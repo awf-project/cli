@@ -201,16 +201,17 @@ func TestPackValidation_PathTraversalRejection(t *testing.T) {
 		0o644,
 	))
 
-	// Test: Pack name with traversal should error
+	// Test: Pack name with traversal should error (guard now uses ValidateName,
+	// message changed from "path traversal" to "invalid name").
 	_, err := resolvePackDir("../escape", localPacks, "")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "path traversal")
+	assert.Contains(t, err.Error(), "invalid")
 
 	// Test: Workflow name with traversal should error
 	packDir := filepath.Join(localPacks, "safe-pack")
 	err = validatePackWorkflow(packDir, "../escape")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "path traversal")
+	assert.Contains(t, err.Error(), "invalid")
 }
 
 // TestPackContextInjection_AWFPathsWithPack verifies pack_name in AWF context
@@ -351,7 +352,9 @@ func TestWorkflowResolution_LocalWorkflowBypass(t *testing.T) {
 	assert.False(t, hasPack)
 }
 
-// TestErrorHandling_InvalidPackName verifies proper error on bad pack name
+// TestErrorHandling_InvalidPackName verifies proper error on bad pack name.
+// The guard now uses ValidateName; the message contains "invalid" instead of
+// "path traversal" to reflect the centralized validation layer.
 func TestErrorHandling_InvalidPackName(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -361,10 +364,12 @@ func TestErrorHandling_InvalidPackName(t *testing.T) {
 	// Test: Pack name with traversal patterns should error
 	_, err := resolvePackDir("../../escape", localPacks, "")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "path traversal")
+	assert.Contains(t, err.Error(), "invalid")
 }
 
-// TestErrorHandling_InvalidWorkflowName verifies proper error on bad workflow name
+// TestErrorHandling_InvalidWorkflowName verifies proper error on bad workflow name.
+// The guard now uses ValidateName; the message contains "invalid" instead of
+// "path traversal" to reflect the centralized validation layer.
 func TestErrorHandling_InvalidWorkflowName(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -381,7 +386,7 @@ func TestErrorHandling_InvalidWorkflowName(t *testing.T) {
 	// Test: Workflow name with traversal patterns should error
 	err := validatePackWorkflow(packDir, "../../escape")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "path traversal")
+	assert.Contains(t, err.Error(), "invalid")
 }
 
 // TestErrorHandling_MissingManifest verifies error on missing manifest

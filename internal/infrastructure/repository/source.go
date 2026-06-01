@@ -21,10 +21,3 @@ func (s Source) String() string {
 		return "unknown"
 	}
 }
-
-// WorkflowInfo contains workflow metadata including its source
-type WorkflowInfo struct {
-	Name   string
-	Source Source
-	Path   string
-}

@@ -9,16 +9,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 // newWorkflowHandlerAPI wires a Bridge + WorkflowHandlers + humatest API
-// around the given mock lister and returns the API for assertions. Bridge is
-// constructed with nil runner/history because workflow-handler tests never
-// exercise execution or history paths.
+// around the given mock lister and returns the API for assertions. Runner is nil
+// because workflow-handler tests never exercise execution paths; history uses a
+// no-op stub to satisfy the non-nil invariant enforced by NewBridge (M-2 fix).
 func newWorkflowHandlerAPI(t *testing.T, lister WorkflowLister) humatest.TestAPI {
 	t.Helper()
-	bridge := NewBridge(lister, nil, nil)
+	bridge := NewBridge(lister, nil, newMockHistoryProvider())
 	handler := NewWorkflowHandlers(bridge)
 	_, api := humatest.New(t)
 	RegisterWorkflowRoutes(api, handler)
@@ -54,8 +55,14 @@ func TestWorkflowHandler_List_HappyPath(t *testing.T) {
 }
 
 func TestWorkflowHandler_Get_NotFound_Returns404(t *testing.T) {
+	// GetWorkflow must return 404 only when the workflow file genuinely does not
+	// exist, i.e. a StructuredError with ErrorCodeUserInputMissingFile.
 	mock := newMockWorkflowLister()
-	mock.getErr = errors.New("workflow not found")
+	mock.getErr = domainerrors.NewUserError(
+		domainerrors.ErrorCodeUserInputMissingFile,
+		"workflow not found: nonexistent",
+		nil, nil,
+	)
 
 	api := newWorkflowHandlerAPI(t, mock)
 
@@ -63,7 +70,27 @@ func TestWorkflowHandler_Get_NotFound_Returns404(t *testing.T) {
 	assert.Equal(t, 404, resp.Code)
 }
 
-func TestWorkflowHandler_Validate_InvalidWorkflow_ReturnsErrors(t *testing.T) {
+func TestWorkflowHandler_Get_InternalError_Returns500WithoutInternalMessage(t *testing.T) {
+	// An internal error (YAML parse failure, permission error, …) must not be
+	// mapped to 404 — that would hide the root cause. It must be 500, and the
+	// raw internal error string must NOT be forwarded to the client.
+	mock := newMockWorkflowLister()
+	mock.getErr = errors.New("yaml: unmarshal errors: field unknown not found in type workflow.Workflow")
+
+	api := newWorkflowHandlerAPI(t, mock)
+
+	resp := api.Get("/api/workflows/local/broken-workflow")
+	assert.Equal(t, 500, resp.Code, "internal get error must return 500, not 404")
+
+	body := resp.Body.String()
+	assert.NotContains(t, body, "yaml", "internal error details must not leak to client")
+	assert.NotContains(t, body, "unmarshal", "internal error details must not leak to client")
+}
+
+func TestWorkflowHandler_Validate_InvalidWorkflow_Returns422(t *testing.T) {
+	// M-5: a workflow that fails validation must return 422 Unprocessable Entity,
+	// not 200. This distinguishes a structurally invalid workflow from a successful
+	// validation that found no errors.
 	mock := newMockWorkflowLister("bad-workflow")
 	mock.validErr = errors.New("invalid step reference")
 
@@ -76,17 +103,7 @@ func TestWorkflowHandler_Validate_InvalidWorkflow_ReturnsErrors(t *testing.T) {
 	}{}
 
 	resp := api.Post("/api/workflows/local/bad-workflow/validate", validateInput)
-	require.Equal(t, 200, resp.Code)
-
-	var result struct {
-		Body struct {
-			Errors []string `json:"errors"`
-		} `json:"body"`
-	}
-	err := json.NewDecoder(resp.Body).Decode(&result)
-	require.NoError(t, err)
-
-	assert.NotEmpty(t, result.Body.Errors)
+	assert.Equal(t, 422, resp.Code, "validation failure must return 422, not 200")
 }
 
 func TestWorkflowHandler_List_EmptyList(t *testing.T) {
@@ -126,7 +143,8 @@ func TestWorkflowHandler_Get_FoundWorkflow_ReturnsWorkflow(t *testing.T) {
 	assert.Equal(t, "test-workflow", result.Body.Name)
 }
 
-func TestWorkflowHandler_Validate_ValidWorkflow_ReturnsEmptyErrors(t *testing.T) {
+func TestWorkflowHandler_Validate_ValidWorkflow_Returns200(t *testing.T) {
+	// A workflow that passes validation returns 200 OK (no errors).
 	mock := newMockWorkflowLister("valid-workflow")
 	// validErr defaults to nil, which means validation passed
 
@@ -139,17 +157,7 @@ func TestWorkflowHandler_Validate_ValidWorkflow_ReturnsEmptyErrors(t *testing.T)
 	}{}
 
 	resp := api.Post("/api/workflows/local/valid-workflow/validate", validateInput)
-	require.Equal(t, 200, resp.Code)
-
-	var result struct {
-		Body struct {
-			Errors []string `json:"errors"`
-		} `json:"body"`
-	}
-	err := json.NewDecoder(resp.Body).Decode(&result)
-	require.NoError(t, err)
-
-	assert.Empty(t, result.Body.Errors)
+	assert.Equal(t, 200, resp.Code)
 }
 
 func TestWorkflowHandler_Get_LocalScope_PassesNameOnly(t *testing.T) {
@@ -181,7 +189,7 @@ func TestWorkflowHandler_Get_UnknownWorkflow_Returns404(t *testing.T) {
 	assert.Equal(t, 404, resp.Code)
 }
 
-func TestWorkflowHandler_Validate_PackScope_ReturnsEmptyErrors(t *testing.T) {
+func TestWorkflowHandler_Validate_PackScope_Returns200(t *testing.T) {
 	mock := newMockWorkflowLister("speckit/specify")
 
 	api := newWorkflowHandlerAPI(t, mock)
@@ -193,18 +201,44 @@ func TestWorkflowHandler_Validate_PackScope_ReturnsEmptyErrors(t *testing.T) {
 	}{}
 
 	resp := api.Post("/api/workflows/speckit/specify/validate", validateInput)
-	require.Equal(t, 200, resp.Code)
-
-	var result struct {
-		Body struct {
-			Errors []string `json:"errors"`
-		} `json:"body"`
-	}
-	err := json.NewDecoder(resp.Body).Decode(&result)
-	require.NoError(t, err)
-
-	assert.Empty(t, result.Body.Errors)
+	assert.Equal(t, 200, resp.Code)
 	assert.Equal(t, "speckit/specify", mock.lastValidateName)
+}
+
+func TestWorkflowHandler_List_InternalError_Returns500WithoutInternalMessage(t *testing.T) {
+	// M5b: ListAllWorkflows errors must be masked from the client. The response
+	// must be 500 and the body must NOT expose the raw internal error string
+	// (which could contain filesystem paths or SQLite details).
+	mock := newMockWorkflowLister()
+	mock.listErr = errors.New("sqlite3: disk I/O error on /var/data/secret.db")
+
+	api := newWorkflowHandlerAPI(t, mock)
+
+	resp := api.Get("/api/workflows")
+	assert.Equal(t, 500, resp.Code, "List with internal error must return 500")
+
+	// The internal error string must not leak to the client.
+	body := resp.Body.String()
+	assert.NotContains(t, body, "sqlite3", "internal error details must not be exposed to client")
+	assert.NotContains(t, body, "secret.db", "internal path must not be exposed to client")
+}
+
+func TestWorkflowHandler_Validate_WorkflowNotFound_Returns404(t *testing.T) {
+	// M5b MINOR: ValidateWorkflow on a missing workflow must return 404, not 200
+	// with a synthetic validation error.
+	mock := newMockWorkflowLister()
+	// No workflows registered — GetWorkflow will return "workflow not found".
+
+	api := newWorkflowHandlerAPI(t, mock)
+
+	validateInput := struct {
+		Body struct {
+			Inputs map[string]any `json:"inputs"`
+		} `json:"body"`
+	}{}
+
+	resp := api.Post("/api/workflows/local/does-not-exist/validate", validateInput)
+	assert.Equal(t, 404, resp.Code, "Validate for missing workflow must return 404, not 200")
 }
 
 func TestWorkflowHandler_List_PopulatesScopeAndWorkflow(t *testing.T) {

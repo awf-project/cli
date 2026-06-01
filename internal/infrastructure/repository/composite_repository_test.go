@@ -288,6 +288,73 @@ states:
 	})
 }
 
+// TestCompositeRepository_DuplicateSource is a regression test for the map-key
+// collision bug: when two SourcedPath entries share the same Source iota value the
+// second used to overwrite the first in the repos map, making the first path
+// invisible to Load/List/Exists. Keying repos by Path fixes this.
+func TestCompositeRepository_DuplicateSource(t *testing.T) {
+	tmpDir := t.TempDir()
+	dir1 := filepath.Join(tmpDir, "dir1")
+	dir2 := filepath.Join(tmpDir, "dir2")
+
+	require.NoError(t, os.MkdirAll(dir1, 0o755))
+	require.NoError(t, os.MkdirAll(dir2, 0o755))
+
+	wf1 := `name: wf-one
+version: "1.0.0"
+description: From dir1
+states:
+  initial: start
+  start:
+    type: terminal
+`
+	wf2 := `name: wf-two
+version: "1.0.0"
+description: From dir2
+states:
+  initial: start
+  start:
+    type: terminal
+`
+	require.NoError(t, os.WriteFile(filepath.Join(dir1, "wf-one.yaml"), []byte(wf1), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir2, "wf-two.yaml"), []byte(wf2), 0o644))
+
+	// Both paths share the same Source value (SourceLocal) — this was the trigger for the bug.
+	repo := NewCompositeRepository([]SourcedPath{
+		{Path: dir1, Source: SourceLocal},
+		{Path: dir2, Source: SourceLocal},
+	})
+
+	ctx := context.Background()
+
+	t.Run("Load finds workflow from first path when both have same Source", func(t *testing.T) {
+		wf, err := repo.Load(ctx, "wf-one")
+		require.NoError(t, err)
+		require.NotNil(t, wf)
+		assert.Equal(t, "From dir1", wf.Description)
+	})
+
+	t.Run("Load finds workflow from second path when both have same Source", func(t *testing.T) {
+		wf, err := repo.Load(ctx, "wf-two")
+		require.NoError(t, err)
+		require.NotNil(t, wf)
+		assert.Equal(t, "From dir2", wf.Description)
+	})
+
+	t.Run("List returns workflows from both paths with same Source", func(t *testing.T) {
+		names, err := repo.List(ctx)
+		require.NoError(t, err)
+		assert.Contains(t, names, "wf-one")
+		assert.Contains(t, names, "wf-two")
+	})
+
+	t.Run("Exists finds workflow in second path when both have same Source", func(t *testing.T) {
+		exists, err := repo.Exists(ctx, "wf-two")
+		require.NoError(t, err)
+		assert.True(t, exists)
+	})
+}
+
 func TestCompositeRepository_SetPackPaths(t *testing.T) {
 	repo := NewCompositeRepository(nil)
 

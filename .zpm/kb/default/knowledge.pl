@@ -251,10 +251,16 @@ is_main_file('main.go').
 is_main_file(File) :- atom_concat(_, '/main.go', File).
 is_main_file(File) :- atom_concat(_, '_test.go', File).
 
+% doc.go files hold only the package-doc comment (zero executable code), so
+% there is nothing to test — exempt them from missing_test like main/_test files.
+doc_only_file('doc.go').
+doc_only_file(File) :- atom_concat(_, '/doc.go', File).
+
 integrity_violation(missing_test, File) :-
     source_file(File),
     \+ covered_by(File, _),
-    \+ is_main_file(File).
+    \+ is_main_file(File),
+    \+ doc_only_file(File).
 
 % --- P2: Framework import in domain layer -----------------------------------
 % Domain code must not import web / ORM frameworks (tight coupling to infra).

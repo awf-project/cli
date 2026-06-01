@@ -14,6 +14,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/logger"
+	"github.com/awf-project/cli/pkg/display"
 )
 
 var (
@@ -135,12 +136,27 @@ func wantsRawDisplay(options map[string]any) bool {
 	return ok && v == "json"
 }
 
-func (b *baseCLIProvider) applyStreamFilter(stdout io.Writer, rawDisplay bool) (io.Writer, *StreamFilterWriter) {
-	if b.hooks.parseDisplayEvents != nil && !rawDisplay && stdout != nil {
+func (b *baseCLIProvider) applyStreamFilter(ctx context.Context, stdout io.Writer, rawDisplay bool) (io.Writer, *StreamFilterWriter) {
+	if b.hooks.parseDisplayEvents == nil || rawDisplay {
+		return stdout, nil
+	}
+	// When a per-step renderer is injected (ACP entry point), it owns the entire
+	// agent stream (text + reasoning + tool events). Discard the inner writer so the
+	// same text is not emitted twice; executor.Run still captures stdout independently.
+	if r := display.RendererFromContext(ctx); r != nil {
+		f := NewStreamFilterWriterWithParser(io.Discard, b.hooks.parseDisplayEvents, DisplayEventRenderer(r), b.logger)
+		return f, f
+	}
+	if stdout != nil {
 		f := NewStreamFilterWriterWithParser(stdout, b.hooks.parseDisplayEvents, nil, b.logger)
 		return f, f
 	}
-	return stdout, nil
+	// stdout is nil but a parser is present: route through a filter backed by
+	// io.Discard so that display events are still parsed (and emitted to any
+	// future renderer wired into the filter). Without this the event stream is
+	// lost silently because the filter is never created.
+	f := NewStreamFilterWriterWithParser(io.Discard, b.hooks.parseDisplayEvents, nil, b.logger)
+	return f, f
 }
 
 // execute runs the provider-specific CLI command and returns the AgentResult,
@@ -187,7 +203,7 @@ func (b *baseCLIProvider) execute(ctx context.Context, prompt string, options ma
 	}()
 
 	rawDisplay := wantsRawDisplay(options)
-	wrappedStdout, filter := b.applyStreamFilter(stdout, rawDisplay)
+	wrappedStdout, filter := b.applyStreamFilter(ctx, stdout, rawDisplay)
 	stdoutBytes, stderrBytes, err := b.executor.Run(ctx, b.binary, wrappedStdout, stderr, args...)
 	completedAt := time.Now()
 	if filter != nil {
@@ -296,7 +312,7 @@ func (b *baseCLIProvider) executeConversation(ctx context.Context, state *workfl
 	}
 
 	rawDisplay := wantsRawDisplay(options)
-	wrappedStdout, filter := b.applyStreamFilter(stdout, rawDisplay)
+	wrappedStdout, filter := b.applyStreamFilter(ctx, stdout, rawDisplay)
 	stdoutBytes, stderrBytes, err := b.executor.Run(ctx, b.binary, wrappedStdout, stderr, args...)
 	completedAt := time.Now()
 	if filter != nil {

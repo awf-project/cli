@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"bytes"
+	"slices"
 	"strings"
 	"testing"
 
@@ -97,6 +98,28 @@ func TestRootCommandHasVersionSubcommand(t *testing.T) {
 
 	if !found {
 		t.Error("expected root command to have 'version' subcommand")
+	}
+}
+
+func TestRootRegistersACPServeCommand(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	var acpServe *cobra.Command
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "acp-serve" {
+			acpServe = sub
+			break
+		}
+	}
+
+	if acpServe == nil {
+		t.Fatal("expected root command to register the 'acp-serve' subcommand")
+	}
+	if !acpServe.Hidden {
+		t.Error("expected 'acp-serve' to be hidden")
+	}
+	if _, ok := acpServe.Annotations["skipFormatValidation"]; !ok {
+		t.Error("expected 'acp-serve' to carry the skipFormatValidation annotation")
 	}
 }
 
@@ -588,7 +611,7 @@ func TestRootCommand_WorkflowCommandHasAlias(t *testing.T) {
 
 	for _, sub := range cmd.Commands() {
 		if sub.Name() == "workflow" {
-			if !contains(sub.Aliases, "wf") {
+			if !slices.Contains(sub.Aliases, "wf") {
 				t.Error("workflow command should have 'wf' alias")
 			}
 			return
@@ -734,14 +757,4 @@ func TestRootCommand_WorkflowCommandIntegration(t *testing.T) {
 	if output == "" && errBuf.String() == "" {
 		t.Error("workflow command should produce output")
 	}
-}
-
-// Helper function to check if slice contains string
-func contains(slice []string, s string) bool {
-	for _, v := range slice {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }

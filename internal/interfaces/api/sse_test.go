@@ -31,7 +31,7 @@ func newMockSSESender() (sse.Sender, *[]sse.Message) {
 }
 
 func TestSSE_UnknownExecutionID_Returns404BeforeStreamOpen(t *testing.T) {
-	bridge := NewBridge(nil, nil, nil)
+	bridge := NewBridge(newMockWorkflowLister(), nil, newMockHistoryProvider())
 	var wg sync.WaitGroup
 	handler := NewSSEHandler(bridge, &wg)
 
@@ -45,7 +45,7 @@ func TestSSE_UnknownExecutionID_Returns404BeforeStreamOpen(t *testing.T) {
 }
 
 func TestSSE_EmitsStepStartedThenStepCompleted_OnStateTransition(t *testing.T) {
-	bridge := NewBridge(nil, nil, nil)
+	bridge := NewBridge(newMockWorkflowLister(), nil, newMockHistoryProvider())
 	var wg sync.WaitGroup
 	handler := NewSSEHandler(bridge, &wg)
 
@@ -91,7 +91,7 @@ func TestSSE_EmitsStepStartedThenStepCompleted_OnStateTransition(t *testing.T) {
 }
 
 func TestSSE_ClosesStreamOnTerminalState(t *testing.T) {
-	bridge := NewBridge(nil, nil, nil)
+	bridge := NewBridge(newMockWorkflowLister(), nil, newMockHistoryProvider())
 	var wg sync.WaitGroup
 	handler := NewSSEHandler(bridge, &wg)
 
@@ -122,7 +122,7 @@ func TestSSE_ClosesStreamOnTerminalState(t *testing.T) {
 }
 
 func TestSSE_ClientDisconnect_StopsPollingGoroutine_NoLeak(t *testing.T) {
-	bridge := NewBridge(nil, nil, nil)
+	bridge := NewBridge(newMockWorkflowLister(), nil, newMockHistoryProvider())
 	var wg sync.WaitGroup
 	handler := NewSSEHandler(bridge, &wg)
 
@@ -157,7 +157,7 @@ func TestSSE_ClientDisconnect_StopsPollingGoroutine_NoLeak(t *testing.T) {
 }
 
 func TestSSE_50ConcurrentSubscribers_NoCrossInterference(t *testing.T) {
-	bridge := NewBridge(nil, nil, nil)
+	bridge := NewBridge(newMockWorkflowLister(), nil, newMockHistoryProvider())
 	var wg sync.WaitGroup
 	handler := NewSSEHandler(bridge, &wg)
 
@@ -174,8 +174,7 @@ func TestSSE_50ConcurrentSubscribers_NoCrossInterference(t *testing.T) {
 	messageCounts := make([]int, 50)
 	var mu sync.Mutex
 
-	for i := 0; i < 50; i++ {
-		i := i
+	for i := range 50 {
 		eg.Go(func() error {
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
@@ -229,7 +228,7 @@ func TestSSE_APIPollingInterval_Is200ms(t *testing.T) {
 }
 
 func TestSSE_SSEHandlerConstructor_StoresReferences(t *testing.T) {
-	bridge := NewBridge(nil, nil, nil)
+	bridge := NewBridge(newMockWorkflowLister(), nil, newMockHistoryProvider())
 	var wg sync.WaitGroup
 
 	handler := NewSSEHandler(bridge, &wg)
@@ -239,16 +238,16 @@ func TestSSE_SSEHandlerConstructor_StoresReferences(t *testing.T) {
 
 func TestSSE_EventStructs_HaveJSONTags(t *testing.T) {
 	types := []reflect.Type{
-		reflect.TypeOf(StepStartedEvent{}),
-		reflect.TypeOf(StepCompletedEvent{}),
-		reflect.TypeOf(StepFailedEvent{}),
-		reflect.TypeOf(WorkflowCompletedEvent{}),
-		reflect.TypeOf(WorkflowFailedEvent{}),
-		reflect.TypeOf(OutputEvent{}),
+		reflect.TypeFor[StepStartedEvent](),
+		reflect.TypeFor[StepCompletedEvent](),
+		reflect.TypeFor[StepFailedEvent](),
+		reflect.TypeFor[WorkflowCompletedEvent](),
+		reflect.TypeFor[WorkflowFailedEvent](),
+		reflect.TypeFor[OutputEvent](),
 	}
 	for _, typ := range types {
 		t.Run(typ.Name(), func(t *testing.T) {
-			for i := 0; i < typ.NumField(); i++ {
+			for i := range typ.NumField() {
 				tag := typ.Field(i).Tag.Get("json")
 				assert.NotEmpty(t, tag, "field %s.%s missing json tag", typ.Name(), typ.Field(i).Name)
 			}

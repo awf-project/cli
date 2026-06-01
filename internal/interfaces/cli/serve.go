@@ -160,6 +160,7 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 	result.WorkflowSvc.SetPackDiscoverer(workflowpkg.NewPackDiscovererAdapter(workflowPackSearchDirs()))
 
 	bridge := api.NewBridge(result.WorkflowSvc, result.ExecService, result.HistorySvc)
+	bridge.SetBaseContext(ctx) // M-1: propagate server shutdown context to in-flight workflows
 	bridge.SetResumer(result.ExecService)
 	addr := fmt.Sprintf("%s:%d", host, port)
 	srv := api.NewServer(bridge, addr)
@@ -178,6 +179,10 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 	case <-ctx.Done():
 		cmd.Println("Shutting down server...")
 		shutdownErr := srv.Shutdown(context.Background())
+		// Cancel all in-flight async executions now that the HTTP server has
+		// stopped accepting requests.  This prevents goroutines from writing to
+		// stores that are about to be closed.
+		bridge.Shutdown()
 		cmd.Println("Server stopped.")
 		return shutdownErr
 	}

@@ -18,19 +18,21 @@ type SourcedPath struct {
 	Source Source
 }
 
-// CompositeRepository aggregates multiple YAMLRepository instances with priority
-// Earlier paths take precedence over later ones for workflows with the same name
+// CompositeRepository aggregates multiple YAMLRepository instances with priority.
+// Earlier paths take precedence over later ones for workflows with the same name.
+// repos is keyed by sp.Path so that multiple SourcedPath entries sharing the same
+// Source value (e.g. two SourceLocal directories) each retain their own repository.
 type CompositeRepository struct {
 	paths         []SourcedPath
-	repos         map[Source]*YAMLRepository
+	repos         map[string]*YAMLRepository // keyed by path, not by Source
 	packLocalDir  string
 	packGlobalDir string
 }
 
 func NewCompositeRepository(paths []SourcedPath) *CompositeRepository {
-	repos := make(map[Source]*YAMLRepository)
+	repos := make(map[string]*YAMLRepository, len(paths))
 	for _, sp := range paths {
-		repos[sp.Source] = NewYAMLRepository(sp.Path)
+		repos[sp.Path] = NewYAMLRepository(sp.Path)
 	}
 	return &CompositeRepository{
 		paths: paths,
@@ -44,7 +46,7 @@ func (r *CompositeRepository) Load(ctx context.Context, name string) (*workflow.
 		if !r.pathExists(sp.Path) {
 			continue
 		}
-		repo := r.repos[sp.Source]
+		repo := r.repos[sp.Path]
 		wf, err := repo.Load(ctx, name)
 		if err != nil {
 			// Check if this is a "not found" error - if so, continue to next repo
@@ -74,7 +76,7 @@ func (r *CompositeRepository) List(ctx context.Context) ([]string, error) {
 		if !r.pathExists(sp.Path) {
 			continue
 		}
-		repo := r.repos[sp.Source]
+		repo := r.repos[sp.Path]
 		repoNames, err := repo.List(ctx)
 		if err != nil {
 			continue // skip errors for individual repos
@@ -101,7 +103,7 @@ func (r *CompositeRepository) ListWithSource(ctx context.Context) ([]ports.Workf
 		if !r.pathExists(sp.Path) {
 			continue
 		}
-		repo := r.repos[sp.Source]
+		repo := r.repos[sp.Path]
 		repoNames, err := repo.List(ctx)
 		if err != nil {
 			continue
@@ -127,7 +129,7 @@ func (r *CompositeRepository) Exists(ctx context.Context, name string) (bool, er
 		if !r.pathExists(sp.Path) {
 			continue
 		}
-		repo := r.repos[sp.Source]
+		repo := r.repos[sp.Path]
 		exists, err := repo.Exists(ctx, name)
 		if err != nil {
 			continue

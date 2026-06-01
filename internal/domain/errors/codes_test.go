@@ -1002,3 +1002,125 @@ func TestErrorCodeConstants_MCPProxy(t *testing.T) {
 		})
 	}
 }
+
+func TestErrorCode_USER_ACP_AreValid(t *testing.T) {
+	tests := []struct {
+		name string
+		code errors.ErrorCode
+	}{
+		{
+			name: "ErrorCodeUserACPInvalidPrompt is valid",
+			code: errors.ErrorCodeUserACPInvalidPrompt,
+		},
+		{
+			name: "ErrorCodeUserACPUnsupportedBlock is valid",
+			code: errors.ErrorCodeUserACPUnsupportedBlock,
+		},
+		{
+			name: "ErrorCodeUserACPPromptInFlight is valid",
+			code: errors.ErrorCodeUserACPPromptInFlight,
+		},
+		{
+			name: "ErrorCodeUserACPUnknownSession is valid",
+			code: errors.ErrorCodeUserACPUnknownSession,
+		},
+		{
+			name: "ErrorCodeUserACPProtocolVersionUnsupported is valid",
+			code: errors.ErrorCodeUserACPProtocolVersionUnsupported,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.True(t, tt.code.IsValid())
+		})
+	}
+}
+
+func TestErrorCode_USER_ACP_Constants_Map_To_ExitOne(t *testing.T) {
+	tests := []struct {
+		name string
+		code errors.ErrorCode
+	}{
+		{
+			name: "ErrorCodeUserACPInvalidPrompt maps to exit code 1",
+			code: errors.ErrorCodeUserACPInvalidPrompt,
+		},
+		{
+			name: "ErrorCodeUserACPUnsupportedBlock maps to exit code 1",
+			code: errors.ErrorCodeUserACPUnsupportedBlock,
+		},
+		{
+			name: "ErrorCodeUserACPPromptInFlight maps to exit code 1",
+			code: errors.ErrorCodeUserACPPromptInFlight,
+		},
+		{
+			name: "ErrorCodeUserACPUnknownSession maps to exit code 1",
+			code: errors.ErrorCodeUserACPUnknownSession,
+		},
+		{
+			name: "ErrorCodeUserACPProtocolVersionUnsupported maps to exit code 1",
+			code: errors.ErrorCodeUserACPProtocolVersionUnsupported,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, 1, tt.code.ExitCode())
+		})
+	}
+}
+
+func TestErrorCode_USER_ACP_Parsing(t *testing.T) {
+	tests := []struct {
+		name             string
+		code             errors.ErrorCode
+		expectedCat      string
+		expectedSubcat   string
+		expectedSpecific string
+	}{
+		{
+			name:             "ErrorCodeUserACPInvalidPrompt parses correctly",
+			code:             errors.ErrorCodeUserACPInvalidPrompt,
+			expectedCat:      "USER",
+			expectedSubcat:   "ACP",
+			expectedSpecific: "INVALID_PROMPT",
+		},
+		{
+			name:             "ErrorCodeUserACPUnsupportedBlock parses correctly",
+			code:             errors.ErrorCodeUserACPUnsupportedBlock,
+			expectedCat:      "USER",
+			expectedSubcat:   "ACP",
+			expectedSpecific: "UNSUPPORTED_BLOCK",
+		},
+		{
+			name:             "ErrorCodeUserACPPromptInFlight parses correctly",
+			code:             errors.ErrorCodeUserACPPromptInFlight,
+			expectedCat:      "USER",
+			expectedSubcat:   "ACP",
+			expectedSpecific: "PROMPT_IN_FLIGHT",
+		},
+		{
+			name:             "ErrorCodeUserACPUnknownSession parses correctly",
+			code:             errors.ErrorCodeUserACPUnknownSession,
+			expectedCat:      "USER",
+			expectedSubcat:   "ACP",
+			expectedSpecific: "UNKNOWN_SESSION",
+		},
+		{
+			name:             "ErrorCodeUserACPProtocolVersionUnsupported parses correctly",
+			code:             errors.ErrorCodeUserACPProtocolVersionUnsupported,
+			expectedCat:      "USER",
+			expectedSubcat:   "ACP",
+			expectedSpecific: "PROTOCOL_VERSION_UNSUPPORTED",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expectedCat, tt.code.Category())
+			assert.Equal(t, tt.expectedSubcat, tt.code.Subcategory())
+			assert.Equal(t, tt.expectedSpecific, tt.code.Specific())
+		})
+	}
+}

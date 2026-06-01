@@ -19,6 +19,7 @@ import (
 	infratools "github.com/awf-project/cli/internal/infrastructure/tools"
 	"github.com/awf-project/cli/internal/infrastructure/tools/builtins"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
+	"github.com/awf-project/cli/pkg/display"
 	"github.com/awf-project/cli/pkg/httpx"
 	"github.com/awf-project/cli/pkg/interpolation"
 )
@@ -92,21 +93,22 @@ type OutputWriterPair struct {
 type SetupOption func(*setupConfig)
 
 type setupConfig struct {
-	notifyConfig     NotifyConfig
-	pluginChecker    PluginStateChecker
-	pluginProviders  PluginProviders
-	tracer           ports.Tracer
-	auditWriter      ports.AuditTrailWriter
-	packName         string
-	packResolver     PackWorkflowLoader
-	outputWriters    *OutputWriterPair
-	userInputReader  ports.UserInputReader
-	historyStore     ports.HistoryStore
-	templatePaths    []string
-	pluginService    *PluginService
-	eventPublisher   ports.EventPublisher
-	agentRoleRepo    ports.AgentRoleRepository
-	toolProxyCLIExec ports.CLIExecutor
+	notifyConfig           NotifyConfig
+	pluginChecker          PluginStateChecker
+	pluginProviders        PluginProviders
+	tracer                 ports.Tracer
+	auditWriter            ports.AuditTrailWriter
+	packName               string
+	packResolver           PackWorkflowLoader
+	outputWriters          *OutputWriterPair
+	userInputReader        ports.UserInputReader
+	historyStore           ports.HistoryStore
+	templatePaths          []string
+	pluginService          *PluginService
+	eventPublisher         ports.EventPublisher
+	agentRoleRepo          ports.AgentRoleRepository
+	toolProxyCLIExec       ports.CLIExecutor
+	displayRendererFactory func(stepID string) display.EventRenderer
 }
 
 // WithNotifyConfig configures notification backend defaults.
@@ -148,6 +150,12 @@ func WithOutputWriters(stdout, stderr io.Writer) SetupOption {
 	return func(c *setupConfig) {
 		c.outputWriters = &OutputWriterPair{Stdout: stdout, Stderr: stderr}
 	}
+}
+
+// WithDisplayRendererFactory installs a per-step display renderer factory on the
+// ExecutionService (used by the ACP entry point to stream typed display events).
+func WithDisplayRendererFactory(f func(stepID string) display.EventRenderer) SetupOption {
+	return func(c *setupConfig) { c.displayRendererFactory = f }
 }
 
 // WithUserInputReader configures the source for interactive user input in conversations.
@@ -345,6 +353,10 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 
 	if cfg.outputWriters != nil {
 		execSvc.SetOutputWriters(cfg.outputWriters.Stdout, cfg.outputWriters.Stderr)
+	}
+
+	if cfg.displayRendererFactory != nil {
+		execSvc.SetDisplayRendererFactory(cfg.displayRendererFactory)
 	}
 
 	if cfg.pluginService != nil {

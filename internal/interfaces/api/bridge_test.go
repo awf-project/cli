@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
@@ -64,7 +65,13 @@ func (m *mockWorkflowLister) GetWorkflow(_ context.Context, name string) (*workf
 	}
 	wf, ok := m.wfs[name]
 	if !ok {
-		return nil, errors.New("workflow not found: " + name)
+		// Mirror infrastructure: unknown workflow → StructuredError with
+		// ErrorCodeUserInputMissingFile so handler tests observe the real contract.
+		return nil, domainerrors.NewUserError(
+			domainerrors.ErrorCodeUserInputMissingFile,
+			"workflow not found: "+name,
+			nil, nil,
+		)
 	}
 	return wf, nil
 }
@@ -144,6 +151,18 @@ func (m *mockHistoryProvider) GetStats(_ context.Context, _ *workflow.HistoryFil
 }
 
 // --- tests ---
+
+func TestBridge_NewBridge_PanicsOnNilWorkflows(t *testing.T) {
+	require.Panics(t, func() {
+		NewBridge(nil, newMockWorkflowRunner(), newMockHistoryProvider())
+	}, "NewBridge must panic when workflows is nil")
+}
+
+func TestBridge_NewBridge_PanicsOnNilHistory(t *testing.T) {
+	require.Panics(t, func() {
+		NewBridge(newMockWorkflowLister(), newMockWorkflowRunner(), nil)
+	}, "NewBridge must panic when history is nil")
+}
 
 func TestBridge_NewBridge_WiresDependencies(t *testing.T) {
 	lister := newMockWorkflowLister("wf-1")
@@ -266,6 +285,83 @@ func TestBridge_TrackResumedExecution_PersistsEntryForSubsequentQueries(t *testi
 	assert.Equal(t, id, stored.ExecutionID)
 	assert.Equal(t, "my-workflow", stored.WorkflowName)
 	assert.Same(t, execCtx, stored.ExecutionContext)
+}
+
+func TestBridge_Shutdown_CancelsAllActiveExecutions(t *testing.T) {
+	// Two blocking executions stay live until explicitly closed.
+	blockA := make(chan error)
+	blockB := make(chan error)
+	t.Cleanup(func() {
+		// Drain so the Bridge cleanup goroutines can exit.
+		select {
+		case <-blockA:
+		default:
+		}
+		select {
+		case <-blockB:
+		default:
+		}
+	})
+
+	runner := &mockWorkflowRunner{
+		execCtx: workflow.NewExecutionContext("exec-a", "wf-a"),
+	}
+	bridge := NewBridge(newMockWorkflowLister("wf-a", "wf-b"), runner, newMockHistoryProvider())
+
+	wfA := &workflow.Workflow{Name: "wf-a", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
+	runner.done = blockA
+	_, execA, err := bridge.StartExecution(context.Background(), wfA, nil)
+	require.NoError(t, err)
+
+	wfB := &workflow.Workflow{Name: "wf-b", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
+	runner.done = blockB
+	_, execB, err := bridge.StartExecution(context.Background(), wfB, nil)
+	require.NoError(t, err)
+
+	// Both contexts must be live before Shutdown.
+	require.NoError(t, execA.Ctx.Err(), "execA context must not be cancelled before Shutdown")
+	require.NoError(t, execB.Ctx.Err(), "execB context must not be cancelled before Shutdown")
+
+	bridge.Shutdown()
+
+	assert.Error(t, execA.Ctx.Err(), "execA context must be cancelled after Shutdown")
+	assert.ErrorIs(t, execA.Ctx.Err(), context.Canceled)
+	assert.Error(t, execB.Ctx.Err(), "execB context must be cancelled after Shutdown")
+	assert.ErrorIs(t, execB.Ctx.Err(), context.Canceled)
+
+	// Close channels so cleanup goroutines can finish (prevents goroutine leak).
+	close(blockA)
+	close(blockB)
+}
+
+func TestBridge_Shutdown_EmptyMap_DoesNotPanic(t *testing.T) {
+	bridge := NewBridge(newMockWorkflowLister(), newMockWorkflowRunner(), newMockHistoryProvider())
+	// Must not panic when no executions are tracked.
+	assert.NotPanics(t, func() { bridge.Shutdown() })
+}
+
+func TestBridge_Shutdown_Idempotent(t *testing.T) {
+	block := make(chan error)
+	t.Cleanup(func() {
+		select {
+		case <-block:
+		default:
+			close(block)
+		}
+	})
+
+	runner := newMockWorkflowRunnerWithDone(block)
+	bridge := NewBridge(newMockWorkflowLister("wf-1"), runner, newMockHistoryProvider())
+	wf := &workflow.Workflow{Name: "wf-1", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
+	_, _, err := bridge.StartExecution(context.Background(), wf, nil)
+	require.NoError(t, err)
+
+	// Second Shutdown must not panic — context.CancelFunc is idempotent.
+	assert.NotPanics(t, func() {
+		bridge.Shutdown()
+		bridge.Shutdown()
+	})
+	close(block)
 }
 
 func TestBridge_ListExecutions_ReturnsActiveAndCompleted(t *testing.T) {

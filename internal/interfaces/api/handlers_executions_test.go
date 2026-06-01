@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
@@ -342,6 +344,45 @@ func TestExecutionHandler_Run_UnknownScope_Returns404(t *testing.T) {
 	resp := api.Post("/api/workflows/unknown/foo/run", input)
 
 	assert.Equal(t, 404, resp.Code, "Run with unknown scope must return 404 Not Found")
+}
+
+func TestExecutionHandler_Resume_NotFound_Returns404(t *testing.T) {
+	// M5b: Resume must return 404 when the execution record does not exist.
+	// The handler must use errors.Is(err, application.ErrExecutionNotFound) —
+	// NOT a string-match — so that future message rewording stays correct.
+	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
+
+	resumer := newMockWorkflowResumer()
+	// Wrap the sentinel the same way ExecutionService.Resume does.
+	resumer.resumeErr = fmt.Errorf("workflow execution not found: missing-id: %w", application.ErrExecutionNotFound)
+	bridge.SetResumer(resumer)
+
+	input := struct {
+		InputOverrides map[string]any `json:"input_overrides,omitempty"`
+		FromStep       string         `json:"from_step,omitempty"`
+	}{}
+
+	resp := api.Post("/api/executions/missing-id/resume", input)
+	assert.Equal(t, 404, resp.Code, "Resume with not-found execution must return 404")
+}
+
+func TestExecutionHandler_Resume_InternalError_Returns422NotExposingDetails(t *testing.T) {
+	// M5b: Resume errors that are not "not found" (e.g. already completed,
+	// workflow load failure) must return 422 Unprocessable Entity, not 404.
+	// The raw internal error string must not be forwarded verbatim.
+	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
+
+	resumer := newMockWorkflowResumer()
+	resumer.resumeErr = errors.New("workflow already completed, cannot resume")
+	bridge.SetResumer(resumer)
+
+	input := struct {
+		InputOverrides map[string]any `json:"input_overrides,omitempty"`
+		FromStep       string         `json:"from_step,omitempty"`
+	}{}
+
+	resp := api.Post("/api/executions/some-id/resume", input)
+	assert.Equal(t, 422, resp.Code, "Resume with completed/invalid state must return 422, not 404")
 }
 
 func TestExecutionHandler_Resume_FailedExecution_RestartsFromFailedStep(t *testing.T) {

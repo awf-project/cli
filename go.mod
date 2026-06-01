@@ -28,6 +28,8 @@ require (
 	modernc.org/sqlite v1.44.3
 )
 
+require go.uber.org/goleak v1.3.0 // indirect
+
 require (
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect

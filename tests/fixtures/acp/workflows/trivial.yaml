@@ -1,0 +1,11 @@
+name: trivial
+version: "1.0.0"
+states:
+  initial: run
+  run:
+    type: step
+    command: "true"
+    on_success: done
+    on_failure: done
+  done:
+    type: terminal

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -227,6 +228,76 @@ workflows:
 	}
 }
 
+// TestPackDiscovererAdapter_DiscoverWorkflows_DeterministicOrder verifies that
+// DiscoverWorkflows returns entries in a stable, sorted order regardless of how
+// the underlying map iteration happened to order pack names.
+// This is critical for the ACP available_commands_update message: clients must
+// receive identical lists between reconnections.
+func TestPackDiscovererAdapter_DiscoverWorkflows_DeterministicOrder(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create packs with names that sort in a predictable alphabetical order.
+	packNames := []string{"zebra", "alpha", "middle"}
+	for _, pack := range packNames {
+		packDir := filepath.Join(dir, pack)
+		require.NoError(t, os.MkdirAll(filepath.Join(packDir, "workflows"), 0o755))
+
+		manifest := fmt.Sprintf(`name: %s
+version: "1.0.0"
+author: "test"
+awf_version: ">=0.5.0"
+workflows:
+  - hello
+`, pack)
+		require.NoError(t, os.WriteFile(filepath.Join(packDir, "manifest.yaml"), []byte(manifest), 0o644))
+
+		wfYAML := `name: hello
+initial: start
+states:
+  initial: start
+  start:
+    type: terminal
+    status: success
+    message: ok
+`
+		require.NoError(t, os.WriteFile(filepath.Join(packDir, "workflows", "hello.yaml"), []byte(wfYAML), 0o644))
+
+		stateJSON := fmt.Sprintf(`{"name":%q,"enabled":true,"source_data":{"repository":"owner/%s","version":"1.0.0"}}`, pack, pack)
+		require.NoError(t, os.WriteFile(filepath.Join(packDir, "state.json"), []byte(stateJSON), 0o644))
+	}
+
+	adapter := workflowpkg.NewPackDiscovererAdapter([]string{dir})
+
+	// Run DiscoverWorkflows multiple times and assert the order is always the same.
+	const runs = 10
+	var firstRun []string
+	for i := range runs {
+		entries, err := adapter.DiscoverWorkflows(context.Background())
+		require.NoError(t, err)
+		require.Len(t, entries, len(packNames), "run %d: expected %d entries", i, len(packNames))
+
+		names := make([]string, len(entries))
+		for j, e := range entries {
+			names[j] = e.Name
+		}
+
+		if i == 0 {
+			firstRun = names
+			// Verify the order matches sorted pack names.
+			sorted := make([]string, len(packNames))
+			copy(sorted, packNames)
+			sort.Strings(sorted)
+			wantNames := make([]string, len(sorted))
+			for j, p := range sorted {
+				wantNames[j] = p + "/hello"
+			}
+			assert.Equal(t, wantNames, names, "first run: entries must be in alphabetical pack order")
+		} else {
+			assert.Equal(t, firstRun, names, "run %d: order must be identical to first run", i)
+		}
+	}
+}
+
 // TestPackDiscovererAdapter_DiscoverWorkflows_PopulatesScopeAndWorkflowFields covers both single and multiple
 // workflows per pack to ensure Scope=packName, Workflow=wfName, Name=packName/wfName, Source="pack".
 func TestPackDiscovererAdapter_DiscoverWorkflows_PopulatesScopeAndWorkflowFields(t *testing.T) {
@@ -303,5 +374,132 @@ steps:
 			assert.Equal(t, tt.wantWorkflow, entry.Workflow, "Workflow should be workflow name")
 			assert.Equal(t, "pack", entry.Source, "Source should be pack")
 		})
+	}
+}
+
+// TestPackDiscovererAdapter_LoadWorkflow_RejectsInvalidPackName verifies that
+// LoadWorkflow validates packName via the shared ValidateName rule before
+// building any filesystem path with filepath.Join. A crafted packName such as
+// "../../etc" must be rejected without touching the filesystem.
+//
+// The error message must contain "invalid name" (the ValidateName sentinel),
+// NOT "not found" — distinguishing a validation rejection from a normal
+// filesystem miss. This ensures the guard fires before filepath.Join.
+//
+// This is the S1 security fix: the choke-point for all GetWorkflow-by-pack calls.
+func TestPackDiscovererAdapter_LoadWorkflow_RejectsInvalidPackName(t *testing.T) {
+	dir := t.TempDir()
+	adapter := workflowpkg.NewPackDiscovererAdapter([]string{dir})
+	ctx := context.Background()
+
+	invalidPackNames := []struct {
+		name  string
+		input string
+	}{
+		{"path traversal dot-dot", "../../etc"},
+		{"absolute path", "/etc/passwd"},
+		{"slash separator", "pack/sub"},
+		{"uppercase letter", "MyPack"},
+		{"starts with digit", "1pack"},
+		{"dot-dot alone", ".."},
+		{"empty string", ""},
+	}
+	for _, tt := range invalidPackNames {
+		t.Run(tt.name, func(t *testing.T) {
+			wf, err := adapter.LoadWorkflow(ctx, tt.input, "someworkflow")
+			require.Error(t, err, "packName %q must be rejected", tt.input)
+			assert.Nil(t, wf)
+			// The error must be a validation rejection, not a filesystem miss.
+			assert.Contains(t, err.Error(), "invalid name",
+				"expected validation error for packName %q, got: %v", tt.input, err)
+		})
+	}
+}
+
+// TestPackDiscovererAdapter_LoadWorkflow_RejectsInvalidWorkflowName verifies
+// that LoadWorkflow validates workflowName before any filesystem access.
+// The error must say "invalid name", not "not found".
+func TestPackDiscovererAdapter_LoadWorkflow_RejectsInvalidWorkflowName(t *testing.T) {
+	dir := t.TempDir()
+	adapter := workflowpkg.NewPackDiscovererAdapter([]string{dir})
+	ctx := context.Background()
+
+	invalidWorkflowNames := []struct {
+		name  string
+		input string
+	}{
+		{"path traversal dot-dot", "../../passwd"},
+		{"slash separator", "sub/workflow"},
+		{"uppercase letter", "MyWorkflow"},
+		{"starts with digit", "1workflow"},
+		{"empty string", ""},
+	}
+	for _, tt := range invalidWorkflowNames {
+		t.Run(tt.name, func(t *testing.T) {
+			wf, err := adapter.LoadWorkflow(ctx, "validpack", tt.input)
+			require.Error(t, err, "workflowName %q must be rejected", tt.input)
+			assert.Nil(t, wf)
+			assert.Contains(t, err.Error(), "invalid name",
+				"expected validation error for workflowName %q, got: %v", tt.input, err)
+		})
+	}
+}
+
+// TestPackDiscovererAdapter_DiscoverWorkflows_WorkflowsInPackAreSorted verifies
+// that workflows within a single pack are returned in alphabetical order.
+// This ensures determinism for the ACP available_commands_update message
+// regardless of manifest declaration order.
+func TestPackDiscovererAdapter_DiscoverWorkflows_WorkflowsInPackAreSorted(t *testing.T) {
+	dir := t.TempDir()
+	packDir := filepath.Join(dir, "mypack")
+	require.NoError(t, os.MkdirAll(filepath.Join(packDir, "workflows"), 0o755))
+
+	// Declare workflows in reverse alphabetical order in the manifest.
+	manifest := `name: mypack
+version: "1.0.0"
+author: "test"
+awf_version: ">=0.5.0"
+workflows:
+  - zebra
+  - alpha
+  - middle
+`
+	require.NoError(t, os.WriteFile(filepath.Join(packDir, "manifest.yaml"), []byte(manifest), 0o644))
+
+	wfYAML := `name: placeholder
+initial: start
+states:
+  initial: start
+  start:
+    type: terminal
+    status: success
+    message: ok
+`
+	for _, wf := range []string{"zebra", "alpha", "middle"} {
+		content := strings.Replace(wfYAML, "placeholder", wf, 1)
+		require.NoError(t, os.WriteFile(
+			filepath.Join(packDir, "workflows", wf+".yaml"),
+			[]byte(content),
+			0o644,
+		))
+	}
+	stateJSON := `{"name":"mypack","enabled":true,"source_data":{"repository":"owner/mypack","version":"1.0.0"}}`
+	require.NoError(t, os.WriteFile(filepath.Join(packDir, "state.json"), []byte(stateJSON), 0o644))
+
+	adapter := workflowpkg.NewPackDiscovererAdapter([]string{dir})
+
+	// Run multiple times to detect any map-ordering non-determinism.
+	const runs = 10
+	for i := range runs {
+		entries, err := adapter.DiscoverWorkflows(context.Background())
+		require.NoError(t, err)
+		require.Len(t, entries, 3)
+
+		names := make([]string, len(entries))
+		for j, e := range entries {
+			names[j] = e.Workflow
+		}
+		wantOrder := []string{"alpha", "middle", "zebra"}
+		assert.Equal(t, wantOrder, names, "run %d: workflows within pack must be in alphabetical order", i)
 	}
 }
