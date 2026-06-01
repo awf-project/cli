@@ -23,6 +23,7 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
+	"github.com/awf-project/cli/pkg/validation"
 )
 
 var (
@@ -215,10 +216,21 @@ func buildBridge() (*Bridge, *TUIInputReader, func(), error) {
 // resolvePackWorkflow loads a workflow from an installed pack.
 // It searches the local pack directory before the global one, mirroring the
 // lookup order used by the CLI pack resolver.
+//
+// S2: Both packName and workflowName are validated via the shared ValidateName
+// rule before any filepath.Join. This eliminates the divergent validation path
+// that previously existed in the TUI without a ".." guard.
 func resolvePackWorkflow(
 	ctx context.Context,
 	packName, workflowName string,
 ) (*workflow.Workflow, string, error) {
+	if err := validation.ValidateName(packName); err != nil {
+		return nil, "", fmt.Errorf("pack name: %w", err)
+	}
+	if err := validation.ValidateName(workflowName); err != nil {
+		return nil, "", fmt.Errorf("workflow name: %w", err)
+	}
+
 	for _, dir := range []string{xdg.LocalWorkflowPacksDir(), xdg.AWFWorkflowPacksDir()} {
 		packDir := filepath.Join(dir, packName)
 		if _, err := os.Stat(packDir); err != nil {

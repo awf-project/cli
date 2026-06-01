@@ -21,6 +21,11 @@ func RenderEvents(w io.Writer, events []display.DisplayEvent, mode display.Displ
 			if mode == display.DisplayModeVerbose {
 				fmt.Fprint(w, formatToolMarker(e.Name, e.Arg))
 			}
+		case display.EventReasoning:
+			// Reasoning ("thought") chunks are intentionally not surfaced by this
+			// CLI renderer: default mode emits final text only, and verbose mode adds
+			// tool markers, not chain-of-thought. Thought chunks are surfaced
+			// separately by the ACP renderer (MsgAgentThoughtChunk).
 		}
 	}
 }

@@ -4,14 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/pkg/registry"
+	"github.com/awf-project/cli/pkg/validation"
 	"gopkg.in/yaml.v3"
 )
-
-var nameRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 // Manifest is the parsed content of a workflow pack's manifest.yaml file.
 type Manifest struct {
@@ -45,8 +43,8 @@ func ParseManifest(data []byte) (*Manifest, error) {
 //   - awf_version is a valid semver constraint
 //   - every entry in workflows has a corresponding .yaml file in packDir/workflows/
 func (m *Manifest) Validate(packDir string) error {
-	if !nameRegex.MatchString(m.Name) {
-		return fmt.Errorf("manifest: invalid pack name %q (must match ^[a-z][a-z0-9-]*$)", m.Name)
+	if err := validation.ValidateName(m.Name); err != nil {
+		return fmt.Errorf("manifest: invalid pack name: %w", err)
 	}
 
 	if m.Name == "local" || m.Name == "global" || m.Name == "env" {
@@ -76,8 +74,8 @@ func (m *Manifest) Validate(packDir string) error {
 	}
 
 	for _, workflow := range m.Workflows {
-		if !nameRegex.MatchString(workflow) {
-			return fmt.Errorf("manifest: invalid workflow name %q (must match ^[a-z][a-z0-9-]*$)", workflow)
+		if err := validation.ValidateName(workflow); err != nil {
+			return fmt.Errorf("manifest: invalid workflow name: %w", err)
 		}
 		workflowFile := filepath.Join(workflowsDir, workflow+".yaml")
 		if _, err := os.Stat(workflowFile); err != nil {

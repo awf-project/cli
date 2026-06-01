@@ -16,6 +16,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/pkg/display"
 	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/awf-project/cli/pkg/output"
 	"github.com/awf-project/cli/pkg/retry"
@@ -45,39 +46,48 @@ type ConversationExecutor interface {
 
 // ExecutionService orchestrates workflow execution.
 type ExecutionService struct {
-	workflowSvc        *WorkflowService
-	executor           ports.CommandExecutor
-	parallelExecutor   ports.ParallelExecutor
-	store              ports.StateStore
-	logger             ports.Logger
-	resolver           interpolation.Resolver
-	evaluator          ports.ExpressionEvaluator
-	hookExecutor       *HookExecutor
-	loopExecutor       *LoopExecutor
-	stdoutWriter       io.Writer
-	stderrWriter       io.Writer
-	historySvc         *HistoryService
-	templateSvc        *TemplateService
-	operationProvider  ports.OperationProvider
-	agentRegistry      ports.AgentRegistry
-	pluginSvc          *PluginService
-	stepTypeProvider   ports.StepTypeProvider
-	conversationMgr    ConversationExecutor
-	outputLimiter      *OutputLimiter
-	awfPaths           map[string]string
-	auditTrailWriter   ports.AuditTrailWriter
-	packWorkflowLoader PackWorkflowLoader
-	tracer             ports.Tracer
-	eventPublisher     ports.EventPublisher
-	skillRepo          ports.SkillRepository
-	agentRoleRepo      ports.AgentRoleRepository
-	toolProxy          *tools.ProxyService
+	workflowSvc            *WorkflowService
+	executor               ports.CommandExecutor
+	parallelExecutor       ports.ParallelExecutor
+	store                  ports.StateStore
+	logger                 ports.Logger
+	resolver               interpolation.Resolver
+	evaluator              ports.ExpressionEvaluator
+	hookExecutor           *HookExecutor
+	loopExecutor           *LoopExecutor
+	stdoutWriter           io.Writer
+	stderrWriter           io.Writer
+	displayRendererFactory func(stepID string) display.EventRenderer
+	historySvc             *HistoryService
+	templateSvc            *TemplateService
+	operationProvider      ports.OperationProvider
+	agentRegistry          ports.AgentRegistry
+	pluginSvc              *PluginService
+	stepTypeProvider       ports.StepTypeProvider
+	conversationMgr        ConversationExecutor
+	outputLimiter          *OutputLimiter
+	awfPaths               map[string]string
+	auditTrailWriter       ports.AuditTrailWriter
+	packWorkflowLoader     PackWorkflowLoader
+	tracer                 ports.Tracer
+	eventPublisher         ports.EventPublisher
+	skillRepo              ports.SkillRepository
+	agentRoleRepo          ports.AgentRoleRepository
+	toolProxy              *tools.ProxyService
 }
 
 // SetOutputWriters configures streaming output writers.
 func (s *ExecutionService) SetOutputWriters(stdout, stderr io.Writer) {
 	s.stdoutWriter = stdout
 	s.stderrWriter = stderr
+}
+
+// SetDisplayRendererFactory installs a per-step renderer factory. When set, each agent
+// step's context carries the renderer returned for that step name, enabling transports
+// (e.g. ACP) to receive typed display events. A factory returning nil leaves the step
+// using the default (inner-writer) rendering path.
+func (s *ExecutionService) SetDisplayRendererFactory(f func(stepID string) display.EventRenderer) {
+	s.displayRendererFactory = f
 }
 
 // SetTemplateService configures the template service for expanding template references.
@@ -1668,6 +1678,12 @@ func (s *ExecutionService) validateInputs(inputs map[string]any, defs []workflow
 // It loads persisted state, validates resumability, merges input overrides,
 // and continues execution from the resolved fromStep while skipping completed steps.
 // fromStep may be "current", "previous", or a literal step name present in States.
+// ErrExecutionNotFound is returned by Resume when the requested workflow execution
+// record does not exist in the state store (Load returned nil without error).
+// Callers should test with errors.Is(err, ErrExecutionNotFound) rather than
+// inspecting the error message string.
+var ErrExecutionNotFound = errors.New("execution not found")
+
 func (s *ExecutionService) Resume(
 	ctx context.Context,
 	workflowID string,
@@ -1680,7 +1696,7 @@ func (s *ExecutionService) Resume(
 		return nil, fmt.Errorf("load state: %w", err)
 	}
 	if execCtx == nil {
-		return nil, fmt.Errorf("workflow execution not found: %s", workflowID)
+		return nil, fmt.Errorf("workflow execution not found: %s: %w", workflowID, ErrExecutionNotFound)
 	}
 
 	// 2. Validate resumable (not completed)
@@ -2280,6 +2296,15 @@ func (s *ExecutionService) executeAgentStep(
 		defer cancel()
 	}
 
+	// Inject the per-step display renderer (ACP typed streaming). No-op for all other
+	// entry points, which never set a factory. Covers the conversation-substruct,
+	// resumable, and interactive (executeConversationStep) paths — all use stepCtx.
+	if s.displayRendererFactory != nil {
+		if r := s.displayRendererFactory(step.Name); r != nil {
+			stepCtx = display.WithRenderer(stepCtx, r)
+		}
+	}
+
 	// Build interpolation context
 	intCtx := s.buildInterpolationContext(execCtx)
 
@@ -2762,35 +2787,63 @@ func (s *ExecutionService) serializeOperationOutputs(outputs map[string]any) str
 }
 
 // classifyErrorType categorizes errors into types matching CLI exit code taxonomy.
-// Returns: "execution", "workflow", "user", or "system"
+// Returns: "execution", "workflow", "user", or "system".
+//
+// C-2 fix: typed error inspection takes priority over string matching.
+// Priority order:
+//  1. context.Canceled / context.DeadlineExceeded — stdlib sentinels, always reliable.
+//  2. domainerrors.StructuredError — domain-layer typed errors with an ErrorCode category.
+//  3. String matching on err.Error() — fallback for unstructured errors from external
+//     processes (shell executor stderr, plugin output). These cannot carry typed codes
+//     and their messages are the only signal available. Limited to well-known patterns.
 func classifyErrorType(err error) string {
 	if err == nil {
 		return ""
 	}
 
+	// 1. Context errors: deadline/timeout and cancellation are execution-layer events.
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return "execution"
+	}
+
+	// 2. StructuredError carries an ErrorCode whose Category() maps directly to our taxonomy.
+	var se *domainerrors.StructuredError
+	if errors.As(err, &se) {
+		switch se.Code.Category() {
+		case "USER":
+			return "user"
+		case "WORKFLOW":
+			return "workflow"
+		case "EXECUTION":
+			return "execution"
+		case "SYSTEM":
+			return "system"
+		}
+	}
+
+	// 3. String-based fallback for unstructured external-process errors (shell, plugin RPC).
+	// Checked in specificity order so "terminal failure" wins over "exit code" when both
+	// are present. This matches the original intent without relying solely on string matching
+	// for structured domain errors.
 	errStr := err.Error()
 	switch {
-	case strings.Contains(errStr, "terminal failure"):
+	case strings.Contains(errStr, "terminal failure"),
+		strings.Contains(errStr, "step not found"),
+		strings.Contains(errStr, "invalid state"),
+		strings.Contains(errStr, "cycle detected"):
 		return "workflow"
-	case strings.Contains(errStr, "step not found"), strings.Contains(errStr, "invalid state"):
-		return "workflow"
-	case strings.Contains(errStr, "cycle detected"):
-		return "workflow"
-	case strings.Contains(errStr, "exit code"):
-		return "execution"
-	case strings.Contains(errStr, "timeout"), strings.Contains(errStr, "context deadline"):
-		return "execution"
-	case strings.Contains(errStr, "command failed"):
-		return "execution"
-	case strings.Contains(errStr, "not found"), strings.Contains(errStr, "missing"):
+	case strings.Contains(errStr, "not found"),
+		strings.Contains(errStr, "missing"),
+		strings.Contains(errStr, "invalid input"),
+		strings.Contains(errStr, "validation"):
 		return "user"
-	case strings.Contains(errStr, "invalid input"), strings.Contains(errStr, "validation"):
-		return "user"
-	case strings.Contains(errStr, "permission"), strings.Contains(errStr, "access denied"):
-		return "system"
-	case strings.Contains(errStr, "IO error"), strings.Contains(errStr, "file system"):
+	case strings.Contains(errStr, "permission"),
+		strings.Contains(errStr, "access denied"),
+		strings.Contains(errStr, "IO error"),
+		strings.Contains(errStr, "file system"):
 		return "system"
 	default:
+		// exit code, timeout, command failed, and any other execution-layer errors.
 		return "execution"
 	}
 }

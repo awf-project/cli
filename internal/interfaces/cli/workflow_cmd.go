@@ -17,6 +17,7 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/awf-project/cli/pkg/registry"
+	pkgvalidation "github.com/awf-project/cli/pkg/validation"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -153,7 +154,15 @@ func readManifestData(packDir string) ([]byte, error) {
 
 // loadWorkflowDescription reads the description field from a workflow YAML file inside a pack.
 // Returns empty string on any error (missing file, invalid YAML, oversized file).
+//
+// P2: workflowName is validated via the shared ValidateName rule before
+// filepath.Join to prevent path traversal. The function is called from
+// runWorkflowInfo which iterates over manifest.Workflows, but a crafted
+// manifest could list names such as "../../sensitive/secret".
 func loadWorkflowDescription(packDir, workflowName string) string {
+	if pkgvalidation.ValidateName(workflowName) != nil {
+		return ""
+	}
 	f, err := os.Open(filepath.Join(packDir, "workflows", workflowName+".yaml"))
 	if err != nil {
 		return ""
@@ -189,8 +198,20 @@ func workflowPackSearchDirs() []string {
 
 // findPackDir locates an installed pack by name across all search directories.
 // Tries the exact name first, then the short name (without awf-workflow- prefix).
+//
+// S3: packName is validated via ValidateName before any filepath.Join.
+// ValidateName rejects "..", "/", uppercase, and other patterns that could
+// escape the search directories, so this function is the gatekeeper for all
+// validate.go, run.go, and workflow_cmd.go call sites.
 func findPackDir(packName string) string {
-	shortName := strings.TrimPrefix(packName, "awf-workflow-")
+	// Validate the base name (without prefix) via the shared rule.
+	// We also validate the full name to reject things like "awf-workflow-../../evil".
+	baseName := strings.TrimPrefix(packName, "awf-workflow-")
+	if pkgvalidation.ValidateName(baseName) != nil {
+		return ""
+	}
+
+	shortName := baseName
 	for _, dir := range workflowPackSearchDirs() {
 		for _, candidate := range []string{packName, shortName} {
 			potentialPath := filepath.Join(dir, candidate)

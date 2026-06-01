@@ -594,6 +594,70 @@ states:
 	assert.Equal(t, "specify", wf.Name)
 }
 
+// TestValidatePackWorkflow_RejectsNonDotDotInvalidNames verifies that
+// validatePackWorkflow rejects workflow names that are invalid by the shared
+// ValidateName rule but do NOT contain "..". The previous strings.Contains("..")
+// guard would have silently allowed these through.
+func TestValidatePackWorkflow_RejectsNonDotDotInvalidNames(t *testing.T) {
+	setupDir := func(t *testing.T) string {
+		t.Helper()
+		dir := t.TempDir()
+		createTestManifest(t, dir, `
+name: speckit
+version: "1.0.0"
+description: "Test pack"
+author: "test"
+awf_version: ">=0.5.0"
+workflows:
+  - specify
+`)
+		return dir
+	}
+
+	// These names contain no ".." but are still invalid and potentially dangerous
+	// (e.g. "sub/secret" could escape via the filesystem depending on layout).
+	invalidNames := []struct {
+		name  string
+		input string
+	}{
+		{"slash separator (no dot-dot)", "sub/secret"},
+		{"uppercase letter", "MyWorkflow"},
+		{"starts with digit", "1workflow"},
+		{"empty string", ""},
+		{"absolute path (no dot-dot)", "/etc/passwd"},
+	}
+	for _, tt := range invalidNames {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := setupDir(t)
+			err := validatePackWorkflow(dir, tt.input)
+			require.Error(t, err, "workflowName %q must be rejected", tt.input)
+		})
+	}
+}
+
+// TestResolvePackDir_RejectsNonDotDotInvalidPackNames verifies that
+// resolvePackDir rejects pack names invalid by ValidateName but without "..".
+func TestResolvePackDir_RejectsNonDotDotInvalidPackNames(t *testing.T) {
+	invalidNames := []struct {
+		name  string
+		input string
+	}{
+		{"slash in name (no dot-dot)", "pack/sub"},
+		{"uppercase", "MyPack"},
+		{"starts with digit", "1pack"},
+		{"empty string", ""},
+		{"absolute path (no dot-dot)", "/etc/passwd"},
+	}
+	for _, tt := range invalidNames {
+		t.Run(tt.name, func(t *testing.T) {
+			local := t.TempDir()
+			global := t.TempDir()
+			_, err := resolvePackDir(tt.input, local, global)
+			require.Error(t, err, "packName %q must be rejected", tt.input)
+		})
+	}
+}
+
 func TestBuildPackAWFPaths_IncludesPackName(t *testing.T) {
 	paths := xdg.PackAWFPaths("speckit")
 

@@ -2,12 +2,13 @@ package display
 
 import "io"
 
-// EventKind discriminates between event types: text output or tool use.
+// EventKind discriminates between event types: text output, tool use, or reasoning.
 type EventKind string
 
 const (
-	EventText    EventKind = "text"
-	EventToolUse EventKind = "tool_use"
+	EventText      EventKind = "text"
+	EventToolUse   EventKind = "tool_use"
+	EventReasoning EventKind = "reasoning"
 )
 
 // DisplayEvent represents a parsed event from a provider's streaming output.

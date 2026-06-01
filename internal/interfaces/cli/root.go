@@ -114,6 +114,7 @@ Examples:
 	cmd.AddCommand(tui.NewCommand())
 	cmd.AddCommand(NewServeCommand())
 	cmd.AddCommand(newMCPServeCommand(Deps{}))
+	cmd.AddCommand(newACPServeCommand(Deps{}))
 
 	return cmd
 }

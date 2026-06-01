@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
+	"github.com/awf-project/cli/pkg/validation"
 )
 
 // parseWorkflowNamespace splits a workflow name into pack and workflow components.
@@ -30,13 +32,15 @@ func parseWorkflowNamespace(name string) (packName, workflowName string) {
 // validatePackWorkflow checks that workflowName is listed as a public workflow in the pack manifest.
 // packDir is the root directory of the installed pack (contains manifest.yaml).
 // Returns USER.INPUT.VALIDATION_FAILED if the workflow is not listed, error if manifest is missing.
-// Rejects path traversal patterns in workflowName before manifest lookup.
+//
+// S3: Uses the shared ValidateName rule (replaces the ad-hoc strings.Contains("..")
+// guard which did not reject slashes, uppercase, or other invalid patterns).
 func validatePackWorkflow(packDir, workflowName string) error {
-	// Reject path traversal patterns before reading filesystem
-	if strings.Contains(workflowName, "..") {
+	// Reject names that fail the shared validation rule before any filesystem access.
+	if err := validation.ValidateName(workflowName); err != nil {
 		return domerrors.NewUserError(
 			domerrors.ErrorCodeUserInputValidationFailed,
-			fmt.Sprintf("%s: workflow name contains path traversal: %q", domerrors.ErrorCodeUserInputValidationFailed, workflowName),
+			fmt.Sprintf("%s: workflow name invalid: %v", domerrors.ErrorCodeUserInputValidationFailed, err),
 			nil,
 			nil,
 		)
@@ -56,10 +60,8 @@ func validatePackWorkflow(packDir, workflowName string) error {
 	}
 
 	// Check if workflow is listed in manifest
-	for _, wf := range manifest.Workflows {
-		if wf == workflowName {
-			return nil
-		}
+	if slices.Contains(manifest.Workflows, workflowName) {
+		return nil
 	}
 
 	// Workflow not found in manifest
@@ -73,13 +75,15 @@ func validatePackWorkflow(packDir, workflowName string) error {
 
 // resolvePackDir finds the installed pack directory by searching local then global paths.
 // Returns the absolute pack directory path or a structured error if not found.
-// Rejects path traversal patterns in packName before filesystem access.
+//
+// S3: Uses the shared ValidateName rule (replaces the ad-hoc strings.Contains("..")
+// guard which did not reject slashes, uppercase, empty string, or other invalid patterns).
 func resolvePackDir(packName, localPacksDir, globalPacksDir string) (string, error) {
-	// Reject path traversal patterns before filesystem access
-	if strings.Contains(packName, "..") {
+	// Reject names that fail the shared validation rule before any filesystem access.
+	if err := validation.ValidateName(packName); err != nil {
 		return "", domerrors.NewUserError(
 			domerrors.ErrorCodeUserInputValidationFailed,
-			fmt.Sprintf("%s: pack name contains path traversal: %q", domerrors.ErrorCodeUserInputValidationFailed, packName),
+			fmt.Sprintf("%s: pack name invalid: %v", domerrors.ErrorCodeUserInputValidationFailed, err),
 			nil,
 			nil,
 		)

@@ -2,9 +2,13 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/danielgtaylor/huma/v2"
+
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 )
 
 // WorkflowHandlers exposes workflow read operations (list, get, validate) via
@@ -22,7 +26,8 @@ func NewWorkflowHandlers(b *Bridge) *WorkflowHandlers {
 func (h *WorkflowHandlers) List(ctx context.Context, _ *struct{}) (*ListWorkflowsOutput, error) {
 	entries, err := h.b.workflows.ListAllWorkflows(ctx)
 	if err != nil {
-		return nil, err
+		slog.Error("list workflows: internal error", slog.Any("error", err))
+		return nil, huma.Error500InternalServerError("failed to list workflows")
 	}
 	summaries := make([]WorkflowSummary, 0, len(entries))
 	for _, e := range entries {
@@ -43,7 +48,16 @@ func (h *WorkflowHandlers) Get(ctx context.Context, in *GetWorkflowInput) (*GetW
 	id := recomposeIdentifier(in.Scope, in.Name)
 	wf, err := h.b.workflows.GetWorkflow(ctx, id)
 	if err != nil {
-		return nil, huma.Error404NotFound(fmt.Sprintf("workflow not found: %s", id))
+		// Return 404 only for genuine "file not found" errors so that YAML
+		// parse errors, permission failures, and other internal errors do not
+		// masquerade as missing workflows. Log internals and return 500 for
+		// anything that is not a missing-file domain error.
+		var se *domainerrors.StructuredError
+		if errors.As(err, &se) && se.Code == domainerrors.ErrorCodeUserInputMissingFile {
+			return nil, huma.Error404NotFound(fmt.Sprintf("workflow not found: %s", id))
+		}
+		slog.Error("get workflow: internal error", slog.String("id", id), slog.Any("error", err))
+		return nil, huma.Error500InternalServerError("failed to load workflow")
 	}
 	out := &GetWorkflowOutput{}
 	out.Body.Body = wf
@@ -52,11 +66,22 @@ func (h *WorkflowHandlers) Get(ctx context.Context, in *GetWorkflowInput) (*GetW
 
 func (h *WorkflowHandlers) Validate(ctx context.Context, in *ValidateWorkflowInput) (*ValidateWorkflowOutput, error) {
 	id := recomposeIdentifier(in.Scope, in.Name)
-	out := &ValidateWorkflowOutput{}
+
+	// Probe existence first so a missing workflow returns 404 rather than 200
+	// with a synthetic validation error, which would be misleading to callers.
+	if _, getErr := h.b.workflows.GetWorkflow(ctx, id); getErr != nil {
+		return nil, huma.Error404NotFound(fmt.Sprintf("workflow not found: %s", id))
+	}
+
 	err := h.b.workflows.ValidateWorkflow(ctx, id)
 	if err != nil {
-		out.Body.Body = validateWorkflowBody{Errors: []string{err.Error()}}
+		// M-5: return 422 Unprocessable Entity for a workflow that fails validation.
+		// This distinguishes a "well-formed request that produced validation errors"
+		// (422) from a "server-side processing failure" (500). 200 would be misleading
+		// because the resource exists but is structurally invalid.
+		return nil, huma.Error422UnprocessableEntity(err.Error())
 	}
+	out := &ValidateWorkflowOutput{}
 	return out, nil
 }
 

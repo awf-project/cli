@@ -1,0 +1,11 @@
+name: long-running
+version: "1.0.0"
+states:
+  initial: run
+  run:
+    type: step
+    command: "sleep 30"
+    on_success: done
+    on_failure: done
+  done:
+    type: terminal

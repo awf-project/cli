@@ -142,6 +142,16 @@ const (
 	ErrorCodeUserMCPProxyInfiniteLoopGuard ErrorCode = "USER.MCP_PROXY.INFINITE_LOOP_GUARD"
 )
 
+// Error code constants for USER.ACP category (exit code 1).
+// ACP-specific codes (F102).
+const (
+	ErrorCodeUserACPInvalidPrompt              ErrorCode = "USER.ACP.INVALID_PROMPT"
+	ErrorCodeUserACPUnsupportedBlock           ErrorCode = "USER.ACP.UNSUPPORTED_BLOCK"
+	ErrorCodeUserACPPromptInFlight             ErrorCode = "USER.ACP.PROMPT_IN_FLIGHT"
+	ErrorCodeUserACPUnknownSession             ErrorCode = "USER.ACP.UNKNOWN_SESSION"
+	ErrorCodeUserACPProtocolVersionUnsupported ErrorCode = "USER.ACP.PROTOCOL_VERSION_UNSUPPORTED"
+)
+
 // Error code constants for SYSTEM.UPGRADE category (exit code 4).
 const (
 	// ErrorCodeSystemUpgradeChecksumMismatch indicates SHA256 checksum verification failed.
@@ -155,17 +165,17 @@ const (
 )
 
 // Category extracts the top-level category from the error code.
-// Returns empty string if the code format is invalid.
+// Returns the first dot-separated segment; returns empty string only when the
+// code itself is empty or starts with a dot.
 //
 // Examples:
 //   - "USER.INPUT.MISSING_FILE" → "USER"
 //   - "WORKFLOW.PARSE.YAML_SYNTAX" → "WORKFLOW"
-//   - "INVALID" → ""
+//   - "INVALID" → "INVALID"
+//   - "" → ""
+//   - ".INPUT.MISSING_FILE" → ""
 func (ec ErrorCode) Category() string {
 	parts := strings.SplitN(string(ec), ".", 2)
-	if len(parts) == 0 {
-		return ""
-	}
 	return parts[0]
 }
 

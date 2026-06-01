@@ -40,10 +40,10 @@ func TestWorkflowInstall_ValidRepoWithVersion(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/releases") {
-			releases := []map[string]interface{}{
+			releases := []map[string]any{
 				{
 					"tag_name": "v1.2.0",
-					"assets": []map[string]interface{}{
+					"assets": []map[string]any{
 						{
 							"name":                 "awf-workflow-speckit_1.2.0.tar.gz",
 							"browser_download_url": "http://" + r.Host + "/downloads/awf-workflow-speckit_1.2.0.tar.gz",
@@ -342,10 +342,10 @@ func TestWorkflowUpdate_SinglePack(t *testing.T) {
 	// Mock GitHub API
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/repos/org/awf-workflow-speckit/releases") {
-			releases := []map[string]interface{}{
+			releases := []map[string]any{
 				{
 					"tag_name": "v1.1.0",
-					"assets": []map[string]interface{}{
+					"assets": []map[string]any{
 						{
 							"name":                 "awf-workflow-speckit_1.1.0.tar.gz",
 							"browser_download_url": "http://" + r.Host + "/downloads/pack.tar.gz",
@@ -413,7 +413,7 @@ func TestWorkflowUpdate_AllPacks(t *testing.T) {
 			}
 		}`, packName, packName)
 		require.NoError(t, os.WriteFile(filepath.Join(packDir, "state.json"), []byte(stateContent), 0o644))
-		require.NoError(t, os.WriteFile(filepath.Join(packDir, "manifest.yaml"), []byte(fmt.Sprintf("name: %s\nversion: 1.0.0\n", packName)), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(packDir, "manifest.yaml"), fmt.Appendf(nil, "name: %s\nversion: 1.0.0\n", packName), 0o644))
 	}
 
 	origWd, err := os.Getwd()
@@ -425,10 +425,10 @@ func TestWorkflowUpdate_AllPacks(t *testing.T) {
 	// Mock GitHub API
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/repos/org/awf-workflow-") && strings.Contains(r.URL.Path, "/releases") {
-			releases := []map[string]interface{}{
+			releases := []map[string]any{
 				{
 					"tag_name": "v1.1.0",
-					"assets": []map[string]interface{}{
+					"assets": []map[string]any{
 						{"name": "pack.tar.gz", "browser_download_url": "http://" + r.Host + "/downloads/pack.tar.gz"},
 						{"name": "checksums.txt", "browser_download_url": "http://" + r.Host + "/downloads/checksums.txt"},
 					},
@@ -920,10 +920,10 @@ func TestRunWorkflowInstall_ProgressMessages(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.Contains(r.URL.Path, "/releases"):
-			releases := []map[string]interface{}{
+			releases := []map[string]any{
 				{
 					"tag_name": "v1.0.0",
-					"assets": []map[string]interface{}{
+					"assets": []map[string]any{
 						{
 							"name":                 "awf-workflow-msgpack_1.0.0.tar.gz",
 							"browser_download_url": "http://" + r.Host + "/downloads/awf-workflow-msgpack_1.0.0.tar.gz",
@@ -999,4 +999,83 @@ func TestRunWorkflowList_EmptyShowsNoMessage(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Contains(t, outBuf.String(), "No workflow packs installed.", "empty state should show 'No workflow packs installed.'")
+}
+
+// TestLoadWorkflowDescription_RejectsInvalidWorkflowName verifies that the CLI
+// loadWorkflowDescription helper returns an empty string for workflow names that
+// fail ValidateName, without touching the filesystem.
+//
+// The critical case is that an attacker-controlled workflowName containing ".."
+// must not read files outside the pack's workflows/ directory, even if such files
+// exist. We create a sentinel file at the expected escape path and assert it is
+// never read.
+//
+// This is the P2 fix: the CLI copy of loadWorkflowDescription now applies the
+// shared name guard before building a filepath.
+func TestLoadWorkflowDescription_RejectsInvalidWorkflowName(t *testing.T) {
+	// Layout:
+	//   root/
+	//     sensitive/
+	//       secret.yaml       ← must never be read
+	//     pack/
+	//       workflows/        ← packDir is root/pack
+	root := t.TempDir()
+	packDir := filepath.Join(root, "pack")
+	require.NoError(t, os.MkdirAll(filepath.Join(packDir, "workflows"), 0o755))
+
+	sensitiveDir := filepath.Join(root, "sensitive")
+	require.NoError(t, os.MkdirAll(sensitiveDir, 0o755))
+	// Place a file that "../../../sensitive/secret" would reach from pack/workflows/.
+	require.NoError(t, os.WriteFile(
+		filepath.Join(sensitiveDir, "secret.yaml"),
+		[]byte("description: leaked"),
+		0o644,
+	))
+
+	invalidNames := []struct {
+		name  string
+		input string
+	}{
+		{"dot-dot traversal", "../../sensitive/secret"},
+		{"slash separator", "sub/workflow"},
+		{"uppercase", "MyWorkflow"},
+		{"starts with digit", "1workflow"},
+		{"empty string", ""},
+	}
+	for _, tt := range invalidNames {
+		t.Run(tt.name, func(t *testing.T) {
+			desc := loadWorkflowDescription(packDir, tt.input)
+			assert.Empty(t, desc,
+				"loadWorkflowDescription must return empty string for invalid name %q; "+
+					"got %q which may indicate path traversal", tt.input, desc)
+		})
+	}
+}
+
+// TestFindPackDir_RejectsPathTraversal verifies that findPackDir returns an empty
+// string (not-found) for pack names that contain path-traversal patterns or other
+// characters rejected by the shared ValidateName rule.
+//
+// This is the S3 security fix: the guard is now inside findPackDir so every call
+// site in validate.go, run.go, and workflow_cmd.go benefits automatically.
+func TestFindPackDir_RejectsPathTraversal(t *testing.T) {
+	traversalAttempts := []struct {
+		name  string
+		input string
+	}{
+		{"dot-dot segments", "../../etc"},
+		{"absolute path", "/etc/passwd"},
+		{"slash in name", "pack/sub"},
+		{"uppercase", "MyPack"},
+		{"starts with digit", "1pack"},
+		{"dot-dot alone", ".."},
+		{"empty string", ""},
+	}
+	for _, tt := range traversalAttempts {
+		t.Run(tt.name, func(t *testing.T) {
+			result := findPackDir(tt.input)
+			assert.Empty(t, result,
+				"findPackDir(%q) must return empty string for invalid pack name", tt.input)
+		})
+	}
 }

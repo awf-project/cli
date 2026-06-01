@@ -38,7 +38,15 @@ func (r *YAMLRepository) WithSource(s Source) *YAMLRepository {
 
 // Load reads and parses a workflow from a YAML file.
 func (r *YAMLRepository) Load(ctx context.Context, name string) (*workflow.Workflow, error) {
-	filePath := r.resolvePath(name)
+	filePath, ok := r.resolvePath(name)
+	if !ok {
+		return nil, domerrors.NewUserError(
+			domerrors.ErrorCodeUserInputMissingFile,
+			fmt.Sprintf("workflow not found: %s", name),
+			map[string]any{"name": name},
+			nil,
+		)
+	}
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -166,7 +174,10 @@ func (r *YAMLRepository) ListWithSource(ctx context.Context) ([]ports.WorkflowIn
 
 // Exists checks if a workflow file exists.
 func (r *YAMLRepository) Exists(ctx context.Context, name string) (bool, error) {
-	filePath := r.resolvePath(name)
+	filePath, ok := r.resolvePath(name)
+	if !ok {
+		return false, nil
+	}
 	_, err := os.Stat(filePath)
 	if err == nil {
 		return true, nil
@@ -177,12 +188,49 @@ func (r *YAMLRepository) Exists(ctx context.Context, name string) (bool, error) 
 	return false, fmt.Errorf("checking workflow file: %w", err)
 }
 
-// resolvePath converts workflow name to file path.
-func (r *YAMLRepository) resolvePath(name string) string {
+// resolvePath converts a workflow name to an absolute-safe file path.
+//
+// It rejects names that resolve outside basePath after cleaning, which
+// prevents path traversal attacks such as "../../etc/passwd" or absolute
+// paths like "/etc/passwd" that filepath.Join would happily accept.
+//
+// Legitimate pack-qualified names ("speckit/specify") are allowed as long as
+// the cleaned path remains inside basePath.
+//
+// Returns ("", false) when the name would escape basePath.
+//
+// # Security note — lexical guard only
+//
+// This guard is intentionally LEXICAL: it uses filepath.Clean for path
+// normalisation but does NOT call filepath.EvalSymlinks. Symbolic links
+// inside basePath are therefore NOT resolved, so a symlink that points
+// outside basePath would pass this check.
+//
+// This is a deliberate design decision consistent with the rest of the codebase:
+// callers that build basePath from trusted sources (XDG data directories,
+// project-local .awf/ directories) accept this trade-off because resolving
+// symlinks would break legitimate use cases such as development setups that
+// symlink individual workflow files. The higher-level name validation in
+// pkg/validation (ValidateName) and the manifest-list checks provide the
+// first line of defense against untrusted names; this lexical check is the
+// final backstop for names that somehow bypass earlier guards.
+func (r *YAMLRepository) resolvePath(name string) (string, bool) {
 	if !strings.HasSuffix(name, ".yaml") {
 		name += ".yaml"
 	}
-	return filepath.Join(r.basePath, name)
+
+	// filepath.Join cleans the path but does NOT block absolute components; an
+	// absolute name silently replaces the base. Use filepath.Join then re-check.
+	joined := filepath.Join(r.basePath, name)
+	cleaned := filepath.Clean(joined)
+	base := filepath.Clean(r.basePath)
+
+	// The cleaned path must start with base + separator to remain inside base.
+	// We also accept an exact match (base itself), though that would be unusual.
+	if cleaned != base && !strings.HasPrefix(cleaned, base+string(filepath.Separator)) {
+		return "", false
+	}
+	return cleaned, true
 }
 
 // parseStates parses the states section with inline step definitions.

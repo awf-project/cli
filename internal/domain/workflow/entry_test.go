@@ -135,6 +135,10 @@ func TestWorkflowEntry_OptionalFields(t *testing.T) {
 		Workflow: "ci",
 	}
 
+	assert.Equal(t, "ci", entry.Name)
+	assert.Equal(t, "local", entry.Source)
+	assert.Equal(t, "local", entry.Scope)
+	assert.Equal(t, "ci", entry.Workflow)
 	assert.Empty(t, entry.Version)
 	assert.Empty(t, entry.Description)
 }
@@ -149,6 +153,10 @@ func TestWorkflowEntry_WithVersionAndDescription(t *testing.T) {
 		Description: "Spec-driven development workflow",
 	}
 
+	assert.Equal(t, "speckit/specify", entry.Name)
+	assert.Equal(t, "pack", entry.Source)
+	assert.Equal(t, "speckit", entry.Scope)
+	assert.Equal(t, "specify", entry.Workflow)
 	assert.Equal(t, "1.2.0", entry.Version)
 	assert.Equal(t, "Spec-driven development workflow", entry.Description)
 }

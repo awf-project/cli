@@ -55,17 +55,40 @@ type Bridge struct {
 	runner           WorkflowRunner
 	history          HistoryProvider
 	resumer          WorkflowResumer
+	baseCtx          context.Context // server shutdown context; derived by StartExecution
 	activeExecutions sync.Map
 }
 
 // NewBridge creates a Bridge wiring the given service interface implementations.
 // runner may be nil; calling StartExecution on a nil runner returns a descriptive error.
-// workflows and history must not be nil; handlers accessing them will panic otherwise.
+// workflows and history must not be nil; a nil value panics at construction time rather
+// than deferring a harder-to-diagnose panic inside a handler.
+//
+// By default StartExecution derives child contexts from context.Background(). Call
+// SetBaseContext to wire the server's shutdown context so a server stop cancels every
+// in-flight workflow (M-1 fix).
 func NewBridge(workflows WorkflowLister, runner WorkflowRunner, history HistoryProvider) *Bridge {
+	if workflows == nil {
+		panic("Bridge: workflows must not be nil")
+	}
+	if history == nil {
+		panic("Bridge: history must not be nil")
+	}
 	return &Bridge{
 		workflows: workflows,
 		runner:    runner,
 		history:   history,
+		baseCtx:   context.Background(),
+	}
+}
+
+// SetBaseContext wires the server's lifecycle context into the Bridge. After this call,
+// StartExecution derives per-execution contexts from baseCtx instead of
+// context.Background(), so a server shutdown cancels every in-flight workflow (M-1 fix).
+// Must be called before any StartExecution call; not safe for concurrent use.
+func (b *Bridge) SetBaseContext(baseCtx context.Context) { //nolint:revive // context-as-struct-field: stored as server lifecycle context, not a request context
+	if baseCtx != nil {
+		b.baseCtx = baseCtx
 	}
 }
 
@@ -80,7 +103,9 @@ func (b *Bridge) StartExecution(ctx context.Context, wf *workflow.Workflow, inpu
 
 	// Decouple execution lifetime from the HTTP request context so the workflow
 	// survives after the /run response is sent and the request context closes.
-	childCtx, cancel := context.WithCancel(context.Background())
+	// M-1 fix: derive from b.baseCtx (the server's shutdown context) rather than
+	// context.Background() so that a server shutdown cancels all in-flight workflows.
+	childCtx, cancel := context.WithCancel(b.baseCtx)
 
 	execCtx, done, err := b.runner.RunWorkflowAsync(childCtx, wf, inputs)
 	if err != nil {
@@ -149,6 +174,13 @@ func (b *Bridge) ListExecutions() []*ActiveExecution {
 // the terminal state to clients querying the just-resumed execution. Without
 // this persistence the /resume handler would return an ID that immediately
 // 404s on read. Eviction/TTL of completed entries is a separate concern.
+//
+// Context invariant: Ctx is set to context.Background() with a no-op Cancel
+// because no goroutine is in flight after a synchronous resume. Bridge.Shutdown()
+// calls Cancel on every tracked entry, which is safe on a no-op. The Done
+// channel is pre-closed to allow callers that drain it (e.g. SSE) to return
+// immediately without blocking. This deliberately differs from StartExecution
+// where Ctx and Cancel are wired to an in-flight goroutine.
 func (b *Bridge) TrackResumedExecution(execCtx *workflow.ExecutionContext) string {
 	id := uuid.NewString()
 	closed := make(chan error)
@@ -157,8 +189,8 @@ func (b *Bridge) TrackResumedExecution(execCtx *workflow.ExecutionContext) strin
 	ae := &ActiveExecution{
 		ExecutionID:      id,
 		WorkflowName:     execCtx.WorkflowName,
-		Ctx:              context.Background(),
-		Cancel:           func() {},
+		Ctx:              context.Background(), // no goroutine in flight; background is intentional
+		Cancel:           func() {},            // no-op: nothing to cancel for a completed resume
 		ExecutionContext: execCtx,
 		Done:             closed,
 	}
@@ -169,4 +201,16 @@ func (b *Bridge) TrackResumedExecution(execCtx *workflow.ExecutionContext) strin
 // SetResumer wires the optional WorkflowResumer dependency.
 func (b *Bridge) SetResumer(r WorkflowResumer) {
 	b.resumer = r
+}
+
+// Shutdown cancels every execution that is still tracked in activeExecutions.
+// It must be called after the HTTP server has stopped accepting requests so
+// that no new executions can be started concurrently.  Calling Shutdown more
+// than once is safe — context.CancelFunc is idempotent.
+func (b *Bridge) Shutdown() {
+	b.activeExecutions.Range(func(_, val any) bool {
+		ae := val.(*ActiveExecution) //nolint:forcetypeassert,errcheck // sync.Map only stores *ActiveExecution
+		ae.Cancel()
+		return true
+	})
 }

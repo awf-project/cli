@@ -4,7 +4,7 @@
 version: "1"
 
 # Default log level: debug, info, warn, error
-log_level: info
+log_level: debug
 
 # Output format: text, json, table, quiet
 output_format: text

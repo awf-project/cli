@@ -11,6 +11,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
+	"github.com/awf-project/cli/pkg/display"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -362,6 +363,22 @@ func TestExecutionSetup_WithEventPublisher(t *testing.T) {
 
 	events := mockPublisher.GetEvents()
 	assert.Greater(t, len(events), 0, "MockEventPublisher must receive events after Run()")
+}
+
+func TestWithDisplayRendererFactory_Wired(t *testing.T) {
+	mockRenderer := func(stepID string) display.EventRenderer {
+		return func(events []display.DisplayEvent) {}
+	}
+
+	setup := buildMinimalSetup(application.WithDisplayRendererFactory(mockRenderer))
+
+	result, err := setup.Build(context.Background())
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.ExecService)
+	// Verify that the setup option was accepted and Build completed without error.
+	// The actual renderer wiring is tested at the ExecutionService level.
 }
 
 // nopWriter is a no-op io.Writer used in tests.

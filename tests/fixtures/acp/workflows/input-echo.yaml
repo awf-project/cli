@@ -1,0 +1,16 @@
+name: input-echo
+version: "1.0.0"
+inputs:
+  - name: message
+    type: string
+    required: false
+    default: "hello"
+states:
+  initial: run
+  run:
+    type: step
+    command: echo "{{inputs.message}}"
+    on_success: done
+    on_failure: done
+  done:
+    type: terminal

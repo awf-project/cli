@@ -26,6 +26,7 @@ commonComponents:
   - pkg-output
   - pkg-registry
   - pkg-mcpserver
+  - pkg-acpserver
 
 vendors:
   go-stdlib:
@@ -209,6 +210,9 @@ components:
   pkg-mcpserver:
     in: ../pkg/mcpserver
 
+  pkg-acpserver:
+    in: ../pkg/acpserver
+
   # PROTOBUF
   proto-plugin:
     in: ../proto/plugin/v1
@@ -293,6 +297,9 @@ components:
   infra-xdg:
     in: infrastructure/xdg
 
+  infra-acp:
+    in: infrastructure/acp
+
   # INTERFACES LAYER
   interfaces-cli:
     in: interfaces/cli
@@ -371,6 +378,7 @@ deps:
       - infra-tools
       - infra-tools-builtins
       - infra-xdg
+      - infra-acp
     canUse:
       - go-stdlib
       - go-sync
@@ -591,7 +599,23 @@ deps:
     canUse:
       - go-stdlib
 
+  infra-acp:
+    mayDependOn:
+      - domain-ports
+      - domain-errors
+      - domain-workflow
+      - domain-plugin
+      - infra-agents
+      - infra-logger
+      - pkg-acpserver
+    canUse:
+      - go-stdlib
+
   pkg-mcpserver:
+    canUse:
+      - go-stdlib
+
+  pkg-acpserver:
     canUse:
       - go-stdlib
 
@@ -621,6 +645,7 @@ deps:
       - domain-errors
       - domain-plugin
       - domain-operation
+      - infra-acp
       - infra-agents
       - infra-audit
       - infra-analyzer

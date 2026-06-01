@@ -138,11 +138,11 @@ func TestMCPServeCommand_EmptyPluginToolsWithBuiltinsEnabled(t *testing.T) {
 	// Wait for either completion or timeout
 	select {
 	case err := <-done:
-		// Command should either succeed with clean shutdown or timeout is expected
-		// The implementation should handle context cancellation
+		// Command should either succeed with clean shutdown or return a context error.
+		// Both context.Canceled and context.DeadlineExceeded are expected outcomes
+		// depending on whether the test timeout fires before or after the goroutine exits.
 		if err != nil {
-			// If there's an error, it might be context.Canceled which is expected
-			assert.True(t, strings.Contains(err.Error(), "Canceled") || strings.Contains(err.Error(), "canceled"), "expected context cancellation or successful shutdown")
+			assert.True(t, isContextShutdownError(err.Error()), "expected context cancellation or successful shutdown, got: %s", err.Error())
 		}
 	case <-ctx.Done():
 		// Timeout is acceptable as the server waits for stdin
@@ -184,11 +184,28 @@ func TestMCPServeCommand_BuiltinsDisabled(t *testing.T) {
 	select {
 	case err := <-done:
 		if err != nil {
-			assert.True(t, strings.Contains(err.Error(), "Canceled") || strings.Contains(err.Error(), "canceled"), "expected context cancellation or successful shutdown")
+			assert.True(t, isContextShutdownError(err.Error()), "expected context cancellation or successful shutdown, got: %s", err.Error())
 		}
 	case <-ctx.Done():
 		t.Logf("Server context timeout (expected for blocking Serve call)")
 	}
+}
+
+// isContextShutdownError returns true when the error message indicates that the
+// stdio-based MCP server stopped due to an expected shutdown condition:
+//   - context.Canceled or context.DeadlineExceeded when the test timeout fires
+//   - "file already closed" / "EOF" when stdin is closed by the test runner
+//     under load (stdin is shared across tests in the same binary)
+//
+// All of these are normal termination signals for a stdio-based server; none
+// indicate a bug in the command itself.
+func isContextShutdownError(msg string) bool {
+	lower := strings.ToLower(msg)
+	return strings.Contains(lower, "canceled") ||
+		strings.Contains(lower, "cancelled") ||
+		strings.Contains(lower, "deadline exceeded") ||
+		strings.Contains(lower, "file already closed") ||
+		strings.Contains(lower, "eof")
 }
 
 func TestMCPServeCommand_ConfigFileCreatedByProxy(t *testing.T) {

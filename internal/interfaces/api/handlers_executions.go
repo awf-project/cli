@@ -2,9 +2,13 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/danielgtaylor/huma/v2"
+
+	"github.com/awf-project/cli/internal/application"
 )
 
 // ExecutionHandlers exposes execution lifecycle operations via HTTP.
@@ -64,7 +68,14 @@ func (h *ExecutionHandlers) Resume(ctx context.Context, in *ResumeExecutionInput
 	}
 	execCtx, err := h.b.resumer.Resume(ctx, in.ID, in.Body.InputOverrides, in.Body.FromStep)
 	if err != nil {
-		return nil, huma.Error404NotFound(fmt.Sprintf("execution not found or cannot be resumed: %s", in.ID))
+		// Return 404 only when the execution record genuinely does not exist.
+		// Use errors.Is against the sentinel so future message rewording never
+		// accidentally triggers — or misses — a 404.
+		if errors.Is(err, application.ErrExecutionNotFound) {
+			return nil, huma.Error404NotFound(fmt.Sprintf("execution not found: %s", in.ID))
+		}
+		slog.Error("resume execution: internal error", slog.String("id", in.ID), slog.Any("error", err))
+		return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("cannot resume execution: %s", err))
 	}
 	id := h.b.TrackResumedExecution(execCtx)
 	out := &RunWorkflowOutput{}
