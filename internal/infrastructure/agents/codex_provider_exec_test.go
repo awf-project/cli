@@ -214,9 +214,10 @@ func TestCodexProvider_ExecuteConversation_ResumeTurnResumeCommand(t *testing.T)
 	calls := mockExec.GetCalls()
 	require.Len(t, calls, 1)
 	args := calls[0].Args
-	assert.Equal(t, "resume", args[0], "resume turn should use 'resume' subcommand")
-	assert.Equal(t, "xyz789", args[1], "should have session ID as arg[1]")
-	assert.Equal(t, "--json", args[2], "should have --json flag after session ID")
+	assert.Equal(t, "exec", args[0], "resume turn should use exec subcommand")
+	assert.Equal(t, "resume", args[1], "should use the exec resume subcommand")
+	assert.Equal(t, "xyz789", args[2], "should have session ID as arg[2]")
+	assert.Equal(t, "--json", args[3], "should have --json flag after session ID")
 	assert.Contains(t, strings.Join(args, " "), "continue", "should contain prompt")
 }
 

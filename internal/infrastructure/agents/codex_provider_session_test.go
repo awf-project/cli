@@ -240,14 +240,14 @@ func TestCodexProvider_ExecuteConversation_SystemPromptFirstTurnOnly(t *testing.
 			assert.NotContains(t, args, "--system-prompt", "codex has no --system-prompt flag")
 
 			// The prompt arg sits immediately after the subcommand positional args.
-			// exec: args = ["exec", "--json", <prompt>, ...]
-			// resume: args = ["resume", <thread_id>, "--json", <prompt>, ...]
+			// first turn: args = ["exec", "--json", <prompt>, ...]
+			// resume:     args = ["exec", "resume", <thread_id>, "--json", <prompt>, ...]
 			var promptArg string
-			switch args[0] {
-			case "exec":
+			switch {
+			case args[0] == "exec" && len(args) > 1 && args[1] == "resume":
+				promptArg = args[4]
+			case args[0] == "exec":
 				promptArg = args[2]
-			case "resume":
-				promptArg = args[3]
 			default:
 				t.Fatalf("unexpected subcommand %q", args[0])
 			}

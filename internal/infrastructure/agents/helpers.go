@@ -62,7 +62,7 @@ func tryParseJSONResponse(output string) map[string]any {
 // findFirstNDJSONEvent scans NDJSON output and returns the first parsed event
 // whose "type" field equals eventType. Returns nil if no match is found.
 func findFirstNDJSONEvent(output, eventType string) map[string]any {
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -80,7 +80,7 @@ func findFirstNDJSONEvent(output, eventType string) map[string]any {
 
 func findLastNDJSONEvent(output, eventType string) map[string]any {
 	var found map[string]any
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
