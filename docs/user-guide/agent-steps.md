@@ -1132,8 +1132,8 @@ Agent responses are automatically captured in the execution state:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `{{.states.step_name.Output}}` | string | Raw response text (or cleaned text if `output_format` is set) |
-| `{{.states.step_name.Response}}` | object | Parsed JSON response (automatic heuristic) |
+| `{{.states.step_name.Output}}` | string | Aggregated assistant text. For CLI providers emitting NDJSON (Claude, Codex, Gemini, OpenCode, GitHub Copilot), the raw stream is extracted to clean text regardless of `output_format`; for HTTP providers, the response body text. `output_format: json` additionally strips markdown code fences. |
+| `{{.states.step_name.Response}}` | object | Parsed JSON response (automatic heuristic — populated when the assistant text is a valid JSON object) |
 | `{{.states.step_name.JSON}}` | object | Parsed JSON from `output_format: json` (explicit, see [Output Formatting](#output-formatting)) |
 | `{{.states.step_name.TokensUsed}}` | int | Total tokens consumed by this step |
 | `{{.states.step_name.TokensInput}}` | int | Input tokens (prompt + context). `0` in single-turn mode. |
@@ -1165,10 +1165,11 @@ process_response:
 
 ## Output Formatting
 
-The `output_format` field serves two purposes:
+The `output_format` field serves three purposes:
 
-1. **Post-processing**: Strips markdown code fences and optionally validates JSON (F065)
-2. **Display filtering**: Controls how agent responses appear on terminal during streaming and buffered execution, with optional verbose tool-use markers (F082, F085)
+1. **Text Extraction**: For CLI providers, extracts clean assistant text from streaming event logs (F103, F082)
+2. **Post-processing**: Strips markdown code fences and optionally validates JSON (F065)
+3. **Display filtering**: Controls how agent responses appear on terminal during streaming and buffered execution, with optional verbose tool-use markers (F082, F085)
 
 When an agent wraps its output in markdown code fences (common with many LLMs), use `output_format` to automatically strip the fences and optionally validate the content:
 
@@ -1210,6 +1211,7 @@ process_results:
 - Strips outermost markdown code fences (e.g., ````json ... ``` ``)
 - Validates stripped content as valid JSON
 - Stores parsed JSON in `{{.states.step_name.JSON}}`
+- Automatically populates `{{.states.step_name.Response}}` with parsed JSON (available across all providers)
 - If validation fails, step fails with a descriptive error
 - Works with both objects and arrays
 
@@ -1225,6 +1227,8 @@ The analysis shows the following:
 - `{{.states.analyze.Output}}` = `{"issues": ["buffer overflow", "memory leak"], "severity": "high"}`
 - `{{.states.analyze.JSON.issues}}` = `["buffer overflow", "memory leak"]`
 - `{{.states.analyze.JSON.severity}}` = `"high"`
+- `{{.states.analyze.Response.issues}}` = `["buffer overflow", "memory leak"]` (same as JSON)
+- `{{.states.analyze.Response.severity}}` = `"high"` (same as JSON)
 
 #### `text` Format
 
@@ -1248,6 +1252,7 @@ save_code:
 - Strips outermost markdown code fences (e.g., ````python ... ``` ``)
 - Returns clean text in `{{.states.step_name.Output}}`
 - Does not populate `{{.states.step_name.JSON}}`
+- Automatically populates `{{.states.step_name.Response}}` if the output happens to be valid JSON (heuristic)
 
 **Example agent output:**
 ```
@@ -1262,6 +1267,8 @@ def fibonacci(n):
 
 **After processing:**
 - `{{.states.generate_code.Output}}` = `def fibonacci(n):\n    if n <= 1:\n        return n\n    return fibonacci(n-1) + fibonacci(n-2)`
+- `{{.states.generate_code.JSON}}` = empty/not populated (no `output_format: json`)
+- `{{.states.generate_code.Response}}` = populated only if output happens to be valid JSON
 
 #### No Format (Default)
 
@@ -1279,10 +1286,15 @@ analyze:
 
 The `output_format` field controls how agent responses appear on the terminal (F082). Additionally, the `--verbose` flag displays tool-use activity markers (F085) — showing which tools the agent invoked — alongside agent output when running with `awf run --output streaming` or `--output buffered`:
 
-| `output_format` | Streaming Display | Buffered Display | Raw Storage |
+| `output_format` | Streaming Display | Buffered Display | `state.Output` Storage |
 |---|---|---|---|
-| `text` (or omitted) | Human-readable filtered text | Filtered text in summary | Raw NDJSON |
-| `json` | Raw NDJSON (unfiltered) | Raw NDJSON (unfiltered) | Raw NDJSON |
+| `text` (or omitted) | Human-readable filtered text | Filtered text in summary | Extracted assistant text |
+| `json` | Raw NDJSON (unfiltered) | Raw NDJSON (unfiltered) | Extracted assistant text (markdown code fences stripped) |
+
+**Output Parity Across All Providers (F103):** For CLI-based providers (Claude, Codex, Gemini, OpenCode), the system automatically extracts clean assistant text from NDJSON events and stores it in `state.Output`. Additionally:
+- `state.Response` is automatically populated when the output is valid JSON (heuristic, regardless of `output_format`)
+- Both `output_format: json` and omitted formats produce semantically equivalent output shapes across all providers
+- Codex now has feature parity with Claude, Gemini, and OpenCode for output handling
 
 #### Streaming Mode (`--output streaming`)
 
@@ -1347,10 +1359,10 @@ Silent mode suppresses all display regardless of `output_format`:
 ```bash
 awf run code-review --output silent
 # No output displayed (silent mode is absolute)
-# state.Output still contains raw NDJSON for template interpolation
+# state.Output still contains the aggregated assistant text for template interpolation
 ```
 
-**Note:** `state.Output` always contains the raw NDJSON regardless of display filtering. Filtering only affects terminal display, not data storage.
+**Note:** `state.Output` is populated independently of display filtering. For CLI providers emitting NDJSON (Claude, Codex, Gemini, OpenCode, GitHub Copilot), the assistant text is extracted from the raw stream and stored — so `{{.states.step.Output}}` resolves to clean text regardless of `output_format`. Filtering only affects terminal display, not data storage.
 
 #### Provider Event Cadence
 

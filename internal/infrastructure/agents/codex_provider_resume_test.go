@@ -53,11 +53,12 @@ func TestCodexProvider_ExecuteConversation_T005_ResumeTurnResumeSubcommand(t *te
 	call := calls[0]
 
 	assert.Equal(t, "codex", call.Name)
-	assert.GreaterOrEqual(t, len(call.Args), 4)
-	assert.Equal(t, "resume", call.Args[0], "resume turn should use resume subcommand")
-	assert.Equal(t, "codex-sess-123", call.Args[1], "session ID should be args[1]")
-	assert.Equal(t, "--json", call.Args[2], "resume should have --json flag after session ID")
-	assert.Equal(t, "add error handling", call.Args[3], "prompt should follow --json")
+	assert.GreaterOrEqual(t, len(call.Args), 5)
+	assert.Equal(t, "exec", call.Args[0], "resume turn should use exec subcommand")
+	assert.Equal(t, "resume", call.Args[1], "exec resume subcommand")
+	assert.Equal(t, "codex-sess-123", call.Args[2], "session ID should be args[2]")
+	assert.Equal(t, "--json", call.Args[3], "resume should have --json flag after session ID")
+	assert.Equal(t, "add error handling", call.Args[4], "prompt should follow --json")
 }
 
 // T005: ExecuteConversation uses resume for any non-empty session ID (no prefix required)
@@ -77,10 +78,11 @@ func TestCodexProvider_ExecuteConversation_T005_NonCodexPrefixedSessionIDFallbac
 	require.Len(t, calls, 1)
 	call := calls[0]
 
-	assert.Equal(t, "resume", call.Args[0], "any non-empty session ID triggers resume subcommand")
-	assert.Equal(t, "non-codex-prefixed-id", call.Args[1], "session ID passed after resume")
-	assert.Equal(t, "--json", call.Args[2])
-	assert.Equal(t, "continue", call.Args[3])
+	assert.Equal(t, "exec", call.Args[0], "any non-empty session ID triggers exec resume")
+	assert.Equal(t, "resume", call.Args[1], "exec resume subcommand")
+	assert.Equal(t, "non-codex-prefixed-id", call.Args[2], "session ID passed after resume")
+	assert.Equal(t, "--json", call.Args[3])
+	assert.Equal(t, "continue", call.Args[4])
 }
 
 // T005: Quiet flag is NOT passed (replaced by --json on exec/resume)
@@ -204,7 +206,7 @@ func TestCodexProvider_ExecuteConversation_T005_OptionsWithSubcommands(t *testin
 			name:           "resume turn with model",
 			sessionID:      "codex-sess-abc",
 			options:        map[string]any{"model": "gpt-4o"},
-			expectedSubcmd: "resume",
+			expectedSubcmd: "exec",
 			expectedFlag:   "--model",
 		},
 		{
@@ -218,7 +220,7 @@ func TestCodexProvider_ExecuteConversation_T005_OptionsWithSubcommands(t *testin
 			name:           "resume turn with dangerously_skip_permissions",
 			sessionID:      "codex-sess-xyz",
 			options:        map[string]any{"dangerously_skip_permissions": true},
-			expectedSubcmd: "resume",
+			expectedSubcmd: "exec",
 			expectedFlag:   "--dangerously-bypass-approvals-and-sandbox",
 		},
 	}
@@ -239,6 +241,9 @@ func TestCodexProvider_ExecuteConversation_T005_OptionsWithSubcommands(t *testin
 			call := calls[0]
 
 			assert.Equal(t, tt.expectedSubcmd, call.Args[0])
+			if tt.sessionID != "" {
+				assert.Equal(t, "resume", call.Args[1], "resume turn nests the resume subcommand under exec")
+			}
 			assert.Contains(t, call.Args, tt.expectedFlag, "expected flag should be in args")
 			assert.NotContains(t, call.Args, "--language", "--language is not supported")
 			assert.NotContains(t, call.Args, "--yolo", "--yolo is not supported")
@@ -316,7 +321,7 @@ func TestCodexProvider_ExecuteConversation_T005_SystemPromptHandling(t *testing.
 			name:            "resume turn with system prompt (should ignore)",
 			sessionID:       "codex-sess-abc",
 			hasSystemPrompt: true,
-			expectedSubcmd:  "resume",
+			expectedSubcmd:  "exec",
 			shouldInline:    false,
 		},
 	}
@@ -345,11 +350,11 @@ func TestCodexProvider_ExecuteConversation_T005_SystemPromptHandling(t *testing.
 			assert.NotContains(t, args, "--system-prompt", "codex has no --system-prompt flag")
 
 			var promptArg string
-			switch args[0] {
-			case "exec":
+			switch {
+			case args[0] == "exec" && len(args) > 1 && args[1] == "resume":
+				promptArg = args[4]
+			case args[0] == "exec":
 				promptArg = args[2]
-			case "resume":
-				promptArg = args[3]
 			}
 
 			if tt.shouldInline {

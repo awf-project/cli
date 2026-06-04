@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **F103**: Codex provider output parity — `state.Output` and `ConversationResult.Output` for the `codex` provider now contain clean aggregated assistant text instead of raw NDJSON, regardless of `output_format` value (`json`, `stream-json`, `text`, or absent), closing the gap left by B015 in 0.7.1 which only covered Claude, Gemini, and OpenCode. Aggregation is presence-aware: when the NDJSON stream contains ≥1 `assistant_message` event, the extracted text overwrites `Output` (empty `assistant_message` yields `Output == ""`); when no events are parsed (plain-text mocks, pre-result lifecycle events only), the base output is preserved. `state.Response` and `ConversationResult.Response` are now populated via `tryParseJSONResponse` on the aggregated assistant text when it is a valid JSON object — matching Gemini/OpenCode semantics. Estimated token recount runs on the extracted text rather than the raw NDJSON length. Conversation parity achieved through a Codex-targeted override in `ExecuteConversation` plus an `extractTextContent` hook wired into `cliProviderHooks`; base provider and other CLI providers (Claude, Gemini, OpenCode, GitHub Copilot) are bit-identical. NUL bytes, multi-event streams, empty assistant messages, and non-JSON plain text are all handled without panic or truncation. Workflow authors can now reference `{{.states.codex_step.Output}}` and `{{.states.codex_step.Response}}` with the same semantics as other providers, unblocking multi-step workflows that pipe Codex output downstream.
+
 ## [0.10.0] - 2026-06-01
 
 ### Changed

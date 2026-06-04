@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,9 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// Component: C025 - Unit Tests for CodexProvider (WITHOUT integration build tag)
-// These tests use MockCLIExecutor to avoid external CLI dependencies
 
 func TestCodexProvider_Execute_Success(t *testing.T) {
 	tests := []struct {
@@ -69,7 +67,6 @@ func TestCodexProvider_Execute_Success(t *testing.T) {
 			require.NotNil(t, result)
 			assert.Equal(t, "codex", result.Provider)
 			assert.Equal(t, tt.wantOutput, result.Output)
-			// Token estimation is ~4 chars per token
 			expectedTokens := len(tt.wantOutput) / 4
 			assert.Equal(t, expectedTokens, result.Tokens)
 			assert.False(t, result.StartedAt.IsZero())
@@ -175,7 +172,6 @@ func TestCodexProvider_Execute_EmptyPrompt(t *testing.T) {
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.wantErr)
 			assert.Nil(t, result)
-			// Executor should not be called
 			calls := mockExec.GetCalls()
 			assert.Empty(t, calls)
 		})
@@ -189,7 +185,6 @@ func TestCodexProvider_Execute_ValidationErrors(t *testing.T) {
 		options map[string]any
 		wantErr string
 	}{
-		// Valid models (should not error)
 		{
 			name:    "valid model: gpt-4o",
 			prompt:  "test",
@@ -226,7 +221,6 @@ func TestCodexProvider_Execute_ValidationErrors(t *testing.T) {
 			options: map[string]any{"model": "o4-mini"},
 			wantErr: "",
 		},
-		// Invalid models (should error)
 		{
 			name:    "invalid model: claude-3-opus (wrong provider)",
 			prompt:  "test",
@@ -269,7 +263,6 @@ func TestCodexProvider_Execute_ValidationErrors(t *testing.T) {
 			options: map[string]any{"model": "oracle"},
 			wantErr: "must start with 'gpt-', 'codex-', or be an o-series",
 		},
-		// Options that are silently ignored (no validation error)
 		{
 			name:    "max_tokens is silently ignored (no validation error)",
 			prompt:  "test",
@@ -396,6 +389,10 @@ func TestCodexProvider_Execute_CLIErrors(t *testing.T) {
 	}
 }
 
+// TestCodexProvider_Execute_StdoutStderrCombination exercises the non-NDJSON fallback path:
+// plain stdout/stderr carries no assistant_message event, so extractCodexAssistantText reports
+// hadText=false and Output is whatever baseCLIProvider.combineOutput produced. It validates the
+// base combine/fallback behavior, not the F103 NDJSON extraction overwrite.
 func TestCodexProvider_Execute_StdoutStderrCombination(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -459,30 +456,13 @@ func TestCodexProvider_Execute_StdoutStderrCombination(t *testing.T) {
 
 func TestCodexProvider_Execute_TokenEstimation(t *testing.T) {
 	tests := []struct {
-		name           string
-		mockStdout     []byte
-		expectedTokens int
+		name       string
+		mockStdout []byte
 	}{
-		{
-			name:           "small output",
-			mockStdout:     []byte("test"),
-			expectedTokens: 1, // 4 chars / 4 = 1
-		},
-		{
-			name:           "medium output",
-			mockStdout:     []byte("This is a longer output with multiple words"),
-			expectedTokens: 10, // 44 chars / 4 = 10 (integer division)
-		},
-		{
-			name:           "large output",
-			mockStdout:     make([]byte, 1000),
-			expectedTokens: 250, // 1000 / 4 = 250
-		},
-		{
-			name:           "empty output",
-			mockStdout:     []byte(""),
-			expectedTokens: 0,
-		},
+		{name: "small output", mockStdout: []byte("test")},
+		{name: "medium output", mockStdout: []byte("This is a longer output with multiple words")},
+		{name: "large output", mockStdout: make([]byte, 1000)},
+		{name: "empty output", mockStdout: []byte("")},
 	}
 
 	for _, tt := range tests {
@@ -495,35 +475,16 @@ func TestCodexProvider_Execute_TokenEstimation(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
-			assert.Equal(t, tt.expectedTokens, result.Tokens)
+			// Plain (non-NDJSON) output is used verbatim, except an empty body becomes the " "
+			// fallback. The ApproximationTokenizer estimates len/4 tokens; derive the expectation
+			// from that contract instead of hardcoding so the test tracks the tokenizer's ratio.
+			wantOutput := string(tt.mockStdout)
+			if wantOutput == "" {
+				wantOutput = " "
+			}
+			assert.Equal(t, len(wantOutput)/4, result.Tokens)
 		})
 	}
-}
-
-func TestCodexProvider_Execute_TimestampOrdering(t *testing.T) {
-	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte("code"), nil)
-	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
-
-	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
-
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.False(t, result.StartedAt.IsZero())
-	assert.False(t, result.CompletedAt.IsZero())
-	assert.True(t, result.CompletedAt.After(result.StartedAt) || result.CompletedAt.Equal(result.StartedAt))
-}
-
-func TestCodexProvider_Execute_ProviderName(t *testing.T) {
-	mockExec := mocks.NewMockCLIExecutor()
-	mockExec.SetOutput([]byte("code"), nil)
-	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
-
-	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
-
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, "codex", result.Provider)
 }
 
 func TestCodexProvider_ExecuteConversation_Success(t *testing.T) {
@@ -698,7 +659,6 @@ func TestCodexProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 		options map[string]any
 		wantErr string
 	}{
-		// Valid models (should not error)
 		{
 			name:    "valid model: gpt-4o",
 			options: map[string]any{"model": "gpt-4o"},
@@ -714,7 +674,6 @@ func TestCodexProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 			options: map[string]any{"model": "o1"},
 			wantErr: "",
 		},
-		// Invalid models (should error)
 		{
 			name:    "invalid model: claude-3-opus",
 			options: map[string]any{"model": "claude-3-opus"},
@@ -735,7 +694,6 @@ func TestCodexProvider_ExecuteConversation_ValidationErrors(t *testing.T) {
 			options: map[string]any{"model": "ollama"},
 			wantErr: "must start with 'gpt-', 'codex-', or be an o-series",
 		},
-		// Options that are silently ignored (no validation error)
 		{
 			name:    "temperature is silently ignored (no validation error)",
 			options: map[string]any{"temperature": 2.5},
@@ -911,15 +869,12 @@ func TestCodexProvider_Name(t *testing.T) {
 	assert.Equal(t, "codex", provider.Name())
 }
 
-func TestCodexProvider_Validate_Success(t *testing.T) {
-	// Note: This test will fail if 'codex' is not in PATH
-	// For unit testing purposes, we skip this test if codex is not available
+func TestCodexProvider_Validate_DoesNotPanic(t *testing.T) {
+	// Validate() resolves 'codex' in PATH, so its result is environment-specific
+	// (error when absent, nil when installed). This test only guarantees the method
+	// can be invoked without panicking.
 	provider := NewCodexProvider()
-	err := provider.Validate()
-
-	// We don't assert anything specific here because this depends on the system
-	// The test verifies the method can be called without panicking
-	_ = err
+	_ = provider.Validate()
 }
 
 func TestCodexProvider_NewCodexProvider_DefaultExecutor(t *testing.T) {
@@ -930,7 +885,6 @@ func TestCodexProvider_NewCodexProvider_DefaultExecutor(t *testing.T) {
 	assert.True(t, ok, "default executor should be ExecCLIExecutor")
 }
 
-// T008: Explicit tests for `exec --json` arg structure assertion
 func TestCodexProvider_Execute_ExecJSONStructure(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -986,7 +940,6 @@ func TestCodexProvider_Execute_ExecJSONStructure(t *testing.T) {
 	}
 }
 
-// T008: Verify --json flag is first arg after exec subcommand
 func TestCodexProvider_Execute_JSONFlagPosition(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("result"), nil)
@@ -1005,7 +958,6 @@ func TestCodexProvider_Execute_JSONFlagPosition(t *testing.T) {
 	assert.Equal(t, "test prompt", args[2])
 }
 
-// T008: ExecuteConversation uses exec --json on first turn
 func TestCodexProvider_ExecuteConversation_FirstTurnExecJSON(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("response"), nil)
@@ -1025,7 +977,481 @@ func TestCodexProvider_ExecuteConversation_FirstTurnExecJSON(t *testing.T) {
 	assert.Equal(t, "first prompt", args[2], "third arg should be prompt")
 }
 
-// T008: ExecuteConversation uses resume subcommand on resume turn
+func TestCodexProvider_extractCodexTextContent(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantText string
+	}{
+		{
+			name:     "single assistant_message",
+			input:    ndjsonLine("hello"),
+			wantText: "hello",
+		},
+		{
+			name:     "multiple assistant_messages joined with newline",
+			input:    ndjsonLine("foo") + "\n" + ndjsonLine("bar"),
+			wantText: "foo\nbar",
+		},
+		{
+			name:     "empty assistant_message text",
+			input:    ndjsonLine(""),
+			wantText: "",
+		},
+		{
+			name:     "plain non-NDJSON text",
+			input:    "second response",
+			wantText: "",
+		},
+		{
+			name:     "empty input",
+			input:    "",
+			wantText: "",
+		},
+		{
+			name:     "NUL byte inside JSON string value",
+			input:    "{\"type\":\"item.completed\",\"item\":{\"item_type\":\"assistant_message\",\"text\":\"hell\x00o\"}}",
+			wantText: "hell\x00o",
+		},
+		{
+			name:     "function_call only produces no text",
+			input:    `{"type":"item.completed","item":{"item_type":"function_call","name":"bash","arguments":"{}"}}`,
+			wantText: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewCodexProvider()
+			got := p.extractCodexTextContent(tt.input)
+			assert.Equal(t, tt.wantText, got)
+		})
+	}
+}
+
+func TestCodexProvider_extractCodexAssistantText(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		wantText    string
+		wantHadText bool
+	}{
+		{
+			name:        "single assistant_message with text",
+			input:       ndjsonLine("hello"),
+			wantText:    "hello",
+			wantHadText: true,
+		},
+		{
+			name:        "multiple assistant_messages joined with newline",
+			input:       ndjsonLine("foo") + "\n" + ndjsonLine("bar"),
+			wantText:    "foo\nbar",
+			wantHadText: true,
+		},
+		{
+			name:        "empty assistant_message text — hadText true despite empty string",
+			input:       ndjsonLine(""),
+			wantText:    "",
+			wantHadText: true,
+		},
+		{
+			name:        "plain non-NDJSON text — hadText false",
+			input:       "second response",
+			wantText:    "",
+			wantHadText: false,
+		},
+		{
+			name:        "empty input",
+			input:       "",
+			wantText:    "",
+			wantHadText: false,
+		},
+		{
+			name:        "NUL byte inside JSON string value — no truncation",
+			input:       "{\"type\":\"item.completed\",\"item\":{\"item_type\":\"assistant_message\",\"text\":\"hell\x00o\"}}",
+			wantText:    "hell\x00o",
+			wantHadText: true,
+		},
+		{
+			name:        "function_call only — hadText false",
+			input:       `{"type":"item.completed","item":{"item_type":"function_call","name":"bash","arguments":"{}"}}`,
+			wantText:    "",
+			wantHadText: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewCodexProvider()
+			gotText, gotHadText := p.extractCodexAssistantText(tt.input)
+			assert.Equal(t, tt.wantText, gotText)
+			assert.Equal(t, tt.wantHadText, gotHadText)
+		})
+	}
+}
+
+func TestCodexProvider_extractCodexTokenUsage(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		wantNil    bool
+		wantInput  int
+		wantOutput int
+		wantTotal  int
+	}{
+		{
+			name:       "turn.completed with full usage",
+			input:      `{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":5}}`,
+			wantInput:  10,
+			wantOutput: 5,
+			wantTotal:  15,
+		},
+		{
+			name:       "usage among multiple events",
+			input:      `{"type":"thread.started","thread_id":"t1"}` + "\n" + `{"type":"turn.completed","usage":{"input_tokens":3,"output_tokens":7}}`,
+			wantInput:  3,
+			wantOutput: 7,
+			wantTotal:  10,
+		},
+		{
+			name:       "partial usage defaults missing field to zero",
+			input:      `{"type":"turn.completed","usage":{"input_tokens":4}}`,
+			wantInput:  4,
+			wantOutput: 0,
+			wantTotal:  4,
+		},
+		{
+			name:    "turn.completed without usage field",
+			input:   `{"type":"turn.completed"}`,
+			wantNil: true,
+		},
+		{
+			name:    "usage present but not an object",
+			input:   `{"type":"turn.completed","usage":"nope"}`,
+			wantNil: true,
+		},
+		{
+			name:    "no turn.completed event",
+			input:   `{"type":"item.completed","item":{"item_type":"assistant_message","text":"hi"}}`,
+			wantNil: true,
+		},
+		{
+			name:    "empty output",
+			input:   "",
+			wantNil: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewCodexProvider()
+			usage := p.extractCodexTokenUsage(tt.input)
+			if tt.wantNil {
+				assert.Nil(t, usage)
+				return
+			}
+			require.NotNil(t, usage)
+			assert.Equal(t, tt.wantInput, usage.InputTokens)
+			assert.Equal(t, tt.wantOutput, usage.OutputTokens)
+			assert.Equal(t, tt.wantTotal, usage.TotalTokens)
+		})
+	}
+}
+
+// TestCodexProvider_RealStream_0133 feeds the exact NDJSON stream emitted by
+// codex-cli 0.133.0 (captured from `codex exec --json`) and asserts the assistant text
+// is extracted cleanly and the real usage is read. Regression guard for the schema drift
+// (item.type=agent_message) that previously left the raw envelope in state.Output.
+func TestCodexProvider_RealStream_0133(t *testing.T) {
+	stream := strings.Join([]string{
+		`{"type":"thread.started","thread_id":"019e91f0-2fd4-7a20-9fc2-03994766eec3"}`,
+		`{"type":"turn.started"}`,
+		`{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"PONG"}}`,
+		`{"type":"turn.completed","usage":{"input_tokens":18809,"cached_input_tokens":3456,"output_tokens":6,"reasoning_output_tokens":0}}`,
+	}, "\n")
+
+	p := NewCodexProvider()
+
+	text, hadText := p.extractCodexAssistantText(stream)
+	assert.True(t, hadText, "agent_message must be recognized as assistant text")
+	assert.Equal(t, "PONG", text, "Output must be the clean answer, not the raw NDJSON envelope")
+
+	usage := p.extractCodexTokenUsage(stream)
+	require.NotNil(t, usage, "turn.completed.usage must be read")
+	assert.Equal(t, 18809, usage.InputTokens)
+	assert.Equal(t, 6, usage.OutputTokens)
+}
+
+func TestCodexProvider_Execute_OutputExtractionAllFormats(t *testing.T) {
+	ndjson := `{"type":"item.completed","item":{"item_type":"assistant_message","text":"clean extracted text"}}`
+	tests := []struct {
+		name         string
+		outputFormat string
+	}{
+		{name: "json format", outputFormat: "json"},
+		{name: "stream-json format", outputFormat: "stream-json"},
+		{name: "text format", outputFormat: "text"},
+		{name: "empty format", outputFormat: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput([]byte(ndjson), nil)
+			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+			options := map[string]any{"output_format": tt.outputFormat}
+
+			result, err := provider.Execute(context.Background(), "test", options, nil, nil)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, "clean extracted text", result.Output)
+		})
+	}
+}
+
+func TestCodexProvider_Execute_ResponsePopulation_ValidJSON(t *testing.T) {
+	ndjson := `{"type":"item.completed","item":{"item_type":"assistant_message","text":"{\"answer\":42}"}}`
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Response)
+	assert.Equal(t, float64(42), result.Response["answer"])
+}
+
+func TestCodexProvider_Execute_ResponsePopulation_InvalidJSON(t *testing.T) {
+	ndjson := `{"type":"item.completed","item":{"item_type":"assistant_message","text":"plain prose text"}}`
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Nil(t, result.Response)
+	assert.Equal(t, "plain prose text", result.Output)
+}
+
+func TestCodexProvider_Execute_ResponsePopulation_EmptyExtraction(t *testing.T) {
+	rawMock := "raw plain text output"
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(rawMock), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Nil(t, result.Response)
+	assert.Equal(t, rawMock, result.Output)
+}
+
+func TestCodexProvider_Execute_TokenRecountOnExtracted(t *testing.T) {
+	// recount uses extracted length ("hi" = 0 tokens), not raw NDJSON length (~19 tokens)
+	ndjson := `{"type":"item.completed","item":{"item_type":"assistant_message","text":"hi"}}`
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.TokensEstimated)
+	assert.Equal(t, len("hi")/4, result.Tokens)
+}
+
+func TestCodexProvider_ExecuteConversation_EmptyAssistantMessage(t *testing.T) {
+	// Response nil: base uses struct literal init, not make(); update if base switches to pre-init.
+	ndjson := `{"type":"item.completed","item":{"item_type":"assistant_message","text":""}}`
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	result, err := provider.ExecuteConversation(context.Background(), workflow.NewConversationState(""), "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "", result.Output)
+	assert.Nil(t, result.Response)
+	// F103: the presence-aware overwrite must re-derive token counts from the extracted
+	// (empty) text rather than leaving the inflated count the base computed on the raw NDJSON.
+	assert.Equal(t, 0, result.TokensOutput)
+	assert.Equal(t, result.TokensInput, result.TokensTotal)
+	// And the trailing assistant turn Content must match the overwritten Output.
+	require.NotEmpty(t, result.State.Turns)
+	last := result.State.Turns[len(result.State.Turns)-1]
+	assert.Equal(t, workflow.TurnRoleAssistant, last.Role)
+	assert.Equal(t, "", last.Content)
+}
+
+func TestCodexProvider_ExecuteConversation_ResponsePopulation_ValidJSON(t *testing.T) {
+	ndjson := `{"type":"item.completed","item":{"item_type":"assistant_message","text":"{\"answer\":42}"}}`
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	result, err := provider.ExecuteConversation(context.Background(), workflow.NewConversationState(""), "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.Response)
+	assert.Equal(t, float64(42), result.Response["answer"])
+}
+
+func TestCodexProvider_ExecuteConversation_JSONResponse(t *testing.T) {
+	ndjson := `{"type":"item.completed","item":{"item_type":"assistant_message","text":"{\"key\":\"val\"}"}}`
+	tests := []struct {
+		name         string
+		outputFormat string
+	}{
+		{name: "json format", outputFormat: "json"},
+		{name: "stream-json format", outputFormat: "stream-json"},
+		{name: "text format", outputFormat: "text"},
+		{name: "absent format", outputFormat: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput([]byte(ndjson), nil)
+			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+			options := map[string]any{"output_format": tt.outputFormat}
+
+			result, err := provider.ExecuteConversation(context.Background(), workflow.NewConversationState(""), "test", options, nil, nil)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.NotNil(t, result.Response, "Response must be populated for all output_format values")
+			assert.Equal(t, "val", result.Response["key"])
+		})
+	}
+}
+
+func TestCodexProvider_ExecuteConversation_NilResponseOnPlainText(t *testing.T) {
+	ndjson := `{"type":"item.completed","item":{"item_type":"assistant_message","text":"plain prose text"}}`
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	result, err := provider.ExecuteConversation(context.Background(), workflow.NewConversationState(""), "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Nil(t, result.Response)
+	assert.Equal(t, "plain prose text", result.Output)
+}
+
+func TestCodexProvider_ExecuteConversation_MultiEventNDJSON(t *testing.T) {
+	ndjson := ndjsonLine("foo") + "\n" + ndjsonLine("bar")
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+	state := workflow.NewConversationState("")
+
+	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "foo\nbar", result.Output)
+}
+
+func TestCodexProvider_ExecuteConversation_NULBytesInStream(t *testing.T) {
+	ndjson := "{\"type\":\"item.completed\",\"item\":{\"item_type\":\"assistant_message\",\"text\":\"before\x00after\"}}"
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+	state := workflow.NewConversationState("")
+
+	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Contains(t, result.Output, "after", "post-NUL characters must not be truncated")
+}
+
+func TestCodexProvider_ExecuteConversation_NonJSONText(t *testing.T) {
+	ndjson := `{"type":"item.completed","item":{"item_type":"assistant_message","text":"hello world"}}`
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+	state := workflow.NewConversationState("")
+
+	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "hello world", result.Output)
+	assert.Nil(t, result.Response)
+}
+
+func TestCodexProvider_Execute_MultiEventNDJSON(t *testing.T) {
+	ndjson := ndjsonLine("foo") + "\n" + ndjsonLine("bar")
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "foo\nbar", result.Output)
+}
+
+func TestCodexProvider_Execute_EmptyAssistantMessage(t *testing.T) {
+	ndjson := `{"type":"item.completed","item":{"item_type":"assistant_message","text":""}}`
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "", result.Output)
+	assert.Nil(t, result.Response)
+}
+
+func TestCodexProvider_Execute_NULBytesInStream(t *testing.T) {
+	ndjson := "{\"type\":\"item.completed\",\"item\":{\"item_type\":\"assistant_message\",\"text\":\"before\x00after\"}}"
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Contains(t, result.Output, "after", "post-NUL characters must not be truncated")
+}
+
+func TestCodexProvider_Execute_NonJSONText(t *testing.T) {
+	ndjson := `{"type":"item.completed","item":{"item_type":"assistant_message","text":"hello world"}}`
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "test", nil, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "hello world", result.Output)
+	assert.Nil(t, result.Response)
+}
+
 func TestCodexProvider_ExecuteConversation_ResumeJSONStructure(t *testing.T) {
 	mockExec := mocks.NewMockCLIExecutor()
 	mockExec.SetOutput([]byte("response"), nil)
@@ -1040,9 +1466,10 @@ func TestCodexProvider_ExecuteConversation_ResumeJSONStructure(t *testing.T) {
 	require.Len(t, calls, 1)
 	args := calls[0].Args
 
-	require.Len(t, args, 4, "resume turn should have resume, sessionID, --json, prompt")
-	assert.Equal(t, "resume", args[0], "first arg should be resume subcommand")
-	assert.Equal(t, "codex-abc123def456", args[1], "second arg should be session ID")
-	assert.Equal(t, "--json", args[2], "third arg should be --json flag")
-	assert.Equal(t, "follow up", args[3], "fourth arg should be prompt")
+	require.Len(t, args, 5, "resume turn should have exec, resume, sessionID, --json, prompt")
+	assert.Equal(t, "exec", args[0], "first arg should be exec subcommand")
+	assert.Equal(t, "resume", args[1], "second arg should be resume subcommand")
+	assert.Equal(t, "codex-abc123def456", args[2], "third arg should be session ID")
+	assert.Equal(t, "--json", args[3], "fourth arg should be --json flag")
+	assert.Equal(t, "follow up", args[4], "fifth arg should be prompt")
 }

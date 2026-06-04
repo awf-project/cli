@@ -135,6 +135,50 @@ func TestCodexProvider_parseCodexDisplayEvents_FunctionCall(t *testing.T) {
 	}
 }
 
+// TestCodexProvider_parseCodexDisplayEvents_CurrentSchema covers the codex-cli >= 0.133.0
+// event shape, where the item discriminator moved to item.type with new values
+// (agent_message / command_execution) instead of the legacy item.item_type
+// (assistant_message / function_call). Regression guard for the format drift that left raw
+// NDJSON leaking into state.Output.
+func TestCodexProvider_parseCodexDisplayEvents_CurrentSchema(t *testing.T) {
+	provider := NewCodexProvider()
+
+	t.Run("agent_message surfaces text (real codex-cli 0.133.0 line)", func(t *testing.T) {
+		line := []byte(`{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"PONG"}}`)
+		got := provider.parseCodexDisplayEvents(line)
+		require.Len(t, got, 1)
+		assert.Equal(t, "item.completed", got[0].Type)
+		assert.Equal(t, EventText, got[0].Kind)
+		assert.Equal(t, "PONG", got[0].Text)
+	})
+
+	t.Run("agent_message with empty text still produces an EventText", func(t *testing.T) {
+		line := []byte(`{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":""}}`)
+		got := provider.parseCodexDisplayEvents(line)
+		require.Len(t, got, 1)
+		assert.Equal(t, EventText, got[0].Kind)
+		assert.Equal(t, "", got[0].Text)
+	})
+
+	t.Run("command_execution maps to EventToolUse", func(t *testing.T) {
+		line := []byte(`{"type":"item.completed","item":{"id":"i2","type":"command_execution","name":"shell","arguments":"{\"command\":\"ls -la\"}"}}`)
+		got := provider.parseCodexDisplayEvents(line)
+		require.Len(t, got, 1)
+		assert.Equal(t, EventToolUse, got[0].Kind)
+		assert.Equal(t, "shell", got[0].Name)
+		assert.Equal(t, "ls -la", got[0].Arg)
+	})
+
+	t.Run("legacy item_type wins when both keys present", func(t *testing.T) {
+		// item_type takes precedence over type, so a legacy assistant_message is honored.
+		line := []byte(`{"type":"item.completed","item":{"item_type":"assistant_message","type":"agent_message","text":"hi"}}`)
+		got := provider.parseCodexDisplayEvents(line)
+		require.Len(t, got, 1)
+		assert.Equal(t, EventText, got[0].Kind)
+		assert.Equal(t, "hi", got[0].Text)
+	})
+}
+
 func TestCodexProvider_parseCodexDisplayEvents_NonAssistantItems(t *testing.T) {
 	provider := NewCodexProvider()
 

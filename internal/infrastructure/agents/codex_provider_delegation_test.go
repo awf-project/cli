@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -11,11 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// T004: Codex provider delegation tests verify that CodexProvider correctly
-// delegates Execute and ExecuteConversation to baseCLIProvider through hooks.
-// Tests fail against stub (buildExecuteArgs/buildConversationArgs return nil)
-// and pass after implementation provides proper CLI arguments.
-
 func TestCodexProvider_Execute_DelegationToBase(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -23,7 +19,6 @@ func TestCodexProvider_Execute_DelegationToBase(t *testing.T) {
 		options    map[string]any
 		mockStdout []byte
 		wantOutput string
-		// Note: stub returns nil args, real impl will return ["exec", "--json", ...]
 	}{
 		{
 			name:       "simple prompt delegation",
@@ -55,18 +50,11 @@ func TestCodexProvider_Execute_DelegationToBase(t *testing.T) {
 			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
 			result, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
-			if err != nil {
-				// Stub returns nil args, causing executor to be called with zero args
-				// Real implementation will return proper args ["exec", "--json", ...]
-				t.Logf("implementation incomplete: %v", err)
-				assert.Nil(t, result)
-				return
-			}
-
+			require.NoError(t, err)
 			require.NotNil(t, result)
 			assert.Equal(t, "codex", result.Provider)
 			assert.Equal(t, tt.wantOutput, result.Output)
-			assert.True(t, result.TokensEstimated, "Execute must set TokensEstimated=true (FR-007)")
+			assert.True(t, result.TokensEstimated, "all CLI providers estimate tokens (no real-time token API)")
 			assert.NotZero(t, result.Tokens)
 		})
 	}
@@ -78,10 +66,10 @@ func TestCodexProvider_Execute_EmptyPrompt_ValidationByBase(t *testing.T) {
 
 	result, err := provider.Execute(context.Background(), "", nil, nil, nil)
 
-	// Base validates empty prompt before calling hooks
 	assert.Error(t, err)
 	assert.Nil(t, result)
-	assert.Contains(t, err.Error(), "prompt")
+	assert.Contains(t, err.Error(), "prompt cannot be empty")
+	assert.Empty(t, mockExec.GetCalls())
 }
 
 func TestCodexProvider_Execute_ContextCancellation(t *testing.T) {
@@ -93,9 +81,10 @@ func TestCodexProvider_Execute_ContextCancellation(t *testing.T) {
 
 	result, err := provider.Execute(ctx, "test", nil, nil, nil)
 
-	// Base checks context error before hook execution
 	assert.Error(t, err)
 	assert.Nil(t, result)
+	assert.True(t, errors.Is(err, context.Canceled), "error must wrap context.Canceled")
+	assert.Empty(t, mockExec.GetCalls())
 }
 
 func TestCodexProvider_ExecuteConversation_DelegationToBase(t *testing.T) {
@@ -142,18 +131,12 @@ func TestCodexProvider_ExecuteConversation_DelegationToBase(t *testing.T) {
 
 			state := workflow.NewConversationState(tt.systemPrompt)
 			result, err := provider.ExecuteConversation(context.Background(), state, tt.userPrompt, tt.options, nil, nil)
-			if err != nil {
-				// Stub returns nil args → executor error (expected against stub)
-				t.Logf("stub error (expected): %v", err)
-				assert.Nil(t, result)
-				return
-			}
-
+			require.NoError(t, err)
 			require.NotNil(t, result)
 			assert.Equal(t, "codex", result.Provider)
 			assert.NotNil(t, result.State)
 
-			// Verify empty output gets " " fallback (FR-008)
+			// empty output gets " " fallback
 			if tt.mockStdout == "" {
 				assert.Equal(t, " ", result.Output)
 			} else {
@@ -182,6 +165,8 @@ func TestCodexProvider_ExecuteConversation_ContextCancellation(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
+	assert.True(t, errors.Is(err, context.Canceled), "error must wrap context.Canceled")
+	assert.Empty(t, mockExec.GetCalls())
 }
 
 func TestCodexProvider_ExecuteConversation_TurnManagement(t *testing.T) {
@@ -199,12 +184,7 @@ func TestCodexProvider_ExecuteConversation_TurnManagement(t *testing.T) {
 	state.TotalTokens = 100
 
 	result, err := provider.ExecuteConversation(context.Background(), state, "Second question", nil, nil, nil)
-	if err != nil {
-		// Stub behavior - expected against incomplete implementation
-		t.Logf("stub error: %v", err)
-		return
-	}
-
+	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, result.State)
 
@@ -248,25 +228,14 @@ func TestCodexProvider_ExecuteConversation_SessionIDExtraction(t *testing.T) {
 
 			state := workflow.NewConversationState("System")
 			result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
-			if err != nil {
-				// Stub case
-				return
-			}
+			require.NoError(t, err)
+			require.NotNil(t, result)
 
 			if tt.wantThreadID != "" {
 				assert.Equal(t, tt.wantThreadID, result.State.SessionID)
 			}
 		})
 	}
-}
-
-func TestCodexProvider_Validate_BinaryNotFound(t *testing.T) {
-	provider := NewCodexProvider()
-	// This will fail on systems without Codex CLI, which is expected
-	err := provider.Validate()
-	// Error is acceptable (Codex not installed)
-	// Success is acceptable (Codex installed)
-	_ = err
 }
 
 func TestCodexProvider_ExecuteConversation_MultipleEvents(t *testing.T) {
@@ -282,13 +251,11 @@ func TestCodexProvider_ExecuteConversation_MultipleEvents(t *testing.T) {
 
 	state := workflow.NewConversationState("Assistant")
 	result, err := provider.ExecuteConversation(context.Background(), state, "multi-event test", nil, nil, nil)
-	if err != nil {
-		// Stub case
-		return
-	}
+	require.NoError(t, err)
+	require.NotNil(t, result)
 
 	// Even with multiple events, session ID should be extracted
-	if result != nil && result.State != nil && result.State.SessionID != "" {
+	if result.State != nil && result.State.SessionID != "" {
 		assert.Equal(t, "thread-multi", result.State.SessionID)
 	}
 }
@@ -299,13 +266,8 @@ func TestCodexProvider_Execute_AllTokensEstimatedTrue(t *testing.T) {
 	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
 
 	result, err := provider.Execute(context.Background(), "test prompt", nil, nil, nil)
-	if err != nil {
-		// Stub case
-		return
-	}
-
+	require.NoError(t, err)
 	require.NotNil(t, result)
-	// FR-007: TokensEstimated must be true for all CLI providers
 	assert.True(t, result.TokensEstimated)
 }
 
@@ -316,12 +278,105 @@ func TestCodexProvider_ExecuteConversation_AllTokensEstimatedTrue(t *testing.T) 
 
 	state := workflow.NewConversationState("System")
 	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
-	if err != nil {
-		// Stub case
-		return
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.True(t, result.TokensEstimated)
+}
+
+func TestCodexProvider_ExecuteConversation_OutputExtraction(t *testing.T) {
+	ndjson := ndjsonLine("extracted assistant text")
+
+	tests := []struct {
+		name         string
+		outputFormat string
+	}{
+		{name: "default (no output_format)", outputFormat: ""},
+		{name: "json output_format", outputFormat: "json"},
+		{name: "text output_format", outputFormat: "text"},
+		{name: "stream-json output_format", outputFormat: "stream-json"},
 	}
 
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput([]byte(ndjson), nil)
+			provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+			opts := map[string]any{}
+			if tt.outputFormat != "" {
+				opts["output_format"] = tt.outputFormat
+			}
+
+			state := workflow.NewConversationState("System")
+			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", opts, nil, nil)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.Equal(t, "extracted assistant text", result.Output)
+			assert.NotContains(t, result.Output, "item.completed", "raw NDJSON envelope must not appear in Output")
+			// Verify the executor was actually invoked (proves mock isolation)
+			assert.Len(t, mockExec.GetCalls(), 1, "executor must be called exactly once per conversation turn")
+		})
+	}
+}
+
+func TestCodexProvider_ExecuteConversation_HookWired(t *testing.T) {
+	ndjson := `{"type":"item.completed","item":{"item_type":"assistant_message","text":"hook extracted text"}}`
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	state := workflow.NewConversationState("System")
+	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
+	require.NoError(t, err)
 	require.NotNil(t, result)
-	// FR-007: TokensEstimated must be true for all CLI providers
-	assert.True(t, result.TokensEstimated)
+
+	assert.Equal(t, "hook extracted text", result.Output)
+	assert.NotContains(t, result.Output, "item.completed", "raw NDJSON envelope must not appear in Output")
+	// Verify the executor was invoked with the NDJSON input (proves hook ran on real output)
+	assert.Len(t, mockExec.GetCalls(), 1, "executor must be called exactly once")
+}
+
+// TestCodexProvider_ExecuteConversation_PlainTextFallback proves the hook runs at runtime:
+// when extractCodexTextContent returns "" (non-NDJSON input), base_cli_provider.go:332-334
+// falls through to strings.TrimSpace(rawOutput). Without the hook wired, the base provider
+// would use the raw bytes directly (no trim). With the hook wired, "" triggers the fallback.
+func TestCodexProvider_ExecuteConversation_PlainTextFallback(t *testing.T) {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte("  plain text response  "), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	state := workflow.NewConversationState("System")
+	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Hook returns "" for non-NDJSON; base falls back to strings.TrimSpace(rawOutput).
+	assert.Equal(t, "plain text response", result.Output, "plain text must be trimmed via base fallback")
+	assert.NotContains(t, result.Output, "item.completed")
+	assert.Len(t, mockExec.GetCalls(), 1)
+}
+
+func TestCodexProvider_ExecuteConversation_NDJSONOutput(t *testing.T) {
+	multiEvent := strings.Join([]string{
+		`{"type":"thread.started","thread_id":"thread-ndjson"}`,
+		ndjsonLine("first part"),
+		ndjsonLine("second part"),
+		`{"type":"item.completed","item":{"item_type":"function_call","name":"bash","arguments":"{}"}}`,
+		ndjsonLine("third part"),
+	}, "\n")
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(multiEvent), nil)
+	provider := NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+
+	state := workflow.NewConversationState("System")
+	result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	assert.Equal(t, "first part\nsecond part\nthird part", result.Output)
+	assert.NotContains(t, result.Output, "item.completed", "raw NDJSON must not appear in Output")
+	// Verify executor was invoked: proves the mock was the actual dependency under test
+	assert.Len(t, mockExec.GetCalls(), 1, "executor must be called exactly once")
 }

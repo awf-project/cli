@@ -159,9 +159,18 @@ transitions:
 
 **Note**: `TokensUsed` replaced deprecated `states.step_name.Tokens` field. If migrating from earlier versions, update workflow YAML expressions from `{{.states.step_name.Tokens}}` to `{{.states.step_name.TokensUsed}}`.
 
-#### Response (Operation Outputs)
+#### Response (Structured Outputs)
 
-Operation steps (e.g., `github.get_issue`, `http.request`) return structured data accessible via `Response`:
+Both agent steps and operation steps return structured data accessible via `Response` when the output is valid JSON.
+
+**Agent steps** automatically populate `Response` when the agent's output contains valid JSON (regardless of `output_format` setting):
+
+```yaml
+{{.states.step_name.Response.field}}        # Parsed field from agent JSON output
+{{.states.step_name.Response}}              # Full parsed JSON object
+```
+
+**Operation steps** (e.g., `github.get_issue`, `http.request`) always return structured data via `Response`:
 
 ```yaml
 {{.states.step_name.Response.title}}       # Parsed field from operation result
@@ -169,25 +178,25 @@ Operation steps (e.g., `github.get_issue`, `http.request`) return structured dat
 {{.states.step_name.Response.labels}}      # Array field
 ```
 
-Use `Output` for raw JSON, `Response.field` for parsed fields:
+Example with agent step returning JSON:
 
 ```yaml
 states:
-  initial: get_issue
+  initial: analyze
 
-  get_issue:
-    type: operation
-    operation: github.get_issue
-    inputs:
-      number: "{{.inputs.issue_number}}"
-    on_success: show_title
+  analyze:
+    type: agent
+    provider: claude
+    prompt: "Return JSON analysis with 'issues' and 'severity' fields"
+    on_success: process
     on_failure: error
 
-  show_title:
+  process:
     type: step
-    command: echo "Issue: {{.states.get_issue.Response.title}}"
+    command: |
+      echo "Severity: {{.states.analyze.Response.severity}}"
+      echo "Issues: {{.states.analyze.Response.issues}}"
     on_success: done
-    on_failure: error
 
   done:
     type: terminal
@@ -195,6 +204,15 @@ states:
     type: terminal
     status: failure
 ```
+
+If agent returns:
+```json
+{"issues": ["buffer overflow", "memory leak"], "severity": "high"}
+```
+
+Then:
+- `{{.states.analyze.Response.severity}}` = `"high"`
+- `{{.states.analyze.Response.issues}}` = `["buffer overflow", "memory leak"]`
 
 **HTTP operation outputs** follow the same pattern:
 
@@ -205,7 +223,12 @@ states:
 {{.states.step_name.Response.body_truncated}}    # true if body was truncated
 ```
 
-See [Workflow Syntax - Operation State](../user-guide/workflow-syntax.md#operation-state) for the full list of available operations and their output fields.
+**Difference from `JSON`:**
+- `Response` is populated automatically for all agent outputs if valid JSON is detected (heuristic)
+- `JSON` is only populated when `output_format: json` is explicitly set on the agent step
+- Use `Response.field` for automatic best-effort parsing; use `JSON.field` for explicit, validated JSON output
+
+See [Agent Steps - Output Formatting](../user-guide/agent-steps.md#output-formatting) for examples and [Workflow Syntax - Operation State](../user-guide/workflow-syntax.md#operation-state) for available operations.
 
 #### JSON (Explicit Output Formatting)
 
@@ -217,9 +240,13 @@ When an agent step uses `output_format: json`, the parsed JSON is accessible via
 ```
 
 **Key differences from `Response`:**
-- `JSON` is only populated when `output_format: json` is explicitly set on the agent step
-- `Response` is populated automatically for all agent outputs if valid JSON is detected (heuristic)
-- `JSON` represents explicitly formatted output; `Response` is automatic best-effort parsing
+- `JSON` is only populated when `output_format: json` is explicitly set on the agent step (and validation passes)
+- `Response` is populated automatically for all agent outputs if valid JSON is detected (heuristic, regardless of `output_format`)
+- Use `JSON.field` for strict, validated output; use `Response.field` for lenient, automatic parsing
+
+**When to use each:**
+- **`JSON.field`**: You explicitly requested `output_format: json` and want strict validation
+- **`Response.field`**: You want to access JSON from any agent output without requiring `output_format: json`
 
 Example with `output_format: json`:
 
@@ -238,8 +265,9 @@ states:
   process:
     type: step
     command: |
-      echo "Severity: {{.states.analyze.JSON.severity}}"
-      echo "Issues: {{.states.analyze.JSON.issues}}"
+      # Both work — JSON is strict, Response is lenient
+      echo "Severity (JSON): {{.states.analyze.JSON.severity}}"
+      echo "Severity (Response): {{.states.analyze.Response.severity}}"
     on_success: done
 
   done:
@@ -254,9 +282,14 @@ If agent returns:
 {"issues": ["buffer overflow", "memory leak"], "severity": "high"}
 ```
 
-Then:
+Then both work identically:
 - `{{.states.analyze.JSON.severity}}` = `"high"`
-- `{{.states.analyze.JSON.issues}}` = `["buffer overflow", "memory leak"]`
+- `{{.states.analyze.Response.severity}}` = `"high"`
+
+**Difference becomes apparent when `output_format: json` is omitted:**
+- Without `output_format: json`, JSON validation is skipped
+- `JSON` remains empty (never populated)
+- `Response` still populates if valid JSON is detected
 
 See [Agent Steps - Output Formatting](../user-guide/agent-steps.md#output-formatting) for detailed examples and best practices.
 
