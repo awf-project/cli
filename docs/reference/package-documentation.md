@@ -20,6 +20,7 @@ go doc ./internal/application
 
 # View infrastructure adapters
 go doc ./internal/infrastructure/agents
+go doc ./internal/infrastructure/mcp
 go doc ./internal/infrastructure/pluginmgr
 go doc ./internal/infrastructure/executor
 go doc ./internal/infrastructure/repository
@@ -281,8 +282,9 @@ All key packages now have documentation:
 ### Application Layer (1 package)
 - `internal/application` - Execution engine and services
 
-### Infrastructure Layer (11 packages)
+### Infrastructure Layer (12 packages)
 - `internal/infrastructure/agents` - AI provider adapters
+- `internal/infrastructure/mcp` - MCP server adapter (official go-sdk wrapper)
 - `internal/infrastructure/executor` - Shell command execution
 - `internal/infrastructure/expression` - Expression evaluation
 - `internal/infrastructure/logger` - Logging adapters
@@ -308,7 +310,7 @@ All key packages now have documentation:
 - `pkg/stringutil` - String manipulation utilities
 - `pkg/validation` - Input validation rules
 
-**Total: 27 documented packages covering 100% of public APIs.**
+**Total: 28 documented packages covering 100% of public APIs.**
 
 ## See Also
 

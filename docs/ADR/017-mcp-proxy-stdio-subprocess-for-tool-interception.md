@@ -47,7 +47,7 @@ Two protocol-level questions are load-bearing beyond this feature:
 
 **Process topology:** Option B — per-step subprocess `awf mcp-serve`. One `awf mcp-serve` process is spawned per step where `mcp_proxy.enable: true`. The subprocess serves MCP over stdin/stdout. The parent `awf run` process spawns it via `ToolProxyService.Start()` and tears it down via `ToolProxyService.Close()`.
 
-**Public package:** The MCP server implementation lives in `pkg/mcpserver/` (not `internal/`), with zero `internal/` imports enforced by a lint rule and an AST-based architecture test. This gives future external consumers (plugin SDK authors, other AWF tooling) a stable, embeddable MCP server.
+**Server implementation:** The MCP server implementation initially lived in `pkg/mcpserver/` but was migrated to `internal/infrastructure/mcp/` in F104 to adopt the official `github.com/modelcontextprotocol/go-sdk` (see ADR 019). The adapter wraps the official SDK while maintaining identical user-facing behavior and continues to enforce zero `internal/` imports at the adapter boundary via lint rules and AST-based architecture tests.
 
 **OpenAI Compatible exception:** The HTTP provider cannot use stdio; instead, `ToolRouter` is invoked in-process and its tool definitions are injected as `tools[]` in the Chat Completions request. This is an explicit split: stdio providers use subprocess MCP, HTTP provider uses in-process `tools[]`.
 

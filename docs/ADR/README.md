@@ -46,6 +46,7 @@ Numbers are never reused. If a decision is reversed, the original ADR is marked 
 | [016](016-http-interface-adapter-huma-sse-streaming.md) | HTTP Interface Adapter with Huma v2 and SSE Streaming | Accepted |
 | [017](017-mcp-proxy-stdio-subprocess-for-tool-interception.md) | MCP Proxy via stdio Subprocess for Tool Interception | Accepted |
 | [018](018-acp-transparent-agent-server-protocol.md) | ACP Transparent Agent Server via JSON-RPC 2.0 stdio Subprocess | Accepted |
+| [019](019-mcp-server-sdk-adapter.md) | MCP Server Migration to Official go-sdk | Accepted |
 
 ## Creating a New ADR
 
