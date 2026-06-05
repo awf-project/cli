@@ -3,7 +3,9 @@ package agents
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/stretchr/testify/assert"
@@ -14,6 +16,7 @@ import (
 type purgeLogCapture struct {
 	debugCalls []string
 	infoCalls  []string
+	warnCalls  []string
 }
 
 func (l *purgeLogCapture) Debug(msg string, _ ...any) {
@@ -24,7 +27,10 @@ func (l *purgeLogCapture) Info(msg string, _ ...any) {
 	l.infoCalls = append(l.infoCalls, msg)
 }
 
-func (l *purgeLogCapture) Warn(_ string, _ ...any)                   {}
+func (l *purgeLogCapture) Warn(msg string, _ ...any) {
+	l.warnCalls = append(l.warnCalls, msg)
+}
+
 func (l *purgeLogCapture) Error(_ string, _ ...any)                  {}
 func (l *purgeLogCapture) WithContext(_ map[string]any) ports.Logger { return l }
 
@@ -37,8 +43,10 @@ type purgeTrackingExecutor struct {
 }
 
 type purgeResponse struct {
-	stdout string
-	err    error
+	stdout   string
+	stderr   string
+	exitCode int
+	err      error
 }
 
 func (e *purgeTrackingExecutor) Execute(_ context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
@@ -48,7 +56,7 @@ func (e *purgeTrackingExecutor) Execute(_ context.Context, cmd *ports.Command) (
 		if resp.err != nil {
 			return nil, resp.err
 		}
-		return &ports.CommandResult{Stdout: resp.stdout, Stderr: "", ExitCode: 0}, nil
+		return &ports.CommandResult{Stdout: resp.stdout, Stderr: resp.stderr, ExitCode: resp.exitCode}, nil
 	}
 	return &ports.CommandResult{Stdout: "", Stderr: "", ExitCode: 0}, nil
 }
@@ -126,6 +134,75 @@ func TestPurgeOrphanMCPRegistrations_PurgesOnlyMatchingPrefix(t *testing.T) {
 
 	// Two info log entries (one per removed server).
 	assert.Len(t, log.infoCalls, 2, "should emit one info log per removed orphan")
+}
+
+// TestResolveListTimeout verifies env-var parsing for the list timeout override.
+func TestResolveListTimeout(t *testing.T) {
+	log := &purgeLogCapture{}
+
+	t.Run("default when unset", func(t *testing.T) {
+		t.Setenv(mcpListTimeoutEnv, "")
+		assert.Equal(t, mcpListDefaultTimeout, resolveListTimeout(log))
+	})
+	t.Run("valid override", func(t *testing.T) {
+		t.Setenv(mcpListTimeoutEnv, "12s")
+		assert.Equal(t, 12*time.Second, resolveListTimeout(log))
+	})
+	t.Run("falls back on unparseable value", func(t *testing.T) {
+		t.Setenv(mcpListTimeoutEnv, "not-a-duration")
+		assert.Equal(t, mcpListDefaultTimeout, resolveListTimeout(log))
+	})
+	t.Run("falls back on non-positive value", func(t *testing.T) {
+		t.Setenv(mcpListTimeoutEnv, "0s")
+		assert.Equal(t, mcpListDefaultTimeout, resolveListTimeout(log))
+	})
+}
+
+// TestPurgeOrphanMCPRegistrations_TimeoutLogsWarn verifies that a `mcp list`
+// timeout (context deadline) is surfaced at WARN — distinct from "not installed" —
+// and does not trigger any remove, since the CLI is installed but unresponsive.
+func TestPurgeOrphanMCPRegistrations_TimeoutLogsWarn(t *testing.T) {
+	// Mirror the shell executor, which wraps ctx.Err() as "command execution: %w".
+	timeoutErr := fmt.Errorf("command execution: %w", context.DeadlineExceeded)
+	exec := &purgeTrackingExecutor{
+		responseFor: map[int]purgeResponse{
+			0: {err: timeoutErr}, // gemini mcp list times out
+			1: {err: timeoutErr}, // opencode mcp list times out
+		},
+	}
+	log := &purgeLogCapture{}
+
+	err := PurgeOrphanMCPRegistrations(context.Background(), exec, log)
+
+	require.NoError(t, err, "timeout must not propagate as an error")
+	assert.Len(t, log.warnCalls, 2, "each timed-out CLI must log exactly one warning")
+	assert.Empty(t, log.infoCalls, "no orphan should be purged on timeout")
+	for _, prog := range exec.commandPrograms() {
+		assert.NotContains(t, prog, "remove", "remove must not run when list times out")
+	}
+}
+
+// TestPurgeOrphanMCPRegistrations_NotInstalledIsQuiet verifies that an exit code
+// 127 (binary not found via the shell) is treated as "not installed": logged at
+// debug, no warning, no remove.
+func TestPurgeOrphanMCPRegistrations_NotInstalledIsQuiet(t *testing.T) {
+	exec := &purgeTrackingExecutor{
+		responseFor: map[int]purgeResponse{
+			0: {exitCode: 127, stderr: "gemini: command not found"},   // gemini not installed
+			1: {exitCode: 127, stderr: "opencode: command not found"}, // opencode not installed
+		},
+	}
+	log := &purgeLogCapture{}
+
+	err := PurgeOrphanMCPRegistrations(context.Background(), exec, log)
+
+	require.NoError(t, err)
+	assert.Empty(t, log.warnCalls, "a missing CLI must not warn — it is an expected, quiet case")
+	assert.NotEmpty(t, log.debugCalls, "a missing CLI should log at debug level")
+	assert.Len(t, exec.commands, 2, "exactly one list attempt per CLI, no removes")
+	for _, prog := range exec.commandPrograms() {
+		assert.NotContains(t, prog, "remove", "remove must not run when the CLI is absent")
+	}
 }
 
 // TestPurgeOrphanMCPRegistrations_RespectsEnvOptOut verifies that when

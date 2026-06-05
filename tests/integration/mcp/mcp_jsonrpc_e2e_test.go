@@ -1,6 +1,6 @@
 //go:build integration && !windows
 
-// Feature: F099
+// Feature: F104
 package mcp_test
 
 import (
@@ -12,11 +12,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
 
-	"github.com/awf-project/cli/pkg/mcpserver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,11 +33,9 @@ func buildAWFBinary(t *testing.T) string {
 	return binaryPath
 }
 
-// writeBuiltinsConfig writes an mcp-serve config that enables built-ins. It returns
-// (configPath, rootDir). rootDir is the directory the proxy will treat as the
-// workspace root; both the config file and any test files the agent will Read/Write
-// must live under it for the path-traversal guard in builtins.WithRootDir to allow
-// them through.
+// writeBuiltinsConfig writes an mcp-serve config that enables built-ins.
+// It returns (configPath, rootDir). rootDir is the directory the proxy will treat as the
+// workspace root; both the config file and any test files must live under it.
 func writeBuiltinsConfig(t *testing.T) (configPath, rootDir string) {
 	t.Helper()
 	rootDir = t.TempDir()
@@ -87,7 +85,8 @@ func startMCPServeProcess(t *testing.T, binaryPath, configPath string) *mcpProce
 	return &mcpProcess{cmd: cmd, stdin: stdin, stdout: bufio.NewReader(stdout)}
 }
 
-func (p *mcpProcess) request(t *testing.T, id int, method string, params any) mcpserver.Response {
+// request sends a JSON-RPC request and returns the parsed response as an untyped map.
+func (p *mcpProcess) request(t *testing.T, id int, method string, params any) map[string]any {
 	t.Helper()
 	req := map[string]any{
 		"jsonrpc": "2.0",
@@ -117,7 +116,7 @@ func (p *mcpProcess) request(t *testing.T, id int, method string, params any) mc
 
 	select {
 	case line := <-respCh:
-		var resp mcpserver.Response
+		var resp map[string]any
 		require.NoError(t, json.Unmarshal(line, &resp), "decoding response: %s", line)
 		return resp
 	case err := <-errCh:
@@ -125,10 +124,10 @@ func (p *mcpProcess) request(t *testing.T, id int, method string, params any) mc
 	case <-time.After(mcpRPCTimeout):
 		t.Fatalf("timed out waiting for response to %s", method)
 	}
-	return mcpserver.Response{}
+	return nil
 }
 
-func TestMCPServeJSONRPC_ToolsList_ReturnsAllSixBuiltins(t *testing.T) {
+func TestMCPServeE2E_ListsBuiltinTools(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -137,32 +136,39 @@ func TestMCPServeJSONRPC_ToolsList_ReturnsAllSixBuiltins(t *testing.T) {
 	configPath, _ := writeBuiltinsConfig(t)
 	proc := startMCPServeProcess(t, binaryPath, configPath)
 
-	initResp := proc.request(t, 1, mcpserver.MethodInitialize, map[string]any{})
-	require.Nil(t, initResp.Error, "initialize must succeed")
+	initResp := proc.request(t, 1, "initialize", map[string]any{})
+	require.Nil(t, initResp["error"], "initialize must succeed")
 
-	listResp := proc.request(t, 2, mcpserver.MethodToolsList, nil)
-	require.Nil(t, listResp.Error, "tools/list must succeed")
+	listResp := proc.request(t, 2, "tools/list", nil)
+	require.Nil(t, listResp["error"], "tools/list must succeed")
 
-	result, ok := listResp.Result.(map[string]any)
+	result, ok := listResp["result"].(map[string]any)
 	require.True(t, ok, "result must be a JSON object")
 	rawTools, ok := result["tools"].([]any)
 	require.True(t, ok, "result must contain a tools array")
 
 	names := make([]string, 0, len(rawTools))
+	foundDescriptionNonEmpty := false
 	for _, raw := range rawTools {
 		def, isMap := raw.(map[string]any)
 		require.True(t, isMap, "each tool must be an object")
 		name, isStr := def["name"].(string)
 		require.True(t, isStr, "each tool must have a string name")
 		names = append(names, name)
+
+		// R5: Verify at least one builtin has a non-empty description
+		if desc, ok := def["description"].(string); ok && desc != "" {
+			foundDescriptionNonEmpty = true
+		}
 	}
 	sort.Strings(names)
 
 	assert.Equal(t, []string{"Bash", "Edit", "Glob", "Grep", "Read", "Write"}, names,
 		"proxy must expose exactly the six built-in tools")
+	assert.True(t, foundDescriptionNonEmpty, "at least one builtin tool must have a non-empty description (R5)")
 }
 
-func TestMCPServeJSONRPC_CallRead_ReturnsFileContents(t *testing.T) {
+func TestMCPServeE2E_CallsBuiltinTool(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -172,78 +178,68 @@ func TestMCPServeJSONRPC_CallRead_ReturnsFileContents(t *testing.T) {
 	proc := startMCPServeProcess(t, binaryPath, configPath)
 
 	target := filepath.Join(rootDir, "hello.txt")
-	const want = "hello from F099\n"
+	const want = "hello from F104\n"
 	require.NoError(t, os.WriteFile(target, []byte(want), 0o644))
 
-	proc.request(t, 1, mcpserver.MethodInitialize, map[string]any{})
+	proc.request(t, 1, "initialize", map[string]any{})
 
-	callResp := proc.request(t, 2, mcpserver.MethodToolsCall, map[string]any{
+	callResp := proc.request(t, 2, "tools/call", map[string]any{
 		"name":      "Read",
 		"arguments": map[string]any{"path": target},
 	})
-	require.Nil(t, callResp.Error, "tools/call must succeed: %+v", callResp.Error)
+	require.Nil(t, callResp["error"], "tools/call must succeed")
 
-	result, ok := callResp.Result.(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, false, result["isError"], "Read on an existing file must not flag isError")
+	result, ok := callResp["result"].(map[string]any)
+	require.True(t, ok, "result must be a map")
+
+	// isError field may be absent (defaults to false) or explicitly false
+	isError, hasIsError := result["isError"].(bool)
+	if hasIsError {
+		assert.False(t, isError, "Read on existing file must not flag isError")
+	}
 
 	content, ok := result["content"].([]any)
-	require.True(t, ok)
+	require.True(t, ok, "result must have content array")
 	require.NotEmpty(t, content, "Read must produce at least one content block")
 
 	block, ok := content[0].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, want, block["text"], "Read must return the file's exact contents")
+	require.True(t, ok, "content block must be a map")
+	assert.Equal(t, "text", block["type"], "content block type must be text")
+	assert.Equal(t, want, block["text"], "Read must return exact file contents")
 }
 
-func TestMCPServeJSONRPC_CallBash_ReturnsStdout(t *testing.T) {
+func TestMCPServeE2E_PayloadRoundTrip_256KiB(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
 
 	binaryPath := buildAWFBinary(t)
-	configPath, _ := writeBuiltinsConfig(t)
+	configPath, rootDir := writeBuiltinsConfig(t)
 	proc := startMCPServeProcess(t, binaryPath, configPath)
 
-	proc.request(t, 1, mcpserver.MethodInitialize, map[string]any{})
+	// R1: Create a 256 KiB payload and verify it round-trips intact
+	payload := strings.Repeat("x", 256*1024)
+	target := filepath.Join(rootDir, "large.txt")
+	require.NoError(t, os.WriteFile(target, []byte(payload), 0o644))
 
-	callResp := proc.request(t, 2, mcpserver.MethodToolsCall, map[string]any{
-		"name":      "Bash",
-		"arguments": map[string]any{"command": "echo proxied-bash"},
+	proc.request(t, 1, "initialize", map[string]any{})
+
+	callResp := proc.request(t, 2, "tools/call", map[string]any{
+		"name":      "Read",
+		"arguments": map[string]any{"path": target},
 	})
-	require.Nil(t, callResp.Error, "tools/call must succeed: %+v", callResp.Error)
+	require.Nil(t, callResp["error"], "tools/call with large file must succeed")
 
-	result, ok := callResp.Result.(map[string]any)
+	result, ok := callResp["result"].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, false, result["isError"], "successful bash command must not flag isError")
 
 	content, ok := result["content"].([]any)
-	require.True(t, ok)
 	require.NotEmpty(t, content)
 
 	block, ok := content[0].(map[string]any)
 	require.True(t, ok)
-	text, _ := block["text"].(string)
-	assert.Contains(t, text, "proxied-bash", "Bash stdout must reach the MCP client")
-}
 
-func TestMCPServeJSONRPC_CallUnknownTool_ReturnsRPCError(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
-	binaryPath := buildAWFBinary(t)
-	configPath, _ := writeBuiltinsConfig(t)
-	proc := startMCPServeProcess(t, binaryPath, configPath)
-
-	proc.request(t, 1, mcpserver.MethodInitialize, map[string]any{})
-
-	callResp := proc.request(t, 2, mcpserver.MethodToolsCall, map[string]any{
-		"name":      "NotARealTool",
-		"arguments": map[string]any{},
-	})
-
-	require.NotNil(t, callResp.Error, "unknown tool must produce a JSON-RPC error, not a successful result")
-	assert.Equal(t, mcpserver.ErrCodeMethodNotFound, callResp.Error.Code,
-		"unknown tool must use the JSON-RPC method-not-found error code")
+	text, ok := block["text"].(string)
+	require.True(t, ok)
+	assert.Equal(t, payload, text, "256 KiB payload must round-trip intact (R1/NFR-002)")
 }

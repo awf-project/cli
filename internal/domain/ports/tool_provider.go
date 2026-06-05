@@ -19,6 +19,16 @@ type ToolResult struct {
 	IsError bool
 }
 
+// ToolProvider exposes a set of tools and executes them on behalf of a transport adapter
+// (e.g. the MCP server).
+//
+// CallTool contract:
+//   - args may be nil or an empty map; implementations MUST treat both identically (no
+//     arguments supplied). Adapters pass nil when the request carries no arguments.
+//   - On success, return a non-nil *ToolResult. Returning (nil, nil) is discouraged;
+//     adapters defensively map it to an IsError result rather than dereferencing nil.
+//   - Execution failures should be reported either as a returned error or as a *ToolResult
+//     with IsError=true; adapters surface both forms back to the client as tool errors.
 type ToolProvider interface {
 	ListTools(ctx context.Context) ([]ToolDefinition, error)
 	CallTool(ctx context.Context, name string, args map[string]any) (*ToolResult, error)

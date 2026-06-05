@@ -2,6 +2,7 @@ package agents
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"time"
@@ -10,41 +11,97 @@ import (
 	"github.com/awf-project/cli/pkg/interpolation"
 )
 
+const (
+	// mcpListDefaultTimeout bounds a single `<cli> mcp list` call. Purge runs at
+	// startup, so this must stay small enough not to noticeably delay the run, yet
+	// large enough for a healthy CLI to answer. Override via mcpListTimeoutEnv.
+	mcpListDefaultTimeout = 5 * time.Second
+	// mcpRemoveTimeout bounds a single `<cli> mcp remove <name>` call.
+	mcpRemoveTimeout = 3 * time.Second
+	// mcpListTimeoutEnv lets advanced users widen (or tighten) the list timeout,
+	// e.g. AWF_MCP_PROXY_LIST_TIMEOUT=15s for a CLI that is slow to enumerate.
+	mcpListTimeoutEnv = "AWF_MCP_PROXY_LIST_TIMEOUT"
+	// exitCodeCommandNotFound is the conventional shell exit code (127) returned
+	// when the CLI binary is not on PATH. Because we run via `sh -c "<cli> ..."`,
+	// a missing binary surfaces as this exit code with a nil error rather than a
+	// Go execution error — so we detect "not installed" here, not in the error path.
+	exitCodeCommandNotFound = 127
+)
+
 // PurgeOrphanMCPRegistrations removes any persistent MCP server registration
 // whose name starts with mcpProxyNamePrefix from Gemini and OpenCode CLIs.
 //
 // Both CLIs are queried via `<cli> mcp list`; matching entries are removed via
-// `<cli> mcp remove <name>`. Failures (CLI not installed, no orphans found,
-// individual remove fails) are logged at debug level and do NOT block startup.
-// Returns nil even on partial failure — purge is best-effort.
+// `<cli> mcp remove <name>`. Each failure mode is classified and logged distinctly
+// (see purgeForCLI) and none block startup — the function always returns nil because
+// purge is best-effort.
 //
-// Environment variable opt-out: when AWF_MCP_PROXY_NO_PURGE is set to any
-// non-empty value the function returns immediately without executing any
-// commands. This escape hatch is intended for advanced users who intentionally
-// maintain MCP server registrations whose names share the awf-proxy- prefix.
+// Environment variables:
+//   - AWF_MCP_PROXY_NO_PURGE: when set to any non-empty value, returns immediately
+//     without executing any commands (for users who intentionally keep awf-proxy-
+//     prefixed registrations).
+//   - AWF_MCP_PROXY_LIST_TIMEOUT: overrides the per-CLI `mcp list` timeout (Go
+//     duration, e.g. "10s"). Defaults to mcpListDefaultTimeout.
 func PurgeOrphanMCPRegistrations(ctx context.Context, exec ports.CommandExecutor, logger ports.Logger) error {
 	if os.Getenv("AWF_MCP_PROXY_NO_PURGE") != "" {
 		logger.Debug("AWF_MCP_PROXY_NO_PURGE is set; skipping orphan MCP purge")
 		return nil
 	}
 
-	purgeForCLI(ctx, exec, logger, "gemini", parseGeminiMCPList)
-	purgeForCLI(ctx, exec, logger, "opencode", parseOpencodeMCPList)
+	timeout := resolveListTimeout(logger)
+	purgeForCLI(ctx, exec, logger, "gemini", parseGeminiMCPList, timeout)
+	purgeForCLI(ctx, exec, logger, "opencode", parseOpencodeMCPList, timeout)
 
 	return nil
 }
 
-// purgeForCLI runs `<cli> mcp list`, parses orphan names, and removes them.
-// Any per-CLI or per-entry error is logged at debug level; the function never
-// returns an error because purge is best-effort and must not block startup.
-func purgeForCLI(ctx context.Context, exec ports.CommandExecutor, logger ports.Logger, cli string, parse func(string) []string) {
-	listCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+// resolveListTimeout reads AWF_MCP_PROXY_LIST_TIMEOUT, falling back to the default
+// on an unset, unparseable, or non-positive value.
+func resolveListTimeout(logger ports.Logger) time.Duration {
+	raw := os.Getenv(mcpListTimeoutEnv)
+	if raw == "" {
+		return mcpListDefaultTimeout
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		logger.Debug("invalid AWF_MCP_PROXY_LIST_TIMEOUT; using default",
+			"value", raw, "default", mcpListDefaultTimeout)
+		return mcpListDefaultTimeout
+	}
+	return d
+}
+
+// purgeForCLI runs `<cli> mcp list`, parses orphan names, and removes them. It
+// distinguishes the failure modes so the logs are actionable rather than guessing:
+//
+//   - timeout (context deadline): the CLI is installed but did not answer in time;
+//     logged at WARN with a hint to widen the timeout or opt out, since orphans are
+//     left in place this run.
+//   - execution error: the command could not be launched at all; DEBUG.
+//   - exit 127: the CLI is not installed (shell could not find it); DEBUG, expected.
+//   - other non-zero exit: the CLI ran but reported an error; DEBUG with stderr.
+//
+// The function never returns an error: purge is best-effort and must not block startup.
+func purgeForCLI(ctx context.Context, exec ports.CommandExecutor, logger ports.Logger, cli string, parse func(string) []string, timeout time.Duration) {
+	listCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	result, err := exec.Execute(listCtx, &ports.Command{Program: cli + " mcp list"})
-	if err != nil {
-		logger.Debug("mcp list failed; CLI may not be installed or returned non-zero",
-			"cli", cli, "error", err)
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		logger.Warn("mcp purge: `mcp list` timed out; orphan registrations left untouched this run "+
+			"(raise AWF_MCP_PROXY_LIST_TIMEOUT, or set AWF_MCP_PROXY_NO_PURGE=1 to disable purge)",
+			"cli", cli, "timeout", timeout)
+		return
+	case err != nil:
+		logger.Debug("mcp purge: `mcp list` could not be executed", "cli", cli, "error", err)
+		return
+	case result.ExitCode == exitCodeCommandNotFound:
+		logger.Debug("mcp purge: CLI not installed; nothing to purge", "cli", cli)
+		return
+	case result.ExitCode != 0:
+		logger.Debug("mcp purge: `mcp list` exited non-zero; skipping",
+			"cli", cli, "exit_code", result.ExitCode, "stderr", firstLine(result.Stderr))
 		return
 	}
 
@@ -54,7 +111,7 @@ func purgeForCLI(ctx context.Context, exec ports.CommandExecutor, logger ports.L
 		// validation. interpolation.ShellEscape defangs any shell metacharacter that might
 		// have slipped through a future format change in the upstream CLI.
 		removeErr := func() error {
-			removeCtx, removeCancel := context.WithTimeout(ctx, 3*time.Second)
+			removeCtx, removeCancel := context.WithTimeout(ctx, mcpRemoveTimeout)
 			defer removeCancel()
 			_, err := exec.Execute(removeCtx, &ports.Command{Program: cli + " mcp remove " + interpolation.ShellEscape(name)})
 			return err
@@ -66,6 +123,13 @@ func purgeForCLI(ctx context.Context, exec ports.CommandExecutor, logger ports.L
 		}
 		logger.Info("purged orphan MCP registration", "cli", cli, "name", name)
 	}
+}
+
+// firstLine returns the first non-empty line of s, trimmed. Used to keep stderr
+// snippets in logs to a single line instead of dumping multi-line CLI output.
+func firstLine(s string) string {
+	first, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+	return strings.TrimSpace(first)
 }
 
 // parseGeminiMCPList extracts MCP server names matching mcpProxyNamePrefix from

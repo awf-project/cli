@@ -203,6 +203,7 @@ Implements domain ports with concrete technologies.
 - `expression/` - Expression evaluator implementing `ExpressionEvaluator` and `ExpressionValidator`
 - `github/` - Built-in GitHub operation provider implementing `OperationProvider` (issue/PR/label/project operations, batch executor, auth fallback)
 - `logger/` - Zap logger implementation (console, JSON, multi-logger, secret masking)
+- `mcp/` - MCP server adapter wrapping the official `github.com/modelcontextprotocol/go-sdk` with provider registration, deduplication, and stdio transport; exposes `RegisterProvider(ports.ToolProvider)` and `ServeStdio(ctx)` (F104)
 - `notify/` - Built-in notification operation provider implementing `OperationProvider` (desktop, webhook backends)
 - `pluginmgr/` - Plugin lifecycle (manifest, state, gRPC connections); delegates transport to `pkg/registry/`
 - `repository/` - YAML file loader implementing `Repository`

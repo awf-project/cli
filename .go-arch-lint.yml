@@ -25,7 +25,6 @@ commonComponents:
   - pkg-httpx
   - pkg-output
   - pkg-registry
-  - pkg-mcpserver
   - pkg-acpserver
 
 vendors:
@@ -159,6 +158,11 @@ vendors:
       - github.com/go-chi/chi/v5
       - github.com/go-chi/chi/v5/**
 
+  go-sdk-mcp:
+    in:
+      - github.com/modelcontextprotocol/go-sdk/mcp
+      - github.com/modelcontextprotocol/go-sdk/**
+
 components:
   # DOMAIN LAYER
   domain-workflow:
@@ -206,9 +210,6 @@ components:
 
   pkg-validation:
     in: ../pkg/validation
-
-  pkg-mcpserver:
-    in: ../pkg/mcpserver
 
   pkg-acpserver:
     in: ../pkg/acpserver
@@ -299,6 +300,9 @@ components:
 
   infra-acp:
     in: infrastructure/acp
+
+  infra-mcp:
+    in: infrastructure/mcp
 
   # INTERFACES LAYER
   interfaces-cli:
@@ -611,9 +615,16 @@ deps:
     canUse:
       - go-stdlib
 
-  pkg-mcpserver:
+  infra-mcp:
+    mayDependOn:
+      - domain-ports
     canUse:
       - go-stdlib
+      - go-sdk-mcp
+      # NOTE: github.com/google/jsonschema-go is intentionally NOT listed here. The
+      # MCP SDK pulls it transitively only; this package never imports it directly
+      # (see internal/infrastructure/mcp/doc.go). Keep it out of canUse so an
+      # accidental direct import is caught as an architecture violation.
 
   pkg-acpserver:
     canUse:
@@ -657,6 +668,7 @@ deps:
       - infra-github
       - infra-http
       - infra-logger
+      - infra-mcp
       - infra-notify
       - infra-otel
       - infra-plugin
