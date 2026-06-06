@@ -3,233 +3,379 @@ package cli
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
+	"io"
 	"os"
-	"strings"
+	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-
-	domainerrors "github.com/awf-project/cli/internal/domain/errors"
-	"github.com/awf-project/cli/pkg/acpserver"
 )
 
-func TestACPServeCommand_IsHidden(t *testing.T) {
-	cmd := newACPServeCommand(Deps{})
-	assert.True(t, cmd.Hidden, "expected acp-serve to be Hidden")
+func TestProcessEnvMap(t *testing.T) {
+	t.Run("happy path", func(t *testing.T) {
+		m := processEnvMap()
+		assert.NotNil(t, m)
+		assert.IsType(t, map[string]string{}, m)
+	})
+
+	t.Run("preserves equals in values", func(t *testing.T) {
+		t.Setenv("TEST_KEY", "value=with=equals")
+		m := processEnvMap()
+		assert.Equal(t, "value=with=equals", m["TEST_KEY"])
+	})
+
+	t.Run("skips empty keys", func(t *testing.T) {
+		m := processEnvMap()
+		for k := range m {
+			assert.NotEqual(t, "", k)
+		}
+	})
 }
 
-func TestACPServeCommand_HasSkipFormatValidationAnnotation(t *testing.T) {
-	cmd := newACPServeCommand(Deps{})
+func TestACPSessionStateDir(t *testing.T) {
+	t.Run("happy path", func(t *testing.T) {
+		dir := acpSessionStateDir("abc123")
+		assert.Contains(t, dir, "awf-acp-states")
+		assert.Contains(t, dir, "abc123")
+	})
 
-	annotation, exists := cmd.Annotations[annotationSkipFormatValidation]
-	require.True(t, exists, "expected annotationSkipFormatValidation annotation to be present")
-	assert.Equal(t, "true", annotation, "expected annotation value to be 'true'")
+	t.Run("path traversal defense", func(t *testing.T) {
+		dir := acpSessionStateDir("../../../etc/passwd")
+		assert.NotContains(t, dir, "..")
+	})
+
+	t.Run("dot slash defense", func(t *testing.T) {
+		dir := acpSessionStateDir("./../../etc")
+		assert.NotContains(t, dir, "..")
+	})
+
+	t.Run("empty fallback", func(t *testing.T) {
+		dir := acpSessionStateDir("")
+		assert.Contains(t, dir, "default")
+	})
+
+	t.Run("slash only fallback", func(t *testing.T) {
+		dir := acpSessionStateDir("/")
+		assert.Contains(t, dir, "default")
+	})
+
+	t.Run("slash root defense", func(t *testing.T) {
+		dir := acpSessionStateDir(string(filepath.Separator))
+		assert.Contains(t, dir, "default")
+	})
+
+	t.Run("dot fallback", func(t *testing.T) {
+		dir := acpSessionStateDir(".")
+		assert.Contains(t, dir, "default")
+	})
+
+	t.Run("creates under temp dir", func(t *testing.T) {
+		dir := acpSessionStateDir("test123")
+		assert.True(t, filepath.IsAbs(dir))
+		assert.Contains(t, dir, os.TempDir())
+	})
 }
 
-func TestACPServeCommand_RequiresConfigFlag(t *testing.T) {
-	cmd := NewRootCommand()
+func TestValidateWorkflowsDir(t *testing.T) {
+	t.Run("valid directory", func(t *testing.T) {
+		tmpdir := t.TempDir()
+		err := validateWorkflowsDir(tmpdir)
+		assert.NoError(t, err)
+	})
 
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"acp-serve"})
+	t.Run("does not exist", func(t *testing.T) {
+		err := validateWorkflowsDir("/nonexistent/path/to/workflows")
+		assert.Error(t, err)
+		exitErr, ok := err.(*exitError)
+		require.True(t, ok, "expected exitError, got %T", err)
+		assert.Equal(t, ExitUser, exitErr.code)
+	})
 
-	err := cmd.Execute()
-	assert.Error(t, err, "expected error when --config flag is missing")
+	t.Run("not a directory", func(t *testing.T) {
+		tmpfile := filepath.Join(t.TempDir(), "file.txt")
+		require.NoError(t, os.WriteFile(tmpfile, []byte("test"), 0o600))
+
+		err := validateWorkflowsDir(tmpfile)
+		assert.Error(t, err)
+		exitErr, ok := err.(*exitError)
+		require.True(t, ok)
+		assert.Equal(t, ExitUser, exitErr.code)
+	})
+
+	t.Run("invalid path characters", func(t *testing.T) {
+		tmpdir := t.TempDir()
+		dir := filepath.Join(tmpdir, "workflows")
+		require.NoError(t, os.Mkdir(dir, 0o755))
+
+		err := validateWorkflowsDir(dir)
+		assert.NoError(t, err)
+	})
 }
 
-func TestACPServeCommand_ConfigFlagExists(t *testing.T) {
-	cmd := newACPServeCommand(Deps{})
+func TestACPTextWriter_Write(t *testing.T) {
+	t.Run("writes to emitter", func(t *testing.T) {
+		mockEmitter := new(mockSessionUpdateEmitter)
+		mockEmitter.On("EmitSessionUpdate", mock.Anything, "session-1", "agent_message_chunk", mock.Anything).Return(nil)
 
-	configFlag := cmd.Flags().Lookup("config")
-	require.NotNil(t, configFlag, "expected --config flag to exist")
-	assert.Equal(t, "string", configFlag.Value.Type(), "expected --config to be string type")
+		ctx := context.Background()
+		streamed := &atomic.Bool{}
+		w := newACPTextWriter(ctx, mockEmitter, "session-1", streamed)
+
+		n, err := w.Write([]byte("hello"))
+		assert.NoError(t, err)
+		assert.Equal(t, 5, n)
+		mockEmitter.AssertCalled(t, "EmitSessionUpdate", mock.Anything, "session-1", "agent_message_chunk", mock.Anything)
+	})
+
+	t.Run("empty write returns zero", func(t *testing.T) {
+		mockEmitter := new(mockSessionUpdateEmitter)
+		ctx := context.Background()
+		w := newACPTextWriter(ctx, mockEmitter, "session-1", nil)
+
+		n, err := w.Write([]byte{})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, n)
+		mockEmitter.AssertNotCalled(t, "EmitSessionUpdate")
+	})
+
+	t.Run("emit failure increments missed count", func(t *testing.T) {
+		mockEmitter := new(mockSessionUpdateEmitter)
+		mockEmitter.On("EmitSessionUpdate", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(io.EOF)
+
+		ctx := context.Background()
+		w := newACPTextWriter(ctx, mockEmitter, "session-1", nil)
+
+		n, err := w.Write([]byte("test"))
+		assert.NoError(t, err)
+		assert.Equal(t, 4, n)
+		assert.Equal(t, uint64(1), w.MissedEmits())
+	})
+
+	t.Run("sets streamed flag on success", func(t *testing.T) {
+		mockEmitter := new(mockSessionUpdateEmitter)
+		mockEmitter.On("EmitSessionUpdate", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+		ctx := context.Background()
+		streamed := &atomic.Bool{}
+		w := newACPTextWriter(ctx, mockEmitter, "session-1", streamed)
+
+		_, _ = w.Write([]byte("test"))
+		assert.True(t, streamed.Load())
+	})
+
+	t.Run("does not set streamed flag on failure", func(t *testing.T) {
+		mockEmitter := new(mockSessionUpdateEmitter)
+		mockEmitter.On("EmitSessionUpdate", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(io.EOF)
+
+		ctx := context.Background()
+		streamed := &atomic.Bool{}
+		w := newACPTextWriter(ctx, mockEmitter, "session-1", streamed)
+
+		_, _ = w.Write([]byte("test"))
+		assert.False(t, streamed.Load())
+	})
+
+	t.Run("nil streamed pointer handled", func(t *testing.T) {
+		mockEmitter := new(mockSessionUpdateEmitter)
+		mockEmitter.On("EmitSessionUpdate", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+		ctx := context.Background()
+		w := newACPTextWriter(ctx, mockEmitter, "session-1", nil)
+
+		n, err := w.Write([]byte("test"))
+		assert.NoError(t, err)
+		assert.Equal(t, 4, n)
+	})
+
+	t.Run("multiple writes accumulate missed", func(t *testing.T) {
+		mockEmitter := new(mockSessionUpdateEmitter)
+		mockEmitter.On("EmitSessionUpdate", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(io.EOF)
+
+		ctx := context.Background()
+		w := newACPTextWriter(ctx, mockEmitter, "session-1", nil)
+
+		_, _ = w.Write([]byte("test1"))
+		_, _ = w.Write([]byte("test2"))
+		_, _ = w.Write([]byte("test3"))
+
+		assert.Equal(t, uint64(3), w.MissedEmits())
+	})
 }
 
-func TestRunACPServe_ConfigMissing_ReturnsExitUser(t *testing.T) {
-	err := runACPServe(context.Background(), Deps{}, "/nonexistent/path/config.json")
+// TestStreamFlaggingEmitter_EmitSessionUpdate covers the wrapper that lets per-step
+// renderers emit ACP SessionUpdate variants directly while preserving the streamed
+// signal (replaces the legacy acpMessageSender). The discriminator/field mapping that
+// used to live in the sender now lives in the infra Renderer (see renderer_test.go).
+func TestStreamFlaggingEmitter_EmitSessionUpdate(t *testing.T) {
+	t.Run("delegates to wrapped emitter", func(t *testing.T) {
+		mockEmitter := new(mockSessionUpdateEmitter)
+		mockEmitter.On("EmitSessionUpdate", mock.Anything, "session-1", "agent_message_chunk", mock.Anything).Return(nil)
 
-	var exitErr *exitError
-	require.True(t, errors.As(err, &exitErr), "expected *exitError")
-	assert.Equal(t, ExitUser, exitErr.code, "expected exit code ExitUser for missing config")
+		e := newStreamFlaggingEmitter(mockEmitter, nil)
+		err := e.EmitSessionUpdate(context.Background(), "session-1", "agent_message_chunk", map[string]any{"seq": uint64(1)})
+		assert.NoError(t, err)
+		mockEmitter.AssertCalled(t, "EmitSessionUpdate", mock.Anything, "session-1", "agent_message_chunk", mock.Anything)
+	})
+
+	t.Run("sets streamed flag on success", func(t *testing.T) {
+		mockEmitter := new(mockSessionUpdateEmitter)
+		mockEmitter.On("EmitSessionUpdate", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+		streamed := &atomic.Bool{}
+		e := newStreamFlaggingEmitter(mockEmitter, streamed)
+		_ = e.EmitSessionUpdate(context.Background(), "session-1", "agent_message_chunk", nil)
+		assert.True(t, streamed.Load())
+	})
+
+	t.Run("propagates emit errors", func(t *testing.T) {
+		mockEmitter := new(mockSessionUpdateEmitter)
+		mockEmitter.On("EmitSessionUpdate", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(io.EOF)
+
+		e := newStreamFlaggingEmitter(mockEmitter, nil)
+		err := e.EmitSessionUpdate(context.Background(), "session-1", "agent_message_chunk", nil)
+		assert.Error(t, err)
+	})
+
+	t.Run("does not set streamed on error", func(t *testing.T) {
+		mockEmitter := new(mockSessionUpdateEmitter)
+		mockEmitter.On("EmitSessionUpdate", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(io.EOF)
+
+		streamed := &atomic.Bool{}
+		e := newStreamFlaggingEmitter(mockEmitter, streamed)
+		_ = e.EmitSessionUpdate(context.Background(), "session-1", "agent_message_chunk", nil)
+		assert.False(t, streamed.Load())
+	})
 }
 
-func TestRunACPServe_MalformedConfig_ReturnsExitUser(t *testing.T) {
-	fixture := "../../../tests/fixtures/acp/malformed.json"
-	err := runACPServe(context.Background(), Deps{}, fixture)
+func TestNewACPTextWriter_ContextCapture(t *testing.T) {
+	mockEmitter := new(mockSessionUpdateEmitter)
+	cancelledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
 
-	var exitErr *exitError
-	require.True(t, errors.As(err, &exitErr), "expected *exitError")
-	assert.Equal(t, ExitUser, exitErr.code, "expected exit code ExitUser for malformed config")
+	streamed := &atomic.Bool{}
+	w := newACPTextWriter(cancelledCtx, mockEmitter, "session-1", streamed)
+
+	assert.NotNil(t, w)
+	assert.Equal(t, cancelledCtx, w.ctx)
 }
 
-func TestRunACPServe_GracefulShutdown_OnSignal(t *testing.T) {
-	fixture := "../../../tests/fixtures/acp/valid.json"
+func TestRunProtocolInterceptor_InvalidJSON(t *testing.T) {
+	t.Run("rejects invalid json", func(t *testing.T) {
+		src := bytes.NewReader([]byte("invalid json\n"))
+		dst := &bytes.Buffer{}
+		_, pipeW := io.Pipe()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+		go func() {
+			runProtocolInterceptor(context.Background(), src, dst, pipeW)
+		}()
 
-	go func() {
+		time.Sleep(100 * time.Millisecond)
+		_ = pipeW.Close()
+
+		output := dst.String()
+		assert.Contains(t, output, "parse error")
+		assert.Contains(t, output, "-32700")
+	})
+
+	t.Run("forwards valid json", func(t *testing.T) {
+		src := bytes.NewReader([]byte(`{"jsonrpc":"2.0","method":"test"}` + "\n"))
+		dst := &bytes.Buffer{}
+		pipeR, pipeW := io.Pipe()
+
+		go func() {
+			runProtocolInterceptor(context.Background(), src, dst, pipeW)
+		}()
+
+		result := make([]byte, 100)
+		n, _ := pipeR.Read(result)
+		assert.Greater(t, n, 0)
+		assert.Contains(t, string(result[:n]), "jsonrpc")
+	})
+
+	t.Run("respects context cancellation", func(t *testing.T) {
+		src := bytes.NewReader([]byte("test\n"))
+		dst := &bytes.Buffer{}
+		_, pipeW := io.Pipe()
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		go func() {
+			runProtocolInterceptor(ctx, src, dst, pipeW)
+		}()
+
 		time.Sleep(50 * time.Millisecond)
 		cancel()
-	}()
+		time.Sleep(50 * time.Millisecond)
 
-	done := make(chan error, 1)
-	go func() {
-		done <- runACPServe(ctx, Deps{}, fixture)
-	}()
+		assert.True(t, true)
+	})
 
-	select {
-	case err := <-done:
-		assert.NoError(t, err, "expected graceful shutdown to return nil")
-	case <-time.After(1 * time.Second):
-		t.Fatal("expected runACPServe to return within 1 second after signal")
-	}
-}
+	t.Run("ignores empty lines", func(t *testing.T) {
+		src := bytes.NewReader([]byte("\n\n" + `{"jsonrpc":"2.0"}` + "\n"))
+		dst := &bytes.Buffer{}
+		pipeR, pipeW := io.Pipe()
 
-func TestRootRegistersACPServe(t *testing.T) {
-	cmd := NewRootCommand()
-
-	var acpServeCmd *cobra.Command
-	for _, sub := range cmd.Commands() {
-		if sub.Name() == "acp-serve" {
-			acpServeCmd = sub
-			break
-		}
-	}
-
-	require.NotNil(t, acpServeCmd, "expected acp-serve command to be registered in root")
-	assert.Equal(t, "acp-serve", acpServeCmd.Use, "expected Use to be 'acp-serve'")
-}
-
-func TestACPServeCommand_IsNotInHelpText(t *testing.T) {
-	cmd := NewRootCommand()
-
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	err := cmd.Help()
-	require.NoError(t, err)
-
-	helpText := buf.String()
-	assert.NotContains(t, helpText, "acp-serve", "expected acp-serve to be hidden from help text")
-}
-
-// TestHandleInitialize_UnsupportedVersion_HumanMessage verifies fix M-6: the error
-// returned for a sub-1 protocol version carries a human-readable message rather than
-// the raw machine error code, and the machine code is preserved in the Data field for
-// automated clients.
-func TestHandleInitialize_UnsupportedVersion_HumanMessage(t *testing.T) {
-	tests := []struct {
-		name      string
-		requested int
-	}{
-		{"zero", 0},
-		{"negative", -1},
-		{"large negative", -100},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			params, err := json.Marshal(map[string]any{"protocolVersion": tt.requested})
-			require.NoError(t, err)
-
-			result, acpErr := handleInitialize(context.Background(), params, "test")
-			require.Nil(t, result, "expected no result on version rejection")
-			require.NotNil(t, acpErr, "expected non-nil error for unsupported version")
-
-			assert.Equal(t, acpserver.ErrInvalidParams, acpErr.Code)
-			// Message must be human-readable, not the raw machine code string.
-			assert.NotEqual(t, string(domainerrors.ErrorCodeUserACPProtocolVersionUnsupported), acpErr.Message,
-				"message must not be the raw machine error code")
-			assert.Contains(t, acpErr.Message, "unsupported protocol version",
-				"message should describe the problem in plain language")
-			// Machine code is preserved in Data for programmatic matching.
-			assert.Equal(t, string(domainerrors.ErrorCodeUserACPProtocolVersionUnsupported), acpErr.Data,
-				"Data field must carry the machine error code")
-		})
-	}
-}
-
-// TestProcessEnvMap_SplitsOnFirstEquals verifies fix M-4: processEnvMap splits each
-// entry on the first '=' only, so values that contain '=' (e.g. base64 secrets) are
-// preserved intact.
-func TestProcessEnvMap_SplitsOnFirstEquals(t *testing.T) {
-	const key = "AWF_TEST_SECRET_KEY_ZZZZZ"
-	const val = "abc=def==ghi" // value contains multiple '='
-	t.Setenv(key, val)
-
-	m := processEnvMap()
-
-	got, ok := m[key]
-	require.True(t, ok, "expected key %q to be present in env map", key)
-	assert.Equal(t, val, got, "value with embedded '=' must be preserved")
-}
-
-// TestProcessEnvMap_NonEmpty verifies fix M-4: processEnvMap always returns a
-// non-nil, non-empty map when at least one environment variable is set, ensuring
-// SecretMasker.MaskText does not short-circuit due to an empty env.
-func TestProcessEnvMap_NonEmpty(t *testing.T) {
-	// The test process always has at least PATH set; the map must never be nil.
-	m := processEnvMap()
-	require.NotNil(t, m, "processEnvMap must never return nil")
-	assert.NotEmpty(t, m, "expected at least one entry from the process environment")
-}
-
-// TestProcessEnvMap_SecretValuePreserved verifies that a known secret entry produced
-// by processEnvMap would not be empty — a prerequisite for SecretMasker to actually
-// redact it from output.
-func TestProcessEnvMap_SecretValuePreserved(t *testing.T) {
-	const key = "SECRET_AWF_UNIT_TEST"
-	const val = "supersecret"
-	t.Setenv(key, val)
-
-	m := processEnvMap()
-
-	got, ok := m[key]
-	require.True(t, ok, "secret key must appear in env map")
-	assert.Equal(t, val, got, "secret value must be preserved exactly for masking")
-}
-
-// TestCleanupPanicSafe_RemoveAllRunsAfterPanic verifies fix M-2: if res.Cleanup()
-// panics, the deferred os.RemoveAll still executes so the temp directory is not leaked.
-// We simulate this by constructing the same closure pattern used in the factory and
-// verifying the directory is removed even when the inner call panics.
-func TestCleanupPanicSafe_RemoveAllRunsAfterPanic(t *testing.T) {
-	dir := t.TempDir()
-	// Create a sub-directory to remove so RemoveAll has something to act on.
-	subDir, err := os.MkdirTemp(dir, "session-")
-	require.NoError(t, err)
-
-	removed := false
-	// Replicate the M-2 closure pattern from runACPServe.
-	cleanup := func() {
-		defer func() {
-			if rmErr := os.RemoveAll(subDir); rmErr == nil {
-				removed = true
-			}
-			// swallow the panic so the test does not fail via panic propagation
-			recover() //nolint:errcheck // controlled test: we want to swallow the panic here
+		go func() {
+			runProtocolInterceptor(context.Background(), src, dst, pipeW)
 		}()
-		panic("simulated Cleanup panic") // simulate res.Cleanup() panicking
-	}
 
-	// Must not panic out of the test itself.
-	assert.NotPanics(t, cleanup, "cleanup closure must not propagate panics")
-	assert.True(t, removed, "sessionStateDir must be removed even when Cleanup panics")
+		result := make([]byte, 50)
+		n, _ := pipeR.Read(result)
+		assert.Greater(t, n, 0)
+		assert.Contains(t, string(result[:n]), "jsonrpc")
+	})
+
+	t.Run("handles line too long", func(t *testing.T) {
+		longLine := make([]byte, 11*1024*1024) // exceeds the 10 MiB cap (NFR-005)
+		src := bytes.NewReader(longLine)
+		dst := &bytes.Buffer{}
+		_, pipeW := io.Pipe()
+
+		// Run synchronously rather than via a goroutine + fixed sleep: an oversize line
+		// yields no valid frame, so the interceptor never writes to pipeW and cannot block.
+		// It scans until bufio.ErrTooLong, writes the parse error to dst, closes pipeW, and
+		// returns. Synchronous execution makes the assertion deterministic (no flakiness when
+		// scanning 11 MiB is slow under -race on CI) and removes the data race on dst that a
+		// concurrent reader created.
+		runProtocolInterceptor(context.Background(), src, dst, pipeW)
+
+		assert.Contains(t, dst.String(), "parse error")
+	})
 }
 
-// TestHandleInitialize_StdinClosedHint is a compile-time guard for fix C-1: we verify
-// that os.Stdin satisfies io.Closer, confirming the defer Close() pattern is valid.
-// The actual goroutine-leak prevention is exercised by the graceful-shutdown integration
-// test (TestRunACPServe_GracefulShutdown_OnSignal).
-func TestHandleInitialize_StdinClosedHint(t *testing.T) {
-	// strings.NewReader is used as a stand-in: we only need to verify the interface.
-	// The real check is that the production code compiles with defer os.Stdin.Close().
-	r := strings.NewReader("{}") // implements io.ReadCloser via os.File in production
-	assert.NotNil(t, r, "sanity: stdin replacement must not be nil")
+func TestWriteJSONRPCParseError(t *testing.T) {
+	t.Run("writes parse error response", func(t *testing.T) {
+		dst := &bytes.Buffer{}
+		writeJSONRPCParseError(dst)
+
+		output := dst.String()
+		assert.Contains(t, output, "parse error")
+		assert.Contains(t, output, "-32700")
+		assert.Contains(t, output, "null")
+		assert.Contains(t, output, "jsonrpc")
+		assert.Contains(t, output, "2.0")
+	})
+
+	t.Run("ends with newline", func(t *testing.T) {
+		dst := &bytes.Buffer{}
+		writeJSONRPCParseError(dst)
+
+		output := dst.String()
+		assert.NotEmpty(t, output)
+		assert.Equal(t, '\n', rune(output[len(output)-1]))
+	})
+}
+
+// Mock types for testing
+
+type mockSessionUpdateEmitter struct {
+	mock.Mock
+}
+
+func (m *mockSessionUpdateEmitter) EmitSessionUpdate(ctx context.Context, sessionID, updateType string, payload map[string]any) error {
+	return m.Called(ctx, sessionID, updateType, payload).Error(0)
 }

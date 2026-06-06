@@ -207,12 +207,12 @@ func resultMap(t *testing.T, result any) map[string]any {
 	return m
 }
 
-// stopReasonOf extracts the stopReason from a promptResult value returned by HandleSessionPrompt
+// stopReasonOf extracts the stopReason from a PromptResult value returned by HandleSessionPrompt
 // or HandleSessionCancel. Using the typed struct avoids stringly-typed map access.
 func stopReasonOf(t *testing.T, result any) string {
 	t.Helper()
-	pr, ok := result.(promptResult)
-	require.True(t, ok, "result must be a promptResult, got %T", result)
+	pr, ok := result.(PromptResult)
+	require.True(t, ok, "result must be a PromptResult, got %T", result)
 	return pr.StopReason
 }
 
@@ -360,9 +360,11 @@ func TestACPSessionService_HandleSessionNew_StoresEditorMcpServers(t *testing.T)
 
 	svc := &ACPSessionService{workflowRepo: mockRepo, logger: ports.NopLogger{}}
 
+	// env is the ACP wire array form ([{name,value}]) — matching the SDK's McpServerStdio
+	// marshaller. The object form ({"K":"V"}) is NOT valid ACP and would fail to decode.
 	params := json.RawMessage(`{
 		"cwd": "/home/user",
-		"mcpServers": [{"name": "editor-server", "command": "python", "args": ["-m", "srv"], "env": {"K": "V"}}]
+		"mcpServers": [{"name": "editor-server", "command": "python", "args": ["-m", "srv"], "env": [{"name": "K", "value": "V"}]}]
 	}`)
 	result, acpErr := svc.HandleSessionNew(ctx, params)
 	require.Nil(t, acpErr)
@@ -375,7 +377,7 @@ func TestACPSessionService_HandleSessionNew_StoresEditorMcpServers(t *testing.T)
 	require.True(t, ok, "editor MCP server must be stored")
 	assert.Equal(t, "python", spec.Command)
 	assert.Equal(t, []string{"-m", "srv"}, spec.Args)
-	assert.Equal(t, map[string]string{"K": "V"}, spec.Env)
+	assert.Equal(t, []MCPEnvVariable{{Name: "K", Value: "V"}}, spec.Env)
 }
 
 // TestACPSessionService_HandleSessionPrompt_DispatchesToRunner verifies the slash command and
@@ -523,6 +525,74 @@ func TestACPSessionService_HandleSessionCancel_InvokesCancel(t *testing.T) {
 	default:
 		t.Fatal("session/cancel must invoke the recorded cancel function")
 	}
+}
+
+// TestACPSessionService_HandleSessionCancel_KeepsSessionReusable is the regression test for the
+// bug where session/cancel cancelled the session-lifetime context, so every later prompt started
+// with an already-cancelled runCtx (a child of sessionCtx) and resolved instantly as "cancelled".
+// Per ACP, session/cancel interrupts only the ongoing turn; the session must stay usable.
+func TestACPSessionService_HandleSessionCancel_KeepsSessionReusable(t *testing.T) {
+	exec := workflow.NewExecutionContext("trivial", "Trivial Workflow")
+	exec.SetStepState("run", workflow.StepState{Output: "ok\n"})
+
+	mockRepo := new(MockWorkflowRepository)
+	ctx := context.Background()
+	mockRepo.On("ListWithSource", ctx).Return([]ports.WorkflowInfo{{Name: "trivial", Source: ports.SourceLocal, Path: "/p/trivial.yaml"}}, nil)
+	mockRepo.On("Load", ctx, "trivial").Return(testWorkflow("trivial"), nil)
+
+	svc := &ACPSessionService{logger: ports.NopLogger{}, workflowRepo: mockRepo, runner: &fakeRunner{execCtx: exec}, emitter: &fakeEmitter{}}
+	svc.SetServerContext(context.Background())
+
+	newResult, acpErr := svc.HandleSessionNew(ctx, json.RawMessage(`{"cwd":"/home/user","mcpServers":[]}`))
+	require.Nil(t, acpErr)
+	sessionID, _ := resultMap(t, newResult)["sessionId"].(string)
+	require.NotEmpty(t, sessionID)
+
+	// Cancel the (idle) session — must NOT poison the session-lifetime context.
+	_, acpErr = svc.HandleSessionCancel(ctx, json.RawMessage(fmt.Sprintf(`{"sessionId":%q}`, sessionID)))
+	require.Nil(t, acpErr)
+
+	val, ok := svc.sessions.Load(sessionID)
+	require.True(t, ok)
+	session := val.(*ACPSession)
+	require.NoError(t, session.getSessionCtx().Err(),
+		"session/cancel must not cancel the session-lifetime context; the session stays reusable")
+
+	// A subsequent prompt must execute normally (end_turn). Under the bug, runCtx derived from the
+	// cancelled sessionCtx would make run.cancelled true and resolve as stopReason=cancelled.
+	promptParams, _ := json.Marshal(map[string]any{
+		"sessionId": sessionID,
+		"prompt":    []map[string]any{{"type": "text", "text": "/trivial"}},
+	})
+	result, acpErr := svc.HandleSessionPrompt(ctx, promptParams)
+	require.Nil(t, acpErr)
+	assert.Equal(t, "end_turn", stopReasonOf(t, result),
+		"a prompt after session/cancel must execute, not start on a cancelled context")
+}
+
+// TestACPSessionService_HandleSessionNew_AcceptsMCPServersWithEnv is the regression test for the
+// MCPServerSpec.Env type mismatch: the ACP wire format (and the SDK's McpServerStdio marshaller)
+// emit env as a JSON ARRAY of {name,value}. Decoding that into a map[string]string failed the whole
+// session/new json.Unmarshal, rejecting every session that declared an MCP stdio server with env.
+func TestACPSessionService_HandleSessionNew_AcceptsMCPServersWithEnv(t *testing.T) {
+	mockRepo := new(MockWorkflowRepository)
+	ctx := context.Background()
+	mockRepo.On("ListWithSource", ctx).Return([]ports.WorkflowInfo{}, nil)
+	svc := &ACPSessionService{logger: ports.NopLogger{}, workflowRepo: mockRepo}
+
+	// Exact wire shape the SDK's McpServerStdio marshaller produces: env is an array of {name,value}.
+	params := json.RawMessage(`{"cwd":"/w","mcpServers":[{"name":"fs","command":"srv","args":["--x"],"env":[{"name":"TOKEN","value":"abc"},{"name":"DEBUG","value":"1"}]}]}`)
+	result, acpErr := svc.HandleSessionNew(ctx, params)
+	require.Nil(t, acpErr, "session/new must accept mcpServers whose env is the wire array form")
+
+	sessionID, _ := resultMap(t, result)["sessionId"].(string)
+	require.NotEmpty(t, sessionID)
+	val, ok := svc.sessions.Load(sessionID)
+	require.True(t, ok)
+	session := val.(*ACPSession)
+	require.Len(t, session.MCPServers, 1)
+	assert.Equal(t, []MCPEnvVariable{{Name: "TOKEN", Value: "abc"}, {Name: "DEBUG", Value: "1"}}, session.MCPServers["fs"].Env,
+		"env vars must survive decoding, not be silently dropped")
 }
 
 // TestACPSessionService_HandleSessionPrompt_FactoryBuildsPerSessionRunnerAndSendsAggregateWhenNothingStreamed
@@ -896,34 +966,34 @@ func TestSendAgentText_HumanReadableMessage_NoMachineCodePrefix(t *testing.T) {
 }
 
 // TestParseSlashCommand_PromptTooLarge is the m-4 non-regression test: a prompt that exceeds
-// maxPromptBytes must be rejected before tokenization, returning an error that mentions both
+// MaxPromptBytes must be rejected before tokenization, returning an error that mentions both
 // the actual size and the limit. This prevents unbounded memory allocation in tokenizePrompt.
 func TestParseSlashCommand_PromptTooLarge(t *testing.T) {
 	// One byte over the 1 MiB limit.
-	oversized := "/" + strings.Repeat("a", maxPromptBytes)
+	oversized := "/" + strings.Repeat("a", MaxPromptBytes)
 	_, _, err := parseSlashCommand(oversized)
-	require.Error(t, err, "prompt exceeding maxPromptBytes must be rejected")
+	require.Error(t, err, "prompt exceeding MaxPromptBytes must be rejected")
 	assert.Contains(t, err.Error(), "prompt too large",
 		"error must clearly state the prompt is too large")
-	assert.Contains(t, err.Error(), fmt.Sprintf("%d", maxPromptBytes),
+	assert.Contains(t, err.Error(), fmt.Sprintf("%d", MaxPromptBytes),
 		"error must include the max allowed size")
 }
 
-// TestParseSlashCommand_PromptAtLimit verifies that a prompt of exactly maxPromptBytes is
+// TestParseSlashCommand_PromptAtLimit verifies that a prompt of exactly MaxPromptBytes is
 // accepted (boundary: limit is exclusive, i.e. len > max triggers the guard).
 func TestParseSlashCommand_PromptAtLimit(t *testing.T) {
-	// Exactly maxPromptBytes — should NOT trigger the guard.
-	// Build "/A" + padding to reach exactly maxPromptBytes bytes.
+	// Exactly MaxPromptBytes — should NOT trigger the guard.
+	// Build "/A" + padding to reach exactly MaxPromptBytes bytes.
 	// Uppercase "A" is rejected by ValidateName (^[a-z][a-z0-9-]*$), so parseSlashCommand
 	// must return an error from name validation — not from the size guard.
-	padding := strings.Repeat("x", maxPromptBytes-len("/A"))
+	padding := strings.Repeat("x", MaxPromptBytes-len("/A"))
 	atLimit := "/A" + padding
-	require.Equal(t, maxPromptBytes, len(atLimit), "test setup: prompt must be exactly maxPromptBytes")
+	require.Equal(t, MaxPromptBytes, len(atLimit), "test setup: prompt must be exactly MaxPromptBytes")
 	// parseSlashCommand must fail with a name-validation error, not "prompt too large".
 	_, _, err := parseSlashCommand(atLimit)
 	require.Error(t, err, "name validation must reject the uppercase name")
 	assert.NotContains(t, err.Error(), "prompt too large",
-		"a prompt of exactly maxPromptBytes must not be rejected by the size guard")
+		"a prompt of exactly MaxPromptBytes must not be rejected by the size guard")
 }
 
 // TestParseSlashCommand_PackNamespaceColonMapsToSlash verifies that a pack slash command using

@@ -6,7 +6,7 @@ title: "018: ACP Transparent Agent Server via JSON-RPC 2.0 stdio Subprocess"
 **Date**: 2026-05-30
 **Issue**: F102
 **Supersedes**: N/A
-**Superseded by**: N/A
+**Superseded by**: ADR 020 (implementation detail, not decision)
 
 ## Context
 

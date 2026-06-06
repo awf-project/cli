@@ -2,53 +2,12 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"sync/atomic"
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
-	"github.com/awf-project/cli/internal/infrastructure/acp"
-	"github.com/awf-project/cli/pkg/acpserver"
 )
-
-// acpHandler is the transport-neutral request handler shape implemented by
-// ACPSessionService. adaptACPHandler lifts it to an acpserver.HandlerFunc, mapping the
-// application-layer error kind onto its JSON-RPC code at the interface boundary so the
-// application layer never imports pkg/acpserver (M1: transport stays an interface concern).
-type acpHandler func(context.Context, json.RawMessage) (any, *application.ACPHandlerError)
-
-func adaptACPHandler(h acpHandler) acpserver.HandlerFunc {
-	return func(ctx context.Context, params json.RawMessage) (any, *acpserver.Error) {
-		result, herr := h(ctx, params)
-		if herr == nil {
-			return result, nil
-		}
-		// JSON-RPC 2.0: an error response carries a null result.
-		// C-3: propagate the optional Data field so machine-readable codes (e.g.
-		// USER.ACP.PROMPT_IN_FLIGHT) appear in the JSON-RPC error's "data" field rather
-		// than in "message", which is displayed verbatim in the editor UI.
-		rpcErr := &acpserver.Error{Code: acpErrorCode(herr.Kind), Message: herr.Message}
-		if herr.Data != nil {
-			rpcErr.Data = herr.Data
-		}
-		return nil, rpcErr
-	}
-}
-
-// acpErrorCode maps an application ACPErrorKind onto its JSON-RPC 2.0 error code.
-func acpErrorCode(kind application.ACPErrorKind) int {
-	switch kind {
-	case application.ACPErrInvalidParams:
-		return acpserver.ErrInvalidParams
-	case application.ACPErrMethodNotFound:
-		return acpserver.ErrMethodNotFound
-	case application.ACPErrInternal:
-		return acpserver.ErrInternal
-	default:
-		return acpserver.ErrInternal
-	}
-}
 
 // acpTextWriter routes raw bytes written by the execution stack (shell step stdout, and
 // any non-rendered agent output) to the editor as ACP agent_message_chunk session/update
@@ -65,7 +24,7 @@ func acpErrorCode(kind application.ACPErrorKind) int {
 // upheld and the execution stack is not interrupted. Use MissedEmits() to observe the
 // cumulative count of failed emissions for monitoring or debugging.
 type acpTextWriter struct {
-	ctx         context.Context //nolint:containedctx // io.Writer.Write has no ctx param; signalCtx (server shutdown context) is captured at construction so a SIGTERM cancels emission instead of writing to a dead stdout. Limitation v1: the writer does not propagate per-request cancellation; this is acceptable because the ACP server is single-session-per-process in v1.
+	ctx         context.Context //nolint:containedctx // io.Writer.Write has no ctx param; see struct doc for rationale
 	emitter     application.SessionUpdateEmitter
 	sessionID   string
 	streamed    *atomic.Bool
@@ -103,80 +62,32 @@ func (w *acpTextWriter) MissedEmits() uint64 {
 	return w.missedEmits.Load()
 }
 
-// acpMessageSender adapts acp.Sender (used by ACPRenderer) to the session emitter,
-// mapping each Message type to its ACP sessionUpdate discriminator and fields. When
-// streamed is non-nil and an emit succeeds, it is set to true so HandleSessionPrompt
-// can suppress the post-run aggregate safely.
-type acpMessageSender struct {
-	emitter   application.SessionUpdateEmitter
-	sessionID string
-	streamed  *atomic.Bool
+// streamFlaggingEmitter wraps a session-scoped SessionUpdateEmitter and flips
+// streamed to true on each successful emit, so HandleSessionPrompt can suppress the
+// post-run aggregate safely. It lets the per-step Renderer emit ACP SessionUpdate
+// variants directly (no bespoke Sender/Message DTO) while preserving the streamed
+// signal the legacy acpMessageSender used to provide.
+type streamFlaggingEmitter struct {
+	emitter  application.SessionUpdateEmitter
+	streamed *atomic.Bool
 }
 
-func newACPMessageSender(emitter application.SessionUpdateEmitter, sessionID string, streamed *atomic.Bool) *acpMessageSender {
-	return &acpMessageSender{emitter: emitter, sessionID: sessionID, streamed: streamed}
+func newStreamFlaggingEmitter(emitter application.SessionUpdateEmitter, streamed *atomic.Bool) *streamFlaggingEmitter {
+	return &streamFlaggingEmitter{emitter: emitter, streamed: streamed}
 }
 
-func (s *acpMessageSender) Send(ctx context.Context, msg acp.Message) error { //nolint:gocritic // hugeParam: signature is fixed by acp.Sender interface
-	var err error
-	switch msg.Type {
-	case acp.MsgAgentMessageChunk:
-		err = s.emitter.EmitSessionUpdate(ctx, s.sessionID, "agent_message_chunk", map[string]any{
-			"seq":     msg.Seq,
-			"content": map[string]any{"type": "text", "text": msg.Content},
-		})
-	case acp.MsgAgentThoughtChunk:
-		err = s.emitter.EmitSessionUpdate(ctx, s.sessionID, "agent_thought_chunk", map[string]any{
-			"seq":     msg.Seq,
-			"content": map[string]any{"type": "text", "text": msg.Content},
-		})
-	case acp.MsgToolCall, acp.MsgToolCallUpdate:
-		err = s.emitter.EmitSessionUpdate(ctx, s.sessionID, string(msg.Type), map[string]any{
-			"seq":        msg.Seq,
-			"toolCallId": msg.ToolID,
-			"title":      msg.Tool,
-			"rawInput":   map[string]any{"text": msg.Content},
-		})
-	default:
-		return nil
-	}
-	if err == nil && s.streamed != nil {
-		s.streamed.Store(true)
+func (e *streamFlaggingEmitter) EmitSessionUpdate(ctx context.Context, sessionID, kind string, fields map[string]any) error {
+	err := e.emitter.EmitSessionUpdate(ctx, sessionID, kind, fields)
+	if err == nil && e.streamed != nil {
+		e.streamed.Store(true)
 	}
 	return err
 }
 
-// acpSessionNotifier adapts acp.SessionNotifier (used by WorkflowEventProjector) to the
-// session emitter. The projector keys updates by workflowID; routing is by the bound
-// sessionID (one projector per session, built in the factory).
-type acpSessionNotifier struct {
-	emitter   application.SessionUpdateEmitter
-	sessionID string
-}
-
-func newACPSessionNotifier(emitter application.SessionUpdateEmitter, sessionID string) *acpSessionNotifier {
-	return &acpSessionNotifier{emitter: emitter, sessionID: sessionID}
-}
-
-func (n *acpSessionNotifier) NotifySessionUpdate(ctx context.Context, _ string, update acp.SessionUpdate) error {
-	fields := map[string]any{}
-	if update.StepName != "" {
-		fields["stepName"] = update.StepName
-	}
-	if update.Error != "" {
-		fields["error"] = update.Error
-	}
-	if update.Duration != "" {
-		fields["duration"] = update.Duration
-	}
-	return n.emitter.EmitSessionUpdate(ctx, n.sessionID, update.Kind, fields)
-}
-
 // compile-time assertions
 var (
-	_ io.Writer           = (*acpTextWriter)(nil)
-	_ acp.Sender          = (*acpMessageSender)(nil)
-	_ acp.SessionNotifier = (*acpSessionNotifier)(nil)
+	_ io.Writer                        = (*acpTextWriter)(nil)
+	_ application.SessionUpdateEmitter = (*streamFlaggingEmitter)(nil)
 )
 
 // sharedHistoryStore wraps a HistoryStore so the per-session ExecutionSetup.Build cleanup

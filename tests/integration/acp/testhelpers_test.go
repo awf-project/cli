@@ -16,9 +16,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/cli/pkg/acpserver"
+	sdk "github.com/coder/acp-go-sdk"
 	"github.com/stretchr/testify/require"
 )
+
+type jsonRPCResponse struct {
+	JSONRPC string            `json:"jsonrpc"`
+	ID      json.RawMessage   `json:"id"`
+	Result  any               `json:"result"`
+	Error   *sdk.RequestError `json:"error,omitempty"`
+}
 
 const acpRPCTimeout = 5 * time.Second
 
@@ -61,7 +68,7 @@ type acpProcess struct {
 	cmd     *exec.Cmd
 	stdin   io.WriteCloser
 	mu      sync.Mutex
-	waiters map[string]chan acpserver.Response
+	waiters map[string]chan jsonRPCResponse
 	rawCh   chan []byte
 }
 
@@ -80,7 +87,7 @@ func startACPServeProcess(t *testing.T, binaryPath string, args ...string) *acpP
 	p := &acpProcess{
 		cmd:     cmd,
 		stdin:   stdin,
-		waiters: make(map[string]chan acpserver.Response),
+		waiters: make(map[string]chan jsonRPCResponse),
 		rawCh:   make(chan []byte, 1024),
 	}
 	go p.readPump(stdout)
@@ -132,7 +139,7 @@ func (p *acpProcess) route(line []byte) {
 		}
 		p.mu.Unlock()
 		if ok {
-			var resp acpserver.Response
+			var resp jsonRPCResponse
 			_ = json.Unmarshal(line, &resp)
 			ch <- resp
 			return
@@ -149,11 +156,11 @@ func (p *acpProcess) route(line []byte) {
 	}
 }
 
-func (p *acpProcess) request(t *testing.T, id int, method string, params any) acpserver.Response {
+func (p *acpProcess) request(t *testing.T, id int, method string, params any) jsonRPCResponse {
 	t.Helper()
 
 	idKey := jsonIntID(id)
-	ch := make(chan acpserver.Response, 1)
+	ch := make(chan jsonRPCResponse, 1)
 	p.mu.Lock()
 	p.waiters[idKey] = ch
 	p.mu.Unlock()
@@ -178,7 +185,7 @@ func (p *acpProcess) request(t *testing.T, id int, method string, params any) ac
 		p.mu.Unlock()
 		t.Fatalf("timed out waiting for response to %s (id=%d)", method, id)
 	}
-	return acpserver.Response{}
+	return jsonRPCResponse{}
 }
 
 // jsonIntID renders an integer id the way encoding/json marshals it, so it matches the
@@ -203,6 +210,38 @@ func (p *acpProcess) readRawLine(t *testing.T, label string) []byte {
 		t.Fatalf("timed out waiting for raw response (%s)", label)
 	}
 	return nil
+}
+
+// drainForAvailableCommands reads session/update notifications from rawCh until one is an
+// available_commands_update that advertises a command with the given name.
+func (p *acpProcess) drainForAvailableCommands(t *testing.T, want string) bool {
+	t.Helper()
+	deadline := time.After(acpRPCTimeout)
+	for {
+		select {
+		case line := <-p.rawCh:
+			var n struct {
+				Params struct {
+					Update struct {
+						SessionUpdate     string `json:"sessionUpdate"`
+						AvailableCommands []struct {
+							Name string `json:"name"`
+						} `json:"availableCommands"`
+					} `json:"update"`
+				} `json:"params"`
+			}
+			if json.Unmarshal(line, &n) == nil &&
+				n.Params.Update.SessionUpdate == "available_commands_update" {
+				for _, cmd := range n.Params.Update.AvailableCommands {
+					if cmd.Name == want {
+						return true
+					}
+				}
+			}
+		case <-deadline:
+			return false
+		}
+	}
 }
 
 // drainForChunk reads session/update notifications from rawCh until one is an

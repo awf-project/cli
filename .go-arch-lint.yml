@@ -25,7 +25,6 @@ commonComponents:
   - pkg-httpx
   - pkg-output
   - pkg-registry
-  - pkg-acpserver
 
 vendors:
   go-stdlib:
@@ -163,6 +162,11 @@ vendors:
       - github.com/modelcontextprotocol/go-sdk/mcp
       - github.com/modelcontextprotocol/go-sdk/**
 
+  go-sdk-acp:
+    in:
+      - github.com/coder/acp-go-sdk
+      - github.com/coder/acp-go-sdk/**
+
 components:
   # DOMAIN LAYER
   domain-workflow:
@@ -210,9 +214,6 @@ components:
 
   pkg-validation:
     in: ../pkg/validation
-
-  pkg-acpserver:
-    in: ../pkg/acpserver
 
   # PROTOBUF
   proto-plugin:
@@ -611,9 +612,10 @@ deps:
       - domain-plugin
       - infra-agents
       - infra-logger
-      - pkg-acpserver
+      - application
     canUse:
       - go-stdlib
+      - go-sdk-acp
 
   infra-mcp:
     mayDependOn:
@@ -625,10 +627,6 @@ deps:
       # MCP SDK pulls it transitively only; this package never imports it directly
       # (see internal/infrastructure/mcp/doc.go). Keep it out of canUse so an
       # accidental direct import is caught as an architecture violation.
-
-  pkg-acpserver:
-    canUse:
-      - go-stdlib
 
   infra-tools:
     mayDependOn:

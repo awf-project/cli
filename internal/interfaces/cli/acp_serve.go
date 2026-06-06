@@ -1,16 +1,17 @@
 package cli
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
-	"maps"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 
@@ -18,9 +19,8 @@ import (
 	yaml "gopkg.in/yaml.v3"
 
 	"github.com/awf-project/cli/internal/application"
-	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/ports"
-	"github.com/awf-project/cli/internal/infrastructure/acp"
+	acpinfra "github.com/awf-project/cli/internal/infrastructure/acp"
 	"github.com/awf-project/cli/internal/infrastructure/agents"
 	"github.com/awf-project/cli/internal/infrastructure/executor"
 	infralogger "github.com/awf-project/cli/internal/infrastructure/logger"
@@ -28,7 +28,6 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/roles"
 	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
-	"github.com/awf-project/cli/pkg/acpserver"
 	"github.com/awf-project/cli/pkg/display"
 )
 
@@ -86,10 +85,13 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 		}
 	}
 
-	srv := acpserver.New(slog.Default())
-
-	// Logs go to stderr so they never corrupt the stdout JSON-RPC stream.
+	// Logs go to stderr so they never corrupt the stdout JSON-RPC stream (NFR-002).
 	logger := infralogger.NewConsoleLogger(os.Stderr, infralogger.LevelInfo, false)
+	// slogLogger wraps os.Stderr for SDK components that require a *slog.Logger
+	// (conn.SetLogger, acpinfra.NewEmitter, acpinfra.NewRenderer). NFR-002: stdout is
+	// reserved for protocol frames; all diagnostics go to stderr.
+	slogLogger := newACPSDKLogger(os.Stderr)
+
 	repo := buildACPWorkflowRepository(cfg)
 
 	appCfg := DefaultConfig()
@@ -123,7 +125,6 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 	shellExecutor := executor.NewShellExecutor()
 	toolCLIExec := agents.NewExecCLIExecutor()
 	masker := infralogger.NewSecretMasker()
-	emitter := &acpUpdateEmitter{server: srv}
 
 	baseOpts := []application.SetupOption{
 		application.WithNotifyConfig(application.NotifyConfig{DefaultBackend: notifyBackend}),
@@ -153,94 +154,45 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 	signalCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Per-session factory: shared base + session-scoped reader/publisher/writers/renderer.
-	factory := func(sessionID string) (application.WorkflowRunner, application.ACPInputResponder, *atomic.Bool, func(), error) {
-		// M3: give the user a one-time explanation when the workflow requests interactive
-		// input, which the ACP server does not support yet (US2 parking is a future story).
-		var inputNoticeOnce sync.Once
-		reader := acp.NewACPInputReader(func() {
-			inputNoticeOnce.Do(func() {
-				//nolint:errcheck // best-effort user notice; EndTurnNotifier has no error return
-				_ = emitter.EmitSessionUpdate(signalCtx, sessionID, "agent_message_chunk", map[string]any{
-					"content": map[string]any{
-						"type": "text",
-						"text": "This workflow is waiting for interactive input, which the ACP server does not support yet. Cancel the prompt to abort.",
-					},
-				})
-			})
-		})
-
-		// I2: streamed flag — set to true by writers/renderer when an emit succeeds so
-		// HandleSessionPrompt can safely suppress the post-run aggregate.
-		streamed := &atomic.Bool{}
-		textWriter := newACPTextWriter(signalCtx, emitter, sessionID, streamed)
-		sender := newACPMessageSender(emitter, sessionID, streamed)
-		projector := acp.NewWorkflowEventProjector(newACPSessionNotifier(emitter, sessionID), logger)
-
-		var publisher ports.EventPublisher = projector
-		if pluginResult.EventPublisher != nil {
-			publisher = acp.NewFanoutPublisher(logger, pluginResult.EventPublisher, projector)
-		}
-
-		// Isolate persisted workflow state per ACP session. Concurrent sessions running the
-		// same workflow share its WorkflowID as the state-file key; a single shared store
-		// would let them clobber each other's state. A per-session subdirectory keeps each
-		// session's state files disjoint.
-		sessionStateDir := acpSessionStateDir(sessionID)
-		stateStore := store.NewJSONStore(sessionStateDir)
-
-		opts := append([]application.SetupOption{}, baseOpts...)
-		opts = append(
-			opts,
-			application.WithUserInputReader(reader),
-			application.WithEventPublisher(publisher),
-			// NOTE(F102): stdout and stderr of a workflow step are both surfaced as
-			// agent_message_chunk via the same writer; the ACP protocol output does not
-			// yet distinguish the two streams. Tracked as a known limitation for F102-v2.
-			// See docs/ADR/018-acp-transparent-agent-server-protocol.md.
-			application.WithOutputWriters(textWriter, textWriter),
-			application.WithDisplayRendererFactory(func(stepID string) display.EventRenderer {
-				// M-4: pass the process environment so MaskText can redact secrets
-				// (API keys, passwords, tokens) before they reach the editor over the
-				// ACP stream. os.Environ() is used as the source because no per-step
-				// env context is available at factory construction time; it covers all
-				// secrets that were exported to this process, which is the right scope
-				// for a long-running server launched by the editor.
-				r := acp.NewACPRenderer(stepID, sender, masker, logger, processEnvMap())
-				return display.EventRenderer(r.RenderFunc(signalCtx))
-			}),
-		)
-		res, bErr := application.NewExecutionSetup(repo, stateStore, shellExecutor, logger, opts...).Build(signalCtx)
-		if bErr != nil {
-			return nil, nil, nil, nil, fmt.Errorf("build session execution: %w", bErr)
-		}
-		// Make pack workflows runnable, not just listable: the ExecutionService resolves the
-		// dispatched workflow via WorkflowSvc.GetWorkflow, which routes a "pack/workflow" name to
-		// the PackDiscoverer only when one is wired. Gated identically to available-command
-		// discovery so a scoped workflows_dir is honored verbatim (no pack resolution outside it).
-		if cfg.WorkflowsDir == "" {
-			res.WorkflowSvc.SetPackDiscoverer(workflowpkg.NewPackDiscovererAdapter(workflowPackSearchDirs()))
-		}
-
-		// C3: wrap the Build cleanup so the per-session state directory is removed when the
-		// session is torn down — otherwise each session leaks a /tmp/awf-acp-states/<id>
-		// subtree for the lifetime of the (long-running) server.
-		//
-		// M-2: RemoveAll is deferred inside the closure so that a panic inside
-		// res.Cleanup() cannot skip the directory removal and leak temp state on disk.
-		// The defer runs even when the panic propagates upward.
-		cleanup := func() {
-			defer func() {
-				if rmErr := os.RemoveAll(sessionStateDir); rmErr != nil {
-					logger.Warn("acp-serve: failed to remove session state dir", "dir", sessionStateDir, "error", rmErr)
-				}
-			}()
-			res.Cleanup()
-		}
-		return res.ExecService, reader, streamed, cleanup, nil
-	}
-
+	// Create the session service before the agent — the agent wraps the service and the
+	// service is wired (via Set* calls) only after conn is created.
 	sessionSvc := application.NewACPSessionService(nil, nil, repo, logger)
+
+	// Agent wraps the session service and implements sdk.Agent; the Conn owns the transport.
+	agent := acpinfra.NewAgent(sessionSvc)
+	// Route stdin through a fresh pipe so the connection's receive goroutine blocks on
+	// stdinPipeR until the forwarding goroutine (started below) writes or closes it. This
+	// guarantees NewConnection's SetLogger write happens-before loggerOrDefault()'s read in
+	// the SDK receive goroutine, eliminating the data race without SDK changes.
+	stdinPipeR, stdinPipeW := io.Pipe()
+	// NFR-002: NewConnection routes all SDK diagnostic logs to stderr (slogLogger); stdout
+	// carries protocol frames only. The acpinfra.Conn wrapper keeps the SDK connection type
+	// confined to internal/infrastructure/acp so this interface file never imports the SDK.
+	conn := acpinfra.NewConnection(agent, os.Stdout, stdinPipeR, slogLogger)
+
+	// Service-level emitter: used by the session service for service-scoped notifications.
+	emitter := conn.NewEmitter(slogLogger)
+
+	envMap := processEnvMap()
+
+	// Per-session factory: shared base + session-scoped emitter/writers/renderer.
+	// Extracted to buildACPSessionFactory so the ~95-line wiring is unit-testable and
+	// runACPServe stays focused on lifecycle.
+	factory := buildACPSessionFactory(&acpSessionFactoryDeps{
+		signalCtx:          signalCtx,
+		conn:               conn,
+		slogLogger:         slogLogger,
+		logger:             logger,
+		masker:             masker,
+		envMap:             envMap,
+		baseOpts:           baseOpts,
+		eventPublisher:     pluginResult.EventPublisher,
+		repo:               repo,
+		shellExecutor:      shellExecutor,
+		wirePackDiscoverer: cfg.WorkflowsDir == "",
+	})
+
+	sessionSvc.SetServerContext(signalCtx)
 	sessionSvc.SetSessionUpdateEmitter(emitter)
 	sessionSvc.SetRunnerFactory(factory)
 	// Pack-aware available-command discovery. Wrapping the repository in a WorkflowService with a
@@ -255,28 +207,183 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 		provider.SetPackDiscoverer(workflowpkg.NewPackDiscovererAdapter(workflowPackSearchDirs()))
 		sessionSvc.SetWorkflowProvider(provider)
 	}
-	// I1: run every session's per-session cleanup at server shutdown.
-	defer sessionSvc.Shutdown()
 
-	srv.RegisterHandler(acpserver.MethodInitialize, makeInitializeHandler(Version))
-	srv.RegisterHandler(acpserver.MethodSessionNew, adaptACPHandler(sessionSvc.HandleSessionNew))
-	srv.RegisterHandler(acpserver.MethodSessionPrompt, adaptACPHandler(sessionSvc.HandleSessionPrompt))
-	srv.RegisterHandler(acpserver.MethodSessionCancel, adaptACPHandler(sessionSvc.HandleSessionCancel))
+	// F-1: forward real stdin into the pipe. The connection reads from stdinPipeR;
+	// this goroutine is started after SetLogger so the happens-before chain is intact:
+	// SetLogger write → go F() → F closes stdinPipeW → stdinPipeR.Read() returns →
+	// loggerOrDefault() read. Closing stdinPipeW on EOF propagates peer disconnect.
+	go func() {
+		runProtocolInterceptor(signalCtx, os.Stdin, os.Stdout, stdinPipeW)
+	}()
 
-	// C-1: Server.Serve requires the caller to close 'in' after Serve returns so
-	// that the internal reader goroutine unblocks its Read(os.Stdin) call and exits.
-	// Without this close the goroutine would block indefinitely on stdin, creating a
-	// goroutine leak. The error is intentionally ignored: stdin close after Serve is
-	// a best-effort cleanup and a failure here does not affect the served result.
-	defer func() { _ = os.Stdin.Close() }() //nolint:errcheck // best-effort stdin cleanup; see comment above
+	// C-1: Close stdinPipeW (unblocks the connection's receive goroutine via the pipe)
+	// and os.Stdin (stops the forwarding goroutine) when runACPServe returns for any
+	// reason. Both closes are best-effort; errors are intentionally ignored.
+	defer func() {
+		_ = stdinPipeW.Close() //nolint:errcheck // unblock connection reader via pipe
+		_ = os.Stdin.Close()   //nolint:errcheck // stop stdin forwarding goroutine
+	}()
 
-	if serveErr := srv.Serve(signalCtx, os.Stdin, os.Stdout); serveErr != nil {
-		if signalCtx.Err() != nil {
-			return nil
+	// serveExit bounds the signal-watch goroutine's lifetime to this function. The
+	// goroutine waits for a shutdown signal to close the pipe (so conn.Done() fires),
+	// but if runACPServe returns for any other reason (peer disconnect, stdin EOF) it
+	// must not outlive the call. Selecting on serveExit makes termination explicit
+	// instead of relying solely on the deferred stop() cancelling signalCtx.
+	serveExit := make(chan struct{})
+	defer close(serveExit)
+
+	// When the signal context fires (SIGTERM/SIGINT), close both ends so the connection
+	// and the forwarding goroutine exit cleanly, causing conn.Done() to fire below.
+	go func() {
+		select {
+		case <-signalCtx.Done():
+		case <-serveExit:
+			return
 		}
-		return &exitError{code: ExitExecution, err: fmt.Errorf("acp-serve: %w", serveErr)}
-	}
+		_ = stdinPipeW.Close() //nolint:errcheck // trigger conn.Done() via pipe EOF
+		_ = os.Stdin.Close()   //nolint:errcheck // stop forwarding goroutine
+	}()
+
+	// Block until the connection closes (peer disconnect, stdin EOF, or signal-driven close above).
+	<-conn.Done()
+	// I1: run every session's per-session cleanup at server shutdown. Deferred here
+	// (after conn.Done()) so it executes only once the connection is already closed,
+	// ensuring the creation window is sealed before runWG is drained.
+	defer sessionSvc.Shutdown()
 	return nil
+}
+
+// newACPSDKLogger builds the *slog.Logger handed to the SDK connection and the ACP infra
+// components. All ACP diagnostics are routed to w (os.Stderr in production) so stdout stays
+// reserved for JSON-RPC protocol frames (NFR-002).
+func newACPSDKLogger(w io.Writer) *slog.Logger {
+	return slog.New(slog.NewTextHandler(w, nil))
+}
+
+// acpSessionFactoryDeps groups the dependencies the per-session runner factory needs.
+// Extracted from runACPServe so the factory wiring is independently unit-testable and the
+// lifecycle function stays readable.
+type acpSessionFactoryDeps struct {
+	// signalCtx is the server shutdown signal context; every session-scoped component
+	// captures it so a SIGTERM/disconnect stops in-flight emission (C2).
+	signalCtx      context.Context //nolint:containedctx // captured shutdown ctx; session components must derive from it (C2)
+	conn           *acpinfra.Conn
+	slogLogger     *slog.Logger
+	logger         ports.Logger
+	masker         acpinfra.SecretMasker
+	envMap         map[string]string
+	baseOpts       []application.SetupOption
+	eventPublisher ports.EventPublisher
+	repo           ports.WorkflowRepository
+	shellExecutor  ports.CommandExecutor
+	// wirePackDiscoverer mirrors cfg.WorkflowsDir == "": when true the session resolves
+	// pack workflows at run time; a scoped server honors its directory verbatim.
+	wirePackDiscoverer bool
+}
+
+// acpSessionWiring holds the per-session components built by buildACPSessionWiring. The
+// concrete (non-interface) fields are exposed so tests can assert wiring invariants — e.g.
+// that the output writer captured the shutdown signal context (C2).
+type acpSessionWiring struct {
+	execService application.WorkflowRunner
+	reader      application.ACPInputResponder
+	streamed    *atomic.Bool
+	textWriter  *acpTextWriter
+	cleanup     func()
+}
+
+// buildACPSessionFactory returns the ACPRunnerFactory installed on the session service.
+// Each invocation builds a fresh, self-contained set of session-scoped I/O components.
+func buildACPSessionFactory(deps *acpSessionFactoryDeps) application.ACPRunnerFactory {
+	return func(sessionID string) (application.WorkflowRunner, application.ACPInputResponder, *atomic.Bool, func(), error) {
+		w, err := buildACPSessionWiring(deps, sessionID)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		return w.execService, w.reader, w.streamed, w.cleanup, nil
+	}
+}
+
+// buildACPSessionWiring constructs the session-scoped emitter, reader, writers, renderer
+// factory and execution service for one ACP session. Returned as a struct (rather than the
+// bare ACPRunnerFactory tuple) so tests can inspect the wiring.
+func buildACPSessionWiring(deps *acpSessionFactoryDeps, sessionID string) (*acpSessionWiring, error) {
+	// Per-session emitter binds to the shared conn. Creating it inside the factory makes
+	// each session's I/O components self-contained and avoids shared mutable state.
+	sessionEmitter := deps.conn.NewEmitter(deps.slogLogger)
+	// NOTE: the ACP permission transport (acpinfra.PermissionClient, ports.ACPClient) is
+	// intentionally NOT wired here. ports.ACPClient has no consumer in F105 — the call site
+	// that drives permission requests (the neutral PermissionGate) is delivered by F108
+	// Axis B (spec US2). Wiring an unused client would be dead code.
+
+	// Pass nil notifier: interactive input (conversation parking) is now fully supported
+	// across ACP turns. No user-facing notice is needed; the editor manages turn state.
+	reader := acpinfra.NewACPInputReader(nil)
+
+	// I2: streamed flag — set to true by writers/renderer when an emit succeeds so
+	// HandleSessionPrompt can safely suppress the post-run aggregate.
+	streamed := &atomic.Bool{}
+	textWriter := newACPTextWriter(deps.signalCtx, sessionEmitter, sessionID, streamed)
+	// renderEmitter lets per-step renderers emit ACP SessionUpdate variants directly while
+	// still flipping `streamed` on success (replaces the legacy Sender/Message DTO).
+	renderEmitter := newStreamFlaggingEmitter(sessionEmitter, streamed)
+	projector := acpinfra.NewWorkflowEventProjector(sessionID, sessionEmitter, deps.logger)
+
+	var publisher ports.EventPublisher = projector
+	if deps.eventPublisher != nil {
+		publisher = acpinfra.NewFanoutPublisher(deps.logger, deps.eventPublisher, projector)
+	}
+
+	// Isolate persisted workflow state per ACP session so concurrent sessions running the
+	// same workflow do not clobber each other's state-file (keyed by WorkflowID).
+	sessionStateDir := acpSessionStateDir(sessionID)
+	stateStore := store.NewJSONStore(sessionStateDir)
+
+	opts := make([]application.SetupOption, 0, len(deps.baseOpts)+4)
+	opts = append(opts, deps.baseOpts...)
+	opts = append(
+		opts,
+		application.WithUserInputReader(reader),
+		application.WithEventPublisher(publisher),
+		// NOTE(F102): stdout and stderr of a workflow step are both surfaced as
+		// agent_message_chunk via the same writer; the ACP protocol output does not yet
+		// distinguish the two streams. Tracked as a known limitation for F102-v2.
+		// See docs/ADR/018-acp-transparent-agent-server-protocol.md.
+		application.WithOutputWriters(textWriter, textWriter),
+		application.WithDisplayRendererFactory(func(stepID string) display.EventRenderer {
+			// M-4: pass the process environment so MaskText can redact secrets before they
+			// reach the editor over the ACP stream.
+			r := acpinfra.NewRenderer(sessionID, stepID, renderEmitter, deps.masker, deps.slogLogger, deps.envMap)
+			return display.EventRenderer(r.RenderFunc(deps.signalCtx))
+		}),
+	)
+	res, bErr := application.NewExecutionSetup(deps.repo, stateStore, deps.shellExecutor, deps.logger, opts...).Build(deps.signalCtx)
+	if bErr != nil {
+		return nil, fmt.Errorf("build session execution: %w", bErr)
+	}
+	// Make pack workflows runnable, not just listable, when discovery is unscoped.
+	if deps.wirePackDiscoverer {
+		res.WorkflowSvc.SetPackDiscoverer(workflowpkg.NewPackDiscovererAdapter(workflowPackSearchDirs()))
+	}
+
+	// C3/M-2: wrap the Build cleanup so the per-session state directory is removed when the
+	// session is torn down (deferred so a panic in res.Cleanup() cannot leak temp state).
+	cleanup := func() {
+		defer func() {
+			if rmErr := os.RemoveAll(sessionStateDir); rmErr != nil {
+				deps.logger.Warn("acp-serve: failed to remove session state dir", "dir", sessionStateDir, "error", rmErr)
+			}
+		}()
+		res.Cleanup()
+	}
+
+	return &acpSessionWiring{
+		execService: res.ExecService,
+		reader:      reader,
+		streamed:    streamed,
+		textWriter:  textWriter,
+		cleanup:     cleanup,
+	}, nil
 }
 
 // acpSessionStateDir returns the per-session directory used to persist workflow state for
@@ -330,93 +437,67 @@ func validateWorkflowsDir(dir string) error {
 	return nil
 }
 
-// acpUpdateEmitter streams application-layer session/update notifications to the editor
-// via the JSON-RPC server's one-way Notify primitive.
-type acpUpdateEmitter struct {
-	server *acpserver.Server
+// runProtocolInterceptor reads newline-delimited JSON-RPC frames from src,
+// writes protocol-level error responses to dst for invalid frames, and
+// forwards valid frames to pipeW for SDK consumption. The SDK silently
+// discards malformed lines without a response; this layer handles them
+// (NFR-005: oversize lines also fail JSON validation and get a -32700).
+func runProtocolInterceptor(ctx context.Context, src io.Reader, dst io.Writer, pipeW *io.PipeWriter) {
+	const maxLineBytes = 10 * 1024 * 1024 // 10 MiB per NFR-005
+
+	scanner := bufio.NewScanner(src)
+	scanner.Buffer(make([]byte, 64*1024), maxLineBytes+1)
+
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			_ = pipeW.Close()
+			return
+		default:
+		}
+
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+
+		if !json.Valid(line) {
+			writeJSONRPCParseError(dst)
+			continue
+		}
+
+		if _, err := pipeW.Write(line); err != nil {
+			return
+		}
+		if _, err := pipeW.Write([]byte{'\n'}); err != nil {
+			return
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		// ErrTooLong: line exceeded the buffer cap (>10 MiB). Send a parse error
+		// before closing the pipe so the client sees a structured response.
+		writeJSONRPCParseError(dst)
+	}
+	_ = pipeW.Close()
 }
 
-func (e *acpUpdateEmitter) EmitSessionUpdate(ctx context.Context, sessionID, kind string, fields map[string]any) error {
-	// ACP discriminates the SessionUpdate union with the `sessionUpdate` field. Copy the
-	// caller's fields first, then set the discriminator last so a stray "sessionUpdate"
-	// key in fields can never clobber it (m6).
-	update := make(map[string]any, len(fields)+1)
-	maps.Copy(update, fields)
-	update["sessionUpdate"] = kind
-	return e.server.Notify(ctx, acpserver.MethodSessionUpdate, map[string]any{
-		"sessionId": sessionID,
-		"update":    update,
+// jsonRPCParseErrorLine is the pre-marshaled JSON-RPC 2.0 parse-error response (RFC 4.2).
+// id is null per spec when the request could not be parsed.
+var jsonRPCParseErrorLine = func() []byte {
+	b, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      json.RawMessage("null"),
+		"error": map[string]any{
+			"code":    -32700,
+			"message": "parse error",
+		},
 	})
-}
+	return append(b, '\n')
+}()
 
-// makeInitializeHandler returns an ACP initialize handler that advertises the given
-// version string. Accepting version as a parameter decouples the handler from the
-// package-level Version variable (ldflags), making it testable without mutating
-// globals and documenting the dependency explicitly (Mi-6 fix).
-func makeInitializeHandler(version string) acpserver.HandlerFunc {
-	return func(ctx context.Context, params json.RawMessage) (any, *acpserver.Error) {
-		return handleInitialize(ctx, params, version)
-	}
-}
-
-// handleInitialize responds to ACP initialize handshakes. It negotiates the protocol
-// version (ADR-018): ACP versions are integers and the agent answers with the highest
-// version it supports that does not exceed the client's request. A request below the
-// minimum we can serve (1) is rejected as USER.ACP.PROTOCOL_VERSION_UNSUPPORTED (m5).
-// agentCapabilities advertises the supported prompt content; no authMethods are
-// advertised — ACP auth is out of scope for v1.
-func handleInitialize(_ context.Context, params json.RawMessage, version string) (any, *acpserver.Error) {
-	negotiated := acpserver.ProtocolVersion
-	if len(params) > 0 {
-		// protocolVersion is decoded leniently: ACP defines it as an integer, but the field
-		// is captured as RawMessage so a non-integer value (older string-style versions, or
-		// none at all) is tolerated rather than rejected — only a well-formed integer below
-		// the minimum we can serve (1) is unsupported (m5).
-		var init struct {
-			ProtocolVersion json.RawMessage `json:"protocolVersion"`
-		}
-		if err := json.Unmarshal(params, &init); err != nil {
-			return nil, &acpserver.Error{Code: acpserver.ErrInvalidParams, Message: err.Error()}
-		}
-		var requested int
-		if json.Unmarshal(init.ProtocolVersion, &requested) == nil {
-			if requested < 1 {
-				// M-6: surface a human-readable message for the editor rather than
-				// the raw machine code. The error code is preserved in Data so that
-				// automated clients can still match it programmatically.
-				return nil, &acpserver.Error{
-					Code:    acpserver.ErrInvalidParams,
-					Message: fmt.Sprintf("unsupported protocol version %d; minimum supported version is 1", requested),
-					Data:    string(domainerrors.ErrorCodeUserACPProtocolVersionUnsupported),
-				}
-			}
-			if requested < negotiated {
-				negotiated = requested
-			}
-		}
-	}
-	return map[string]any{
-		"protocolVersion": negotiated,
-		"agentCapabilities": map[string]any{
-			"loadSession": false,
-			"promptCapabilities": map[string]any{
-				"image":           false,
-				"audio":           false,
-				"embeddedContext": false,
-			},
-			"mcpCapabilities": map[string]any{
-				"http": false,
-				"sse":  false,
-			},
-		},
-		"agentInfo": map[string]any{
-			"name":    "awf",
-			"title":   "AI Workflow CLI",
-			"version": version,
-		},
-		// No authentication methods are advertised — ACP auth is out of scope for v1.
-		"authMethods": []any{},
-	}, nil
+func writeJSONRPCParseError(w io.Writer) {
+	_, _ = w.Write(jsonRPCParseErrorLine)
 }
 
 // processEnvMap builds a map[string]string from os.Environ() for use with

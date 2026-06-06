@@ -91,7 +91,7 @@ func TestACPSessionService_InFlightReleasedAfterPrompt(t *testing.T) {
 // A Shutdown arriving any time after setCancel finds a non-nil cancelFn, cancels the context,
 // and runner.Run receives it immediately.
 //
-// The test drives the cancel via session.cancel() directly (the same path Shutdown uses) and
+// The test drives the cancel via session.shutdown() directly (the same path Shutdown uses) and
 // verifies the blocking prompt resolves with stopReason=cancelled — not a timeout/deadlock.
 func TestACPSessionService_Issue1_ShutdownCancelsRunViaSetCancel(t *testing.T) {
 	runStarted := make(chan struct{})
@@ -122,7 +122,7 @@ func TestACPSessionService_Issue1_ShutdownCancelsRunViaSetCancel(t *testing.T) {
 	val, ok := svc.sessions.Load("sess-issue1")
 	require.True(t, ok)
 	session := val.(*ACPSession)
-	session.cancel()
+	session.shutdown()
 
 	select {
 	case got := <-done:

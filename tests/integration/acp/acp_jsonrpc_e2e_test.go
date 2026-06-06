@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/awf-project/cli/pkg/acpserver"
+	sdk "github.com/coder/acp-go-sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,8 +23,8 @@ func TestACPServeJSONRPC_Initialize_ReturnsCapabilities(t *testing.T) {
 	configPath := writeACPConfig(t, fixtureWorkflowsDir(t))
 	proc := startACPServeProcess(t, binaryPath, fmt.Sprintf("--config=%s", configPath))
 
-	resp := proc.request(t, 1, acpserver.MethodInitialize, map[string]any{
-		"protocolVersion": "1.0.0",
+	resp := proc.request(t, 1, sdk.AgentMethodInitialize, map[string]any{
+		"protocolVersion": sdk.ProtocolVersionNumber,
 		"capabilities":    map[string]any{},
 		"clientInfo": map[string]any{
 			"name":    "test-client",
@@ -40,7 +40,7 @@ func TestACPServeJSONRPC_Initialize_ReturnsCapabilities(t *testing.T) {
 
 	protocolVersion, ok := result["protocolVersion"].(float64)
 	assert.True(t, ok, "result must contain protocolVersion as a JSON number (ADR-018: integer)")
-	assert.Equal(t, float64(acpserver.ProtocolVersion), protocolVersion, "protocolVersion must be the pinned integer")
+	assert.Equal(t, float64(sdk.ProtocolVersionNumber), protocolVersion, "protocolVersion must be the pinned integer")
 
 	_, hasAgentCaps := result["agentCapabilities"]
 	assert.True(t, hasAgentCaps, "result must advertise agentCapabilities")
@@ -61,8 +61,8 @@ func TestACPServeJSONRPC_SessionNew_AdvertisesSlashCommands(t *testing.T) {
 	configPath := writeACPConfig(t, fixtureWorkflowsDir(t))
 	proc := startACPServeProcess(t, binaryPath, fmt.Sprintf("--config=%s", configPath))
 
-	proc.request(t, 1, acpserver.MethodInitialize, map[string]any{
-		"protocolVersion": "1.0.0",
+	proc.request(t, 1, sdk.AgentMethodInitialize, map[string]any{
+		"protocolVersion": sdk.ProtocolVersionNumber,
 		"capabilities":    map[string]any{},
 		"clientInfo": map[string]any{
 			"name":    "test-client",
@@ -71,8 +71,9 @@ func TestACPServeJSONRPC_SessionNew_AdvertisesSlashCommands(t *testing.T) {
 	})
 
 	start := time.Now()
-	resp := proc.request(t, 2, acpserver.MethodSessionNew, map[string]any{
-		"sessionId": "test-sn",
+	resp := proc.request(t, 2, sdk.AgentMethodSessionNew, map[string]any{
+		"cwd":        t.TempDir(),
+		"mcpServers": []any{},
 	})
 	elapsed := time.Since(start)
 
@@ -81,21 +82,13 @@ func TestACPServeJSONRPC_SessionNew_AdvertisesSlashCommands(t *testing.T) {
 
 	result, ok := resp.Result.(map[string]any)
 	require.True(t, ok, "result must be a JSON object")
+	require.NotEmpty(t, result, "result must contain sessionId")
 
-	commands, ok := result["commands"].([]any)
-	require.True(t, ok, "result must contain commands array")
-	require.NotEmpty(t, commands, "commands must list at least one workflow")
-
-	names := make([]string, 0, len(commands))
-	for _, raw := range commands {
-		cmd, isMap := raw.(map[string]any)
-		require.True(t, isMap, "each command must be a JSON object")
-		name, isStr := cmd["name"].(string)
-		require.True(t, isStr, "each command must have a string name")
-		names = append(names, name)
+	// Per SDK protocol, available commands are delivered as an available_commands_update
+	// session/update notification, not in the session/new response body.
+	if !proc.drainForAvailableCommands(t, "trivial") {
+		t.Fatal("expected available_commands_update notification advertising trivial workflow")
 	}
-
-	assert.Contains(t, names, "trivial", "commands must include trivial fixture workflow")
 }
 
 func TestACPServeJSONRPC_SessionPrompt_RunsWorkflow(t *testing.T) {
@@ -107,8 +100,8 @@ func TestACPServeJSONRPC_SessionPrompt_RunsWorkflow(t *testing.T) {
 	configPath := writeACPConfig(t, fixtureWorkflowsDir(t))
 	proc := startACPServeProcess(t, binaryPath, fmt.Sprintf("--config=%s", configPath))
 
-	proc.request(t, 1, acpserver.MethodInitialize, map[string]any{
-		"protocolVersion": "1.0.0",
+	proc.request(t, 1, sdk.AgentMethodInitialize, map[string]any{
+		"protocolVersion": sdk.ProtocolVersionNumber,
 		"capabilities":    map[string]any{},
 		"clientInfo": map[string]any{
 			"name":    "test-client",
@@ -116,13 +109,14 @@ func TestACPServeJSONRPC_SessionPrompt_RunsWorkflow(t *testing.T) {
 		},
 	})
 
-	sessionResp := proc.request(t, 2, acpserver.MethodSessionNew, map[string]any{
-		"sessionId": "test-prompt",
+	sessionResp := proc.request(t, 2, sdk.AgentMethodSessionNew, map[string]any{
+		"cwd":        t.TempDir(),
+		"mcpServers": []any{},
 	})
 	result, _ := sessionResp.Result.(map[string]any)
 	sessionID := fmt.Sprintf("%v", result["sessionId"])
 
-	resp := proc.request(t, 3, acpserver.MethodSessionPrompt, map[string]any{
+	resp := proc.request(t, 3, sdk.AgentMethodSessionPrompt, map[string]any{
 		"sessionId": sessionID,
 		"prompt": []map[string]any{
 			{"type": "text", "text": "/trivial"},
@@ -146,8 +140,8 @@ func TestACPServeJSONRPC_SessionCancel_ReturnsCancelledStopReason(t *testing.T) 
 	configPath := writeACPConfig(t, fixtureWorkflowsDir(t))
 	proc := startACPServeProcess(t, binaryPath, fmt.Sprintf("--config=%s", configPath))
 
-	proc.request(t, 1, acpserver.MethodInitialize, map[string]any{
-		"protocolVersion": "1.0.0",
+	proc.request(t, 1, sdk.AgentMethodInitialize, map[string]any{
+		"protocolVersion": sdk.ProtocolVersionNumber,
 		"capabilities":    map[string]any{},
 		"clientInfo": map[string]any{
 			"name":    "test-client",
@@ -155,21 +149,22 @@ func TestACPServeJSONRPC_SessionCancel_ReturnsCancelledStopReason(t *testing.T) 
 		},
 	})
 
-	sessionResp := proc.request(t, 2, acpserver.MethodSessionNew, map[string]any{
-		"sessionId": "test-cancel",
+	sessionResp := proc.request(t, 2, sdk.AgentMethodSessionNew, map[string]any{
+		"cwd":        t.TempDir(),
+		"mcpServers": []any{},
 	})
 	result, _ := sessionResp.Result.(map[string]any)
 	sessionID := fmt.Sprintf("%v", result["sessionId"])
 
 	go func() {
 		time.Sleep(1 * time.Second)
-		proc.request(t, 4, acpserver.MethodSessionCancel, map[string]any{
+		proc.request(t, 4, sdk.AgentMethodSessionCancel, map[string]any{
 			"sessionId": sessionID,
 		})
 	}()
 
 	start := time.Now()
-	resp := proc.request(t, 3, acpserver.MethodSessionPrompt, map[string]any{
+	resp := proc.request(t, 3, sdk.AgentMethodSessionPrompt, map[string]any{
 		"sessionId": sessionID,
 		"prompt": []map[string]any{
 			{"type": "text", "text": "/long-running"},
@@ -197,8 +192,8 @@ func TestACPServeJSONRPC_UnsupportedBlock_RejectsWithUSERACPUnsupportedBlock(t *
 	configPath := writeACPConfig(t, fixtureWorkflowsDir(t))
 	proc := startACPServeProcess(t, binaryPath, fmt.Sprintf("--config=%s", configPath))
 
-	proc.request(t, 1, acpserver.MethodInitialize, map[string]any{
-		"protocolVersion": "1.0.0",
+	proc.request(t, 1, sdk.AgentMethodInitialize, map[string]any{
+		"protocolVersion": sdk.ProtocolVersionNumber,
 		"capabilities":    map[string]any{},
 		"clientInfo": map[string]any{
 			"name":    "test-client",
@@ -206,13 +201,14 @@ func TestACPServeJSONRPC_UnsupportedBlock_RejectsWithUSERACPUnsupportedBlock(t *
 		},
 	})
 
-	sessionResp := proc.request(t, 2, acpserver.MethodSessionNew, map[string]any{
-		"sessionId": "test-unsupported",
+	sessionResp := proc.request(t, 2, sdk.AgentMethodSessionNew, map[string]any{
+		"cwd":        t.TempDir(),
+		"mcpServers": []any{},
 	})
 	result, _ := sessionResp.Result.(map[string]any)
 	sessionID := fmt.Sprintf("%v", result["sessionId"])
 
-	resp := proc.request(t, 3, acpserver.MethodSessionPrompt, map[string]any{
+	resp := proc.request(t, 3, sdk.AgentMethodSessionPrompt, map[string]any{
 		"sessionId": sessionID,
 		"prompt": []map[string]any{
 			{
@@ -248,8 +244,8 @@ func TestACPServeJSONRPC_MalformedJSONLine_Returns32700WithIDNull(t *testing.T) 
 	configPath := writeACPConfig(t, fixtureWorkflowsDir(t))
 	proc := startACPServeProcess(t, binaryPath, fmt.Sprintf("--config=%s", configPath))
 
-	proc.request(t, 1, acpserver.MethodInitialize, map[string]any{
-		"protocolVersion": "1.0.0",
+	proc.request(t, 1, sdk.AgentMethodInitialize, map[string]any{
+		"protocolVersion": sdk.ProtocolVersionNumber,
 		"capabilities":    map[string]any{},
 		"clientInfo": map[string]any{
 			"name":    "test-client",
@@ -260,19 +256,19 @@ func TestACPServeJSONRPC_MalformedJSONLine_Returns32700WithIDNull(t *testing.T) 
 	proc.writeRaw(t, []byte("{bad json\n"))
 	rawLine := proc.readRawLine(t, "malformed-json-response")
 
-	var parseErrResp acpserver.Response
+	var parseErrResp jsonRPCResponse
 	require.NoError(t, json.Unmarshal(rawLine, &parseErrResp),
 		"parse error response must be valid JSON: %s", rawLine)
 
 	require.NotNil(t, parseErrResp.Error, "malformed JSON must produce an error response")
-	assert.Equal(t, acpserver.ErrParse, parseErrResp.Error.Code,
+	assert.Equal(t, -32700, parseErrResp.Error.Code,
 		"error code must be -32700 (parse error)")
 
 	assert.Equal(t, json.RawMessage("null"), parseErrResp.ID,
 		"error response ID must be JSON null for parse error")
 
-	recoveryResp := proc.request(t, 2, acpserver.MethodInitialize, map[string]any{
-		"protocolVersion": "1.0.0",
+	recoveryResp := proc.request(t, 2, sdk.AgentMethodInitialize, map[string]any{
+		"protocolVersion": sdk.ProtocolVersionNumber,
 		"capabilities":    map[string]any{},
 		"clientInfo": map[string]any{
 			"name":    "test-client",
@@ -292,15 +288,18 @@ func TestACPServeJSONRPC_SessionPrompt_StreamsShellOutputLive(t *testing.T) {
 	configPath := writeACPConfig(t, fixtureWorkflowsDir(t))
 	proc := startACPServeProcess(t, binaryPath, fmt.Sprintf("--config=%s", configPath))
 
-	proc.request(t, 1, acpserver.MethodInitialize, map[string]any{
-		"protocolVersion": "1.0.0", "capabilities": map[string]any{},
+	proc.request(t, 1, sdk.AgentMethodInitialize, map[string]any{
+		"protocolVersion": sdk.ProtocolVersionNumber, "capabilities": map[string]any{},
 		"clientInfo": map[string]any{"name": "test", "version": "1.0.0"},
 	})
-	sn := proc.request(t, 2, acpserver.MethodSessionNew, map[string]any{})
+	sn := proc.request(t, 2, sdk.AgentMethodSessionNew, map[string]any{
+		"cwd":        t.TempDir(),
+		"mcpServers": []any{},
+	})
 	res, _ := sn.Result.(map[string]any)
 	sid := fmt.Sprintf("%v", res["sessionId"])
 
-	resp := proc.request(t, 3, acpserver.MethodSessionPrompt, map[string]any{
+	resp := proc.request(t, 3, sdk.AgentMethodSessionPrompt, map[string]any{
 		"sessionId": sid,
 		"prompt":    []map[string]any{{"type": "text", "text": "/input-echo --input=message=streamhello"}},
 	})
@@ -320,8 +319,8 @@ func TestACPServeJSONRPC_OversizeLine_ReturnsStructuredError(t *testing.T) {
 	configPath := writeACPConfig(t, fixtureWorkflowsDir(t))
 	proc := startACPServeProcess(t, binaryPath, fmt.Sprintf("--config=%s", configPath))
 
-	proc.request(t, 1, acpserver.MethodInitialize, map[string]any{
-		"protocolVersion": "1.0.0",
+	proc.request(t, 1, sdk.AgentMethodInitialize, map[string]any{
+		"protocolVersion": sdk.ProtocolVersionNumber,
 		"capabilities":    map[string]any{},
 		"clientInfo": map[string]any{
 			"name":    "test-client",
@@ -338,14 +337,14 @@ func TestACPServeJSONRPC_OversizeLine_ReturnsStructuredError(t *testing.T) {
 
 	rawLine := proc.readRawLine(t, "oversize-line-response")
 
-	var errResp acpserver.Response
+	var errResp jsonRPCResponse
 	require.NoError(t, json.Unmarshal(rawLine, &errResp),
 		"oversize error response must be valid JSON: %s", rawLine)
 
 	require.NotNil(t, errResp.Error, "oversize line (>10 MiB) must produce an error response")
 
-	recoveryResp := proc.request(t, 2, acpserver.MethodInitialize, map[string]any{
-		"protocolVersion": "1.0.0",
+	recoveryResp := proc.request(t, 2, sdk.AgentMethodInitialize, map[string]any{
+		"protocolVersion": sdk.ProtocolVersionNumber,
 		"capabilities":    map[string]any{},
 		"clientInfo": map[string]any{
 			"name":    "test-client",
