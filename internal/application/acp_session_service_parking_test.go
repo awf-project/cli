@@ -160,6 +160,66 @@ func promptTurn(t *testing.T, svc *ACPSessionService, sessionID, text string) an
 	}
 }
 
+// TestACPSessionService_Prompt_RunCtxSurvivesTurn1RequestCancellation is a regression test for
+// the "Invalid prompt: must begin with a /<workflow> slash command" bug. The SDK cancels the
+// per-request context when the Prompt handler returns end_turn (via defer cancel in connection.go).
+// Before the fix, runCtx was a child of that per-request ctx, so the parked ReadInput goroutine
+// was killed by the cancellation and ParkedTurnCount dropped to 0 before turn2 arrived, causing
+// the second prompt to be misrouted as a new slash command instead of a continuation.
+//
+// After the fix, runCtx derives from session.sessionCtx (session-lifetime, independent of any
+// single request context), so cancelling turn1's request context must NOT kill the parked run.
+func TestACPSessionService_Prompt_RunCtxSurvivesTurn1RequestCancellation(t *testing.T) {
+	exec := workflow.NewExecutionContext("wf-survive", "Survive Test")
+	exec.SetStepState("out", workflow.StepState{Output: "survived\n"})
+
+	reader := newParkingResponder()
+	runner := &parkingRunner{reader: reader, turns: 1, execCtx: exec}
+	streamed := &atomic.Bool{}
+	emitter := &fakeEmitter{}
+
+	svc := &ACPSessionService{logger: ports.NopLogger{}, emitter: emitter}
+	svc.SetRunnerFactory(func(string) (WorkflowRunner, ACPInputResponder, *atomic.Bool, func(), error) {
+		return runner, reader, streamed, func() {}, nil
+	})
+	session := &ACPSession{ID: "sess-survive"}
+	svc.sessions.Store("sess-survive", session)
+
+	// Turn 1: dispatch with a cancellable request context (models the SDK per-request ctx).
+	turn1Ctx, turn1Cancel := context.WithCancel(context.Background())
+	turn1 := json.RawMessage(`{"sessionId":"sess-survive","prompt":[{"type":"text","text":"/wf-survive"}]}`)
+	done := make(chan struct{}, 1)
+	go func() {
+		defer close(done)
+		svc.HandleSessionPrompt(turn1Ctx, turn1) //nolint:errcheck // result checked indirectly
+	}()
+
+	// Wait for the workflow to park (ParkedTurnCount > 0) so we know ReadInput is blocking.
+	require.Eventually(t, func() bool { return session.ParkedTurnCount.Load() > 0 },
+		time.Second, time.Millisecond, "workflow must park after turn 1 dispatches")
+
+	// Simulate what the SDK does when the Prompt handler returns end_turn: cancel the
+	// per-request context. This must NOT kill the parked run goroutine.
+	turn1Cancel()
+	<-done // turn 1 handler has returned
+
+	// Give the race detector a moment to surface any use-after-cancel on runCtx.
+	time.Sleep(10 * time.Millisecond)
+
+	// The run goroutine must still be parked — ParkedTurnCount must be positive.
+	require.Greater(t, session.ParkedTurnCount.Load(), int32(0),
+		"parked workflow must survive cancellation of turn 1's request context; "+
+			"if this fails, runCtx was derived from the per-request ctx (regression)")
+
+	// Turn 2: the user's reply must resume the parked workflow normally.
+	turn2 := json.RawMessage(`{"sessionId":"sess-survive","prompt":[{"type":"text","text":"continue"}]}`)
+	r2, e2 := svc.HandleSessionPrompt(context.Background(), turn2)
+	require.Nil(t, e2)
+	assert.Equal(t, "end_turn", stopReasonOf(t, r2),
+		"turn 2 must complete via the parked reader, not fail with 'Invalid prompt'")
+	assert.Contains(t, emitter.agentText(), "survived")
+}
+
 // TestACPSessionService_Prompt_MultiTurnParkingResumesEachTurn verifies a workflow that parks
 // more than once: each user reply resumes the SAME run, the workflow re-parks (ending the turn
 // with end_turn), and the run completes only after the final reply — with replies routed to the

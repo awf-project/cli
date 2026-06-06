@@ -13,29 +13,29 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/acp"
 )
 
-// spySessionNotifier captures calls to NotifySessionUpdate for assertion
-type spySessionNotifier struct {
-	calls []spySessionUpdate
+// fakeSessionUpdateEmitter records EmitSessionUpdate calls for testing.
+type fakeSessionUpdateEmitter struct {
+	calls []fakeEmitterCall
 }
 
-type spySessionUpdate struct {
-	ctx        context.Context
-	workflowID string
-	update     acp.SessionUpdate
-	err        error
+type fakeEmitterCall struct {
+	ctx       context.Context
+	sessionID string
+	kind      string
+	fields    map[string]any
 }
 
-func (s *spySessionNotifier) NotifySessionUpdate(ctx context.Context, workflowID string, update acp.SessionUpdate) error {
-	s.calls = append(s.calls, spySessionUpdate{
-		ctx:        ctx,
-		workflowID: workflowID,
-		update:     update,
-		err:        nil,
+func (f *fakeSessionUpdateEmitter) EmitSessionUpdate(ctx context.Context, sessionID, kind string, fields map[string]any) error {
+	f.calls = append(f.calls, fakeEmitterCall{
+		ctx:       ctx,
+		sessionID: sessionID,
+		kind:      kind,
+		fields:    fields,
 	})
 	return nil
 }
 
-// spyLogger captures debug and warn logs for assertion
+// spyLogger captures debug and warn logs for assertion (reused from event_projector_test.go)
 type spyLogger struct {
 	debugs []spyWarn
 	warns  []spyWarn
@@ -58,124 +58,128 @@ func (s *spyLogger) WithContext(ctx map[string]any) ports.Logger {
 	return s
 }
 
-func TestWorkflowEventProjector_MapsEventToSessionUpdateKind(t *testing.T) {
+func TestWorkflowEventProjector_PublishWorkflowStarted(t *testing.T) {
 	tests := []struct {
 		name           string
 		eventType      string
 		metadata       map[string]string
 		expectedKind   string
-		expectedFields func(t *testing.T, update acp.SessionUpdate)
+		expectedFields func(t *testing.T, fields map[string]any)
 	}{
 		{
-			name:         "workflow started event maps to workflow_started kind",
+			name:         "workflow_started event emitted correctly",
 			eventType:    workflow.EventWorkflowStarted,
 			metadata:     map[string]string{"workflow_id": "wf-123", "workflow_name": "test-workflow"},
 			expectedKind: "workflow_started",
-			expectedFields: func(t *testing.T, update acp.SessionUpdate) {
-				assert.Empty(t, update.StepName)
-				assert.Empty(t, update.Error)
-				assert.Empty(t, update.Duration)
+			expectedFields: func(t *testing.T, fields map[string]any) {
+				assert.Empty(t, fields, "workflow_started should have empty fields")
 			},
 		},
 		{
-			name:         "workflow completed event maps to workflow_completed kind",
+			name:         "workflow_completed event emitted correctly",
 			eventType:    workflow.EventWorkflowCompleted,
 			metadata:     map[string]string{"workflow_id": "wf-123", "workflow_name": "test-workflow", "duration_ms": "5000"},
 			expectedKind: "workflow_completed",
-			expectedFields: func(t *testing.T, update acp.SessionUpdate) {
-				assert.Empty(t, update.StepName)
-				assert.Empty(t, update.Error)
-				assert.NotEmpty(t, update.Duration)
+			expectedFields: func(t *testing.T, fields map[string]any) {
+				assert.NotNil(t, fields["duration_ms"], "workflow_completed should include duration_ms")
 			},
 		},
 		{
-			name:         "workflow failed event maps to workflow_failed kind",
+			name:         "workflow_failed event emitted correctly",
 			eventType:    workflow.EventWorkflowFailed,
 			metadata:     map[string]string{"workflow_id": "wf-123", "workflow_name": "test-workflow", "error": "step failed"},
 			expectedKind: "workflow_failed",
-			expectedFields: func(t *testing.T, update acp.SessionUpdate) {
-				assert.Empty(t, update.StepName)
-				assert.NotEmpty(t, update.Error)
-				assert.Empty(t, update.Duration)
+			expectedFields: func(t *testing.T, fields map[string]any) {
+				assert.NotNil(t, fields["error"], "workflow_failed should include error")
 			},
 		},
 		{
-			name:         "step started event maps to step_started kind",
+			name:         "step_started event emitted correctly",
 			eventType:    workflow.EventStepStarted,
 			metadata:     map[string]string{"workflow_id": "wf-123", "step_name": "validate"},
 			expectedKind: "step_started",
-			expectedFields: func(t *testing.T, update acp.SessionUpdate) {
-				assert.Equal(t, "validate", update.StepName)
-				assert.Empty(t, update.Error)
-				assert.Empty(t, update.Duration)
+			expectedFields: func(t *testing.T, fields map[string]any) {
+				assert.Equal(t, "validate", fields["step_name"], "step_started should include step_name")
 			},
 		},
 		{
-			name:         "step completed event maps to step_completed kind",
+			name:         "step_completed event emitted correctly",
 			eventType:    workflow.EventStepCompleted,
 			metadata:     map[string]string{"workflow_id": "wf-123", "step_name": "validate"},
 			expectedKind: "step_completed",
-			expectedFields: func(t *testing.T, update acp.SessionUpdate) {
-				assert.Equal(t, "validate", update.StepName)
-				assert.Empty(t, update.Error)
-				assert.Empty(t, update.Duration)
+			expectedFields: func(t *testing.T, fields map[string]any) {
+				assert.Equal(t, "validate", fields["step_name"], "step_completed should include step_name")
 			},
 		},
 		{
-			name:         "step failed event maps to step_failed kind",
+			name:         "step_failed event emitted correctly",
 			eventType:    workflow.EventStepFailed,
 			metadata:     map[string]string{"workflow_id": "wf-123", "step_name": "validate", "error": "validation failed"},
 			expectedKind: "step_failed",
-			expectedFields: func(t *testing.T, update acp.SessionUpdate) {
-				assert.Equal(t, "validate", update.StepName)
-				assert.NotEmpty(t, update.Error)
-				assert.Empty(t, update.Duration)
+			expectedFields: func(t *testing.T, fields map[string]any) {
+				assert.Equal(t, "validate", fields["step_name"], "step_failed should include step_name")
+				assert.NotNil(t, fields["error"], "step_failed should include error")
 			},
 		},
 		{
-			name:         "step retrying event maps to step_retrying kind",
+			name:         "step_retrying event emitted correctly",
 			eventType:    workflow.EventStepRetrying,
 			metadata:     map[string]string{"workflow_id": "wf-123", "step_name": "validate"},
 			expectedKind: "step_retrying",
-			expectedFields: func(t *testing.T, update acp.SessionUpdate) {
-				assert.Equal(t, "validate", update.StepName)
-				assert.Empty(t, update.Error)
-				assert.Empty(t, update.Duration)
+			expectedFields: func(t *testing.T, fields map[string]any) {
+				assert.Equal(t, "validate", fields["step_name"], "step_retrying should include step_name")
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			notifier := &spySessionNotifier{}
+			emitter := &fakeSessionUpdateEmitter{}
 			logger := &spyLogger{}
-			projector := acp.NewWorkflowEventProjector(notifier, logger)
+			projector := acp.NewWorkflowEventProjector("sess_test", emitter, logger)
 
 			event := pluginmodel.NewDomainEvent(tt.eventType, "core", tt.metadata, nil)
 			err := projector.Publish(context.Background(), event)
 
 			require.NoError(t, err)
-			require.Len(t, notifier.calls, 1, "NotifySessionUpdate should be called exactly once")
+			require.Len(t, emitter.calls, 1, "EmitSessionUpdate should be called exactly once")
 
-			call := notifier.calls[0]
-			assert.Equal(t, "wf-123", call.workflowID)
-			assert.Equal(t, tt.expectedKind, call.update.Kind)
-			tt.expectedFields(t, call.update)
+			call := emitter.calls[0]
+			// The emit MUST target the ACP session ID bound at construction, NOT the run's
+			// workflow_id metadata ("wf-123"). Routing by workflow_id sent updates to a
+			// session the editor never created, so they were silently dropped.
+			assert.Equal(t, "sess_test", call.sessionID, "emitter must be called with the ACP session ID, not workflow_id")
+			assert.Equal(t, tt.expectedKind, call.kind, "emitter should be called with correct kind")
+			tt.expectedFields(t, call.fields)
 		})
 	}
 }
 
-func TestWorkflowEventProjector_SkipsEventsWithoutWorkflowID(t *testing.T) {
-	notifier := &spySessionNotifier{}
+func TestWorkflowEventProjector_PublishNilEvent(t *testing.T) {
+	emitter := &fakeSessionUpdateEmitter{}
 	logger := &spyLogger{}
-	projector := acp.NewWorkflowEventProjector(notifier, logger)
+	projector := acp.NewWorkflowEventProjector("sess_test", emitter, logger)
+
+	require.NotPanics(t, func() {
+		err := projector.Publish(context.Background(), nil)
+		assert.NoError(t, err)
+	})
+	assert.Len(t, emitter.calls, 0, "nil event must not trigger any emission")
+	require.Len(t, logger.warns, 1, "nil event must log a WARN so the buggy caller is visible")
+	assert.Equal(t, "acp projector: nil event dropped", logger.warns[0].msg)
+}
+
+func TestWorkflowEventProjector_SkipsEventsWithoutWorkflowID(t *testing.T) {
+	emitter := &fakeSessionUpdateEmitter{}
+	logger := &spyLogger{}
+	projector := acp.NewWorkflowEventProjector("sess_test", emitter, logger)
 
 	// Event with empty workflow_id metadata
 	event := pluginmodel.NewDomainEvent(
 		workflow.EventWorkflowStarted,
 		"core",
 		map[string]string{
-			"workflow_id":   "", // empty
+			"workflow_id":   "",
 			"workflow_name": "test-workflow",
 		},
 		nil,
@@ -184,91 +188,33 @@ func TestWorkflowEventProjector_SkipsEventsWithoutWorkflowID(t *testing.T) {
 	err := projector.Publish(context.Background(), event)
 
 	require.NoError(t, err)
-	assert.Len(t, notifier.calls, 0, "NotifySessionUpdate should not be called for event without workflow_id")
+	assert.Len(t, emitter.calls, 0, "EmitSessionUpdate should not be called for event without workflow_id")
 }
 
-func TestWorkflowEventProjector_SkipsUnknownEventTypes(t *testing.T) {
-	notifier := &spySessionNotifier{}
+func TestWorkflowEventProjector_ImplementsEventPublisher(t *testing.T) {
+	emitter := &fakeSessionUpdateEmitter{}
 	logger := &spyLogger{}
-	projector := acp.NewWorkflowEventProjector(notifier, logger)
+	projector := acp.NewWorkflowEventProjector("sess_test", emitter, logger)
 
-	// Event with non-workflow event type
-	event := pluginmodel.NewDomainEvent(
-		"unknown.event",
-		"core",
-		map[string]string{
-			"workflow_id": "wf-123",
-		},
-		nil,
-	)
-
-	err := projector.Publish(context.Background(), event)
-
-	require.NoError(t, err)
-	assert.Len(t, notifier.calls, 0, "NotifySessionUpdate should not be called for unknown event type")
-	// m-7: unhandled event types must emit a Debug log so they are traceable
-	require.Len(t, logger.debugs, 1, "unknown event type must emit a Debug log")
-	assert.Equal(t, "acp projector: unhandled event type", logger.debugs[0].msg)
-}
-
-func TestWorkflowEventProjector_NotifierErrorPropagated(t *testing.T) {
-	notifierErr := &errorSessionNotifier{err: assert.AnError}
-	logger := &spyLogger{}
-	projector := acp.NewWorkflowEventProjector(notifierErr, logger)
-
+	// Verify projector satisfies ports.EventPublisher interface
+	// (compile-time assertion in event_projector.go: var _ ports.EventPublisher = (*WorkflowEventProjector)(nil))
 	event := pluginmodel.NewDomainEvent(
 		workflow.EventWorkflowStarted,
 		"core",
-		map[string]string{
-			"workflow_id":   "wf-123",
-			"workflow_name": "test-workflow",
-		},
+		map[string]string{"workflow_id": "wf-123"},
 		nil,
 	)
-
 	err := projector.Publish(context.Background(), event)
-
-	// M-3: notifier errors must be propagated so callers can react
-	require.Error(t, err)
-	assert.ErrorIs(t, err, assert.AnError)
-
-	// Error must also be logged as Warn before returning
-	require.Len(t, logger.warns, 1, "Logger should capture one warn call")
-	assert.Contains(t, logger.warns[0].msg, "notify")
-}
-
-func TestWorkflowEventProjector_Close(t *testing.T) {
-	notifier := &spySessionNotifier{}
-	logger := &spyLogger{}
-	projector := acp.NewWorkflowEventProjector(notifier, logger)
-
-	err := projector.Close()
 
 	assert.NoError(t, err)
 }
 
-// errorSessionNotifier is a SessionNotifier that returns an error
-type errorSessionNotifier struct {
-	err error
-}
-
-func (e *errorSessionNotifier) NotifySessionUpdate(ctx context.Context, workflowID string, update acp.SessionUpdate) error {
-	return e.err
-}
-
-// TestWorkflowEventProjector_NilEventDoesNotPanic verifies the nil-guard contract:
-// passing a nil event must return nil without panicking (C3 fix) and must log
-// a WARN so a buggy caller is visible in diagnostics.
-func TestWorkflowEventProjector_NilEventDoesNotPanic(t *testing.T) {
-	notifier := &spySessionNotifier{}
+func TestWorkflowEventProjector_Close(t *testing.T) {
+	emitter := &fakeSessionUpdateEmitter{}
 	logger := &spyLogger{}
-	projector := acp.NewWorkflowEventProjector(notifier, logger)
+	projector := acp.NewWorkflowEventProjector("sess_test", emitter, logger)
 
-	require.NotPanics(t, func() {
-		err := projector.Publish(context.Background(), nil)
-		assert.NoError(t, err)
-	})
-	assert.Len(t, notifier.calls, 0, "nil event must not trigger any notification")
-	require.Len(t, logger.warns, 1, "nil event must log a WARN so the buggy caller is visible")
-	assert.Equal(t, "acp projector: nil event dropped", logger.warns[0].msg)
+	err := projector.Close()
+
+	assert.NoError(t, err)
 }

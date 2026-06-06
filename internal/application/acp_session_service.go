@@ -65,7 +65,8 @@ type WorkflowSlashCommand struct {
 }
 
 // SessionUpdateEmitter streams a session/update notification to the editor for the given
-// session. The interfaces/cli wiring backs it with acpserver.Server.Notify. It is optional:
+// session. The infrastructure acp.Emitter backs it with the SDK AgentSideConnection's
+// SessionUpdate call (wired in interfaces/cli). It is optional:
 // when unset the session service runs workflows without streaming lifecycle updates.
 type SessionUpdateEmitter interface {
 	EmitSessionUpdate(ctx context.Context, sessionID, kind string, fields map[string]any) error
@@ -100,6 +101,13 @@ type ACPSessionService struct {
 	workflows WorkflowProvider
 	sessions  sync.Map // string → *ACPSession
 	logger    ports.Logger
+
+	// serverCtx is the server-lifetime context used as the parent for every
+	// session-lifetime context (ACPSession.sessionCtx). It must be set via
+	// SetServerContext before HandleSessionNew is called. When not set (unit tests that
+	// use the shared runner path), HandleSessionNew falls back to context.Background().
+	// Read-only once Serve is running (same Set*-before-Serve contract as emitter).
+	serverCtx context.Context //nolint:containedctx // server-lifetime ctx; sessions derive their own children from it
 
 	// emitter and runnerFactory are set before Serve is called (via SetSessionUpdateEmitter
 	// and SetRunnerFactory) and are read-only during the server's lifetime. They are NOT
@@ -138,6 +146,15 @@ func (s *ACPSessionService) SetWorkflowProvider(p WorkflowProvider) {
 // unset, the shared runner passed to NewACPSessionService is used.
 func (s *ACPSessionService) SetRunnerFactory(f ACPRunnerFactory) {
 	s.runnerFactory = f
+}
+
+// SetServerContext installs the server-lifetime context used as the parent for every
+// session-lifetime context (ACPSession.sessionCtx). Must be called before Serve starts
+// (same single-threaded initialization contract as SetSessionUpdateEmitter and
+// SetRunnerFactory). When not called, HandleSessionNew falls back to context.Background()
+// so unit tests that omit wiring continue to work.
+func (s *ACPSessionService) SetServerContext(ctx context.Context) {
+	s.serverCtx = ctx
 }
 
 // NewACPSessionService constructs an ACPSessionService. A nil logger is replaced with a
@@ -245,6 +262,14 @@ func (s *ACPSessionService) loadCommandMetadata(ctx context.Context, commands []
 	for i := range commands {
 		name := loadNames[i]
 		wg.Go(func() {
+			// (*sync.WaitGroup).Go requires the function not to panic. loadWorkflow parses
+			// untrusted on-disk YAML, so guard against a panicking repository implementation
+			// crashing the long-running server; a failed metadata load is best-effort anyway.
+			defer func() {
+				if r := recover(); r != nil {
+					s.logger.Warn("session/new: workflow load panicked", "workflow", name, "panic", r)
+				}
+			}()
 			// Issue #2: acquire the semaphore with a ctx-aware select so that a cancelled
 			// context does not leave this goroutine blocked forever waiting for a slot.
 			select {
@@ -254,14 +279,9 @@ func (s *ACPSessionService) loadCommandMetadata(ctx context.Context, commands []
 			}
 			defer func() { <-sem }()
 
-			// Respect context cancellation before issuing the Load; if ctx is already done
-			// after acquiring the semaphore we skip the I/O operation rather than racing it.
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-
+			// No second ctx.Done() pre-check here: loadWorkflow receives ctx and the repository
+			// implementations honor cancellation, so a cancelled context already short-circuits
+			// the Load. A redundant pre-check only adds a race window without changing behavior.
 			wf, loadErr := loadWorkflow(ctx, name)
 			if loadErr != nil {
 				s.logger.Warn("session/new: workflow load failed", "workflow", name, "error", loadErr)
@@ -281,8 +301,8 @@ func (s *ACPSessionService) loadCommandMetadata(ctx context.Context, commands []
 }
 
 // HandleSessionNew handles a session/new request.
-// The transport-neutral *ACPHandlerError is lifted to acpserver.HandlerFunc by the
-// interfaces/cli adapter (adaptACPHandler).
+// The transport-neutral *ACPHandlerError is mapped to the SDK request-error variant
+// by the infrastructure acp.Agent adapter (via toACPError).
 func (s *ACPSessionService) HandleSessionNew(ctx context.Context, params json.RawMessage) (any, *ACPHandlerError) {
 	// Issue #8: reject session creation immediately if Shutdown is already in progress.
 	// This closes the creation window between the two-pass Range in Shutdown — a session
@@ -311,10 +331,24 @@ func (s *ACPSessionService) HandleSessionNew(ctx context.Context, params json.Ra
 		mcpServers[m.Name] = m
 	}
 
+	// Derive the session-lifetime context from the server context (signalCtx in production,
+	// context.Background() in unit tests). This context is the parent of every runCtx
+	// created in HandleSessionPrompt, ensuring that a run goroutine survives individual
+	// ACP turn boundaries. The SDK cancels its per-request context when the Prompt handler
+	// returns end_turn; without this indirection that cancellation propagates into runCtx
+	// and kills the parked ReadInput before the user's next turn arrives.
+	parent := s.serverCtx
+	if parent == nil {
+		parent = context.Background()
+	}
+	sessionCtx, sessionCancel := context.WithCancel(parent)
+
 	session := &ACPSession{
-		ID:         sessionID,
-		CWD:        p.CWD,
-		MCPServers: mcpServers,
+		ID:            sessionID,
+		CWD:           p.CWD,
+		MCPServers:    mcpServers,
+		sessionCtx:    sessionCtx,
+		sessionCancel: sessionCancel,
 	}
 	s.sessions.Store(sessionID, session)
 
@@ -415,8 +449,8 @@ func (s *ACPSessionService) ensureRunner(session *ACPSession) (WorkflowRunner, *
 }
 
 // HandleSessionPrompt handles a session/prompt request.
-// The transport-neutral *ACPHandlerError is lifted to acpserver.HandlerFunc by the
-// interfaces/cli adapter (adaptACPHandler).
+// The transport-neutral *ACPHandlerError is mapped to the SDK request-error variant
+// by the infrastructure acp.Agent adapter (via toACPError).
 func (s *ACPSessionService) HandleSessionPrompt(ctx context.Context, params json.RawMessage) (any, *ACPHandlerError) {
 	var p sessionPromptParams
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -520,11 +554,18 @@ func (s *ACPSessionService) HandleSessionPrompt(ctx context.Context, params json
 	// TUI, which runs the workflow async (RunWorkflowAsync) and signals InputRequestedMsg when
 	// the ConversationManager parks.
 	//
+	// Context parenting: runCtx is derived from session.sessionCtx (session-lifetime), NOT
+	// from the request ctx (per-turn SDK context). The SDK cancels the per-request context
+	// when the Prompt handler returns end_turn (via defer cancel(nil) in connection.go).
+	// If runCtx were a child of the request ctx, that cancellation would propagate into the
+	// parked ReadInput goroutine and kill the run before the user's next turn arrives — the
+	// exact root cause of the "Invalid prompt: must begin with a /<workflow>" bug.
+	//
 	// Ordering contract (issue #1): create the cancel func and register it via setCancel
 	// BEFORE runWG.Add(1), so a concurrent Shutdown that observes a positive runWG always has
 	// a non-nil cancelFn to interrupt. Unlike the old synchronous handler, cancel() is owned by
 	// the run goroutine (which outlives this call) and is therefore NOT deferred here.
-	runCtx, cancel := context.WithCancel(ctx)
+	runCtx, cancel := context.WithCancel(session.getSessionCtx())
 	session.setCancel(cancel)
 
 	// runWG.Add(1) BEFORE ensureRunner so Shutdown's runWG.Wait() covers the runner build
@@ -605,7 +646,9 @@ func (s *ACPSessionService) finishedTurn(ctx context.Context, session *ACPSessio
 		s.sendAgentText(ctx, session.ID, fmt.Sprintf("Workflow %q cancelled.", run.workflowName))
 		return promptStop("cancelled")
 	case run.runErr != nil:
-		s.logger.Debug("session/prompt: workflow run failed", "workflow", run.workflowName, "error", run.runErr)
+		// Include the concrete error type so operators can distinguish failure classes
+		// (timeout vs validation vs executor) from structured logs without a stack trace.
+		s.logger.Debug("session/prompt: workflow run failed", "workflow", run.workflowName, "error_type", fmt.Sprintf("%T", run.runErr), "error", run.runErr)
 		s.sendAgentText(ctx, session.ID, fmt.Sprintf("Workflow %q failed: %s", run.workflowName, run.runErr))
 		return promptStop("end_turn")
 	default:
@@ -683,8 +726,8 @@ func workflowOutputText(execCtx *workflow.ExecutionContext) string {
 }
 
 // HandleSessionCancel handles a session/cancel request.
-// The transport-neutral *ACPHandlerError is lifted to acpserver.HandlerFunc by the
-// interfaces/cli adapter (adaptACPHandler).
+// The transport-neutral *ACPHandlerError is mapped to the SDK request-error variant
+// by the infrastructure acp.Agent adapter (via toACPError).
 func (s *ACPSessionService) HandleSessionCancel(ctx context.Context, params json.RawMessage) (any, *ACPHandlerError) {
 	var p sessionCancelParams
 	if err := json.Unmarshal(params, &p); err != nil {
@@ -720,10 +763,13 @@ func (s *ACPSessionService) Shutdown() {
 	// between the two passes would escape both the cancel sweep and the cleanup sweep.
 	s.shutdownStarted.Store(true)
 
-	// Phase 1: cancel all in-flight runs.
+	// Phase 1: tear down every session — cancel its in-flight run AND its session-lifetime
+	// context. shutdown() (not cancel()) is used here because this is a permanent teardown:
+	// session/cancel uses cancel() to keep the session reusable, whereas Shutdown must also
+	// release each session's sessionCtx.
 	s.sessions.Range(func(_, v any) bool {
 		if session, ok := v.(*ACPSession); ok {
-			session.cancel()
+			session.shutdown()
 		}
 		return true
 	})
@@ -759,22 +805,26 @@ func (s *ACPSessionService) lookupSession(sessionID string) (*ACPSession, *ACPHa
 	return session, nil
 }
 
-// promptResult is the typed result envelope for session/prompt and session/cancel responses.
+// PromptResult is the typed result envelope for session/prompt and session/cancel responses.
 // Using a named struct instead of map[string]any prevents accidental key misspellings and
 // makes the wire format explicit. The json tag preserves the camelCase ACP wire key.
-type promptResult struct {
+// Exported so infrastructure adapters (e.g. acp.Agent) can type-assert without a JSON
+// round-trip and receive a compile-time guarantee on the field name.
+type PromptResult struct {
 	StopReason string `json:"stopReason"`
 }
 
 // promptStop builds the session/prompt result envelope carrying a stop reason.
-func promptStop(reason string) promptResult {
-	return promptResult{StopReason: reason}
+func promptStop(reason string) PromptResult {
+	return PromptResult{StopReason: reason}
 }
 
-// maxPromptBytes is the upper bound on prompt text accepted by parseSlashCommand.
-// A 1 MiB cap prevents tokenizePrompt from consuming unbounded memory on a malicious
-// or misbehaving editor client that sends an arbitrarily large prompt (m-4 fix).
-const maxPromptBytes = 1 << 20 // 1 MiB
+// MaxPromptBytes is the upper bound on prompt size accepted by the ACP server. A 1 MiB cap
+// prevents tokenizePrompt from consuming unbounded memory on a malicious or misbehaving editor
+// client that sends an arbitrarily large prompt (m-4 fix). Exported as the single source of
+// truth: the infrastructure agent adapter (internal/infrastructure/acp) reuses it for its own
+// pre-handler guard so the two layers cannot drift apart.
+const MaxPromptBytes = 1 << 20 // 1 MiB
 
 // parseSlashCommand extracts the workflow name and its inputs from a prompt whose first
 // token is a /<workflow> slash command. The leading "/" selects the workflow; the remaining
@@ -782,10 +832,10 @@ const maxPromptBytes = 1 << 20 // 1 MiB
 // The prompt is tokenized shell-style (single/double quotes group their contents and are
 // stripped), so quoted values may contain spaces — parity with how the CLI's shell tokenizes
 // --input values. No @prompts/ resolution is performed (ACP editors send literal values).
-// Returns an error immediately when len(text) > maxPromptBytes without tokenizing.
+// Returns an error immediately when len(text) > MaxPromptBytes without tokenizing.
 func parseSlashCommand(text string) (name string, inputs map[string]any, err error) {
-	if len(text) > maxPromptBytes {
-		return "", nil, fmt.Errorf("prompt too large (%d bytes, max %d)", len(text), maxPromptBytes)
+	if len(text) > MaxPromptBytes {
+		return "", nil, fmt.Errorf("prompt too large (%d bytes, max %d)", len(text), MaxPromptBytes)
 	}
 	tokens := tokenizePrompt(text)
 	if len(tokens) == 0 || !strings.HasPrefix(tokens[0], "/") {

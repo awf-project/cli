@@ -96,7 +96,7 @@ func TestACPSessionService_C1_ShutdownDuringRunnerInit(t *testing.T) {
 
 	// Shutdown races while factory is building the runner. It is launched before unblocking
 	// the factory so that the race window (Shutdown arrives before setCancel is called) is
-	// exercised. Shutdown's session.cancel() is a no-op here (cancelFn not yet registered).
+	// exercised. Shutdown's session.shutdown() run-cancel is a no-op here (cancelFn not yet registered).
 	shutdownDone := make(chan struct{})
 	go func() {
 		defer close(shutdownDone)
@@ -104,7 +104,7 @@ func TestACPSessionService_C1_ShutdownDuringRunnerInit(t *testing.T) {
 	}()
 
 	// Let the factory finish so the prompt can proceed to runner.Run. The Shutdown cancel
-	// (session.cancel) fired before setCancel, so it was a no-op. Cancel the promptCtx now
+	// (session.shutdown's run-cancel) fired before setCancel, so it was a no-op. Cancel the promptCtx now
 	// to simulate the JSON-RPC server cancelling the request context at shutdown — this is
 	// what unblocks the blocking runner (runCtx is derived from promptCtx).
 	close(factoryProceed)

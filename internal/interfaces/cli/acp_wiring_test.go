@@ -3,12 +3,16 @@ package cli
 import (
 	"context"
 	"errors"
+	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
-	"github.com/awf-project/cli/internal/infrastructure/acp"
 )
 
 // errorEmitter is a captureEmitter variant that always returns an error on EmitSessionUpdate.
@@ -101,31 +105,27 @@ func TestACPTextWriter_EmptyWrite_NoEmit(t *testing.T) {
 	}
 }
 
-func TestACPMessageSender_MapsMessageTypes(t *testing.T) {
-	em := &captureEmitter{}
-	s := newACPMessageSender(em, "sess_1", nil)
-	cases := []struct {
-		msg  acp.Message
-		kind string
-	}{
-		{acp.Message{Type: acp.MsgAgentMessageChunk, Content: "t"}, "agent_message_chunk"},
-		{acp.Message{Type: acp.MsgAgentThoughtChunk, Content: "r"}, "agent_thought_chunk"},
-		{acp.Message{Type: acp.MsgToolCall, ToolID: "id1", Tool: "bash", Content: "ls"}, "tool_call"},
-		{acp.Message{Type: acp.MsgToolCallUpdate, ToolID: "id1", Tool: "bash", Content: "ls"}, "tool_call_update"},
-	}
-	for _, tc := range cases {
-		if err := s.Send(context.Background(), tc.msg); err != nil {
-			t.Fatalf("send: %v", err)
-		}
-	}
-	if len(em.calls) != len(cases) {
-		t.Fatalf("expected %d emits, got %d", len(cases), len(em.calls))
-	}
-	for i, tc := range cases {
-		if em.calls[i].kind != tc.kind {
-			t.Fatalf("case %d: want kind %q got %q", i, tc.kind, em.calls[i].kind)
-		}
-	}
+func TestACPWiring_NoACPServerImport(t *testing.T) {
+	// acp_wiring.go must not import pkg/acpserver after the SDK migration.
+	// All handler adapters now use SDK types; the legacy acpserver package is removed.
+	data, err := os.ReadFile("acp_wiring.go")
+	require.NoError(t, err)
+	content := string(data)
+
+	assert.NotContains(t, content, "pkg/acpserver")
+	assert.NotContains(t, content, "acpserver.")
+}
+
+func TestACPWiring_NoACPErrorCode(t *testing.T) {
+	// acpErrorCode must be removed from acp_wiring.go after the SDK migration.
+	// Call sites now use toACPError from T029 (infrastructure/acp layer); the
+	// interfaces layer no longer performs kind→code mapping.
+	data, err := os.ReadFile("acp_wiring.go")
+	require.NoError(t, err)
+	content := string(data)
+
+	assert.NotContains(t, content, "acpErrorCode")
+	assert.NotContains(t, content, "adaptACPHandler")
 }
 
 // TestACPTextWriter_MissedEmitsCounter verifies that each Write whose EmitSessionUpdate
@@ -164,19 +164,45 @@ func TestACPTextWriter_MissedEmits_NotIncrementedOnSuccess(t *testing.T) {
 	}
 }
 
-func TestACPSessionNotifier_MapsSessionUpdate(t *testing.T) {
+// TestStreamFlaggingEmitter_FlipsStreamedOnSuccess verifies the wrapper sets the shared
+// streamed flag to true only when the wrapped emit succeeds, and forwards the call
+// (sessionID/kind/fields) to the underlying emitter unchanged.
+func TestStreamFlaggingEmitter_FlipsStreamedOnSuccess(t *testing.T) {
 	em := &captureEmitter{}
-	n := newACPSessionNotifier(em, "sess_1")
-	err := n.NotifySessionUpdate(context.Background(), "wf-123", acp.SessionUpdate{
-		Kind: "step_started", StepName: "build",
-	})
-	if err != nil {
-		t.Fatalf("notify: %v", err)
-	}
-	if len(em.calls) != 1 || em.calls[0].kind != "step_started" || em.calls[0].sessionID != "sess_1" {
-		t.Fatalf("unexpected emit: %+v", em.calls)
-	}
-	if em.calls[0].fields["stepName"] != "build" {
-		t.Fatalf("stepName not mapped: %+v", em.calls[0].fields)
-	}
+	streamed := &atomic.Bool{}
+	e := newStreamFlaggingEmitter(em, streamed)
+
+	err := e.EmitSessionUpdate(context.Background(), "sess_1", "agent_message_chunk", map[string]any{"k": "v"})
+
+	require.NoError(t, err)
+	assert.True(t, streamed.Load(), "streamed must flip to true after a successful emit")
+	require.Len(t, em.calls, 1, "the call must be forwarded to the underlying emitter")
+	assert.Equal(t, "sess_1", em.calls[0].sessionID)
+	assert.Equal(t, "agent_message_chunk", em.calls[0].kind)
+}
+
+// TestStreamFlaggingEmitter_DoesNotFlipOnError verifies that when the wrapped emitter
+// returns an error, streamed stays false and the error is propagated. This guards the
+// invariant that HandleSessionPrompt only suppresses its post-run aggregate when output
+// was actually delivered.
+func TestStreamFlaggingEmitter_DoesNotFlipOnError(t *testing.T) {
+	streamed := &atomic.Bool{}
+	e := newStreamFlaggingEmitter(&errorEmitter{}, streamed)
+
+	err := e.EmitSessionUpdate(context.Background(), "sess_1", "agent_message_chunk", nil)
+
+	require.Error(t, err)
+	assert.False(t, streamed.Load(), "streamed must stay false when the emit fails")
+}
+
+// TestStreamFlaggingEmitter_NilStreamedSafe verifies a nil streamed pointer is tolerated
+// (no panic) — the wrapper degrades to a transparent pass-through.
+func TestStreamFlaggingEmitter_NilStreamedSafe(t *testing.T) {
+	em := &captureEmitter{}
+	e := newStreamFlaggingEmitter(em, nil)
+
+	err := e.EmitSessionUpdate(context.Background(), "sess_1", "agent_message_chunk", nil)
+
+	require.NoError(t, err)
+	require.Len(t, em.calls, 1)
 }

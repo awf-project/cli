@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/awf-project/cli/pkg/acpserver"
+	sdk "github.com/coder/acp-go-sdk"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,7 +31,7 @@ func TestACPClientHarness_NoInProcessGoroutineLeak_FiveTurnSession(t *testing.T)
 	configPath := writeACPConfig(t, fixtureWorkflowsDir(t))
 	proc := startACPServeProcess(t, binaryPath, fmt.Sprintf("--config=%s", configPath))
 
-	proc.request(t, 1, acpserver.MethodInitialize, map[string]any{
+	proc.request(t, 1, sdk.AgentMethodInitialize, map[string]any{
 		"protocolVersion": "1.0.0",
 		"capabilities":    map[string]any{},
 		"clientInfo": map[string]any{
@@ -40,7 +40,7 @@ func TestACPClientHarness_NoInProcessGoroutineLeak_FiveTurnSession(t *testing.T)
 		},
 	})
 
-	sessionResp := proc.request(t, 2, acpserver.MethodSessionNew, map[string]any{
+	sessionResp := proc.request(t, 2, sdk.AgentMethodSessionNew, map[string]any{
 		"sessionId": "leak-test-session",
 	})
 	result, _ := sessionResp.Result.(map[string]any)
@@ -49,7 +49,7 @@ func TestACPClientHarness_NoInProcessGoroutineLeak_FiveTurnSession(t *testing.T)
 	before := runtime.NumGoroutine()
 
 	for i := range 5 {
-		proc.request(t, 3+i, acpserver.MethodSessionPrompt, map[string]any{
+		proc.request(t, 3+i, sdk.AgentMethodSessionPrompt, map[string]any{
 			"sessionId": sessionID,
 			"prompt": []map[string]any{
 				{"type": "text", "text": "/trivial"},

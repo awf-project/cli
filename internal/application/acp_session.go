@@ -20,13 +20,23 @@ type WorkflowRunner interface {
 	Run(ctx context.Context, name string, inputs map[string]any) (*workflow.ExecutionContext, error)
 }
 
+// MCPEnvVariable mirrors one ACP McpServerStdio env entry. The ACP wire format serializes
+// env vars as a JSON array of {name, value} objects, NOT a JSON object — so the field below
+// MUST decode the array form. Decoding into a map[string]string fails json.Unmarshal for the
+// whole session/new payload, which rejected every session/new that carried an MCP stdio server
+// with environment variables (the mandatory transport — "All Agents MUST support stdio").
+type MCPEnvVariable struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 // MCPServerSpec is an editor-provided MCP server launch spec decoded from a session/new
 // `mcpServers` array entry (ACP). Distinct from workflow.MCPProxyConfig (interception config).
 type MCPServerSpec struct {
-	Name    string            `json:"name"`
-	Command string            `json:"command"`
-	Args    []string          `json:"args"`
-	Env     map[string]string `json:"env"`
+	Name    string           `json:"name"`
+	Command string           `json:"command"`
+	Args    []string         `json:"args"`
+	Env     []MCPEnvVariable `json:"env"`
 }
 
 // ACPInputResponder is the subset of the ACP input reader the session service drives:
@@ -99,6 +109,23 @@ type ACPSession struct {
 	CWD        string
 	MCPServers map[string]MCPServerSpec
 
+	// sessionCtx is a context that lives for the full lifetime of this session — from
+	// session/new until Shutdown (NOT session/cancel, which only interrupts the current run
+	// and leaves the session reusable). It is the parent of every runCtx created in
+	// HandleSessionPrompt, so the run goroutine survives individual ACP turn boundaries
+	// (each of which cancels its own per-request SDK context).
+	//
+	// Without this indirection, runCtx = context.WithCancel(requestCtx): the SDK
+	// cancels requestCtx when the Prompt handler returns (end_turn), which cascades into
+	// runCtx and kills the parked ReadInput goroutine before the user's next turn arrives.
+	//
+	// Both fields are written once at session construction (HandleSessionNew) and are
+	// safe to read without mu afterwards. sessionCancel is invoked only by shutdown()
+	// (the service Shutdown sweep) — it needs no separate lock because a
+	// context.CancelFunc is safe to call concurrently.
+	sessionCtx    context.Context //nolint:containedctx // session-lifetime ctx; must outlive per-request SDK ctx (see above)
+	sessionCancel context.CancelFunc
+
 	// inputReader holds the session's ACPInputResponder wrapped in inputReaderHolder.
 	// Written once under runnerMu in ensureRunner and read by HandleSessionPrompt
 	// (parking check) without the lock. An atomic.Pointer[inputReaderHolder] makes the
@@ -151,6 +178,16 @@ type ACPSession struct {
 	streamed atomic.Pointer[atomic.Bool]
 }
 
+// getSessionCtx returns the session-lifetime context, falling back to
+// context.Background() when the session was created without going through
+// HandleSessionNew (e.g. in unit tests that construct ACPSession directly).
+func (s *ACPSession) getSessionCtx() context.Context {
+	if s.sessionCtx != nil {
+		return s.sessionCtx
+	}
+	return context.Background()
+}
+
 // setCancel records the cancel function for the in-flight workflow run.
 func (s *ACPSession) setCancel(fn context.CancelFunc) {
 	s.mu.Lock()
@@ -158,14 +195,33 @@ func (s *ACPSession) setCancel(fn context.CancelFunc) {
 	s.mu.Unlock()
 }
 
-// cancel invokes the recorded cancel function, if any. Safe to call concurrently with
-// setCancel and idempotent (a nil cancelFn is a no-op).
+// cancel interrupts the in-flight workflow run (via cancelFn) WITHOUT tearing down the
+// session-lifetime context. ACP session/cancel targets the ongoing turn, not the session:
+// the editor may send a fresh prompt on the same session afterwards. Cancelling sessionCtx
+// here would make every subsequent runCtx (a child of sessionCtx) start already-Done, so the
+// next workflow would fail instantly with context.Canceled — silently bricking the session.
+// Killing only runCtx is sufficient to stop the current run (including a parked ReadInput),
+// since runCtx is a child of sessionCtx.
+//
+// Safe to call concurrently with setCancel and idempotent (nil funcs are no-ops;
+// context.CancelFunc is safe to call multiple times).
 func (s *ACPSession) cancel() {
 	s.mu.Lock()
 	fn := s.cancelFn
 	s.mu.Unlock()
 	if fn != nil {
 		fn()
+	}
+}
+
+// shutdown tears the session down permanently: it cancels the in-flight run AND the
+// session-lifetime context (releasing the goroutine context.WithCancel spawned to watch the
+// parent server context). Reserved for the service Shutdown sweep — never reachable from
+// session/cancel, which must leave the session reusable.
+func (s *ACPSession) shutdown() {
+	s.cancel()
+	if s.sessionCancel != nil {
+		s.sessionCancel()
 	}
 }
 

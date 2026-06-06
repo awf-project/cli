@@ -3,9 +3,10 @@ package acp
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 
-	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/infrastructure/agents"
 	"github.com/awf-project/cli/pkg/display"
 )
@@ -16,24 +17,51 @@ type SecretMasker interface {
 	MaskText(text string, env map[string]string) string
 }
 
-// ACPRenderer converts a DisplayEvent stream into ACP Message variants.
-// It is instantiated per workflow step — the seenTools dedup index never leaks across steps.
-type ACPRenderer struct {
+// synthesizeToolID returns a stable per-step tool identifier for seenTools dedup.
+// If the event carries its own ID, that is used verbatim. Otherwise the tool name
+// is combined with stepID to produce a stable ID across streaming chunks of the same
+// tool call (issue #4 fix). As a last resort, seq gives a unique but non-stable ID
+// so multi-chunk dedup will not work, but nothing panics.
+func synthesizeToolID(stepID, eventID, eventName string, seq uint64) string {
+	if eventID != "" {
+		return eventID
+	}
+	if eventName != "" {
+		return fmt.Sprintf("%s-tool-%s", stepID, eventName)
+	}
+	return fmt.Sprintf("%s-tool-%d", stepID, seq)
+}
+
+// Renderer converts a DisplayEvent stream into ACP SessionUpdate emissions via
+// application.SessionUpdateEmitter. It is instantiated per workflow step — the
+// seenTools dedup index never leaks across steps (per-step isolation invariant,
+// D-row from plan; sharing would misclassify first-sighting tool_call vs subsequent
+// tool_call_update variants).
+//
+// The renderer is bound to a single ACP session: sessionID routes every emitted
+// update to the correct session, while stepID scopes tool-ID synthesis and dedup.
+type Renderer struct {
+	// sessionID and stepID are immutable after NewRenderer returns; they are read
+	// outside mu (e.g. in synthesizeToolID and when building fields) and must stay
+	// immutable for that to be data-race-free. Do not reuse a Renderer across steps.
+	sessionID string
 	stepID    string
-	sender    Sender
+	emitter   application.SessionUpdateEmitter
 	masker    SecretMasker
-	logger    ports.Logger
+	logger    *slog.Logger
 	env       map[string]string
 	mu        sync.Mutex
 	seq       uint64
 	seenTools map[string]struct{}
 }
 
-// NewACPRenderer creates a renderer bound to a single workflow step.
-func NewACPRenderer(stepID string, sender Sender, masker SecretMasker, logger ports.Logger, env map[string]string) *ACPRenderer {
-	return &ACPRenderer{
+// NewRenderer creates a Renderer bound to one ACP session and one workflow step.
+// masker may be nil (no redaction); env is the source of secret values to mask.
+func NewRenderer(sessionID, stepID string, emitter application.SessionUpdateEmitter, masker SecretMasker, logger *slog.Logger, env map[string]string) *Renderer {
+	return &Renderer{
+		sessionID: sessionID,
 		stepID:    stepID,
-		sender:    sender,
+		emitter:   emitter,
 		masker:    masker,
 		logger:    logger,
 		env:       env,
@@ -41,38 +69,31 @@ func NewACPRenderer(stepID string, sender Sender, masker SecretMasker, logger po
 	}
 }
 
-// Render converts one DisplayEvent into a Message and forwards it via the Sender.
-// ctx carries the workflow's cancellation signal and is propagated to Sender.Send
-// so emission stops when the ACP peer disconnects. event is taken by pointer to avoid
-// copying the ~112-byte struct on every event; Render does not retain it.
+// Render converts one DisplayEvent into an ACP SessionUpdate and emits it via the
+// emitter. The discriminator (kind) and field shapes match the ACP wire protocol:
+//   - text  → "agent_message_chunk" with content {type:text, text}
+//   - reasoning → "agent_thought_chunk" with content {type:text, text}
+//   - tool use → "tool_call" (first sighting) / "tool_call_update" (subsequent)
+//     with {toolCallId, title, rawInput:{text}}
 //
-// Concurrency: the mutex is held only to allocate a monotonic seq number and consult
-// seenTools. Sender.Send is called OUTSIDE the lock so a slow peer does not serialize
-// all concurrent Render callers. Seq monotonicity is preserved (each goroutine gets a
-// unique seq before releasing the lock); emission order is not guaranteed when multiple
-// goroutines race — use a single-threaded caller when strict ordering is required.
-func (r *ACPRenderer) Render(ctx context.Context, event *display.DisplayEvent) error {
+// Concurrency: the mutex guards only seq allocation and seenTools. MaskText and
+// EmitSessionUpdate run OUTSIDE the lock so a slow peer does not serialize concurrent
+// callers (invariant verified by TestRenderer_SlowEmitterDoesNotSerializeCallers).
+func (r *Renderer) Render(ctx context.Context, event *display.DisplayEvent) error {
 	if event == nil {
-		r.logger.Warn("acp renderer: nil event dropped", "step", r.stepID)
+		if r.logger != nil {
+			r.logger.Warn("acp renderer: nil event dropped", "step", r.stepID)
+		}
 		return nil
 	}
 
-	// Build the message skeleton under the lock (seq allocation + seenTools update only).
-	// MaskText is called OUTSIDE the lock: masker and env are immutable after construction
-	// so there is no race on them, and moving the call out avoids holding the mutex during
-	// a potentially non-trivial string scan.
-	// Release the lock before calling MaskText and Sender.Send to avoid serializing slow I/O.
-	type msgSkeleton struct {
-		msgType  MessageType
-		seq      uint64
-		rawText  string // unmasked text to pass to MaskText after unlock
-		toolID   string
-		toolName string
-	}
-
 	var (
-		sk    msgSkeleton
-		valid bool
+		kind     string
+		toolID   string
+		rawText  string
+		toolName string
+		isTool   bool
+		valid    bool
 	)
 
 	r.mu.Lock()
@@ -81,44 +102,23 @@ func (r *ACPRenderer) Render(ctx context.Context, event *display.DisplayEvent) e
 
 	// Switch on event.Kind (normalized discriminator) rather than event.Type (raw
 	// provider string). Kind is set by every provider's parser and is the canonical
-	// field for rendering decisions; Type is provider-specific and cannot be reliably
-	// compared across providers (M-4 fix).
+	// field for rendering decisions.
 	switch event.Kind {
 	case display.EventText:
-		sk = msgSkeleton{msgType: MsgAgentMessageChunk, seq: seq, rawText: event.Text}
-		valid = true
+		kind, rawText, valid = "agent_message_chunk", event.Text, true
 
 	case display.EventReasoning:
-		sk = msgSkeleton{msgType: MsgAgentThoughtChunk, seq: seq, rawText: event.Text}
-		valid = true
+		kind, rawText, valid = "agent_thought_chunk", event.Text, true
 
 	case display.EventToolUse:
-		toolID := event.ID
-		if toolID == "" {
-			// Synthesize a STABLE ID so that successive streaming chunks from the same
-			// tool are correctly classified as MsgToolCallUpdate rather than MsgToolCall.
-			// Using seq would produce a unique ID per event (every event looks like a
-			// first sighting). Using the tool name makes the ID stable across all chunks
-			// belonging to the same tool invocation within this step (issue #4 fix).
-			// Fallback to seq only when the name is also absent — seq at least prevents
-			// a panic and gives a unique string, though multi-chunk dedup won't work in
-			// that degenerate case.
-			if event.Name != "" {
-				toolID = fmt.Sprintf("%s-tool-%s", r.stepID, event.Name)
-			} else {
-				toolID = fmt.Sprintf("%s-tool-%d", r.stepID, seq)
-			}
-		}
-
-		msgType := MsgToolCall
+		toolID = synthesizeToolID(r.stepID, event.ID, event.Name, seq)
+		kind = "tool_call"
 		if _, seen := r.seenTools[toolID]; seen {
-			msgType = MsgToolCallUpdate
+			kind = "tool_call_update"
 		} else {
 			r.seenTools[toolID] = struct{}{}
 		}
-
-		sk = msgSkeleton{msgType: msgType, seq: seq, rawText: event.Arg, toolID: toolID, toolName: event.Name}
-		valid = true
+		rawText, toolName, isTool, valid = event.Arg, event.Name, true, true
 	}
 	r.mu.Unlock()
 
@@ -126,28 +126,46 @@ func (r *ACPRenderer) Render(ctx context.Context, event *display.DisplayEvent) e
 		return nil
 	}
 
-	// MaskText and Sender.Send run outside the lock: env is read-only after construction.
-	msg := Message{
-		Type:    sk.msgType,
-		StepID:  r.stepID,
-		Seq:     sk.seq,
-		Content: r.masker.MaskText(sk.rawText, r.env),
-		ToolID:  sk.toolID,
-		Tool:    sk.toolName,
+	// MaskText is applied outside the mutex: env is read-only after construction and
+	// keeping slow string work off the lock preserves the no-serialization invariant.
+	content := r.mask(rawText)
+
+	var fields map[string]any
+	if isTool {
+		fields = map[string]any{
+			"seq":        seq,
+			"toolCallId": toolID,
+			"title":      toolName,
+			"rawInput":   map[string]any{"text": content},
+		}
+	} else {
+		fields = map[string]any{
+			"seq":     seq,
+			"content": map[string]any{"type": "text", "text": content},
+		}
 	}
-	return r.sender.Send(ctx, msg)
+
+	return r.emitter.EmitSessionUpdate(ctx, r.sessionID, kind, fields)
+}
+
+// mask redacts secrets in text using the configured masker. A nil masker is a no-op.
+func (r *Renderer) mask(text string) string {
+	if r.masker == nil {
+		return text
+	}
+	return r.masker.MaskText(text, r.env)
 }
 
 // RenderFunc returns a closure that satisfies agents.DisplayEventRenderer.
-// Each event in the slice is rendered independently; a Send error is logged and the batch continues.
-// If ctx is cancelled before an event is processed, the batch stops early.
-func (r *ACPRenderer) RenderFunc(ctx context.Context) agents.DisplayEventRenderer {
+// Each event in the slice is rendered independently; an emit error is logged and the
+// batch continues. If ctx is cancelled before an event is processed, the batch stops.
+func (r *Renderer) RenderFunc(ctx context.Context) agents.DisplayEventRenderer {
 	return func(events []agents.DisplayEvent) {
 		for i := range events {
 			if ctx.Err() != nil {
 				return
 			}
-			if err := r.Render(ctx, &events[i]); err != nil {
+			if err := r.Render(ctx, &events[i]); err != nil && r.logger != nil {
 				r.logger.Warn("acp render failed", "step", r.stepID, "err", err.Error())
 			}
 		}
