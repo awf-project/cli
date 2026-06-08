@@ -305,6 +305,12 @@ components:
   infra-mcp:
     in: infrastructure/mcp
 
+  domain-transcript:
+    in: domain/transcript
+
+  infra-transcript:
+    in: infrastructure/transcript
+
   # INTERFACES LAYER
   interfaces-cli:
     in: interfaces/cli
@@ -342,6 +348,7 @@ deps:
       - domain-errors
       - domain-plugin
       - domain-operation
+      - domain-transcript
     canUse:
       - go-stdlib
   domain-errors:
@@ -371,6 +378,7 @@ deps:
       - domain-errors
       - domain-plugin
       - domain-operation
+      - domain-transcript
       - application-tools
       - infra-agents
       - infra-expression
@@ -394,8 +402,10 @@ deps:
       - domain-ports
       - domain-errors
       - domain-plugin
+      - domain-transcript
     canUse:
       - go-stdlib
+      - uuid
 
   # INFRASTRUCTURE — domain + vendors
   infra-agents:
@@ -404,6 +414,7 @@ deps:
       - domain-ports
       - domain-errors
       - domain-plugin
+      - domain-transcript
       - infra-logger
     canUse:
       - go-stdlib
@@ -644,6 +655,19 @@ deps:
     canUse:
       - go-stdlib
 
+  domain-transcript:
+    mayDependOn: []
+    canUse:
+      - go-stdlib
+
+  infra-transcript:
+    mayDependOn:
+      - domain-transcript
+      - domain-ports
+    canUse:
+      - go-stdlib
+      - uuid
+
   # INTERFACES — wiring layer (app + infra + domain)
   interfaces-cli:
     mayDependOn:
@@ -677,6 +701,7 @@ deps:
       - infra-tokenizer
       - infra-tools
       - infra-tools-builtins
+      - infra-transcript
       - infra-updater
       - infra-workflowpkg
       - infra-xdg

@@ -155,6 +155,7 @@ type ConversationResult struct {
 	Provider        string             // provider name used
 	State           *ConversationState // final conversation state
 	Output          string             // final assistant response (last turn)
+	RawOutput       string             // unmodified provider stream for the last turn (NDJSON for CLI providers); source for transcript normalization (F106 US2)
 	DisplayOutput   string             // filtered human-readable output for display (empty when output_format=json or no parser)
 	Response        map[string]any     // parsed JSON response from last turn (if applicable)
 	TokensInput     int                // total input tokens across all turns

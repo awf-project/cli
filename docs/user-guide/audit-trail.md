@@ -94,8 +94,33 @@ Audit trail failures never block workflow execution:
 - If the audit file path is not writable, a warning is emitted to stderr and the workflow proceeds normally.
 - Audit write errors do not change the workflow exit code.
 
+## Canonical Transcript vs. Audit Trail
+
+In addition to the audit trail, AWF automatically creates a **canonical transcript** file for every workflow run. While similar in format (both JSONL), they serve different purposes:
+
+| Aspect | Audit Trail | Canonical Transcript |
+|--------|-----------|----------------------|
+| **Scope** | Workflow-level summary | Full execution details |
+| **Events per run** | 2 (start + completion) | Hundreds (every step, message, tool call) |
+| **File location** | `$XDG_DATA_HOME/awf/audit.jsonl` | `storage/transcripts/<run-id>.jsonl` |
+| **Purpose** | Compliance, accounting | Replay, debugging, detailed audit |
+| **Step details** | Minimal | Complete (prompts, tool inputs/outputs, loop iterations) |
+| **Agent exchange** | Not recorded | Full lifecycle (every message) |
+
+**Use the audit trail** for:
+- Compliance logging (who ran what, when)
+- Execution accounting (success/failure counts)
+- Historical queries across all runs
+
+**Use the canonical transcript** for:
+- Debugging failed workflows (see exact agent response)
+- Replaying executions offline
+- Analyzing agent behavior
+- Sub-workflow tree reconstruction
+
 ## See Also
 
+- [Transcript Schema](../reference/transcript-schema.md) — Full transcript field reference and content blocks
 - [Audit Trail Schema](../reference/audit-trail-schema.md) — Full field reference and constraints
 - [ADR-0010](../ADR/010-paired-jsonl-audit-trail-with-atomic-append.md) — Design decision: paired JSONL with atomic append
 - [ADR-0011](../ADR/011-application-layer-secret-masking-for-audit-events.md) — Design decision: application-layer secret masking

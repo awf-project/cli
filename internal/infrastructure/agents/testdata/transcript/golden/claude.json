@@ -1,0 +1,31 @@
+[
+  {
+    "type": "thinking",
+    "fidelity": "agent_emitted",
+    "thinking": "Let me think about this carefully."
+  },
+  {
+    "type": "text",
+    "fidelity": "agent_emitted",
+    "text": "Hello, I can help with that."
+  },
+  {
+    "type": "tool_use",
+    "fidelity": "agent_emitted",
+    "tool_name": "bash",
+    "tool_id": "toolu_01ABC",
+    "tool_input": {
+      "command": "echo hello"
+    }
+  },
+  {
+    "type": "text",
+    "fidelity": "agent_emitted",
+    "text": "The command ran successfully."
+  },
+  {
+    "type": "thinking",
+    "fidelity": "agent_emitted",
+    "thinking": "Should I say more?"
+  }
+]

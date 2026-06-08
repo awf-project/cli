@@ -68,6 +68,7 @@ type ExecutionContext struct {
 	mu           sync.RWMutex // protects concurrent map access
 	WorkflowID   string
 	WorkflowName string
+	ParentRunID  string // non-empty when this run was spawned by a call_workflow step
 	Status       ExecutionStatus
 	CurrentStep  string
 	ExitCode     int // process exit code propagated from terminal steps (FR-004)

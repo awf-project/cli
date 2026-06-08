@@ -116,7 +116,7 @@ func TestStartToolProxyImpl_NoopWhenProxyNil(t *testing.T) {
 	opts := map[string]any{}
 	step := &workflow.Step{MCPProxy: &workflow.MCPProxyConfig{Enable: true, InterceptBuiltins: true}}
 
-	cleanup, err := startToolProxyImpl(context.Background(), nil, mocks.NewMockLogger(), step, opts, "claude", nil)
+	cleanup, err := startToolProxyImpl(context.Background(), nil, mocks.NewMockLogger(), step, opts, "claude", nil, nil, "")
 
 	require.NoError(t, err)
 	require.NotNil(t, cleanup)
@@ -136,7 +136,7 @@ func TestStartToolProxyImpl_NoopWhenDisabled(t *testing.T) {
 	opts := map[string]any{}
 	step := &workflow.Step{MCPProxy: &workflow.MCPProxyConfig{Enable: false, InterceptBuiltins: true}}
 
-	cleanup, err := startToolProxyImpl(context.Background(), proxy, mocks.NewMockLogger(), step, opts, "claude", nil)
+	cleanup, err := startToolProxyImpl(context.Background(), proxy, mocks.NewMockLogger(), step, opts, "claude", nil, nil, "")
 
 	require.NoError(t, err)
 	assert.NoError(t, cleanup())
@@ -156,7 +156,7 @@ func TestStartToolProxyImpl_OpenAICompatibleUsesHTTPPath(t *testing.T) {
 	opts := map[string]any{}
 	step := &workflow.Step{MCPProxy: &workflow.MCPProxyConfig{Enable: true, InterceptBuiltins: true}}
 
-	cleanup, err := startToolProxyImpl(context.Background(), proxy, mocks.NewMockLogger(), step, opts, "openai_compatible", nil)
+	cleanup, err := startToolProxyImpl(context.Background(), proxy, mocks.NewMockLogger(), step, opts, "openai_compatible", nil, nil, "")
 
 	require.NoError(t, err)
 	assert.NoError(t, cleanup())

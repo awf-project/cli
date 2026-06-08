@@ -1,0 +1,18 @@
+[
+  {
+    "type": "text",
+    "fidelity": "agent_emitted",
+    "text": "Hello\u0000world"
+  },
+  {
+    "type": "tool_use",
+    "fidelity": "agent_emitted",
+    "tool_name": "bash",
+    "tool_input": "{\"command\":\"ls\"}"
+  },
+  {
+    "type": "text",
+    "fidelity": "agent_emitted",
+    "text": "Task complete."
+  }
+]

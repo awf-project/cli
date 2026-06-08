@@ -222,7 +222,10 @@ func (m *ConversationManager) ExecuteConversation(
 
 	// F099: Start MCP tool proxy for the conversation if configured. The proxy lives for
 	// the full lifetime of the multi-turn loop; cleanup runs after the loop exits.
-	proxyCleanup, proxyErr := startConversationToolProxy(ctx, m.toolProxy, m.logger, step, options, resolvedProvider, provider)
+	// F106: the ConversationManager does not own a transcript recorder, so router-fidelity
+	// tool capture is not wired on this multi-turn path (single-turn agent steps cover the
+	// primary US3 case); pass a nil recorder so capture is a graceful no-op here.
+	proxyCleanup, proxyErr := startConversationToolProxy(ctx, m.toolProxy, m.logger, step, options, resolvedProvider, provider, nil, "")
 	if proxyErr != nil {
 		return nil, fmt.Errorf("step %s: %w", step.Name, proxyErr)
 	}

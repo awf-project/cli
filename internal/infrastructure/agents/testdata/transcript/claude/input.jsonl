@@ -1,0 +1,4 @@
+{"type":"user","message":{"content":[{"type":"text","text":"Hello, can you help?"}]}}
+{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"Let me think about this carefully."},{"type":"text","text":"Hello, I can help with that."},{"type":"tool_use","id":"toolu_01ABC","name":"bash","input":{"command":"echo hello"}}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"The command ran successfully."}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":""},{"type":"thinking","thinking":"Should I say more?"}]}}

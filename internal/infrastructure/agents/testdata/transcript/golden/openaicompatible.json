@@ -1,0 +1,19 @@
+[
+  {
+    "type": "text",
+    "fidelity": "agent_emitted",
+    "text": "Hello! How can I help you?"
+  },
+  {
+    "type": "tool_use",
+    "fidelity": "agent_emitted",
+    "tool_name": "bash",
+    "tool_id": "call_abc123",
+    "tool_input": "{\"command\":\"echo hello\"}"
+  },
+  {
+    "type": "text",
+    "fidelity": "agent_emitted",
+    "text": "I've completed the task."
+  }
+]

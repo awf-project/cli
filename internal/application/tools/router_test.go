@@ -77,6 +77,7 @@ func (t *mockTracer) Start(ctx context.Context, spanName string) (context.Contex
 type mockLogger struct {
 	mu        sync.Mutex
 	infoLogs  []string
+	warnLogs  []string
 	errorLogs []string
 	fields    []map[string]any
 }
@@ -90,7 +91,13 @@ func (l *mockLogger) Info(msg string, fields ...any) {
 		l.fields = append(l.fields, parseFields(fields))
 	}
 }
-func (l *mockLogger) Warn(msg string, fields ...any) {}
+
+func (l *mockLogger) Warn(msg string, fields ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.warnLogs = append(l.warnLogs, msg)
+}
+
 func (l *mockLogger) Error(msg string, fields ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

@@ -33,8 +33,12 @@ func (s *ExecutionService) startToolProxy(
 	opts map[string]any,
 	resolvedProvider string,
 	provider ports.AgentProvider,
+	execCtx *workflow.ExecutionContext,
 ) (cleanup func() error, err error) {
-	return startToolProxyImpl(ctx, s.toolProxy, s.logger, step, opts, resolvedProvider, provider)
+	// F106 FR-008: capture in-process (HTTP router) tool calls with fidelity:"router",
+	// correlated to this run. recorderFor(ctx) routes sub-workflow tool calls to the
+	// child transcript; execCtx.WorkflowID is the unified run id.
+	return startToolProxyImpl(ctx, s.toolProxy, s.logger, step, opts, resolvedProvider, provider, s.recorderFor(ctx), execCtx.WorkflowID)
 }
 
 // startConversationToolProxy starts the MCP tool proxy for a conversation step. It is
@@ -48,13 +52,16 @@ func startConversationToolProxy(
 	opts map[string]any,
 	resolvedProvider string,
 	provider ports.AgentProvider,
+	recorder ports.Recorder,
+	runID string,
 ) (cleanup func() error, err error) {
-	return startToolProxyImpl(ctx, proxy, logger, step, opts, resolvedProvider, provider)
+	return startToolProxyImpl(ctx, proxy, logger, step, opts, resolvedProvider, provider, recorder, runID)
 }
 
 // startToolProxyImpl contains the actual start logic shared by single-turn and
 // conversation entry points. Splitting it out keeps the call sites readable and ensures
 // any policy change (e.g., HTTP vs stdio path selection) lands in exactly one place.
+// recorder/runID wire the in-process ToolRouter for F106 router-fidelity tool capture.
 func startToolProxyImpl(
 	ctx context.Context,
 	proxy *tools.ProxyService,
@@ -63,6 +70,8 @@ func startToolProxyImpl(
 	opts map[string]any,
 	resolvedProvider string,
 	provider ports.AgentProvider,
+	recorder ports.Recorder,
+	runID string,
 ) (func() error, error) {
 	if proxy == nil || step.MCPProxy == nil || !step.MCPProxy.Enable {
 		return func() error { return nil }, nil
@@ -78,6 +87,9 @@ func startToolProxyImpl(
 			return func() error { return nil }, fmt.Errorf("start tool proxy (http): %w", startErr)
 		}
 		if router != nil {
+			// F106 FR-008: capture tool.call/tool.result at the router seam.
+			router.SetRecorder(recorder)
+			router.SetRunID(runID)
 			if setter, ok := provider.(toolRouterSetter); ok {
 				setter.SetToolRouter(router)
 			} else {

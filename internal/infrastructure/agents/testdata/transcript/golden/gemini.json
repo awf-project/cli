@@ -1,0 +1,29 @@
+[
+  {
+    "type": "text",
+    "fidelity": "agent_emitted",
+    "text": "Hello! I'd be happy to help."
+  },
+  {
+    "type": "text",
+    "fidelity": "agent_emitted",
+    "text": "Let me run a command for you."
+  },
+  {
+    "type": "tool_use",
+    "fidelity": "agent_emitted",
+    "tool_name": "bash",
+    "tool_input": {
+      "command": "ls -la"
+    }
+  },
+  {
+    "type": "tool_use",
+    "fidelity": "agent_emitted",
+    "tool_name": "write_file",
+    "tool_input": {
+      "content": "done",
+      "path": "/tmp/out.txt"
+    }
+  }
+]

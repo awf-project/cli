@@ -241,6 +241,7 @@ func (b *baseCLIProvider) execute(ctx context.Context, prompt string, options ma
 	result := &workflow.AgentResult{
 		Provider:        b.name,
 		Output:          outputStr,
+		RawOutput:       rawOutput,
 		DisplayOutput:   displayOutput,
 		StartedAt:       startedAt,
 		CompletedAt:     completedAt,
@@ -381,6 +382,7 @@ func (b *baseCLIProvider) executeConversation(ctx context.Context, state *workfl
 		Provider:        b.name,
 		State:           workingState,
 		Output:          outputStr,
+		RawOutput:       rawOutput,
 		DisplayOutput:   displayOutput,
 		TokensInput:     inputTokens,
 		TokensOutput:    assistantTurn.Tokens,

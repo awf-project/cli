@@ -199,6 +199,18 @@ linters:
         linters:
           - gocritic
 
+      # gocritic hugeParam - test fake implementations satisfy interfaces by value
+      - path: _test\.go
+        text: "hugeParam"
+        linters:
+          - gocritic
+
+      # gocritic unnamedResult - test fakes implement interfaces; named returns optional
+      - path: _test\.go
+        text: "unnamedResult"
+        linters:
+          - gocritic
+
       # gocritic elseif - acceptable in tests for clarity
       - path: _test\.go
         text: "elseif"
@@ -210,6 +222,12 @@ linters:
         text: "commentedOutCode"
         linters:
           - gocritic
+
+      # staticcheck S1005 - test files use _ = <-ch for clarity when draining channels
+      - path: _test\.go
+        text: "S1005"
+        linters:
+          - staticcheck
 
       # gocritic rangeValCopy - performance is not critical in CLI display functions
       - path: internal/interfaces/cli/(run|status)\.go
@@ -231,6 +249,13 @@ linters:
       # Allow dot imports in tests for testify
       - path: _test\.go
         text: dot-imports
+        linters:
+          - revive
+
+      # Test helper functions use (svc, ctx) parameter order intentionally
+      # to group the service under test with its arguments; ctx is still present
+      - path: _test\.go
+        text: context-as-argument
         linters:
           - revive
 
