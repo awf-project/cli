@@ -132,7 +132,8 @@ func (c *AgentConfig) IsConversationMode() bool {
 // AgentResult holds the result of an agent execution.
 type AgentResult struct {
 	Provider        string         // provider name used
-	Output          string         // raw output from agent CLI
+	Output          string         // extracted text response from the agent (NDJSON/lifecycle envelope stripped)
+	RawOutput       string         // unmodified provider stream (NDJSON for CLI providers); source for transcript normalization (F106 US2). Empty for providers with no raw stream (e.g. openai_compatible HTTP).
 	DisplayOutput   string         // filtered human-readable output for display (empty when output_format=json or no parser)
 	Response        map[string]any // parsed JSON response (if applicable)
 	Tokens          int            // token usage (if reported by provider)

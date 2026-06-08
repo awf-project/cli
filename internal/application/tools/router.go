@@ -7,8 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/transcript"
 )
 
 var _ ports.ToolRouter = (*Router)(nil)
@@ -26,6 +29,19 @@ type Router struct {
 	providers []ports.ToolProvider
 	tracer    ports.Tracer
 	logger    ports.Logger
+	recorder  ports.Recorder
+	runID     string
+}
+
+// SetRecorder attaches an optional transcript recorder for capturing tool.call / tool.result events.
+func (r *Router) SetRecorder(rec ports.Recorder) {
+	r.recorder = rec
+}
+
+// SetRunID sets the workflow run identifier stamped onto emitted tool.call / tool.result
+// events so tool exchanges can be correlated to their originating workflow run.
+func (r *Router) SetRunID(id string) {
+	r.runID = id
 }
 
 func NewRouter(tracer ports.Tracer, logger ports.Logger) *Router {
@@ -100,6 +116,20 @@ func (r *Router) CallTool(ctx context.Context, name string, args map[string]any)
 
 	span.SetAttribute("tool.source", entry.definition.Source)
 
+	var callID string
+	if r.recorder != nil {
+		callID = uuid.New().String()
+		callEvent := transcript.ExchangeEvent{
+			Type:      transcript.EventTypeToolCall,
+			RunID:     r.runID,
+			Timestamp: time.Now(),
+			Payload:   &transcript.ToolPayload{Name: name, CallID: callID, Input: args, Fidelity: transcript.FidelityRouter},
+		}
+		if recErr := r.recorder.Record(ctx, callEvent); recErr != nil {
+			r.logger.Warn("transcript record warning", "error", recErr, "event", transcript.EventTypeToolCall)
+		}
+	}
+
 	result, err := entry.provider.CallTool(ctx, name, args)
 
 	durationMs := time.Since(start).Milliseconds()
@@ -107,6 +137,22 @@ func (r *Router) CallTool(ctx context.Context, name string, args map[string]any)
 
 	if err != nil {
 		span.RecordError(err)
+	}
+
+	if r.recorder != nil {
+		resultPayload := &transcript.ToolPayload{Name: name, CallID: callID, Input: args, Fidelity: transcript.FidelityRouter, Output: result}
+		if err != nil {
+			resultPayload.Error = err.Error()
+		}
+		resultEvent := transcript.ExchangeEvent{
+			Type:      transcript.EventTypeToolResult,
+			RunID:     r.runID,
+			Timestamp: time.Now(),
+			Payload:   resultPayload,
+		}
+		if recErr := r.recorder.Record(ctx, resultEvent); recErr != nil {
+			r.logger.Warn("transcript record warning", "error", recErr, "event", transcript.EventTypeToolResult)
+		}
 	}
 
 	fields := []any{

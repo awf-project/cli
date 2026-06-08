@@ -15,6 +15,7 @@ import (
 	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/transcript"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/pkg/display"
 	"github.com/awf-project/cli/pkg/interpolation"
@@ -74,6 +75,10 @@ type ExecutionService struct {
 	skillRepo              ports.SkillRepository
 	agentRoleRepo          ports.AgentRoleRepository
 	toolProxy              *tools.ProxyService
+	recorder               ports.Recorder
+	recorderFactory        ports.RecorderFactory
+	transcriptDir          string
+	agentOutputNormalizer  ports.AgentOutputNormalizer
 }
 
 // SetOutputWriters configures streaming output writers.
@@ -154,6 +159,40 @@ func (s *ExecutionService) SetAWFPaths(paths map[string]string) {
 // When nil, audit emission is skipped without error.
 func (s *ExecutionService) SetAuditTrailWriter(w ports.AuditTrailWriter) {
 	s.auditTrailWriter = w
+}
+
+// SetRecorder configures the transcript recorder for F106 canonical exchange transcript.
+// When nil, transcript emission is skipped without error.
+func (s *ExecutionService) SetRecorder(r ports.Recorder) {
+	s.recorder = r
+}
+
+// SetRecorderFactory configures the factory used to create child recorders for
+// call_workflow sub-runs. When nil, child transcript recording is skipped.
+func (s *ExecutionService) SetRecorderFactory(f ports.RecorderFactory) {
+	s.recorderFactory = f
+}
+
+// SetTranscriptDir configures the directory where transcript files are written.
+// Derived from the same config as the parent recorder's path.
+func (s *ExecutionService) SetTranscriptDir(dir string) {
+	s.transcriptDir = dir
+}
+
+// SetAgentOutputNormalizer configures the normalizer that converts provider raw output
+// into transcript ContentBlocks for F106 message.assistant emission. When nil, agent
+// output is not normalized into the transcript (graceful no-op).
+func (s *ExecutionService) SetAgentOutputNormalizer(n ports.AgentOutputNormalizer) {
+	s.agentOutputNormalizer = n
+}
+
+// transcriptBaseDir returns the configured transcript directory, falling back
+// to "storage/transcripts" when none is set.
+func (s *ExecutionService) transcriptBaseDir() string {
+	if s.transcriptDir != "" {
+		return s.transcriptDir
+	}
+	return "storage/transcripts"
 }
 
 // SetPluginService configures the plugin service for disabled-plugin detection.
@@ -359,7 +398,7 @@ func (s *ExecutionService) Run(
 	workflowName string,
 	inputs map[string]any,
 ) (*workflow.ExecutionContext, error) {
-	return s.runWithCallStack(ctx, workflowName, inputs, nil)
+	return s.runWithCallStack(ctx, workflowName, inputs, nil, "", "")
 }
 
 // RunWithWorkflow executes a pre-loaded workflow with the given inputs.
@@ -369,7 +408,20 @@ func (s *ExecutionService) RunWithWorkflow(
 	wf *workflow.Workflow,
 	inputs map[string]any,
 ) (*workflow.ExecutionContext, error) {
-	return s.runWithCallStackAndWorkflow(ctx, "", wf, inputs, nil)
+	return s.runWithCallStackAndWorkflow(ctx, "", wf, inputs, nil, "", "")
+}
+
+// RunWithWorkflowAndRunID executes a pre-loaded workflow using runID as the execution's
+// WorkflowID. This lets callers (e.g. the CLI run command) reuse the same identifier for
+// the transcript filename (<run-id>.jsonl) and the run_id stamped on every emitted event,
+// keeping the on-disk file and its contents correlatable (F106 SC-001).
+func (s *ExecutionService) RunWithWorkflowAndRunID(
+	ctx context.Context,
+	wf *workflow.Workflow,
+	inputs map[string]any,
+	runID string,
+) (*workflow.ExecutionContext, error) {
+	return s.runWithCallStackAndWorkflow(ctx, "", wf, inputs, nil, runID, "")
 }
 
 // RunWorkflowAsync starts workflow execution and returns the ExecutionContext immediately.
@@ -380,7 +432,7 @@ func (s *ExecutionService) RunWorkflowAsync(
 	wf *workflow.Workflow,
 	inputs map[string]any,
 ) (*workflow.ExecutionContext, <-chan error, error) {
-	spanCtx, span, execCtx, err := s.prepareExecution(ctx, wf, inputs, nil)
+	spanCtx, span, execCtx, err := s.prepareExecution(ctx, wf, inputs, nil, "", "")
 	if err != nil {
 		if span != nil {
 			span.End()
@@ -400,11 +452,17 @@ func (s *ExecutionService) RunWorkflowAsync(
 // prepareExecution handles workflow setup: span creation, template expansion, context
 // initialization, input validation, audit emission, and workflow_start hooks.
 // Returns the span-enriched context, the span (caller must End() it), and the execution context.
+//
+// runID, when non-empty, is used verbatim as the execution's WorkflowID so the
+// transcript filename (<run-id>.jsonl) and the run_id stamped on every emitted event
+// are the same identifier. An empty runID falls back to a generated UUID. parentRunID
+// is propagated onto the child context for F106 sub-workflow transcript linkage.
 func (s *ExecutionService) prepareExecution(
 	ctx context.Context,
 	wf *workflow.Workflow,
 	inputs map[string]any,
 	parentCallStack []string,
+	runID, parentRunID string,
 ) (context.Context, ports.Span, *workflow.ExecutionContext, error) {
 	ctx, span := s.startSpan(ctx, "workflow.run")
 	span.SetAttribute("workflow.name", wf.Name)
@@ -418,7 +476,12 @@ func (s *ExecutionService) prepareExecution(
 		}
 	}
 
-	execCtx := workflow.NewExecutionContext(uuid.New().String(), wf.Name)
+	resolvedRunID := runID
+	if resolvedRunID == "" {
+		resolvedRunID = uuid.New().String()
+	}
+	execCtx := workflow.NewExecutionContext(resolvedRunID, wf.Name)
+	execCtx.ParentRunID = parentRunID
 	execCtx.Status = workflow.StatusRunning
 	span.SetAttribute("execution_id", execCtx.WorkflowID)
 
@@ -612,18 +675,21 @@ func (s *ExecutionService) runWithCallStack(
 	workflowName string,
 	inputs map[string]any,
 	parentCallStack []string,
+	runID, parentRunID string,
 ) (*workflow.ExecutionContext, error) {
-	return s.runWithCallStackAndWorkflow(ctx, workflowName, nil, inputs, parentCallStack)
+	return s.runWithCallStackAndWorkflow(ctx, workflowName, nil, inputs, parentCallStack, runID, parentRunID)
 }
 
 // runWithCallStackAndWorkflow executes a workflow with an optional parent call stack.
 // If wf is nil, loads the workflow by name. Otherwise uses the provided workflow.
+// runID/parentRunID thread the F106 run identity through to prepareExecution.
 func (s *ExecutionService) runWithCallStackAndWorkflow(
 	ctx context.Context,
 	workflowName string,
 	wf *workflow.Workflow,
 	inputs map[string]any,
 	parentCallStack []string,
+	runID, parentRunID string,
 ) (*workflow.ExecutionContext, error) {
 	if wf == nil {
 		var err error
@@ -633,7 +699,7 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 		}
 	}
 
-	spanCtx, span, execCtx, err := s.prepareExecution(ctx, wf, inputs, parentCallStack)
+	spanCtx, span, execCtx, err := s.prepareExecution(ctx, wf, inputs, parentCallStack, runID, parentRunID)
 	if err != nil {
 		return nil, err
 	}
@@ -653,6 +719,8 @@ func (s *ExecutionService) executeStep(
 	defer span.End()
 	span.SetAttribute("step.name", step.Name)
 	span.SetAttribute("step.type", string(step.Type))
+	s.emitTranscriptStep(ctx, execCtx, step, transcript.EventTypeStepStarted)
+	defer s.emitTranscriptStep(ctx, execCtx, step, transcript.EventTypeStepCompleted)
 
 	startTime := time.Now()
 
@@ -909,6 +977,8 @@ func (s *ExecutionService) executeParallelStep(
 	span.SetAttribute("step.name", step.Name)
 	span.SetAttribute("parallel.strategy", string(step.Strategy))
 	span.SetAttribute("parallel.branches", len(step.Branches))
+	s.emitTranscriptStep(ctx, execCtx, step, transcript.EventTypeStepStarted)
+	defer s.emitTranscriptStep(ctx, execCtx, step, transcript.EventTypeStepCompleted)
 
 	startTime := time.Now()
 
@@ -1029,6 +1099,8 @@ func (s *ExecutionService) executeLoopStep(
 	defer loopSpan.End()
 	loopSpan.SetAttribute("step.name", step.Name)
 	loopSpan.SetAttribute("loop.type", string(step.Type))
+	s.emitTranscriptStep(ctx, execCtx, step, transcript.EventTypeStepStarted)
+	defer s.emitTranscriptStep(ctx, execCtx, step, transcript.EventTypeStepCompleted)
 
 	startTime := time.Now()
 
@@ -1982,6 +2054,8 @@ func (s *ExecutionService) executeCustomStepType(
 	execCtx *workflow.ExecutionContext,
 ) (string, error) {
 	startTime := time.Now()
+	s.emitTranscriptStep(ctx, execCtx, step, transcript.EventTypeStepStarted)
+	defer s.emitTranscriptStep(ctx, execCtx, step, transcript.EventTypeStepCompleted)
 
 	if s.stepTypeProvider == nil {
 		state := workflow.StepState{
@@ -2101,6 +2175,8 @@ func (s *ExecutionService) executePluginOperation(
 	ctx, span := s.startSpan(ctx, "plugin.rpc")
 	defer span.End()
 	span.SetAttribute("plugin.name", step.Operation)
+	s.emitTranscriptStep(ctx, execCtx, step, transcript.EventTypeStepStarted)
+	defer s.emitTranscriptStep(ctx, execCtx, step, transcript.EventTypeStepCompleted)
 
 	// Validate provider is configured
 	if s.operationProvider == nil {
@@ -2263,6 +2339,8 @@ func (s *ExecutionService) executeAgentStep(
 
 	ctx, span := s.startSpan(ctx, "agent.call")
 	defer span.End()
+	s.emitTranscriptStep(ctx, execCtx, step, transcript.EventTypeStepStarted)
+	defer s.emitTranscriptStep(ctx, execCtx, step, transcript.EventTypeStepCompleted)
 
 	// Validate registry is configured
 	if s.agentRegistry == nil {
@@ -2373,6 +2451,7 @@ func (s *ExecutionService) executeAgentStep(
 	if roleErr != nil {
 		return "", fmt.Errorf("step %s: resolve role: %w", step.Name, roleErr)
 	}
+	s.emitTranscriptAgentMessage(ctx, execCtx, resolvedPrompt, composedPrompt)
 	if composedPrompt != "" {
 		if _, exists := opts["system_prompt"]; exists {
 			s.logger.Warn("options.system_prompt overridden by composed role+system_prompt", "step", step.Name)
@@ -2383,7 +2462,7 @@ func (s *ExecutionService) executeAgentStep(
 	// F099: Start MCP tool proxy if configured for this step. Injects the temp config
 	// path into opts so the provider's MCP injector can reference it; cleanup runs after
 	// provider.Execute / executeResumableAgentCall returns.
-	proxyCleanup, proxyErr := s.startToolProxy(stepCtx, step, opts, resolvedProvider, provider)
+	proxyCleanup, proxyErr := s.startToolProxy(stepCtx, step, opts, resolvedProvider, provider, execCtx)
 	if proxyErr != nil {
 		return "", fmt.Errorf("step %s: %w", step.Name, proxyErr)
 	}
@@ -2422,6 +2501,7 @@ func (s *ExecutionService) executeAgentStep(
 			result = &workflow.AgentResult{
 				Provider:    convResult.Provider,
 				Output:      convResult.Output,
+				RawOutput:   convResult.RawOutput,
 				Response:    convResult.Response,
 				Tokens:      convResult.TokensTotal,
 				StartedAt:   convResult.StartedAt,
@@ -2456,6 +2536,10 @@ func (s *ExecutionService) executeAgentStep(
 			span.SetAttribute("model", model)
 		}
 		span.SetAttribute("tokens_used", result.Tokens)
+		// F106 US2: normalize the provider's RAW stream (NDJSON) into a message.assistant
+		// event, falling back to the extracted text for providers with no raw stream.
+		// Emitted before error handling so partial/dangling output is still captured.
+		s.emitTranscriptAgentResponse(ctx, execCtx, resolvedProvider, result.RawOutput, result.Output)
 	}
 
 	// Handle execution error (e.g., context canceled, provider error)
@@ -2723,7 +2807,7 @@ func (s *ExecutionService) resolveOperationInputs(
 	intCtx *interpolation.Context,
 ) (map[string]any, error) {
 	if inputs == nil {
-		return nil, nil
+		return make(map[string]any), nil
 	}
 
 	resolved := make(map[string]any, len(inputs))

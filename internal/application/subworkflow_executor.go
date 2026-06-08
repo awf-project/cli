@@ -4,9 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
@@ -101,6 +105,28 @@ func (s *ExecutionService) executeCallWorkflowStep(
 		}
 	}
 
+	// T050: construct child recorder for transcript linkage (one Recorder per sub-run)
+	childRunID := uuid.New().String()
+	var childRecorder ports.Recorder
+	if s.recorderFactory != nil {
+		var recErr error
+		childRecorder, recErr = s.recorderFactory(
+			filepath.Join(s.transcriptBaseDir(), childRunID+".jsonl"),
+		)
+		if recErr != nil && s.logger != nil {
+			s.logger.Warn("child recorder creation failed", "error", recErr, "run_id", childRunID)
+		}
+	}
+	if childRecorder != nil {
+		defer func() {
+			// Close flushes the child transcript's final buffered line; surface a failure
+			// as a warning rather than silently dropping the tail of the sub-run's file.
+			if cerr := childRecorder.Close(); cerr != nil && s.logger != nil {
+				s.logger.Warn("child recorder close failed", "error", cerr, "run_id", childRunID)
+			}
+		}()
+	}
+
 	// 4. Push current workflow to call stack
 	execCtx.PushCallStack(wf.Name)
 	defer execCtx.PopCallStack()
@@ -134,9 +160,15 @@ func (s *ExecutionService) executeCallWorkflowStep(
 		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
 	}
 
-	// 7. Execute sub-workflow with parent call stack for circular detection
+	// 7. Execute sub-workflow with parent call stack for circular detection.
+	// Route the child run's transcript emission to its own Recorder (one file per
+	// sub-run, F106 US5) via the context, and thread the child/parent run identity so
+	// the child's events carry RunID=childRunID and ParentRunID=parent's WorkflowID.
 	s.logger.Info("executing sub-workflow", "step", step.Name, "workflow", config.Workflow)
-	subResult, execErr := s.runWithCallStack(subCtx, config.Workflow, subInputs, execCtx.CallStack)
+	s.emitTranscriptCallWorkflowStarted(ctx, execCtx, step, childRunID)
+	subCtx = withRecorder(subCtx, childRecorder)
+	subResult, execErr := s.runWithCallStack(subCtx, config.Workflow, subInputs, execCtx.CallStack, childRunID, execCtx.WorkflowID)
+	s.emitTranscriptCallWorkflowCompleted(ctx, execCtx, step, childRunID, execErr)
 
 	// Create sub-workflow result for tracking
 	result := workflow.NewSubWorkflowResult(config.Workflow)

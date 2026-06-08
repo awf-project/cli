@@ -27,6 +27,7 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/awf-project/cli/pkg/interpolation"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -40,6 +41,7 @@ func newRunCommand(cfg *Config) *cobra.Command {
 	var interactiveFlag bool
 	var breakpointFlags []string
 	var skipPlugins bool
+	var debugTranscriptMirror string
 
 	cmd := &cobra.Command{
 		Use:   "run <workflow>",
@@ -86,7 +88,7 @@ Examples:
 			if stepFlag != "" {
 				return runSingleStep(cmd, cfg, args[0], stepFlag, inputFlags, mockFlags, skipPlugins)
 			}
-			return runWorkflow(cmd, cfg, args[0], inputFlags, skipPlugins)
+			return runWorkflow(cmd, cfg, args[0], inputFlags, skipPlugins, debugTranscriptMirror)
 		},
 	}
 
@@ -105,6 +107,8 @@ Examples:
 	cmd.Flags().BoolVar(&skipPlugins, "skip-plugins", false, "Skip plugin validators")
 	cmd.Flags().StringVar(&cfg.OtelExporter, "otel-exporter", "", "OpenTelemetry OTLP exporter endpoint (e.g. localhost:4317)")
 	cmd.Flags().StringVar(&cfg.OtelServiceName, "otel-service-name", "awf", "OpenTelemetry service name")
+	cmd.Flags().StringVar(&debugTranscriptMirror, "debug-transcript-mirror", "",
+		"[DEBUG] Write received transcript events to this path (subscription mirror)")
 
 	// Wire custom help function for workflow-specific help (F035)
 	cmd.SetHelpFunc(workflowHelpFunc(cfg))
@@ -176,7 +180,7 @@ func workflowHelpFunc(cfg *Config) func(*cobra.Command, []string) {
 	}
 }
 
-func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags []string, skipPlugins bool) error {
+func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags []string, skipPlugins bool, debugTranscriptMirror string) error {
 	// Parse inputs
 	inputs, err := parseInputFlags(inputFlags)
 	if err != nil {
@@ -312,6 +316,19 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		auditWriter = aw
 	}
 
+	// Setup transcript recorder (F106)
+	runID := uuid.New().String()
+	var recorder ports.Recorder
+	var mirrorCancel func()
+	if rec, recCleanup, recErr := WireTranscript(runID, cfg.StoragePath); recErr != nil {
+		logger.Warn("failed to initialize transcript recorder, transcripts disabled", "error", recErr)
+	} else {
+		defer recCleanup() //nolint:errcheck // best-effort transcript flush on exit
+		recorder = rec
+		mirrorCancel = AttachMirrorSubscriber(rec, debugTranscriptMirror)
+		defer mirrorCancel()
+	}
+
 	templatePaths := []string{
 		".awf/templates",
 		filepath.Join(cfg.StoragePath, "templates"),
@@ -359,6 +376,14 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		setupOpts = append(setupOpts, application.WithAuditWriter(auditWriter))
 	}
 
+	if recorder != nil {
+		setupOpts = append(setupOpts,
+			application.WithRecorder(recorder),
+			application.WithRecorderFactory(NewRecorderFactory()),
+			application.WithTranscriptDir(filepath.Join(cfg.StoragePath, "transcripts")),
+		)
+	}
+
 	if stdoutWriter != nil {
 		setupOpts = append(setupOpts, application.WithOutputWriters(stdoutWriter, stderrWriter))
 	}
@@ -377,8 +402,10 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 	startTime := time.Now()
 
-	// Execute workflow with pre-loaded workflow (avoids double I/O)
-	execCtx, execErr := execSvc.RunWithWorkflow(ctx, wf, inputs)
+	// Execute workflow with pre-loaded workflow (avoids double I/O). Reuse runID as the
+	// execution WorkflowID so the transcript file <runID>.jsonl and the run_id stamped on
+	// every emitted event are the same identifier (F106 SC-001).
+	execCtx, execErr := execSvc.RunWithWorkflowAndRunID(ctx, wf, inputs, runID)
 
 	// Flush any remaining output from streaming writers
 	if stdoutWriter != nil {

@@ -1,0 +1,4 @@
+{"object":"","choices":[]}
+{"object":"chat.completion.chunk","choices":[{"delta":{"content":"Hello! How can I help you?"}}]}
+{"object":"chat.completion.chunk","choices":[{"delta":{"tool_calls":[{"id":"call_abc123","function":{"name":"bash","arguments":"{\"command\":\"echo hello\"}"}}]}}]}
+{"object":"chat.completion","choices":[{"message":{"content":"I've completed the task."}}]}

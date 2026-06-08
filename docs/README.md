@@ -67,7 +67,8 @@ Technical reference documentation:
 - [Variable Interpolation](reference/interpolation.md) - Template variables and syntax
 - [Input Validation](reference/validation.md) - Validation rules for workflow inputs
 - [Loop Reference](reference/loop.md) - Loop control flow and transitions
-- [Audit Trail Schema](reference/audit-trail-schema.md) - JSONL entry format, fields, and constraints
+- [Audit Trail Schema](reference/audit-trail-schema.md) - Workflow start/completion audit log JSONL format
+- [Transcript Schema](reference/transcript-schema.md) - Canonical agent exchange transcript (full execution lifecycle in JSONL)
 - [Package Documentation](reference/package-documentation.md) - Discovering code documentation with `go doc`
 
 ## Development

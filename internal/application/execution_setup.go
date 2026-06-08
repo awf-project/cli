@@ -98,6 +98,9 @@ type setupConfig struct {
 	pluginProviders        PluginProviders
 	tracer                 ports.Tracer
 	auditWriter            ports.AuditTrailWriter
+	recorder               ports.Recorder
+	recorderFactory        ports.RecorderFactory
+	transcriptDir          string
 	packName               string
 	packResolver           PackWorkflowLoader
 	outputWriters          *OutputWriterPair
@@ -134,6 +137,24 @@ func WithTracer(t ports.Tracer) SetupOption {
 // WithAuditWriter configures an audit trail writer for execution events.
 func WithAuditWriter(w ports.AuditTrailWriter) SetupOption {
 	return func(c *setupConfig) { c.auditWriter = w }
+}
+
+// WithRecorder configures a transcript recorder for F106 canonical exchange format.
+func WithRecorder(r ports.Recorder) SetupOption {
+	return func(c *setupConfig) { c.recorder = r }
+}
+
+// WithRecorderFactory configures the factory used to create per-sub-run child
+// recorders for F106 sub-workflow transcript linkage. Without it, executeCallWorkflowStep
+// cannot open child transcript files and sub-workflow linkage is disabled.
+func WithRecorderFactory(f ports.RecorderFactory) SetupOption {
+	return func(c *setupConfig) { c.recorderFactory = f }
+}
+
+// WithTranscriptDir configures the directory where child transcript files are written
+// for F106 sub-workflow linkage. Paired with WithRecorderFactory.
+func WithTranscriptDir(dir string) SetupOption {
+	return func(c *setupConfig) { c.transcriptDir = dir }
 }
 
 // WithPackContext sets the pack name and its associated workflow loader.
@@ -322,6 +343,11 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 		execSvc.SetAuditTrailWriter(cfg.auditWriter)
 	}
 
+	// F106 US2: normalize provider agent output into transcript message.assistant blocks.
+	execSvc.SetAgentOutputNormalizer(agents.NewContentBlockNormalizer())
+
+	wireTranscriptRecording(execSvc, cfg)
+
 	if cfg.tracer != nil {
 		execSvc.SetTracer(cfg.tracer)
 	}
@@ -376,6 +402,22 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 		HistorySvc:  historySvc,
 		Cleanup:     cleanup,
 	}, nil
+}
+
+// wireTranscriptRecording attaches the F106 transcript recorder, the per-sub-run
+// recorder factory, and the transcript directory to the execution service when
+// each is configured. Without the factory and directory, executeCallWorkflowStep's
+// child-recorder block is unreachable and sub-workflow linkage is disabled.
+func wireTranscriptRecording(execSvc *ExecutionService, cfg *setupConfig) {
+	if cfg.recorder != nil {
+		execSvc.SetRecorder(cfg.recorder)
+	}
+	if cfg.recorderFactory != nil {
+		execSvc.SetRecorderFactory(cfg.recorderFactory)
+	}
+	if cfg.transcriptDir != "" {
+		execSvc.SetTranscriptDir(cfg.transcriptDir)
+	}
 }
 
 // buildProviders assembles the composite operation provider from built-in and plugin-supplied

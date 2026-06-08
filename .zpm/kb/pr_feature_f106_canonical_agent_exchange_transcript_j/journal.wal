@@ -1,0 +1,116 @@
+{"ts":1780836417,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:todo(_, _, _, _)"}
+{"ts":1780836417,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub(_, _, _)"}
+{"ts":1780836417,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock(_, _, _)"}
+{"ts":1780836418,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:not_impl(_, _, _)"}
+{"ts":1780836418,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:pr_file(_, _)"}
+{"ts":1780836418,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:pr_file('.zpm/kb/feedback/journal.wal', changed)"}
+{"ts":1780836418,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:pr_file('.zpm/mounts.json', changed)"}
+{"ts":1780837829,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:todo(_, _, _, _)"}
+{"ts":1780837829,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub(_, _, _)"}
+{"ts":1780837829,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock(_, _, _)"}
+{"ts":1780837830,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:not_impl(_, _, _)"}
+{"ts":1780837830,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:pr_file(_, _)"}
+{"ts":1780837830,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:pr_file('.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', changed)"}
+{"ts":1780837831,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_2', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780837831,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_3', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780837832,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_9', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780837832,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_10', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780854565,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:todo(_, _, _, _)"}
+{"ts":1780854565,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub(_, _, _)"}
+{"ts":1780854566,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock(_, _, _)"}
+{"ts":1780854566,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:not_impl(_, _, _)"}
+{"ts":1780854566,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:pr_file(_, _)"}
+{"ts":1780854566,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:pr_file('.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', changed)"}
+{"ts":1780854567,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_2', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780854567,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_3', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780854567,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_9', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780854567,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_10', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780854568,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_14', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780854568,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_15', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780854568,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_16', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780854568,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_17', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780854569,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_19', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780854569,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_20', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870794,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:todo(_, _, _, _)"}
+{"ts":1780870795,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub(_, _, _)"}
+{"ts":1780870795,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock(_, _, _)"}
+{"ts":1780870795,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:not_impl(_, _, _)"}
+{"ts":1780870796,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:pr_file(_, _)"}
+{"ts":1780870796,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:pr_file('.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', changed)"}
+{"ts":1780870796,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_2', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870797,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_3', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870797,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_9', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870797,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_10', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870798,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_14', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870798,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_15', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870798,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_16', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870798,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_17', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870799,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_19', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870799,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_20', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870799,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_24', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870800,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_25', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870800,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_26', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870800,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_27', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870801,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_28', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870801,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_29', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870801,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_30', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870802,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_31', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870802,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_32', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870802,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_33', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870803,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_35', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780870803,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_36', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872371,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:todo(_, _, _, _)"}
+{"ts":1780872371,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub(_, _, _)"}
+{"ts":1780872372,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock(_, _, _)"}
+{"ts":1780872372,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:not_impl(_, _, _)"}
+{"ts":1780872372,"op":"retractall","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:pr_file(_, _)"}
+{"ts":1780872373,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:pr_file('.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', changed)"}
+{"ts":1780872373,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_2', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872373,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_3', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872374,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_9', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872374,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_10', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872374,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_14', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872375,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_15', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872375,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_16', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872375,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_17', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872376,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_19', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872376,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_20', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872376,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_24', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872377,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_25', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872377,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_26', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872377,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_27', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872378,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_28', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872378,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_29', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872378,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_30', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872379,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_31', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872379,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_32', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872379,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_33', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872380,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_35', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872380,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_36', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872380,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_40', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872381,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_41', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872381,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_42', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872381,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_43', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872382,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_44', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872382,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_45', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872382,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_46', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872383,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_47', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872383,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_48', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872383,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_49', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872384,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_50', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872384,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_51', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872384,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_52', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872385,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_53', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872385,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_54', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872385,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_55', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872386,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_56', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872386,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_57', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872386,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_58', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872387,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_59', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872387,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_60', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872387,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_61', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872388,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:stub('issue_1_63', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872388,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_1_64', '.zpm/kb/pr_feature_f106_canonical_agent_exchange_transcript_j/journal.wal', 'unknown')"}
+{"ts":1780872388,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:pr_file('internal/application/execution_service.go', changed)"}
+{"ts":1780872389,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_2_35', 'internal/application/execution_service.go', 'unknown')"}
+{"ts":1780872389,"op":"assert","clause":"pr_feature_f106_canonical_agent_exchange_transcript_j:mock('issue_2_134', 'internal/application/execution_service.go', 'unknown')"}

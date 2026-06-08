@@ -9,6 +9,7 @@ import (
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/transcript"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/awf-project/cli/pkg/display"
@@ -268,6 +269,16 @@ func TestBuild_WithAuditWriter(t *testing.T) {
 	assert.NotNil(t, result.ExecService, "ExecService must be non-nil when an audit writer is provided")
 }
 
+func TestBuild_WithRecorder(t *testing.T) {
+	recorder := &mockRecorder{}
+	setup := buildMinimalSetup(application.WithRecorder(recorder))
+
+	result, err := setup.Build(context.Background())
+
+	require.NoError(t, err)
+	assert.NotNil(t, result.ExecService, "ExecService must be non-nil when a recorder is provided")
+}
+
 func TestBuild_PluginGating_DisabledProvider(t *testing.T) {
 	// Only notify is enabled; github and http are disabled.
 	checker := newStubPluginChecker(map[string]bool{
@@ -385,3 +396,19 @@ func TestWithDisplayRendererFactory_Wired(t *testing.T) {
 type nopWriter struct{}
 
 func (n *nopWriter) Write(p []byte) (int, error) { return len(p), nil }
+
+// mockRecorder is a minimal test stub for ports.Recorder.
+type mockRecorder struct{}
+
+func (m *mockRecorder) Record(ctx context.Context, event transcript.ExchangeEvent) error {
+	return nil
+}
+
+func (m *mockRecorder) Subscribe() (<-chan transcript.ExchangeEvent, func()) {
+	ch := make(chan transcript.ExchangeEvent)
+	return ch, func() { close(ch) }
+}
+
+func (m *mockRecorder) Close() error {
+	return nil
+}

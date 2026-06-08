@@ -1,0 +1,4 @@
+{"type":"system.ready","data":{}}
+{"type":"assistant.message","data":{"content":"Hello, I can assist you with that."}}
+{"type":"tool.execution_start","data":{"toolName":"bash"}}
+{"type":"assistant.message","data":{"content":"I've completed the task."}}

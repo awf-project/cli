@@ -1,0 +1,17 @@
+[
+  {
+    "type": "text",
+    "fidelity": "agent_emitted",
+    "text": "Hello, I can assist you with that."
+  },
+  {
+    "type": "tool_use",
+    "fidelity": "agent_emitted",
+    "tool_name": "bash"
+  },
+  {
+    "type": "text",
+    "fidelity": "agent_emitted",
+    "text": "I've completed the task."
+  }
+]
