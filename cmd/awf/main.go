@@ -8,8 +8,12 @@ import (
 )
 
 func main() {
-	cmd := cli.NewRootCommand()
-	if err := cmd.Execute(); err != nil {
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	err := cmd.Execute()
+	// cleanup releases facade resources (closes the history store). Called explicitly
+	// before any os.Exit below, since os.Exit does not run deferred functions.
+	cleanup()
+	if err != nil {
 		// Check for exitError with specific exit code
 		if exitErr, ok := err.(interface{ ExitCode() int }); ok {
 			// Skip printing if error was already formatted by WriteError

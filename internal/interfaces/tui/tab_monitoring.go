@@ -12,6 +12,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/transcript"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
@@ -66,9 +68,6 @@ func renderTruncated(lines []string, maxLines int) []string {
 	)
 	return result
 }
-
-// monitoringTickInterval defines the polling interval for execution state updates.
-const monitoringTickInterval = 200 * time.Millisecond
 
 // tickMsg is an internal message that drives the execution state polling loop.
 type tickMsg struct{}
@@ -129,6 +128,10 @@ type MonitoringTab struct {
 	convBuf       *strings.Builder
 	convStep      string
 	convTurnCount int
+
+	// sender forwards tea.Msg values from the event goroutine into the Bubble Tea loop.
+	// Wired via SetSender after the program is created (mirrors TUIInputReader.SetSender).
+	sender func(tea.Msg)
 }
 
 func newMonitoringTab() MonitoringTab {
@@ -219,6 +222,10 @@ func (t MonitoringTab) Update(msg tea.Msg) (MonitoringTab, tea.Cmd) { //nolint:c
 		if t.ticking {
 			return t, scheduleTick()
 		}
+		return t, nil
+
+	case facadeEventMsg:
+		t.applyFacadeEvent(msg.Event)
 		return t, nil
 
 	case spinner.TickMsg:
@@ -338,6 +345,37 @@ func (t *MonitoringTab) SetInputReader(r *TUIInputReader) {
 	t.inputReader = r
 }
 
+// SetSender wires the tea.Msg dispatcher so StartEventLoop can forward facade events
+// into the Bubble Tea update loop. Call this after tea.NewProgram, passing p.Send.
+func (t *MonitoringTab) SetSender(send func(tea.Msg)) {
+	t.sender = send
+}
+
+// StartEventLoop spawns a goroutine that ranges over sess.Events() and forwards each
+// event to the Bubble Tea program as a facadeEventMsg, replacing the 200 ms tick loop (D27).
+//
+// Terminal events (EventWorkflowCompleted, EventWorkflowFailed) are forwarded as
+// facadeEventMsg first, then an ExecutionFinishedMsg is sent to stop the tick loop and
+// finalize the monitoring tab. This allows callers that use RunWorkflowViaFacade (which
+// supplies no Done channel) to still receive the finished signal.
+func (t *MonitoringTab) StartEventLoop(sess ports.RunSession) {
+	send := t.sender
+	go func() {
+		for e := range sess.Events() {
+			if send == nil {
+				continue
+			}
+			send(facadeEventMsg{Event: e})
+			switch e.Kind { //nolint:exhaustive // only terminal events require a follow-up message; all others are fully handled by facadeEventMsg
+			case ports.EventWorkflowCompleted:
+				send(ExecutionFinishedMsg{Err: nil})
+			case ports.EventWorkflowFailed:
+				send(ExecutionFinishedMsg{Err: sess.Err()})
+			}
+		}
+	}()
+}
+
 // InputActive reports whether the conversation text input is focused.
 func (t MonitoringTab) InputActive() bool { //nolint:gocritic // read-only
 	return t.inputActive
@@ -400,9 +438,9 @@ func (t MonitoringTab) View() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 }
 
-// scheduleTick returns a tea.Cmd that fires a tickMsg after monitoringTickInterval.
+// scheduleTick returns a tea.Cmd that fires a tickMsg after 200ms.
 func scheduleTick() tea.Cmd {
-	return tea.Tick(monitoringTickInterval, func(_ time.Time) tea.Msg {
+	return tea.Tick(200*time.Millisecond, func(_ time.Time) tea.Msg {
 		return tickMsg{}
 	})
 }
@@ -669,6 +707,46 @@ func (t *MonitoringTab) renderStepBlock(step *workflow.Step, state *workflow.Ste
 	}
 
 	return sb.String()
+}
+
+// applyFacadeEvent translates a facade ports.Event into a step-state update and
+// rebuilds the tree. Step-level events (EventStepStarted, EventStepCompleted) use
+// the StepPayload.Name to locate the step; non-step events are ignored for state
+// purposes. This replaces direct ExecutionContext polling for event-driven updates (D27).
+//
+//nolint:gocritic // hugeParam: Event is part of the ports contract; pointer indirection would couple TUI to *ports.Event
+func (t *MonitoringTab) applyFacadeEvent(ev ports.Event) {
+	switch ev.Kind { //nolint:exhaustive // only step-level events drive state updates; all others are intentionally ignored
+	case ports.EventStepStarted:
+		payload, ok := ev.Payload.(*transcript.StepPayload)
+		if !ok || payload == nil || payload.Name == "" {
+			return
+		}
+		existing := t.states[payload.Name]
+		existing.Name = payload.Name
+		existing.Status = workflow.StatusRunning
+		t.states[payload.Name] = existing
+		t.rebuildTree()
+		t.updateViewportContent()
+
+	case ports.EventStepCompleted:
+		payload, ok := ev.Payload.(*transcript.StepPayload)
+		if !ok || payload == nil || payload.Name == "" {
+			return
+		}
+		existing := t.states[payload.Name]
+		existing.Name = payload.Name
+		if payload.Error != "" {
+			existing.Status = workflow.StatusFailed
+			existing.Error = payload.Error
+		} else {
+			existing.Status = workflow.StatusCompleted
+		}
+		t.states[payload.Name] = existing
+		t.rebuildTree()
+		t.updateViewportContent()
+		t.autoSelectFailed()
+	}
 }
 
 // autoSelectRunning switches selectedIdx to the first running node.

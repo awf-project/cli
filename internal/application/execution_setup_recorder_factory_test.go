@@ -28,7 +28,8 @@ func TestBuild_WiresRecorderFactoryAndTranscriptDir(t *testing.T) {
 		return &fakeRecorder{}, nil
 	}
 
-	setup := NewExecutionSetup(repo, store, executor, logger,
+	setup := NewExecutionSetup(
+		repo, store, executor, logger,
 		WithRecorderFactory(factory),
 		WithTranscriptDir("/tmp/awf-transcripts"),
 	)

@@ -1,6 +1,8 @@
 package transcript
 
 import (
+	"encoding/json"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -117,6 +119,40 @@ func (fo *FanOut) Stats() FanOutStats {
 		Subscribers: subscribers,
 		Drops:       fo.totalDrops.Load(),
 	}
+}
+
+// MirrorToFile subscribes to the recorder and appends every recorded event as JSON
+// (one per line) to mirrorPath until the returned cancel is called or the recorder
+// closes. This is the single infrastructure-owned mirror subscriber: keeping the
+// Subscribe() call here preserves the SC-001 sole-subscriber invariant for the
+// interface layer, which must consume RunSession.Events() instead of subscribing
+// directly. A nil recorder or empty path yields a no-op cancel.
+func MirrorToFile(rec ports.Recorder, mirrorPath string) func() {
+	if mirrorPath == "" || rec == nil {
+		return func() {}
+	}
+
+	ch, cancel := rec.Subscribe()
+
+	go func() {
+		f, err := os.OpenFile(mirrorPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // caller-controlled debug path
+		if err != nil {
+			// Unsubscribe so the fanout stops buffering for a subscriber that will
+			// never drain, and drain any already-queued events for GC.
+			cancel()
+			for range ch { //nolint:revive // intentional drain of the closed channel
+			}
+			return
+		}
+		defer f.Close() //nolint:errcheck // best-effort debug mirror
+
+		enc := json.NewEncoder(f)
+		for event := range ch {
+			_ = enc.Encode(event) //nolint:errcheck // best-effort debug mirror
+		}
+	}()
+
+	return cancel
 }
 
 func (fo *FanOut) Close() error {

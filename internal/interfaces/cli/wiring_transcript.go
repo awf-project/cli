@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,34 +42,10 @@ func NewRecorderFactory() ports.RecorderFactory {
 }
 
 // AttachMirrorSubscriber attaches a debug mirror subscriber to the recorder.
-// When mirrorPath is non-empty, it subscribes to recorder events and writes them to mirrorPath.
-// Returns a cancel function that should be called on shutdown.
-// When mirrorPath is empty, returns a no-op cancel function.
+// When mirrorPath is non-empty, recorder events are written to mirrorPath; when empty,
+// returns a no-op cancel. The actual subscription lives in the transcript infrastructure
+// (transcript.MirrorToFile) so the interface layer holds no direct recorder.Subscribe()
+// call, preserving the SC-001 sole-subscriber invariant.
 func AttachMirrorSubscriber(rec ports.Recorder, mirrorPath string) func() {
-	if mirrorPath == "" || rec == nil {
-		return func() {}
-	}
-
-	ch, cancel := rec.Subscribe()
-
-	go func() {
-		f, err := os.OpenFile(mirrorPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // caller-controlled debug path
-		if err != nil {
-			// Unsubscribe so the fanout stops buffering (and logging drops) for a
-			// subscriber that will never drain its channel, and drain any already-queued
-			// events to let the buffered channel be garbage-collected.
-			cancel()
-			for range ch { //nolint:revive // intentional drain of the closed channel
-			}
-			return
-		}
-		defer f.Close() //nolint:errcheck // best-effort debug mirror
-
-		enc := json.NewEncoder(f)
-		for event := range ch {
-			_ = enc.Encode(event) //nolint:errcheck // best-effort debug mirror
-		}
-	}()
-
-	return cancel
+	return transcript.MirrorToFile(rec, mirrorPath)
 }

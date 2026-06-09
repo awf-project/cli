@@ -13,7 +13,7 @@ import (
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
-	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/transcript"
 	"github.com/awf-project/cli/internal/infrastructure/audit"
 	"github.com/awf-project/cli/internal/infrastructure/config"
 	"github.com/awf-project/cli/internal/infrastructure/executor"
@@ -23,7 +23,6 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
-	"github.com/awf-project/cli/pkg/validation"
 )
 
 var (
@@ -178,10 +177,9 @@ func buildBridge() (*Bridge, *TUIInputReader, func(), error) {
 	// Channel-based conversation input reader for multi-turn agent conversations.
 	inputReader := NewTUIInputReader(nil)
 
-	// Pack workflow resolver + conversation reader + streaming output.
+	// Conversation reader + streaming output.
 	setupOpts = append(
 		setupOpts,
-		application.WithPackContext("", resolvePackWorkflow),
 		application.WithUserInputReader(inputReader),
 		application.WithOutputWriters(streamBuf, io.Discard),
 	)
@@ -210,41 +208,17 @@ func buildBridge() (*Bridge, *TUIInputReader, func(), error) {
 
 	bridge := NewBridge(result.WorkflowSvc, result.ExecService, result.HistorySvc)
 	bridge.stream = streamBuf
+
+	// Wire the facade for event-driven execution (T061, D27, FR-011).
+	// The facade uses the same services already wired into the bridge so there is no
+	// duplicate resource ownership. The recorder is a no-op: transcript events flow
+	// through the execution service's internal recorder (wired by ExecutionSetup), not
+	// through this facade-level nopRecorder which is only required by the Adapter constructor.
+	if facade := buildTUIFacade(result); facade != nil {
+		bridge.SetFacade(facade)
+	}
+
 	return bridge, inputReader, cleanup, nil
-}
-
-// resolvePackWorkflow loads a workflow from an installed pack.
-// It searches the local pack directory before the global one, mirroring the
-// lookup order used by the CLI pack resolver.
-//
-// S2: Both packName and workflowName are validated via the shared ValidateName
-// rule before any filepath.Join. This eliminates the divergent validation path
-// that previously existed in the TUI without a ".." guard.
-func resolvePackWorkflow(
-	ctx context.Context,
-	packName, workflowName string,
-) (*workflow.Workflow, string, error) {
-	if err := validation.ValidateName(packName); err != nil {
-		return nil, "", fmt.Errorf("pack name: %w", err)
-	}
-	if err := validation.ValidateName(workflowName); err != nil {
-		return nil, "", fmt.Errorf("workflow name: %w", err)
-	}
-
-	for _, dir := range []string{xdg.LocalWorkflowPacksDir(), xdg.AWFWorkflowPacksDir()} {
-		packDir := filepath.Join(dir, packName)
-		if _, err := os.Stat(packDir); err != nil {
-			continue
-		}
-		workflowsDir := filepath.Join(packDir, "workflows")
-		repo := repository.NewYAMLRepository(workflowsDir)
-		wf, err := repo.Load(ctx, workflowName)
-		if err != nil {
-			continue
-		}
-		return wf, packDir, nil
-	}
-	return nil, "", fmt.Errorf("pack %q not found", packName)
 }
 
 func buildWorkflowPaths() []repository.SourcedPath {
@@ -293,6 +267,63 @@ func findAWFAuditLog() string {
 	}
 	return ""
 }
+
+// buildTUIFacade constructs a ports.WorkflowFacade from the already-built services in
+// result. It mirrors the pattern used by cli.buildFacade (T060) but reuses the services
+// that ExecutionSetup already wired rather than constructing new ones.
+//
+// The facade's Adapter receives a tuiNopRecorder because ExecutionSetup wires its own
+// per-execution recorder internally; the facade-level recorder is only required by the
+// Adapter constructor and is never called in the code paths exercised by the TUI.
+// Returns nil on any setup error so the caller falls back gracefully.
+func buildTUIFacade(result *application.SetupResult) ports.WorkflowFacade {
+	if result == nil || result.WorkflowSvc == nil {
+		return nil
+	}
+
+	packDirs := []string{
+		xdg.LocalWorkflowPacksDir(),
+		xdg.AWFWorkflowPacksDir(),
+	}
+	discoverer := workflowpkg.NewPackDiscovererAdapter(packDirs)
+	repo := repository.NewCompositeRepository(buildWorkflowPaths())
+	resolver := application.NewResolver(discoverer, repo)
+
+	// Use zero ExecutionService when result.ExecService is unavailable; the facade's
+	// Run method panics gracefully (recover) for truly missing execution dependencies.
+	execSvc := result.ExecService
+	if execSvc == nil {
+		execSvc = &application.ExecutionService{}
+	}
+
+	return application.NewAdapter(
+		result.WorkflowSvc,
+		execSvc,
+		result.HistorySvc,
+		resolver,
+		tuiNopRecorder{},
+		application.NewSessionRegistry(),
+	)
+}
+
+// tuiNopRecorder is a no-op ports.Recorder for the TUI facade. The TUI facade
+// Adapter needs a Recorder in its constructor (SC-001 / sole-subscriber contract)
+// but the actual transcript recording is handled by the ExecutionService's own
+// per-execution recorder wired by ExecutionSetup. This recorder's Subscribe channel
+// is immediately closed so any accidental consumer terminates without blocking.
+type tuiNopRecorder struct{}
+
+func (tuiNopRecorder) Record(_ context.Context, _ transcript.ExchangeEvent) error { //nolint:gocritic // hugeParam: ports.Recorder contract requires value type
+	return nil
+}
+
+func (tuiNopRecorder) Subscribe() (ch <-chan transcript.ExchangeEvent, cancel func()) {
+	c := make(chan transcript.ExchangeEvent)
+	close(c)
+	return c, func() {}
+}
+
+func (tuiNopRecorder) Close() error { return nil }
 
 // nopLogger satisfies ports.Logger for silent TUI operation.
 type nopLogger struct{}

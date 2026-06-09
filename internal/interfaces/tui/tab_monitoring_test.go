@@ -30,17 +30,46 @@
 package tui
 
 import (
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/transcript"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 // helpers
+
+// mockRunSession implements ports.RunSession for testing event loop behavior.
+type mockRunSession struct {
+	eventsChan <-chan ports.Event
+}
+
+func (m *mockRunSession) ID() string {
+	return "mock-session"
+}
+
+func (m *mockRunSession) Events() <-chan ports.Event {
+	return m.eventsChan
+}
+
+func (m *mockRunSession) Respond(r ports.InputResponse) error {
+	return nil
+}
+
+func (m *mockRunSession) Err() error {
+	return nil
+}
+
+func (m *mockRunSession) Close() error {
+	return nil
+}
 
 func monitoringTabWithSize(w, h int) MonitoringTab {
 	tab := newMonitoringTab()
@@ -724,6 +753,370 @@ func TestMonitoringTab_Spinner_HiddenAfterPollData(t *testing.T) {
 
 	tab, _ = tab.Update(executionPollMsg{States: map[string]workflow.StepState{}})
 	assert.False(t, tab.showSpinner)
+}
+
+// --- T061: Event loop migration tests ---
+
+// TestTUI_TabMonitoringConsumesEventsLoop verifies that StartEventLoop properly
+// consumes events from a RunSession and forwards each event to the Bubble Tea program.
+// This replaces the 200ms polling loop pattern (D27).
+func TestTUI_TabMonitoringConsumesEventsLoop(t *testing.T) {
+	tab := newMonitoringTab()
+
+	// Mock RunSession with scripted events.
+	eventChan := make(chan ports.Event, 3)
+	defer close(eventChan)
+
+	mockSession := &mockRunSession{
+		eventsChan: eventChan,
+	}
+
+	// Track messages sent via the sender callback with proper synchronization.
+	sentChan := make(chan tea.Msg, 3)
+	sender := func(msg tea.Msg) {
+		sentChan <- msg
+	}
+	tab.SetSender(sender)
+
+	// Queue test events.
+	testEvent1 := ports.Event{
+		Seq:   1,
+		Kind:  ports.EventRunStarted,
+		RunID: "test-run-1",
+	}
+	testEvent2 := ports.Event{
+		Seq:   2,
+		Kind:  ports.EventStepStarted,
+		RunID: "test-run-1",
+	}
+	testEvent3 := ports.Event{
+		Seq:   3,
+		Kind:  ports.EventRunCompleted,
+		RunID: "test-run-1",
+	}
+
+	eventChan <- testEvent1
+	eventChan <- testEvent2
+	eventChan <- testEvent3
+
+	// Start the event loop goroutine.
+	tab.StartEventLoop(mockSession)
+
+	// Collect sent messages with timeout.
+	var sentMessages []tea.Msg
+	timeout := time.NewTimer(200 * time.Millisecond)
+	defer timeout.Stop()
+
+CollectLoop:
+	for len(sentMessages) < 3 {
+		select {
+		case msg := <-sentChan:
+			sentMessages = append(sentMessages, msg)
+		case <-timeout.C:
+			break CollectLoop
+		}
+	}
+
+	// Verify each event was forwarded as a facadeEventMsg.
+	require.Len(t, sentMessages, 3, "must send one message per event")
+
+	for i, msg := range sentMessages {
+		fMsg, ok := msg.(facadeEventMsg)
+		require.True(t, ok, "sent message %d must be facadeEventMsg, got %T", i, msg)
+		assert.Equal(t, uint64(i+1), fMsg.Event.Seq, "event %d seq mismatch", i)
+	}
+}
+
+// TestTUI_TabMonitoringEventLoopWithNilSender verifies that the event loop
+// safely handles a nil sender (does not panic and discards events).
+func TestTUI_TabMonitoringEventLoopWithNilSender(t *testing.T) {
+	tab := newMonitoringTab()
+	// sender is nil by default
+
+	eventChan := make(chan ports.Event, 1)
+	defer close(eventChan)
+
+	mockSession := &mockRunSession{
+		eventsChan: eventChan,
+	}
+
+	eventChan <- ports.Event{
+		Seq:   1,
+		Kind:  ports.EventRunStarted,
+		RunID: "test-run",
+	}
+
+	// Should not panic with nil sender.
+	require.NotPanics(t, func() {
+		tab.StartEventLoop(mockSession)
+		time.Sleep(50 * time.Millisecond)
+	})
+}
+
+// TestTUI_StartEventLoop_TerminalCompleted_SendsExecutionFinishedMsg verifies that
+// StartEventLoop sends ExecutionFinishedMsg(nil) when EventWorkflowCompleted is received.
+// This allows the facade-driven path (Done == nil) to properly stop the tick loop.
+func TestTUI_StartEventLoop_TerminalCompleted_SendsExecutionFinishedMsg(t *testing.T) {
+	tab := newMonitoringTab()
+
+	eventChan := make(chan ports.Event, 2)
+	mockSession := &mockRunSession{eventsChan: eventChan}
+
+	sentChan := make(chan tea.Msg, 4)
+	tab.SetSender(func(msg tea.Msg) { sentChan <- msg })
+
+	tab.StartEventLoop(mockSession)
+
+	eventChan <- ports.Event{Seq: 1, Kind: ports.EventStepStarted, RunID: "r1"}
+	eventChan <- ports.Event{Seq: 2, Kind: ports.EventWorkflowCompleted, RunID: "r1"}
+	close(eventChan)
+
+	// Collect messages; expect facadeEventMsg×2 + ExecutionFinishedMsg×1.
+	var got []tea.Msg
+	timeout := time.NewTimer(300 * time.Millisecond)
+	defer timeout.Stop()
+collect:
+	for {
+		select {
+		case m := <-sentChan:
+			got = append(got, m)
+			if _, ok := m.(ExecutionFinishedMsg); ok {
+				break collect
+			}
+		case <-timeout.C:
+			break collect
+		}
+	}
+
+	var finishedMsgs []ExecutionFinishedMsg
+	for _, m := range got {
+		if fm, ok := m.(ExecutionFinishedMsg); ok {
+			finishedMsgs = append(finishedMsgs, fm)
+		}
+	}
+	require.Len(t, finishedMsgs, 1, "must send exactly one ExecutionFinishedMsg on terminal event")
+	assert.Nil(t, finishedMsgs[0].Err, "err must be nil for EventWorkflowCompleted")
+}
+
+// TestTUI_StartEventLoop_TerminalFailed_SendsExecutionFinishedMsg verifies that
+// StartEventLoop sends ExecutionFinishedMsg with sess.Err() when EventWorkflowFailed.
+func TestTUI_StartEventLoop_TerminalFailed_SendsExecutionFinishedMsg(t *testing.T) {
+	tab := newMonitoringTab()
+
+	eventChan := make(chan ports.Event, 1)
+	mockSession := &mockRunSession{eventsChan: eventChan}
+
+	sentChan := make(chan tea.Msg, 4)
+	tab.SetSender(func(msg tea.Msg) { sentChan <- msg })
+
+	tab.StartEventLoop(mockSession)
+
+	eventChan <- ports.Event{Seq: 1, Kind: ports.EventWorkflowFailed, RunID: "r1"}
+	close(eventChan)
+
+	timeout := time.NewTimer(300 * time.Millisecond)
+	defer timeout.Stop()
+	var finishedMsgs []ExecutionFinishedMsg
+collect:
+	for {
+		select {
+		case m := <-sentChan:
+			if fm, ok := m.(ExecutionFinishedMsg); ok {
+				finishedMsgs = append(finishedMsgs, fm)
+				break collect
+			}
+		case <-timeout.C:
+			break collect
+		}
+	}
+
+	require.Len(t, finishedMsgs, 1, "must send ExecutionFinishedMsg on EventWorkflowFailed")
+	// mockRunSession.Err() returns nil; just verify the message was sent.
+	_ = finishedMsgs[0].Err
+}
+
+// TestTUI_NoPollingIntervalConstant verifies that the monitoringTickInterval
+// constant has been removed from the TUI package as part of the polling->events migration.
+func TestTUI_NoPollingIntervalConstant(t *testing.T) {
+	// This is a static analysis test: verify that monitoringTickInterval is no longer
+	// referenced in this file's source code.
+	// The constant was defined on line 71-72 and scheduled ticks in scheduleTick().
+	source, err := os.ReadFile("tab_monitoring.go")
+	if err != nil {
+		// If we can't read from the current directory, try the absolute path.
+		// Test runs from the module root.
+		wd, _ := os.Getwd()
+		source, err = os.ReadFile(wd + "/internal/interfaces/tui/tab_monitoring.go")
+		require.NoError(t, err, "must be able to read tab_monitoring.go from either . or ./internal/interfaces/tui/")
+	}
+
+	hasConstant := strings.Contains(string(source), "monitoringTickInterval")
+	assert.False(t, hasConstant, "monitoringTickInterval constant should be removed (D27: replaced by event loop)")
+}
+
+// TestTUI_CommandResolvePackWorkflowRemoved verifies that the resolvePackWorkflow
+// function has been deleted from command.go as part of the cleanup (D28).
+func TestTUI_CommandResolvePackWorkflowRemoved(t *testing.T) {
+	// This is a static analysis test: verify resolvePackWorkflow function is removed
+	// from command.go. The function was at lines 223-248.
+	source, err := os.ReadFile("command.go")
+	if err != nil {
+		wd, _ := os.Getwd()
+		source, err = os.ReadFile(wd + "/internal/interfaces/tui/command.go")
+		require.NoError(t, err, "must be able to read command.go from either . or ./internal/interfaces/tui/")
+	}
+
+	hasFunc := strings.Contains(string(source), "resolvePackWorkflow")
+	assert.False(t, hasFunc, "resolvePackWorkflow function should be removed (D28: duplicate + silent-continue bug)")
+}
+
+// TestTUI_InputReaderFileDeleted verifies that the input_reader.go file
+// has been deleted as part of the cleanup (D28).
+func TestTUI_InputReaderFileDeleted(t *testing.T) {
+	// This is a static analysis test: verify the input_reader.go file does not exist.
+	// The file contained the TUIInputReader type and related functions.
+	_, err := os.Stat("input_reader.go")
+	if err == nil {
+		// Try with full path if it exists in current dir.
+		wd, _ := os.Getwd()
+		_, err = os.Stat(wd + "/internal/interfaces/tui/input_reader.go")
+	}
+	assert.True(t, os.IsNotExist(err), "input_reader.go file should be deleted (D28)")
+}
+
+// --- T061 GREEN: facadeEventMsg handler ---
+
+// TestMonitoringTab_FacadeEventMsg_StepStarted_SetsRunningState verifies that a
+// EventStepStarted facade event updates the corresponding step's state to Running.
+func TestMonitoringTab_FacadeEventMsg_StepStarted_SetsRunningState(t *testing.T) {
+	tab := newMonitoringTab()
+	tab.steps = []workflow.Step{
+		{Name: "build", Type: workflow.StepTypeCommand},
+	}
+
+	payload := &transcript.StepPayload{Name: "build", Kind: "command"}
+	event := ports.Event{
+		Seq:     1,
+		Kind:    ports.EventStepStarted,
+		RunID:   "run-1",
+		Payload: payload,
+	}
+
+	tab, _ = tab.Update(facadeEventMsg{Event: event})
+
+	state, ok := tab.states["build"]
+	require.True(t, ok, "state must be set for step 'build' after EventStepStarted")
+	assert.Equal(t, workflow.StatusRunning, state.Status)
+}
+
+// TestMonitoringTab_FacadeEventMsg_StepCompleted_SetsCompletedState verifies that
+// EventStepCompleted updates the step's state to Completed.
+func TestMonitoringTab_FacadeEventMsg_StepCompleted_SetsCompletedState(t *testing.T) {
+	tab := newMonitoringTab()
+	tab.steps = []workflow.Step{
+		{Name: "test", Type: workflow.StepTypeCommand},
+	}
+	// Pre-seed running state.
+	tab.states["test"] = workflow.StepState{Name: "test", Status: workflow.StatusRunning}
+
+	payload := &transcript.StepPayload{Name: "test", Kind: "command"}
+	event := ports.Event{
+		Seq:     2,
+		Kind:    ports.EventStepCompleted,
+		RunID:   "run-1",
+		Payload: payload,
+	}
+
+	tab, _ = tab.Update(facadeEventMsg{Event: event})
+
+	state, ok := tab.states["test"]
+	require.True(t, ok, "state must exist for step 'test' after EventStepCompleted")
+	assert.Equal(t, workflow.StatusCompleted, state.Status)
+}
+
+// TestMonitoringTab_FacadeEventMsg_StepCompleted_WithError_SetsFailedState verifies
+// that EventStepCompleted with a non-empty Error sets status to Failed.
+func TestMonitoringTab_FacadeEventMsg_StepCompleted_WithError_SetsFailedState(t *testing.T) {
+	tab := newMonitoringTab()
+	tab.steps = []workflow.Step{
+		{Name: "deploy", Type: workflow.StepTypeCommand},
+	}
+	tab.states["deploy"] = workflow.StepState{Name: "deploy", Status: workflow.StatusRunning}
+
+	payload := &transcript.StepPayload{Name: "deploy", Kind: "command", Error: "exit status 1"}
+	event := ports.Event{
+		Seq:     3,
+		Kind:    ports.EventStepCompleted,
+		RunID:   "run-1",
+		Payload: payload,
+	}
+
+	tab, _ = tab.Update(facadeEventMsg{Event: event})
+
+	state, ok := tab.states["deploy"]
+	require.True(t, ok, "state must exist for step 'deploy' after failed EventStepCompleted")
+	assert.Equal(t, workflow.StatusFailed, state.Status)
+	assert.Equal(t, "exit status 1", state.Error)
+}
+
+// TestMonitoringTab_FacadeEventMsg_UnknownPayload_DoesNotPanic verifies that events
+// with unexpected or nil payload are handled gracefully.
+func TestMonitoringTab_FacadeEventMsg_UnknownPayload_DoesNotPanic(t *testing.T) {
+	tab := newMonitoringTab()
+
+	event := ports.Event{
+		Seq:     1,
+		Kind:    ports.EventStepStarted,
+		RunID:   "run-1",
+		Payload: nil, // nil payload
+	}
+
+	require.NotPanics(t, func() {
+		tab, _ = tab.Update(facadeEventMsg{Event: event})
+	})
+}
+
+// TestMonitoringTab_FacadeEventMsg_NonStepEvent_DoesNotAlterStates verifies that
+// non-step events (run-level, message events) do not corrupt the step-state map.
+func TestMonitoringTab_FacadeEventMsg_NonStepEvent_DoesNotAlterStates(t *testing.T) {
+	tab := newMonitoringTab()
+	tab.states["existing"] = workflow.StepState{Name: "existing", Status: workflow.StatusCompleted}
+
+	for _, kind := range []ports.EventKind{
+		ports.EventRunStarted,
+		ports.EventRunCompleted,
+		ports.EventMessageUser,
+		ports.EventMessageAssistant,
+	} {
+		event := ports.Event{Seq: 1, Kind: kind, RunID: "run-1"}
+		tab, _ = tab.Update(facadeEventMsg{Event: event})
+	}
+
+	assert.Equal(t, workflow.StatusCompleted, tab.states["existing"].Status,
+		"non-step events must not alter existing step states")
+}
+
+// TestMonitoringTab_FacadeEventMsg_RebuildsTree verifies that step state changes
+// from facade events are reflected in the rendered tree (flatNodes updated).
+func TestMonitoringTab_FacadeEventMsg_RebuildsTree(t *testing.T) {
+	tab := newMonitoringTab()
+	tab.steps = []workflow.Step{
+		{Name: "lint", Type: workflow.StepTypeCommand},
+	}
+
+	payload := &transcript.StepPayload{Name: "lint", Kind: "command"}
+	event := ports.Event{
+		Seq:     1,
+		Kind:    ports.EventStepStarted,
+		RunID:   "run-1",
+		Payload: payload,
+	}
+
+	tab, _ = tab.Update(facadeEventMsg{Event: event})
+
+	require.NotEmpty(t, tab.flatNodes, "flatNodes must be rebuilt after facade event updates state")
+	assert.Equal(t, "lint", tab.flatNodes[0].Name)
+	assert.Equal(t, workflow.StatusRunning, tab.flatNodes[0].Status)
 }
 
 // --- End-to-end: AC gate TestMonitoringTab ---

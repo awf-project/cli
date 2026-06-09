@@ -142,6 +142,31 @@ const (
 	ErrorCodeUserMCPProxyInfiniteLoopGuard ErrorCode = "USER.MCP_PROXY.INFINITE_LOOP_GUARD"
 )
 
+// Error code constants for USER.FACADE category (exit code 1).
+// Facade interface resolution errors declared by T055; consumed by T054 Resolver.
+const (
+	// ErrorCodeUserFacadeIdentifierEmpty indicates the facade identifier provided by the caller is empty.
+	ErrorCodeUserFacadeIdentifierEmpty ErrorCode = "USER.FACADE.IDENTIFIER_EMPTY"
+
+	// ErrorCodeUserFacadeIdentifierMalformed indicates the facade identifier does not follow the expected format.
+	ErrorCodeUserFacadeIdentifierMalformed ErrorCode = "USER.FACADE.IDENTIFIER_MALFORMED"
+
+	// ErrorCodeUserFacadePackNotFound indicates no pack matching the requested identifier could be located.
+	ErrorCodeUserFacadePackNotFound ErrorCode = "USER.FACADE.PACK_NOT_FOUND"
+
+	// ErrorCodeUserFacadeWorkflowNotFound indicates no workflow matching the requested identifier exists in the resolved pack.
+	ErrorCodeUserFacadeWorkflowNotFound ErrorCode = "USER.FACADE.WORKFLOW_NOT_FOUND"
+
+	// ErrorCodeUserFacadeSessionClosed indicates the target facade session has already been closed and cannot accept further operations.
+	ErrorCodeUserFacadeSessionClosed ErrorCode = "USER.FACADE.SESSION_CLOSED"
+
+	// ErrorCodeUserFacadeInputRejected indicates the input supplied to the facade was rejected by validation.
+	ErrorCodeUserFacadeInputRejected ErrorCode = "USER.FACADE.INPUT_REJECTED"
+
+	// ErrorCodeUserFacadeDuplicateResponse indicates a response was submitted for a facade request that has already received a response.
+	ErrorCodeUserFacadeDuplicateResponse ErrorCode = "USER.FACADE.DUPLICATE_RESPONSE"
+)
+
 // Error code constants for USER.ACP category (exit code 1).
 // ACP-specific codes (F102).
 const (
@@ -162,6 +187,13 @@ const (
 
 	// ErrorCodeSystemUpgradeDownloadFailed indicates the release download failed.
 	ErrorCodeSystemUpgradeDownloadFailed ErrorCode = "SYSTEM.UPGRADE.DOWNLOAD_FAILED"
+)
+
+// Error code constants for SYSTEM.INTERNAL category (exit code 4).
+// Sentinel returned by the application-layer MapError when no mapping case covers the variant;
+// prevents silent failures while keeping the mapping closed (fail-closed pattern, NFR-005).
+const (
+	ErrorCodeSystemInternalUnmapped ErrorCode = "SYSTEM.INTERNAL.UNMAPPED"
 )
 
 // Category extracts the top-level category from the error code.

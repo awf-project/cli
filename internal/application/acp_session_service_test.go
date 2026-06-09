@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1036,5 +1037,360 @@ func TestParseSlashCommand_ValidNames(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantName, gotName)
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// T063 — Facade delegation tests (F107)
+// ---------------------------------------------------------------------------
+
+// MockWorkflowFacade implements ports.WorkflowFacade for testing the ACP facade path.
+type MockWorkflowFacade struct {
+	mu           sync.Mutex
+	calls        []facadeCall
+	runResponses map[string]ports.RunSession
+}
+
+type facadeCall struct {
+	Method     string
+	Identifier string
+	Inputs     map[string]any
+}
+
+func (m *MockWorkflowFacade) List(_ context.Context) ([]ports.WorkflowSummary, error) {
+	return nil, nil
+}
+
+func (m *MockWorkflowFacade) Validate(_ context.Context, _ ports.RunRequest) (ports.ValidationReport, error) { //nolint:gocritic // hugeParam: interface signature fixed by ports.WorkflowFacade
+	return ports.ValidationReport{}, nil
+}
+
+func (m *MockWorkflowFacade) Status(_ context.Context, _ string) (ports.RunStatus, error) {
+	return ports.RunStatus{}, nil
+}
+
+func (m *MockWorkflowFacade) History(_ context.Context, _ ports.HistoryFilter) ([]ports.RunRecord, error) { //nolint:gocritic // hugeParam: interface signature fixed by ports.WorkflowFacade
+	return nil, nil
+}
+
+func (m *MockWorkflowFacade) Run(_ context.Context, req ports.RunRequest) (ports.RunSession, error) { //nolint:gocritic // hugeParam: interface signature fixed by ports.WorkflowFacade
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.calls = append(m.calls, facadeCall{
+		Method:     "Run",
+		Identifier: req.Identifier,
+		Inputs:     req.Inputs,
+	})
+
+	if resp, ok := m.runResponses[req.Identifier]; ok {
+		return resp, nil
+	}
+	// Return a properly initialized session with a closeable event channel so the
+	// projection goroutine in dispatchViaFacade can drain and terminate cleanly.
+	s := NewMockRunSession(req.Identifier)
+	close(s.eventsChan)
+	return s, nil
+}
+
+func (m *MockWorkflowFacade) Resume(_ context.Context, _ string) (ports.RunSession, error) {
+	return nil, nil
+}
+
+func (m *MockWorkflowFacade) RunCalls() []facadeCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	calls := make([]facadeCall, len(m.calls))
+	copy(calls, m.calls)
+	return calls
+}
+
+// MockRunSession implements ports.RunSession for testing event projection and continuation.
+type MockRunSession struct {
+	mu           sync.Mutex
+	id           string
+	events       []ports.Event
+	eventsChan   chan ports.Event
+	respondCalls []ports.InputResponse
+	respondError error
+	err          error
+}
+
+func NewMockRunSession(id string) *MockRunSession {
+	return &MockRunSession{
+		id:         id,
+		eventsChan: make(chan ports.Event, 10),
+	}
+}
+
+func (m *MockRunSession) ID() string {
+	return m.id
+}
+
+func (m *MockRunSession) Events() <-chan ports.Event {
+	return m.eventsChan
+}
+
+func (m *MockRunSession) Respond(resp ports.InputResponse) error { //nolint:gocritic // hugeParam: interface signature fixed by ports.RunSession
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.respondCalls = append(m.respondCalls, resp)
+	return m.respondError
+}
+
+func (m *MockRunSession) Err() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.err
+}
+
+func (m *MockRunSession) Close() error {
+	return nil
+}
+
+func (m *MockRunSession) EmitEvent(e ports.Event) { //nolint:gocritic // hugeParam: ports.Event is the channel element type; pointer would break chan ports.Event
+	m.mu.Lock()
+	m.events = append(m.events, e)
+	m.mu.Unlock()
+	m.eventsChan <- e
+}
+
+func (m *MockRunSession) RecordedEvents() []ports.Event {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	events := make([]ports.Event, len(m.events))
+	copy(events, m.events)
+	return events
+}
+
+func (m *MockRunSession) RespondCalls() []ports.InputResponse {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	calls := make([]ports.InputResponse, len(m.respondCalls))
+	copy(calls, m.respondCalls)
+	return calls
+}
+
+// facadeRunner is a fakeRunner variant that does not call callCount — used in tests that
+// only need the WorkflowRunner interface satisfied without tracking call counts.
+type facadeRunner struct{}
+
+func (r *facadeRunner) Run(_ context.Context, name string, _ map[string]any) (*workflow.ExecutionContext, error) {
+	return workflow.NewExecutionContext(name, name), nil
+}
+
+// TestACPSessionService_RoutesRunThroughFacade verifies that when a facade is configured,
+// HandleSessionPrompt dispatches through facade.Run instead of the legacy runner.
+// This test fails until dispatchViaFacade is implemented to call facade.Run.
+func TestACPSessionService_RoutesRunThroughFacade(t *testing.T) {
+	facade := &MockWorkflowFacade{
+		runResponses: make(map[string]ports.RunSession),
+	}
+
+	svc := &ACPSessionService{
+		logger:  ports.NopLogger{},
+		runner:  &facadeRunner{},
+		facade:  facade,
+		emitter: &fakeEmitter{},
+		convMgr: NewConversationManager(ports.NopLogger{}, nil, nil),
+	}
+
+	session := &ACPSession{ID: "sess-facade-dispatch"}
+	svc.sessions.Store("sess-facade-dispatch", session)
+
+	params := json.RawMessage(`{"sessionId":"sess-facade-dispatch","prompt":[{"type":"text","text":"/deploy target=prod"}]}`)
+
+	result, err := svc.HandleSessionPrompt(context.Background(), params)
+
+	require.Nil(t, err)
+	assert.NotNil(t, result)
+
+	calls := facade.RunCalls()
+	require.NotEmpty(t, calls, "facade.Run must be called when facade is configured")
+
+	lastCall := calls[len(calls)-1]
+	assert.Equal(t, "deploy", lastCall.Identifier, "facade.Run must be called with parsed workflow identifier")
+	assert.Equal(t, map[string]any{"target": "prod"}, lastCall.Inputs, "facade.Run must be called with parsed inputs")
+}
+
+// TestACPSessionService_ProjectsEventsToSessionUpdate verifies that events from the
+// facade's RunSession are projected to session/update notifications via the emitter.
+// This test fails until dispatchViaFacade reads from sess.Events() and projects via emitter.
+func TestACPSessionService_ProjectsEventsToSessionUpdate(t *testing.T) {
+	emitter := &fakeEmitter{}
+	mockSession := NewMockRunSession("test-workflow")
+
+	facade := &MockWorkflowFacade{
+		runResponses: make(map[string]ports.RunSession),
+	}
+	facade.runResponses["test-workflow"] = mockSession
+
+	svc := &ACPSessionService{
+		logger:  ports.NopLogger{},
+		runner:  &facadeRunner{},
+		facade:  facade,
+		emitter: emitter,
+		convMgr: NewConversationManager(ports.NopLogger{}, nil, nil),
+	}
+
+	sess := &ACPSession{ID: "sess-events"}
+	svc.sessions.Store("sess-events", sess)
+
+	params := json.RawMessage(`{"sessionId":"sess-events","prompt":[{"type":"text","text":"/test-workflow"}]}`)
+
+	go func() {
+		mockSession.EmitEvent(ports.Event{Kind: ports.EventRunStarted})
+		mockSession.EmitEvent(ports.Event{Kind: ports.EventStepCompleted})
+		close(mockSession.eventsChan)
+	}()
+
+	result, err := svc.HandleSessionPrompt(context.Background(), params)
+
+	require.Nil(t, err)
+	assert.NotNil(t, result)
+
+	assert.NotEmpty(t, emitter.updates, "events from facade must be projected to session/update")
+}
+
+// TestACPSessionService_RespondCallsSessionRespond verifies that a continuation prompt
+// (when a workflow is parked) routes through session.Respond via the inputReader.
+// The run's doneCh is pre-closed to let waitTurn return without blocking the test.
+func TestACPSessionService_RespondCallsSessionRespond(t *testing.T) {
+	svc := &ACPSessionService{
+		logger:  ports.NopLogger{},
+		runner:  &facadeRunner{},
+		facade:  nil, // legacy path: parked continuation via inputReader
+		emitter: &fakeEmitter{},
+		convMgr: NewConversationManager(ports.NopLogger{}, nil, nil),
+	}
+
+	sess := &ACPSession{
+		ID:              "sess-respond",
+		ParkedTurnCount: atomic.Int32{},
+	}
+	svc.sessions.Store("sess-respond", sess)
+
+	sess.ParkedTurnCount.Store(1)
+	responder := &fakeACPInputResponder{}
+	sess.inputReader.Store(&inputReaderHolder{r: responder})
+
+	// Pre-close doneCh so waitTurn returns immediately after Respond is called.
+	doneCh := make(chan struct{})
+	close(doneCh)
+	run := &acpRun{
+		parkedCh:     make(chan struct{}, 1),
+		doneCh:       doneCh,
+		workflowName: "interactive-workflow",
+	}
+	sess.run.Store(run)
+
+	params := json.RawMessage(`{"sessionId":"sess-respond","prompt":[{"type":"text","text":"user response"}]}`)
+
+	result, err := svc.HandleSessionPrompt(context.Background(), params)
+
+	require.Nil(t, err)
+	assert.NotNil(t, result)
+
+	recorded := responder.recorded()
+	require.NotEmpty(t, recorded, "responder must record the continuation text")
+	assert.Equal(t, "user response", recorded[0])
+}
+
+// fakeACPInputResponder records routed continuation turns for TestACPSessionService_RespondCallsSessionRespond.
+// Kept separate from the existing fakeInputReader to avoid redeclaration conflicts.
+type fakeACPInputResponder struct {
+	mu    sync.Mutex
+	calls []string
+}
+
+func (f *fakeACPInputResponder) ReadInput(_ context.Context) (string, error) { return "", nil }
+
+func (f *fakeACPInputResponder) Respond(text string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, text)
+}
+
+func (f *fakeACPInputResponder) SetParkHooks(_, _ func()) {}
+
+func (f *fakeACPInputResponder) recorded() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	calls := make([]string, len(f.calls))
+	copy(calls, f.calls)
+	return calls
+}
+
+// TestACPSessionService_ContinuationParkingPreserved verifies that the sessionCtx/runCtx
+// split is preserved: the per-request context cancellation resolves waitTurn with "cancelled"
+// while sessionCtx (the session-lifetime context) remains uncancelled — proving that the
+// session survives the turn boundary so a subsequent prompt can resume the same session.
+// This verifies the architectural split from F105 (research Q4) remains intact.
+func TestACPSessionService_ContinuationParkingPreserved(t *testing.T) {
+	session := &ACPSession{
+		ID:              "sess-parking-preserved",
+		ParkedTurnCount: atomic.Int32{},
+	}
+
+	serverCtx, serverCancel := context.WithCancel(context.Background())
+	defer serverCancel()
+
+	svc := &ACPSessionService{
+		logger:    ports.NopLogger{},
+		runner:    &facadeRunner{},
+		emitter:   &fakeEmitter{},
+		convMgr:   NewConversationManager(ports.NopLogger{}, nil, nil),
+		serverCtx: serverCtx,
+	}
+
+	sessionCtx, sessionCancel := context.WithCancel(serverCtx)
+	session.sessionCtx = sessionCtx
+	session.sessionCancel = sessionCancel
+
+	svc.sessions.Store("sess-parking-preserved", session)
+
+	run := &acpRun{
+		parkedCh:     make(chan struct{}, 1),
+		doneCh:       make(chan struct{}),
+		workflowName: "test-workflow",
+	}
+	session.run.Store(run)
+
+	// Use a cancellable per-request context (mirrors the SDK's per-turn context that is
+	// cancelled when the Prompt handler returns end_turn). Cancel it immediately to
+	// exercise the ctx.Done() branch in waitTurn.
+	requestCtx, requestCancel := context.WithCancel(context.Background())
+	requestCancel() // simulate SDK cancelling the per-turn ctx on return
+
+	result := svc.waitTurn(requestCtx, session, run)
+
+	require.NotNil(t, result)
+
+	// The per-request ctx is cancelled — waitTurn must return "cancelled".
+	pr, ok := result.(PromptResult)
+	require.True(t, ok, "waitTurn must return PromptResult")
+	assert.Equal(t, "cancelled", pr.StopReason)
+
+	// sessionCtx must remain live — it must NOT be cancelled merely because the
+	// per-request context was. This is the core of the sessionCtx/runCtx split:
+	// the session survives individual turn boundaries so subsequent prompts can resume.
+	assert.NoError(t, sessionCtx.Err(),
+		"sessionCtx must remain independent of per-request context for parking to survive")
+}
+
+// TestACP_NoDirectRecorderSubscribe verifies that ACP code does not call recorder.Subscribe
+// in violation of SC-001. This is a grep-style test that ensures the constraint is enforced.
+func TestACP_NoDirectRecorderSubscribe(t *testing.T) {
+	// Paths are relative to this package's source directory (go test sets the
+	// working directory to the package dir), so they resolve on any machine/CI.
+	files := []string{
+		"acp_session_service.go",
+		"../infrastructure/acp/agent.go",
+	}
+
+	for _, file := range files {
+		content, readErr := os.ReadFile(file)
+		require.NoError(t, readErr)
+		assert.NotContains(t, string(content), "recorder.Subscribe",
+			"ACP code must not call recorder.Subscribe (SC-001)")
 	}
 }

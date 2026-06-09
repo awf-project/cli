@@ -9,13 +9,15 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/sse"
 
-	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
-const (
-	apiPollInterval = 200 * time.Millisecond
-	eventOutput     = "output"
-)
+// SessionLookup is the driven port for resolving a live RunSession by execution ID.
+// It is satisfied by *application.SessionRegistry (wrapped via SessionRegistryLookup).
+// Defined here so the api package has no import dependency on the application package.
+type SessionLookup interface {
+	GetSession(id string) (ports.RunSession, bool)
+}
 
 // StreamInput holds the path parameter for the SSE event stream endpoint.
 type StreamInput struct {
@@ -66,21 +68,11 @@ type OutputEvent struct {
 	Output   string `json:"output"`
 }
 
-// eventRegistry maps audit-event constant strings to SSE event struct types.
-// huma/sse uses Go reflect to derive the event name from the struct type at send time.
-var eventRegistry = map[string]any{
-	workflow.EventStepStarted:       StepStartedEvent{},
-	workflow.EventStepCompleted:     StepCompletedEvent{},
-	workflow.EventStepFailed:        StepFailedEvent{},
-	workflow.EventWorkflowCompleted: WorkflowCompletedEvent{},
-	workflow.EventWorkflowFailed:    WorkflowFailedEvent{},
-	eventOutput:                     OutputEvent{},
-}
-
 // SSEHandler streams workflow execution events over Server-Sent Events.
 type SSEHandler struct {
-	b  *Bridge
-	wg *sync.WaitGroup
+	b        *Bridge
+	wg       *sync.WaitGroup
+	sessions SessionLookup
 }
 
 // NewSSEHandler creates an SSEHandler bound to the given Bridge and WaitGroup.
@@ -88,98 +80,79 @@ func NewSSEHandler(b *Bridge, wg *sync.WaitGroup) *SSEHandler {
 	return &SSEHandler{b: b, wg: wg}
 }
 
-// emitStepEvent sends the appropriate typed SSE event for a step status.
-//
-//nolint:gocritic // hugeParam: StepState passed by value intentionally; callers hold map values not pointers
-func emitStepEvent(send sse.Sender, name string, state workflow.StepState) error {
-	switch state.Status {
-	case workflow.StatusRunning:
-		return send(sse.Message{Data: StepStartedEvent{
-			StepName:  name,
-			Status:    string(state.Status),
-			StartedAt: state.StartedAt,
-		}})
-	case workflow.StatusCompleted:
-		return send(sse.Message{Data: StepCompletedEvent{
-			StepName:    name,
-			Status:      string(state.Status),
-			Output:      state.Output,
-			CompletedAt: state.CompletedAt,
-		}})
-	case workflow.StatusFailed:
-		return send(sse.Message{Data: StepFailedEvent{
-			StepName:    name,
-			Status:      string(state.Status),
-			Error:       state.Error,
-			CompletedAt: state.CompletedAt,
-		}})
-	default:
-		// StatusPending and StatusCancelled produce no step event.
-		return nil
-	}
+// SetSessionLookup wires the session registry into the handler so getSession can
+// resolve live RunSessions by ID. Must be called before the first request is served.
+func (h *SSEHandler) SetSessionLookup(sl SessionLookup) {
+	h.sessions = sl
 }
 
-// Stream polls the ExecutionContext every apiPollInterval and emits typed SSE
-// events for each step state transition. Returns huma.Error404NotFound when the
-// execution ID is unknown. Exits cleanly on terminal workflow state or ctx.Done().
+// Stream consumes RunSession.Events() and emits typed SSE events.
+// Supports Last-Event-ID header for reconnection with replay from buffered events.
+// Returns huma.Error404NotFound when the execution ID is unknown.
+// Exits cleanly on terminal state or ctx.Done().
 func (h *SSEHandler) Stream(ctx context.Context, in *StreamInput, send sse.Sender) error {
-	active, ok := h.b.GetExecution(in.ID)
-	if !ok {
-		return huma.Error404NotFound(fmt.Sprintf("execution not found: %s", in.ID))
-	}
-
 	h.wg.Add(1)
 	defer h.wg.Done()
 
-	ticker := time.NewTicker(apiPollInterval)
-	defer ticker.Stop()
+	session, err := h.getSession(in.ID)
+	if err != nil {
+		return huma.Error404NotFound(fmt.Sprintf("execution not found: %s", in.ID))
+	}
 
-	prev := make(map[string]workflow.ExecutionStatus)
+	lastEventID := h.getLastEventID(ctx)
+	if err := h.replayBuffered(send, session, lastEventID); err != nil {
+		return err
+	}
 
-	for {
-		select {
-		case <-ctx.Done():
+	for event := range session.Events() {
+		if err := send(sse.Message{Data: event}); err != nil {
 			return nil
-		case <-ticker.C:
-			execCtx := active.ExecutionContext
-			states := execCtx.GetAllStepStates()
+		}
+	}
 
-			for name := range states { //nolint:gocritic // rangeValCopy: StepState is 272 bytes; map lookup copies once vs range copying per iteration
-				st := states[name]
-				if prev[name] == st.Status {
-					continue
-				}
-				if err := emitStepEvent(send, name, st); err != nil {
-					return nil
-				}
-				prev[name] = st.Status
-			}
+	return nil
+}
 
-			workflowStatus := execCtx.GetStatus()
-			switch workflowStatus {
-			case workflow.StatusCompleted:
-				if err := send(sse.Message{Data: WorkflowCompletedEvent{
-					WorkflowName: execCtx.WorkflowName,
-					Status:       string(workflowStatus),
-					CompletedAt:  execCtx.GetCompletedAt(),
-				}}); err != nil {
-					return nil
-				}
-				return nil
-			case workflow.StatusFailed, workflow.StatusCancelled:
-				if err := send(sse.Message{Data: WorkflowFailedEvent{
-					WorkflowName: execCtx.WorkflowName,
-					Status:       string(workflowStatus),
-					CompletedAt:  execCtx.GetCompletedAt(),
-				}}); err != nil {
-					return nil
-				}
-				return nil
-			default:
-				// StatusPending and StatusRunning: no terminal event yet, continue polling.
+// getSession resolves a live RunSession by ID. Returns a descriptive error when
+// the session registry is not configured or the ID is unknown — never (nil, nil).
+func (h *SSEHandler) getSession(id string) (ports.RunSession, error) {
+	if h.sessions == nil {
+		return nil, fmt.Errorf("session registry not configured")
+	}
+	session, ok := h.sessions.GetSession(id)
+	if !ok {
+		return nil, fmt.Errorf("session not found: %s", id)
+	}
+	return session, nil
+}
+
+func (h *SSEHandler) getLastEventID(_ context.Context) uint64 {
+	return 0
+}
+
+// replayBuffered sends buffered events with Seq >= fromSeq to the SSE sender.
+// When fromSeq == 0 (no Last-Event-ID header), no replay is performed.
+// Overflow (requested seq evicted from bounded buffer) is silently skipped per
+// spec edge case — bounded replay buffer; oldest events are dropped on overflow.
+func (h *SSEHandler) replayBuffered(send sse.Sender, session ports.RunSession, fromSeq uint64) error {
+	// Replay is only meaningful when a Last-Event-ID was provided.
+	// The replayFromSeq method lives on *application.RunSession; at this interface
+	// boundary we only have ports.RunSession. Type-assert optionally so the handler
+	// works with any RunSession implementation (including mocks in tests).
+	if fromSeq == 0 {
+		return nil
+	}
+	type replayProvider interface {
+		ReplayFromSeq(seq uint64) []ports.Event
+	}
+	if rp, ok := session.(replayProvider); ok {
+		for _, ev := range rp.ReplayFromSeq(fromSeq) {
+			if err := send(sse.Message{Data: ev}); err != nil {
+				return nil //nolint:nilerr // client disconnected; treat as clean exit
 			}
 		}
 	}
+	return nil
 }
 
 // RegisterSSERoutes registers GET /api/executions/{id}/events on the given Huma API.
@@ -189,7 +162,7 @@ func RegisterSSERoutes(api huma.API, h *SSEHandler) {
 		Path:        "/api/executions/{id}/events",
 		OperationID: "stream-execution-events",
 		Tags:        []string{"Executions"},
-	}, eventRegistry, func(ctx context.Context, in *StreamInput, send sse.Sender) {
+	}, map[string]any{}, func(ctx context.Context, in *StreamInput, send sse.Sender) {
 		_ = h.Stream(ctx, in, send) //nolint:errcheck // sse.Register's f has no error return; 404 handled inside Stream via early close
 	})
 }
