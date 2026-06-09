@@ -187,8 +187,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tabMonitoring.SetStream(m.bridge.stream)
 		}
 		m.lastErr = ""
+		// Start event-loop goroutine when a RunSession is available (D27, FR-011).
+		// The goroutine ranges over sess.Events() and forwards each as facadeEventMsg
+		// via the sender wired by SetSender. When the session carries a terminal event,
+		// StartEventLoop also sends ExecutionFinishedMsg so the tick loop stops even when
+		// no Done channel is present (facade-driven path via RunWorkflowViaFacade).
+		if msg.Session != nil {
+			m.tabMonitoring.StartEventLoop(msg.Session)
+		}
 		var monCmd tea.Cmd
 		m.tabMonitoring, monCmd = m.tabMonitoring.Update(msg)
+		// Done may be nil when the facade path (RunWorkflowViaFacade) is used — in that
+		// case ExecutionFinishedMsg arrives via the StartEventLoop goroutine instead.
+		if msg.Done == nil {
+			return m, monCmd
+		}
 		return m, tea.Batch(monCmd, WaitForExecution(msg.Done))
 
 	case ExecutionFinishedMsg:
@@ -232,6 +245,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case tickMsg, executionPollMsg:
+		var cmd tea.Cmd
+		m.tabMonitoring, cmd = m.tabMonitoring.Update(msg)
+		return m, cmd
+
+	case facadeEventMsg:
+		// Route facade events directly to the monitoring tab regardless of active tab,
+		// so that step-state updates arrive even when the user is on another tab (D27).
 		var cmd tea.Cmd
 		m.tabMonitoring, cmd = m.tabMonitoring.Update(msg)
 		return m, cmd

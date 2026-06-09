@@ -3,11 +3,14 @@ package tui
 import (
 	"errors"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/transcript"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
@@ -315,6 +318,154 @@ func TestModel_View_TabSwitching_ChangesContentArea(t *testing.T) {
 
 	// Both views contain the tab bar, but the content area should differ.
 	assert.NotEqual(t, workflowsView, monitoringView)
+}
+
+// --- T061: facadeEventMsg routing ---
+
+// TestModel_Update_FacadeEventMsg_RoutesToMonitoringTabRegardlessOfActiveTab verifies
+// that facadeEventMsg is always forwarded to the monitoring tab regardless of which
+// tab is currently active. This mirrors the tickMsg / executionPollMsg routing pattern.
+func TestModel_Update_FacadeEventMsg_RoutesToMonitoringTabRegardlessOfActiveTab(t *testing.T) {
+	tabs := []struct {
+		name string
+		tab  Tab
+	}{
+		{"workflows", TabWorkflows},
+		{"history", TabHistory},
+		{"logs", TabExternalLogs},
+		{"monitoring", TabMonitoring},
+	}
+
+	for _, tt := range tabs {
+		t.Run(tt.name+" active", func(t *testing.T) {
+			m := New()
+			m.activeTab = tt.tab
+			m.tabMonitoring.steps = []workflow.Step{
+				{Name: "step-a", Type: workflow.StepTypeCommand},
+			}
+
+			payload := &transcript.StepPayload{Name: "step-a", Kind: "command"}
+			event := ports.Event{
+				Seq:     1,
+				Kind:    ports.EventStepStarted,
+				Payload: payload,
+			}
+
+			result, _ := m.Update(facadeEventMsg{Event: event})
+
+			updated := result.(Model)
+			state, ok := updated.tabMonitoring.states["step-a"]
+			require.True(t, ok, "monitoring tab must receive facade event when %s tab is active", tt.name)
+			assert.Equal(t, workflow.StatusRunning, state.Status)
+		})
+	}
+}
+
+// TestModel_Update_ExecutionStartedMsg_WithSession_StartsEventLoop verifies that
+// when ExecutionStartedMsg carries a non-nil RunSession, the monitoring tab's
+// event-loop goroutine is started and events are forwarded to the program.
+func TestModel_Update_ExecutionStartedMsg_WithSession_StartsEventLoop(t *testing.T) {
+	m := New()
+
+	eventChan := make(chan ports.Event, 1)
+	defer close(eventChan)
+
+	sentChan := make(chan tea.Msg, 1)
+	m.tabMonitoring.SetSender(func(msg tea.Msg) {
+		sentChan <- msg
+	})
+
+	mockSess := &mockRunSession{eventsChan: eventChan}
+	wf := &workflow.Workflow{Name: "wf", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
+	execCtx := workflow.NewExecutionContext("exec-1", "wf")
+	done := make(chan error, 1)
+
+	m.Update(ExecutionStartedMsg{
+		ExecutionID: "exec-1",
+		Workflow:    wf,
+		ExecCtx:     execCtx,
+		Done:        done,
+		Session:     mockSess,
+	})
+
+	// Send an event; the goroutine must forward it via sender.
+	testEvent := ports.Event{Seq: 1, Kind: ports.EventRunStarted, RunID: "exec-1"}
+	eventChan <- testEvent
+
+	select {
+	case msg := <-sentChan:
+		fMsg, ok := msg.(facadeEventMsg)
+		require.True(t, ok, "event loop must forward events as facadeEventMsg, got %T", msg)
+		assert.Equal(t, uint64(1), fMsg.Event.Seq)
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("event loop did not forward event within 200ms")
+	}
+}
+
+// TestModel_Update_ExecutionStartedMsg_WithNilDone_DoesNotPanic verifies that the
+// facade-driven path (RunWorkflowViaFacade) can emit an ExecutionStartedMsg with a
+// nil Done channel without causing a panic or blocking the Bubble Tea event loop.
+// ExecutionFinishedMsg will arrive via StartEventLoop when a terminal event is received.
+func TestModel_Update_ExecutionStartedMsg_WithNilDone_DoesNotPanic(t *testing.T) {
+	m := New()
+
+	eventChan := make(chan ports.Event, 1)
+	defer close(eventChan)
+
+	sentChan := make(chan tea.Msg, 2)
+	m.tabMonitoring.SetSender(func(msg tea.Msg) {
+		sentChan <- msg
+	})
+
+	mockSess := &mockRunSession{eventsChan: eventChan}
+	wf := &workflow.Workflow{Name: "wf", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
+
+	require.NotPanics(t, func() {
+		_, cmd := m.Update(ExecutionStartedMsg{
+			ExecutionID: "exec-1",
+			Workflow:    wf,
+			Session:     mockSess,
+			// Done is intentionally nil — facade-driven path
+		})
+		// cmd must not be nil (at minimum the tick command from the monitoring tab)
+		assert.NotNil(t, cmd, "monCmd must be returned even when Done is nil")
+	})
+}
+
+// TestModel_Update_ExecutionStartedMsg_WithNilDone_FinishesViaEventLoop verifies the
+// full flow: nil Done + Session → StartEventLoop → terminal event → ExecutionFinishedMsg.
+func TestModel_Update_ExecutionStartedMsg_WithNilDone_FinishesViaEventLoop(t *testing.T) {
+	m := New()
+
+	eventChan := make(chan ports.Event, 2)
+	finishedChan := make(chan ExecutionFinishedMsg, 1)
+
+	// Wire sender: capture ExecutionFinishedMsg sent by the event-loop goroutine.
+	m.tabMonitoring.SetSender(func(msg tea.Msg) {
+		if fm, ok := msg.(ExecutionFinishedMsg); ok {
+			finishedChan <- fm
+		}
+	})
+
+	mockSess := &mockRunSession{eventsChan: eventChan}
+	wf := &workflow.Workflow{Name: "wf", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
+
+	m.Update(ExecutionStartedMsg{
+		ExecutionID: "exec-1",
+		Workflow:    wf,
+		Session:     mockSess,
+	})
+
+	// The event-loop goroutine is now running; send a terminal event.
+	eventChan <- ports.Event{Seq: 1, Kind: ports.EventWorkflowCompleted, RunID: "exec-1"}
+	close(eventChan)
+
+	select {
+	case fm := <-finishedChan:
+		assert.Nil(t, fm.Err, "ExecutionFinishedMsg.Err must be nil for completed workflow")
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("StartEventLoop did not send ExecutionFinishedMsg within 300ms")
+	}
 }
 
 // --- Help toggle ---

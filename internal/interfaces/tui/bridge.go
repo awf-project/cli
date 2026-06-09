@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
@@ -82,6 +83,12 @@ type Bridge struct {
 	runner    WorkflowRunner
 	history   HistoryProvider
 	stream    *StreamBuffer
+
+	// facade is the optional ports.WorkflowFacade used by RunWorkflowViaFacade.
+	// When set, RunWorkflowViaFacade returns an ExecutionStartedMsg that includes
+	// a live RunSession whose Events() channel drives the monitoring tab event loop
+	// (D27, FR-011) instead of relying solely on the 200 ms polling tick.
+	facade ports.WorkflowFacade
 }
 
 // NewBridge creates a Bridge wiring the given service interface implementations.
@@ -94,6 +101,13 @@ func NewBridge(workflows WorkflowLister, runner WorkflowRunner, history HistoryP
 		history:   history,
 		stream:    &StreamBuffer{},
 	}
+}
+
+// SetFacade wires a WorkflowFacade into the Bridge so that RunWorkflowViaFacade
+// can start event-driven executions via facade.Run. Safe to call after NewBridge;
+// a nil facade is accepted and causes RunWorkflowViaFacade to return ErrMsg.
+func (b *Bridge) SetFacade(f ports.WorkflowFacade) {
+	b.facade = f
 }
 
 // Stream returns the shared output stream buffer.
@@ -189,6 +203,36 @@ func (b *Bridge) RunWorkflow(ctx context.Context, wf *workflow.Workflow, inputs 
 	}
 }
 
+// RunWorkflowViaFacade returns a tea.Cmd that starts workflow execution through
+// the WorkflowFacade. The resulting ExecutionStartedMsg includes a live RunSession
+// whose Events() channel drives state updates in the monitoring tab (D27, FR-011).
+//
+// Unlike RunWorkflow, this path does not supply an ExecCtx or Done channel:
+// the monitoring tab's StartEventLoop goroutine becomes the sole reader of
+// Session.Events(), and when it detects a terminal event (EventWorkflowCompleted or
+// EventWorkflowFailed) it sends ExecutionFinishedMsg to stop the tick loop. The
+// caller must nil-guard msg.Done before calling WaitForExecution.
+func (b *Bridge) RunWorkflowViaFacade(ctx context.Context, name string, inputs map[string]any) tea.Cmd {
+	return func() tea.Msg {
+		if b.facade == nil {
+			return ErrMsg{Err: errors.New("facade not configured for event-driven execution")}
+		}
+		if err := ctx.Err(); err != nil {
+			return ErrMsg{Err: err}
+		}
+		sess, err := b.facade.Run(ctx, ports.RunRequest{Identifier: name, Inputs: inputs})
+		if err != nil {
+			return ErrMsg{Err: err}
+		}
+		return ExecutionStartedMsg{
+			ExecutionID: name,
+			Session:     sess,
+			// ExecCtx and Done are nil: state is driven entirely by Session.Events().
+			// model.go nil-guards Done before calling WaitForExecution.
+		}
+	}
+}
+
 // WaitForExecution returns a tea.Cmd that blocks until the execution finishes
 // and then delivers the result as an ExecutionFinishedMsg.
 func WaitForExecution(done <-chan error) tea.Cmd {
@@ -212,4 +256,67 @@ func (b *Bridge) ValidateWorkflow(ctx context.Context, name string) tea.Cmd {
 
 		return ValidationResultMsg{Name: name, Success: true}
 	}
+}
+
+var _ ports.UserInputReader = (*TUIInputReader)(nil)
+
+// MsgSender is a function that sends a tea.Msg to the Bubble Tea program.
+// Typically bound to (*tea.Program).Send.
+type MsgSender func(msg tea.Msg)
+
+// TUIInputReader implements ports.UserInputReader for the TUI.
+// It bridges the blocking ConversationManager goroutine with the Bubble Tea
+// event loop via channels.
+type TUIInputReader struct {
+	requestCh  chan struct{}
+	responseCh chan string
+	sender     MsgSender
+}
+
+// NewTUIInputReader creates a TUIInputReader. sender may be nil during tests;
+// when non-nil it is called to notify the Bubble Tea program that input is needed.
+func NewTUIInputReader(sender MsgSender) *TUIInputReader {
+	return &TUIInputReader{
+		requestCh:  make(chan struct{}, 1),
+		responseCh: make(chan string, 1),
+		sender:     sender,
+	}
+}
+
+// SetSender sets the tea.Msg sender (typically (*tea.Program).Send).
+// Called after the program is created but before any execution starts.
+func (r *TUIInputReader) SetSender(sender MsgSender) {
+	r.sender = sender
+}
+
+// ReadInput blocks until the user submits input via the TUI or the context
+// is cancelled. It signals the Bubble Tea model that input is needed by
+// sending InputRequestedMsg.
+func (r *TUIInputReader) ReadInput(ctx context.Context) (string, error) {
+	select {
+	case r.requestCh <- struct{}{}:
+	default:
+	}
+
+	if r.sender != nil {
+		r.sender(InputRequestedMsg{})
+	}
+
+	select {
+	case text := <-r.responseCh:
+		return text, nil
+	case <-ctx.Done():
+		return "", fmt.Errorf("input cancelled: %w", ctx.Err())
+	}
+}
+
+// RequestCh returns the channel that signals when input is requested.
+// Used in tests; the TUI model uses InputRequestedMsg instead.
+func (r *TUIInputReader) RequestCh() <-chan struct{} {
+	return r.requestCh
+}
+
+// Respond sends user input back to the blocked ReadInput call.
+func (r *TUIInputReader) Respond(text string) {
+	r.responseCh <- text
 }

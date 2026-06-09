@@ -13,6 +13,8 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+
+	"github.com/awf-project/cli/internal/domain/ports"
 )
 
 // Option configures a Server on construction.
@@ -25,6 +27,22 @@ func WithShutdownTimeout(d time.Duration) Option {
 	}
 }
 
+// WithFacade wires the workflow facade for handlers that need it.
+func WithFacade(facade ports.WorkflowFacade) Option {
+	return func(s *Server) {
+		s.facade = facade
+	}
+}
+
+// WithSessionRegistry wires a SessionLookup into handlers that need to resolve live
+// RunSessions by ID (SSEHandler and RespondHandler). Without this option those
+// handlers return 404 for every request — no panic, but no streaming either.
+func WithSessionRegistry(sl SessionLookup) Option {
+	return func(s *Server) {
+		s.sessions = sl
+	}
+}
+
 // Server assembles all handler families into a single HTTP server backed by chi and Huma.
 type Server struct {
 	bridge          *Bridge
@@ -33,6 +51,8 @@ type Server struct {
 	httpSrv         *http.Server
 	shutdownTimeout time.Duration
 	sseWG           sync.WaitGroup
+	facade          ports.WorkflowFacade
+	sessions        SessionLookup
 }
 
 // NewServer assembles a Server with middleware and all route families on addr.
@@ -56,7 +76,18 @@ func NewServer(bridge *Bridge, addr string, opts ...Option) *Server {
 
 	RegisterWorkflowRoutes(s.api, NewWorkflowHandlers(bridge))
 	RegisterExecutionRoutes(s.api, NewExecutionHandlers(bridge))
-	RegisterSSERoutes(s.api, NewSSEHandler(bridge, &s.sseWG))
+	sseHandler := NewSSEHandler(bridge, &s.sseWG)
+	if s.sessions != nil {
+		sseHandler.SetSessionLookup(s.sessions)
+	}
+	RegisterSSERoutes(s.api, sseHandler)
+	if s.facade != nil {
+		respondHandler := NewRespondHandler(s.facade)
+		if s.sessions != nil {
+			respondHandler.SetSessionLookup(s.sessions)
+		}
+		RegisterRespondRoutes(s.api, respondHandler)
+	}
 	RegisterHistoryRoutes(s.api, NewHistoryHandlers(bridge))
 
 	s.httpSrv = &http.Server{

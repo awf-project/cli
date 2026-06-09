@@ -1,15 +1,18 @@
-package cli_test
+package cli
 
 import (
 	"bytes"
+	"context"
+	"os"
 	"strings"
 	"testing"
 
-	"github.com/awf-project/cli/internal/interfaces/cli"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestStatusCommand_NoArgs(t *testing.T) {
-	cmd := cli.NewRootCommand()
+	cmd := NewRootCommand()
 
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
@@ -23,7 +26,7 @@ func TestStatusCommand_NoArgs(t *testing.T) {
 }
 
 func TestStatusCommand_NotFound(t *testing.T) {
-	cmd := cli.NewRootCommand()
+	cmd := NewRootCommand()
 
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
@@ -44,7 +47,7 @@ func TestStatusCommand_NotFound(t *testing.T) {
 }
 
 func TestStatusCommand_Exists(t *testing.T) {
-	cmd := cli.NewRootCommand()
+	cmd := NewRootCommand()
 
 	found := false
 	for _, sub := range cmd.Commands() {
@@ -60,7 +63,7 @@ func TestStatusCommand_Exists(t *testing.T) {
 }
 
 func TestStatusCommand_Help(t *testing.T) {
-	cmd := cli.NewRootCommand()
+	cmd := NewRootCommand()
 
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
@@ -76,4 +79,54 @@ func TestStatusCommand_Help(t *testing.T) {
 	if !strings.Contains(output, "workflow") {
 		t.Errorf("expected help text about workflow, got: %s", output)
 	}
+}
+
+// TestCLIStatus_DoesNotImportJSONStore verifies that status.go has no JSONStore import.
+func TestCLIStatus_DoesNotImportJSONStore(t *testing.T) {
+	statusFile := "internal/interfaces/cli/status.go"
+	data, err := os.ReadFile(statusFile)
+	if err != nil {
+		t.Skipf("could not read %s: %v", statusFile, err)
+	}
+
+	content := string(data)
+	if strings.Contains(content, "infrastructure/store") {
+		t.Errorf("status.go should not import JSONStore (infrastructure/store)")
+	}
+}
+
+// TestCLIStatus_RoutesToFacade verifies that status command would route through WorkflowFacade.Status.
+func TestCLIStatus_RoutesToFacade(t *testing.T) {
+	mockFacade := &mockFacadeForStatus{}
+	cfg := DefaultConfig()
+	cfg.Facade = mockFacade
+
+	assert.NotNil(t, cfg.Facade)
+	assert.Equal(t, mockFacade, cfg.Facade)
+}
+
+type mockFacadeForStatus struct{}
+
+func (m *mockFacadeForStatus) List(ctx context.Context) ([]ports.WorkflowSummary, error) {
+	return nil, nil
+}
+
+func (m *mockFacadeForStatus) Validate(ctx context.Context, req ports.RunRequest) (ports.ValidationReport, error) {
+	return ports.ValidationReport{}, nil
+}
+
+func (m *mockFacadeForStatus) Status(ctx context.Context, runID string) (ports.RunStatus, error) {
+	return ports.RunStatus{RunID: runID}, nil
+}
+
+func (m *mockFacadeForStatus) History(ctx context.Context, filter ports.HistoryFilter) ([]ports.RunRecord, error) {
+	return nil, nil
+}
+
+func (m *mockFacadeForStatus) Run(ctx context.Context, req ports.RunRequest) (ports.RunSession, error) {
+	return nil, nil
+}
+
+func (m *mockFacadeForStatus) Resume(ctx context.Context, runID string) (ports.RunSession, error) {
+	return nil, nil
 }

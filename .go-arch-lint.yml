@@ -333,6 +333,8 @@ components:
     in: testutil/builders
   testutil-fixtures:
     in: testutil/fixtures
+  testutil-facadetest:
+    in: testutil/facadetest
 
 deps:
   # DOMAIN — only stdlib (+ pkg via commonComponents)
@@ -678,6 +680,7 @@ deps:
       - domain-errors
       - domain-plugin
       - domain-operation
+      - domain-transcript
       - infra-acp
       - infra-agents
       - infra-audit
@@ -727,6 +730,7 @@ deps:
       - domain-errors
       - domain-plugin
       - domain-operation
+      - domain-transcript
       - infra-audit
       - infra-config
       - infra-executor
@@ -750,6 +754,7 @@ deps:
       - domain-errors
       - domain-plugin
       - domain-operation
+      - domain-transcript
     canUse:
       - go-stdlib
       - go-sync
@@ -804,3 +809,13 @@ deps:
       - go-stdlib
       - testify
       - yaml
+  # facadetest: scriptable WorkflowFacade fake (T064); depends on the ports it
+  # satisfies and on application for MapError in WithTerminalFailed.
+  testutil-facadetest:
+    mayDependOn:
+      - domain-ports
+      - application
+    canUse:
+      - go-stdlib
+      - go-sync
+      - testify

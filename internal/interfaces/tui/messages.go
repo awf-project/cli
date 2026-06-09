@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
@@ -19,11 +20,14 @@ type HistoryLoadedMsg struct {
 // ExecutionStartedMsg signals a workflow run has begun in a background goroutine.
 // ExecCtx is the live execution context, observable via GetAllStepStates() during execution.
 // Done receives nil on success or an error when execution completes.
+// Session is optional: when non-nil the model calls MonitoringTab.StartEventLoop to
+// consume facade events instead of relying solely on the 200 ms polling tick (D27).
 type ExecutionStartedMsg struct {
 	ExecutionID string
 	Workflow    *workflow.Workflow
 	ExecCtx     *workflow.ExecutionContext
 	Done        <-chan error
+	Session     ports.RunSession // optional; nil = polling only
 }
 
 // ExecutionFinishedMsg signals the workflow run has ended.
@@ -61,3 +65,10 @@ func (e ErrMsg) Error() string {
 // input in a conversation step. The monitoring tab should display a text input
 // and auto-select the running conversation step.
 type InputRequestedMsg struct{}
+
+// facadeEventMsg carries a single Event received from a RunSession event channel.
+// Sent from the goroutine spawned by MonitoringTab.StartEventLoop that ranges over
+// RunSession.Events() — replacing the legacy 200ms polling loop (D27, FR-011).
+type facadeEventMsg struct {
+	Event ports.Event
+}

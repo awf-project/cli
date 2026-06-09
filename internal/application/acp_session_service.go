@@ -99,8 +99,13 @@ type ACPSessionService struct {
 	// pack-blind workflowRepo. Optional, following the same Set* wiring convention as emitter
 	// and runnerFactory below; read-only once Serve is running.
 	workflows WorkflowProvider
-	sessions  sync.Map // string → *ACPSession
-	logger    ports.Logger
+	// facade is the pack-aware WorkflowFacade used for Run/Respond delegation (T063, D36).
+	// When set (via SetFacade), HandleSessionPrompt routes through facade.Run and
+	// session.Respond instead of the legacy in-place runner. Optional; read-only once Serve
+	// is running (same Set*-before-Serve contract as emitter and runnerFactory).
+	facade   ports.WorkflowFacade
+	sessions sync.Map // string → *ACPSession
+	logger   ports.Logger
 
 	// serverCtx is the server-lifetime context used as the parent for every
 	// session-lifetime context (ACPSession.sessionCtx). It must be set via
@@ -155,6 +160,14 @@ func (s *ACPSessionService) SetRunnerFactory(f ACPRunnerFactory) {
 // so unit tests that omit wiring continue to work.
 func (s *ACPSessionService) SetServerContext(ctx context.Context) {
 	s.serverCtx = ctx
+}
+
+// SetFacade installs the pack-aware WorkflowFacade for Run/Respond delegation (T063, D36).
+// When set, HandleSessionPrompt routes through facade.Run and RunSession.Respond instead
+// of the legacy in-place runner. Optional; must be called during the single-threaded
+// initialization sequence before Serve, like the other Set* wiring.
+func (s *ACPSessionService) SetFacade(f ports.WorkflowFacade) {
+	s.facade = f
 }
 
 // NewACPSessionService constructs an ACPSessionService. A nil logger is replaced with a
@@ -546,6 +559,13 @@ func (s *ACPSessionService) HandleSessionPrompt(ctx context.Context, params json
 		return promptStop("end_turn"), nil
 	}
 
+	// Facade path (D36, T063): when SetFacade is wired, delegate to facade.Run instead of
+	// the legacy runner. The sessionCtx/runCtx split and event projection are completed in
+	// the GREEN phase; this stub routes through the interface boundary to unblock test RED.
+	if s.facade != nil {
+		return s.dispatchViaFacade(ctx, session, workflowName, inputs), nil
+	}
+
 	// US2 conversation parking — run the workflow on its OWN goroutine so this handler can
 	// return a stopReason while the workflow is still parked, letting the editor re-enable its
 	// input field. The synchronous alternative blocked the turn until the whole workflow
@@ -723,6 +743,183 @@ func workflowOutputText(execCtx *workflow.ExecutionContext) string {
 		}
 	}
 	return strings.Join(parts, "\n")
+}
+
+// dispatchViaFacade implements the facade execution path (D36, T063 GREEN).
+//
+// Architecture (preserves the proven sessionCtx/runCtx split from F105, research Q4):
+//
+//   - runCtx is derived from session.sessionCtx (session-lifetime context), NOT from the
+//     per-turn request ctx. The SDK cancels the per-turn ctx when the Prompt handler returns
+//     end_turn; a runCtx child of requestCtx would be killed before the next turn's
+//     continuation input can arrive — the exact bug this split was designed to prevent.
+//
+//   - The event projection goroutine drains sess.Events() and projects each ports.Event to
+//     a session/update notification via the emitter (FR-013, D34). When EventInputRequired
+//     arrives the goroutine increments session.ParkedTurnCount and signals run.parkedCh so
+//     waitTurn returns end_turn and the editor re-enables its input field. The continuation
+//     turn routes through the existing HandleSessionPrompt parking branch, which calls
+//     facadeInputBridge.Respond(text) → RunSession.Respond(InputResponse{Value: text}).
+//
+//   - A facadeInputBridge is stored in session.inputReader so the existing continuation-
+//     routing code (which calls h.r.Respond(text)) works unmodified for the facade path.
+func (s *ACPSessionService) dispatchViaFacade(requestCtx context.Context, session *ACPSession, workflowName string, inputs map[string]any) any {
+	// runCtx is derived from the session-lifetime context, NOT the per-turn request ctx.
+	// This mirrors the legacy runner path (lines 588-589) and preserves the proven
+	// sessionCtx/runCtx split (F105 research Q4).
+	runCtx, cancel := context.WithCancel(session.getSessionCtx())
+	session.setCancel(cancel)
+
+	// runWG covers the projection goroutine so Shutdown.runWG.Wait() drains it before
+	// releasing per-session resources (mirrors the C1 fix in the legacy runner path).
+	session.runWG.Add(1)
+
+	facadeSess, err := s.facade.Run(runCtx, ports.RunRequest{
+		Identifier: workflowName,
+		Inputs:     inputs,
+	})
+	if err != nil {
+		session.runWG.Done()
+		cancel()
+		s.logger.Warn("session/prompt: facade.Run failed", "sessionId", session.ID, "workflow", workflowName, "error", err)
+		s.sendAgentText(requestCtx, session.ID, fmt.Sprintf("Workflow %q failed to start: %s", workflowName, err))
+		return promptStop("end_turn")
+	}
+
+	// Wire the facadeInputBridge so that continuation turns (parkedTurnCount > 0)
+	// route through h.r.Respond(text) → RunSession.Respond(InputResponse{Value: text}).
+	// This keeps the existing HandleSessionPrompt parking branch unmodified.
+	bridge := &facadeInputBridge{session: facadeSess}
+	session.inputReader.Store(&inputReaderHolder{r: bridge})
+
+	// Publish the run coordination state before launching the goroutine so the park
+	// signal from the projection goroutine has a valid run.parkedCh to send on.
+	run := &acpRun{
+		parkedCh:     make(chan struct{}, 1),
+		doneCh:       make(chan struct{}),
+		workflowName: workflowName,
+	}
+	session.run.Store(run)
+
+	go func() {
+		defer session.runWG.Done()
+		defer cancel()
+		defer facadeSess.Close() //nolint:errcheck // Close is idempotent and returns nil
+
+		s.projectFacadeEvents(runCtx, session, run, facadeSess)
+
+		run.runErr = facadeSess.Err()
+		run.cancelled = runCtx.Err() != nil
+		close(run.doneCh)
+	}()
+
+	return s.waitTurn(requestCtx, session, run)
+}
+
+// facadeInputBridge wraps a ports.RunSession to satisfy ACPInputResponder for the facade
+// execution path. It enables the existing ACPSession.inputReader continuation routing to
+// work with RunSession without modifying ACPSession or HandleSessionPrompt.
+//
+// ReadInput is never called in the facade path — input requests arrive via EventInputRequired
+// on the RunSession event channel, not via a blocking poll on the workflow goroutine.
+// Respond is called by HandleSessionPrompt when a continuation turn arrives: it forwards
+// the user's text to RunSession.Respond so the parked workflow can resume.
+type facadeInputBridge struct {
+	session ports.RunSession
+}
+
+func (b *facadeInputBridge) ReadInput(_ context.Context) (string, error) {
+	// Not used in facade path: input requests arrive via EventInputRequired events.
+	return "", nil
+}
+
+func (b *facadeInputBridge) Respond(text string) {
+	_ = b.session.Respond(ports.InputResponse{Value: text}) //nolint:errcheck // ACPInputResponder.Respond has no error return; log-free drop is the established contract for all ACPInputResponder implementations
+}
+
+func (b *facadeInputBridge) SetParkHooks(_, _ func()) {
+	// Park accounting for the facade path is handled directly in projectFacadeEvents
+	// via session.ParkedTurnCount — no hook indirection is needed.
+}
+
+// projectFacadeEvents drains the RunSession event channel, projects each ports.Event to a
+// session/update notification, and handles the EventInputRequired parking protocol.
+//
+// When EventInputRequired arrives the function:
+//  1. Increments session.ParkedTurnCount so HandleSessionPrompt's parking branch activates.
+//  2. Signals run.parkedCh (non-blocking, buffered cap 1) so waitTurn returns end_turn and
+//     the editor re-enables its input field.
+//  3. Returns immediately (the projection loop is paused until the next event arrives, which
+//     happens after the continuation turn calls RunSession.Respond).
+//
+// Projection terminates when the event channel is closed (workflow finished or session ctx
+// cancelled). ProjectFacadeEvent maps each ports.EventKind to an ACP session/update kind
+// and a flat fields map; unknown or non-projectable kinds are silently skipped.
+func (s *ACPSessionService) projectFacadeEvents(ctx context.Context, session *ACPSession, run *acpRun, facadeSess ports.RunSession) {
+	for ev := range facadeSess.Events() {
+		if ev.Kind == ports.EventInputRequired {
+			session.ParkedTurnCount.Add(1)
+			select {
+			case run.parkedCh <- struct{}{}:
+			default:
+			}
+			// Decrement on the next event (which arrives after Respond unparks the workflow)
+			// or when the channel is closed. We defer the decrement until after the next event
+			// to keep the count accurate across the turn boundary.
+			// Block until a non-InputRequired event or channel close signals the workflow resumed.
+			nextEv, ok := <-facadeSess.Events()
+			session.ParkedTurnCount.Add(-1)
+			if !ok {
+				return
+			}
+			// Project the next event normally.
+			s.emitFacadeEvent(ctx, session.ID, nextEv)
+			continue
+		}
+		s.emitFacadeEvent(ctx, session.ID, ev)
+	}
+}
+
+// emitFacadeEvent maps a ports.Event to a session/update notification kind and fields,
+// then emits it via the session update emitter. Unknown kinds are silently skipped (best-effort).
+// This reuses the projection table from F105's WorkflowEventProjector (D34, FR-013, research Q3).
+func (s *ACPSessionService) emitFacadeEvent(ctx context.Context, sessionID string, ev ports.Event) { //nolint:gocritic // hugeParam: ports.Event is part of the ports contract; pointer indirection would couple the projection helper to *Event and diverge from the channel element type
+	if s.emitter == nil {
+		return
+	}
+	kind, fields := facadeEventToUpdate(ev)
+	if kind == "" {
+		return
+	}
+	if err := s.emitter.EmitSessionUpdate(ctx, sessionID, kind, fields); err != nil {
+		s.logger.Warn("session/prompt: facade event emit failed", "sessionId", sessionID, "eventKind", ev.Kind.String(), "error", err)
+	}
+}
+
+// facadeEventToUpdate maps a ports.Event to the (kind, fields) pair for a session/update
+// notification. Returns ("", nil) for event kinds that do not project to ACP notifications.
+// Mirrors the WorkflowEventProjector switch table (F105, research Q3) for consistency (D34).
+func facadeEventToUpdate(ev ports.Event) (kind string, fields map[string]any) { //nolint:gocritic // hugeParam: ports.Event is part of the ports contract; pointer indirection would diverge from the channel element type used throughout
+	switch ev.Kind {
+	case ports.EventRunStarted:
+		return "workflow_started", map[string]any{"run_id": ev.RunID}
+	case ports.EventRunCompleted, ports.EventWorkflowCompleted:
+		return "workflow_completed", map[string]any{"run_id": ev.RunID}
+	case ports.EventStepStarted:
+		return "step_started", map[string]any{"run_id": ev.RunID}
+	case ports.EventStepCompleted:
+		return "step_completed", map[string]any{"run_id": ev.RunID}
+	case ports.EventMessageAssistant:
+		return "agent_message_chunk", map[string]any{
+			"content": map[string]any{"type": "text", "text": ev.RunID},
+		}
+	case ports.EventWorkflowFailed:
+		return "workflow_failed", map[string]any{"run_id": ev.RunID}
+	default:
+		// EventKindUnknown, EventInputRequired (handled by caller), EventMessageUser,
+		// EventToolCall, EventToolResult, EventStepCallWorkflow* — not projected.
+		return "", nil
+	}
 }
 
 // HandleSessionCancel handles a session/cancel request.

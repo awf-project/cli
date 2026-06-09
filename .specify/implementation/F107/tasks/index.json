@@ -1,0 +1,295 @@
+[
+  {
+    "id": "T053",
+    "type": "code",
+    "size": "M",
+    "parallel": false,
+    "depends_on": [],
+    "user_story": "US1",
+    "status": "completed",
+    "files": [
+      "internal/domain/ports/facade.go",
+      "internal/domain/ports/facade_event.go",
+      "internal/domain/ports/facade_dto.go",
+      "internal/domain/ports/facade_contract_test.go"
+    ],
+    "tests": [
+      "internal/domain/ports/facade_contract_test.go"
+    ],
+    "file": "tasks/T053.md"
+  },
+  {
+    "id": "T054",
+    "type": "code",
+    "size": "M",
+    "parallel": true,
+    "depends_on": [
+      "T053",
+      "T055"
+    ],
+    "user_story": "US3",
+    "status": "completed",
+    "files": [
+      "internal/application/resolver.go",
+      "internal/application/resolver_wire.go",
+      "internal/application/resolver_test.go",
+      "internal/application/resolver_wire_test.go"
+    ],
+    "tests": [
+      "internal/application/resolver_test.go",
+      "internal/application/resolver_wire_test.go"
+    ],
+    "file": "tasks/T054.md"
+  },
+  {
+    "id": "T055",
+    "type": "code",
+    "size": "S",
+    "parallel": true,
+    "depends_on": [
+      "T053"
+    ],
+    "user_story": "US1",
+    "status": "completed",
+    "files": [
+      "internal/domain/errors/codes.go",
+      "internal/application/error_codes.go",
+      "internal/application/error_codes_test.go"
+    ],
+    "tests": [
+      "internal/application/error_codes_test.go"
+    ],
+    "file": "tasks/T055.md"
+  },
+  {
+    "id": "T056",
+    "type": "code",
+    "size": "S",
+    "parallel": true,
+    "depends_on": [
+      "T053"
+    ],
+    "user_story": "US1",
+    "status": "completed",
+    "files": [
+      "internal/application/facade_projection.go",
+      "internal/application/facade_projection_test.go"
+    ],
+    "tests": [
+      "internal/application/facade_projection_test.go"
+    ],
+    "file": "tasks/T056.md"
+  },
+  {
+    "id": "T057",
+    "type": "code",
+    "size": "M",
+    "parallel": false,
+    "depends_on": [
+      "T053",
+      "T055"
+    ],
+    "user_story": "US1",
+    "status": "completed",
+    "files": [
+      "internal/application/session_registry.go",
+      "internal/application/session_registry_test.go",
+      "internal/application/run_session.go",
+      "internal/application/run_session_test.go",
+      "internal/application/drain.go",
+      "internal/application/drain_test.go"
+    ],
+    "tests": [
+      "internal/application/session_registry_test.go",
+      "internal/application/run_session_test.go",
+      "internal/application/drain_test.go"
+    ],
+    "file": "tasks/T057.md"
+  },
+  {
+    "id": "T058",
+    "type": "code",
+    "size": "L",
+    "parallel": false,
+    "depends_on": [
+      "T053",
+      "T054",
+      "T055",
+      "T056",
+      "T057"
+    ],
+    "user_story": "US1",
+    "status": "completed",
+    "files": [
+      "internal/application/facade_adapter.go",
+      "internal/application/facade_adapter_test.go"
+    ],
+    "tests": [
+      "internal/application/facade_adapter_test.go"
+    ],
+    "file": "tasks/T058.md"
+  },
+  {
+    "id": "T059",
+    "type": "code",
+    "size": "M",
+    "parallel": false,
+    "depends_on": [
+      "T058"
+    ],
+    "user_story": "US2",
+    "status": "completed",
+    "files": [
+      "internal/application/input_bridge.go",
+      "internal/application/input_bridge_test.go"
+    ],
+    "tests": [
+      "internal/application/input_bridge_test.go"
+    ],
+    "file": "tasks/T059.md"
+  },
+  {
+    "id": "T060",
+    "type": "code",
+    "size": "L",
+    "parallel": false,
+    "depends_on": [
+      "T059"
+    ],
+    "user_story": "US1, US4",
+    "status": "completed",
+    "files": [
+      "internal/interfaces/cli/run.go",
+      "internal/interfaces/cli/status.go",
+      "internal/interfaces/cli/resume.go",
+      "internal/interfaces/cli/resume_list.go",
+      "cmd/awf/main.go",
+      "internal/interfaces/cli/run_test.go",
+      "internal/interfaces/cli/status_test.go",
+      "internal/interfaces/cli/resume_list_test.go"
+    ],
+    "tests": [
+      "internal/interfaces/cli/run_test.go",
+      "internal/interfaces/cli/status_test.go",
+      "internal/interfaces/cli/resume_list_test.go"
+    ],
+    "file": "tasks/T060.md"
+  },
+  {
+    "id": "T061",
+    "type": "code",
+    "size": "M",
+    "parallel": false,
+    "depends_on": [
+      "T060"
+    ],
+    "user_story": "US1",
+    "status": "completed",
+    "files": [
+      "internal/interfaces/tui/tab_monitoring.go",
+      "internal/interfaces/tui/command.go",
+      "cmd/awf/main.go",
+      "internal/interfaces/tui/tab_monitoring_test.go",
+      ".go-arch-lint.yml"
+    ],
+    "tests": [
+      "internal/interfaces/tui/tab_monitoring_test.go"
+    ],
+    "file": "tasks/T061.md"
+  },
+  {
+    "id": "T062",
+    "type": "code",
+    "size": "M",
+    "parallel": false,
+    "depends_on": [
+      "T061"
+    ],
+    "user_story": "US1",
+    "status": "completed",
+    "files": [
+      "internal/interfaces/api/sse.go",
+      "internal/interfaces/api/routing.go",
+      "internal/interfaces/api/respond_handler.go",
+      "internal/interfaces/api/server.go",
+      "internal/interfaces/api/sse_test.go",
+      "internal/interfaces/api/respond_handler_test.go",
+      ".go-arch-lint.yml"
+    ],
+    "tests": [
+      "internal/interfaces/api/sse_test.go",
+      "internal/interfaces/api/respond_handler_test.go"
+    ],
+    "file": "tasks/T062.md"
+  },
+  {
+    "id": "T063",
+    "type": "code",
+    "size": "M",
+    "parallel": false,
+    "depends_on": [
+      "T062"
+    ],
+    "user_story": "US1",
+    "status": "blocked",
+    "files": [
+      "internal/application/acp_session_service.go",
+      "internal/infrastructure/acp/agent.go",
+      "internal/application/acp_session_service_test.go"
+    ],
+    "tests": [
+      "internal/application/acp_session_service_test.go"
+    ],
+    "file": "tasks/T063.md"
+  },
+  {
+    "id": "T064",
+    "type": "code",
+    "size": "M",
+    "parallel": true,
+    "depends_on": [
+      "T053",
+      "T055"
+    ],
+    "user_story": "US5",
+    "status": "completed",
+    "files": [
+      "internal/testutil/facadetest/facadetest.go",
+      "internal/testutil/facadetest/doc.go",
+      "internal/testutil/facadetest/facadetest_test.go"
+    ],
+    "tests": [
+      "internal/testutil/facadetest/facadetest_test.go"
+    ],
+    "file": "tasks/T064.md"
+  },
+  {
+    "id": "T065",
+    "type": "code",
+    "size": "L",
+    "parallel": false,
+    "depends_on": [
+      "T063",
+      "T064"
+    ],
+    "user_story": "US5",
+    "status": "blocked",
+    "files": [
+      "tests/integration/features/facade_conformance_test.go",
+      "tests/integration/features/facade_e2e_run_test.go",
+      "tests/integration/features/facade_resume_test.go",
+      "tests/integration/features/agent_uniformity_test.go",
+      "tests/fixtures/facade/cli-stdout.golden",
+      "tests/fixtures/facade/acp-session-update.golden",
+      "tests/fixtures/facade/sse-frames.golden",
+      "tests/fixtures/facade/tui-tea-msg.golden"
+    ],
+    "tests": [
+      "tests/integration/features/facade_conformance_test.go",
+      "tests/integration/features/facade_e2e_run_test.go",
+      "tests/integration/features/facade_resume_test.go",
+      "tests/integration/features/agent_uniformity_test.go"
+    ],
+    "file": "tasks/T065.md"
+  }
+]

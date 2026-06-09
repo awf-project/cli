@@ -377,7 +377,8 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 
 	if recorder != nil {
-		setupOpts = append(setupOpts,
+		setupOpts = append(
+			setupOpts,
 			application.WithRecorder(recorder),
 			application.WithRecorderFactory(NewRecorderFactory()),
 			application.WithTranscriptDir(filepath.Join(cfg.StoragePath, "transcripts")),

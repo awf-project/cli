@@ -9,22 +9,27 @@ AWF follows Hexagonal (Ports and Adapters) / Clean Architecture with strict depe
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     INTERFACES LAYER                        │
-│      CLI (current)  │  API (future)  │  MQ (future)        │
+│      CLI (current)  │  API   │  ACP  │  TUI                 │
 └───────────────────────────┬─────────────────────────────────┘
                             │
 ┌───────────────────────────┴─────────────────────────────────┐
 │                   APPLICATION LAYER                         │
-│   WorkflowService │ ExecutionService │ PluginService        │
+│                    WorkflowFacade                           │
+│   WorkflowService │ ExecutionService │ HistoryService       │
+│                 Resolver │ InputBridge                      │
+│   PluginService │ StateManager │ TemplateService            │
 └───────────────────────────┬─────────────────────────────────┘
                             │
 ┌───────────────────────────┴─────────────────────────────────┐
 │                      DOMAIN LAYER                           │
-│   Workflow │ Step │ Plugin │ Operation │ Ports (Interfaces)  │
+│   Workflow │ Step │ Plugin │ Operation │ Ports (Interfaces) │
+│                  Recorder (Transcript)                      │
 └───────────────────────────┬─────────────────────────────────┘
                             │
 ┌───────────────────────────┴─────────────────────────────────┐
 │                  INFRASTRUCTURE LAYER                       │
-│ YAMLRepository │ JSONStateStore │ AgentProviders │ GitHub │ Notify │
+│ YAMLRepository │ JSONStateStore │ AgentProviders │ Agents   │
+│ GitHub │ Notify │ MCP │ Transcript Record                   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -175,18 +180,31 @@ Orchestrates use cases using domain entities and ports.
 
 **Location:** `internal/application/`
 
-**Services:**
+**Core Services:**
 - `WorkflowService` - Workflow loading, validation, listing
 - `ExecutionService` - Workflow execution engine
+- `HistoryService` - Execution history and resumable workflow management
 - `StateManager` - State persistence management
 - `TemplateService` - Template loading and resolution
 - `PluginService` - Plugin lifecycle orchestration
+
+**Unified Execution Port (F107):**
+- `WorkflowFacade` - Unified entry point across all interfaces (CLI, HTTP API, ACP, TUI)
+  - **Async methods:** `Run(ctx, RunRequest) RunSession`, `Resume(ctx, id) RunSession` — return `RunSession` for streaming event consumption
+  - **Sync methods:** `List()`, `Validate(name)`, `Status(id)`, `History(filter)` — for querying workflows and execution state
+  - **RunSession:** Bidirectional session with `Events()` channel for real-time execution events, `Respond(InputResponse)` for mid-execution input collection, `Err()` for terminal error, and idempotent `Close()`
+  - **Event Projection:** Maps canonical `transcript.ExchangeEvent` (from F106 Recorder) to provider-agnostic `facade.Event` with `EventKind` enum; reuses F106's `Seq` for coherent SSE replay-from-Seq
+  - **Canonical Resolver:** Single `Resolver` consolidating three divergent implementations (`pack_resolver.go`, `resolvePackWorkflow`, `SplitCallWorkflowName`); handles pack/workflow parsing, manifest validation, and load via `PackDiscoverer` or `Repository`
+  - **Error Mapping:** Single exhaustive `StructuredError → ErrorCode` table with pure per-interface translators (`exitCode`, `httpStatus`, `rpcCode`)
+  - **Input Bridge:** Bidirectional `UserInputReader` synthesizing `EventInputRequired` and accepting `Respond()` to unify interactive input collection across all interfaces
+  - **Session Registry:** In-process `map[ID]*RunSession` for HTTP/cloud consumers and `Drain(sess)` helper for CLI synchronous use
 
 **Key Responsibilities:**
 - Coordinate domain operations
 - Handle transactions/rollbacks
 - Implement use case logic
 - No direct infrastructure access (only through ports)
+- F107 adapter composes services via delegation (no business logic rewrite)
 
 ### Infrastructure Layer
 
@@ -474,6 +492,37 @@ defer cancel()
 
 result, err := executor.Execute(ctx, cmd)
 ```
+
+### Unified Execution Facade
+
+The `WorkflowFacade` provides a single async-first entry point across all interfaces (CLI, HTTP, ACP, TUI):
+
+**Event Streaming Architecture:**
+1. Each `Run()` / `Resume()` call returns a `RunSession` with `Events() <-chan facade.Event`
+2. The adapter subscribes once to the F106 `Recorder.Subscribe()` per session for back-pressure isolation
+3. Events are projected from three sources into one ordered stream:
+   - **Primary:** `transcript.ExchangeEvent` from `Recorder` (normalized agent output, masking applied)
+   - **Bridge-synthesized:** `EventInputRequired` when user input is needed mid-execution
+   - **Terminal outcome:** `workflow_completed`/`workflow_failed` derived from synchronous `StructuredError`
+4. All events preserve the F106 `Seq` monotonic ordering for coherent SSE replay-from-Seq
+5. RunSession provides bounded replay buffer (default 256 events) keyed by `Seq` for reconnect windows
+
+**Canonical Resolution:**
+- One `Resolver` consolidates three divergent implementations
+- Parses canonical `pack/workflow` format
+- Per-interface wire adapters handle format conversions (CLI identity, HTTP, ACP `:` ↔ `/`, MCP `_` ↔ `/`)
+- Validates pack manifest and loads via `PackDiscoverer` or `Repository`
+
+**Error Mapping:**
+- Single exhaustive `StructuredError → ErrorCode` table
+- Pure per-interface translators convert codes to exit codes, HTTP status, RPC codes
+- Unmapped errors fail closed to `ErrInternal` with original error preserved for logging
+
+**Input Collection:**
+- Bidirectional `UserInputReader` bridge replaces CLI stdin, TUI, and ACP input readers
+- Synthesizes `EventInputRequired` on `Events()` channel
+- Consumer calls `RunSession.Respond(InputResponse)` to resume blocked executor
+- Handles edge cases: respond after close (non-fatal error), duplicate respond (dropped), close before respond (terminal event)
 
 ### Parallel Execution
 

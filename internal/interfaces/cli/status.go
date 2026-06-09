@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
-	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
 )
@@ -36,37 +36,95 @@ func runStatus(cmd *cobra.Command, cfg *Config, workflowID string) error {
 	// Create output writer
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
-	// Load state
-	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
-	execCtx, err := stateStore.Load(ctx, workflowID)
+	// Route through WorkflowFacade when wired (T060).
+	if cfg.Facade != nil {
+		return runStatusViaFacade(cmd, cfg, writer, ctx, workflowID)
+	}
+
+	// Facade not yet wired: return a "not found" error so callers get a meaningful message
+	// instead of a nil-pointer panic. Once facade wiring is complete in main.go this branch
+	// will never be reached in production.
+	err := fmt.Errorf("workflow execution not found: %s (status lookup requires facade wiring)", workflowID)
+	if writer.IsJSONFormat() {
+		return writer.WriteError(err, ExitUser)
+	}
+	return writeErrorAndExit(writer, err, ExitUser)
+}
+
+// runStatusViaFacade delegates the status lookup to ports.WorkflowFacade.Status.
+// It formats the returned RunStatus for all output modes (text/JSON/table/quiet).
+func runStatusViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWriter, ctx context.Context, runID string) error { //nolint:revive // context.Context not first param: writer is a pre-built dependency, not a new chain
+	status, err := cfg.Facade.Status(ctx, runID)
 	if err != nil {
 		if writer.IsJSONFormat() {
 			return writer.WriteError(err, ExitUser)
 		}
 		return writeErrorAndExit(writer, err, ExitUser)
 	}
-	if execCtx == nil {
-		err := fmt.Errorf("workflow execution not found: %s", workflowID)
+	if status.RunID == "" {
+		notFound := fmt.Errorf("workflow execution not found: %s", runID)
 		if writer.IsJSONFormat() {
-			return writer.WriteError(err, ExitUser)
+			return writer.WriteError(notFound, ExitUser)
 		}
-		return writeErrorAndExit(writer, err, ExitUser)
+		return writeErrorAndExit(writer, notFound, ExitUser)
 	}
 
-	// JSON/quiet/table format: use OutputWriter
+	// JSON/quiet/table format
 	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet || cfg.OutputFormat == ui.FormatTable {
-		execInfo := toExecutionInfo(execCtx)
+		execInfo := runStatusToExecutionInfo(&status)
 		return writer.WriteExecution(&execInfo)
 	}
 
-	// Text format: use formatter
+	// Text format
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		Verbose: cfg.Verbose,
 		Quiet:   cfg.Quiet,
 		NoColor: cfg.NoColor,
 	})
-	displayStatus(formatter, execCtx, cfg.Verbose)
+	displayRunStatus(formatter, &status)
 	return nil
+}
+
+// runStatusToExecutionInfo converts a ports.RunStatus to ui.ExecutionInfo for structured output.
+func runStatusToExecutionInfo(s *ports.RunStatus) ui.ExecutionInfo {
+	var durationMs int64
+	if s.CompletedAt.IsZero() && !s.StartedAt.IsZero() {
+		durationMs = time.Since(s.StartedAt).Milliseconds()
+	} else if !s.CompletedAt.IsZero() && !s.StartedAt.IsZero() {
+		durationMs = s.CompletedAt.Sub(s.StartedAt).Milliseconds()
+	}
+
+	info := ui.ExecutionInfo{
+		WorkflowID: s.RunID,
+		Status:     s.Status,
+		DurationMs: durationMs,
+	}
+	if !s.StartedAt.IsZero() {
+		info.StartedAt = s.StartedAt.Format(time.RFC3339)
+	}
+	if !s.CompletedAt.IsZero() {
+		info.CompletedAt = s.CompletedAt.Format(time.RFC3339)
+	}
+	return info
+}
+
+// displayRunStatus renders a ports.RunStatus in human-readable text format.
+func displayRunStatus(formatter *ui.Formatter, s *ports.RunStatus) {
+	color := formatter.Colorizer()
+
+	formatter.Printf("ID:       %s\n", s.RunID)
+	formatter.StatusLine("Status", s.Status, "")
+
+	var duration time.Duration
+	if s.CompletedAt.IsZero() && !s.StartedAt.IsZero() {
+		duration = time.Since(s.StartedAt)
+	} else if !s.CompletedAt.IsZero() && !s.StartedAt.IsZero() {
+		duration = s.CompletedAt.Sub(s.StartedAt)
+	}
+	if duration > 0 {
+		formatter.Printf("Duration: %s\n", duration.Round(time.Millisecond))
+	}
+	_ = color // colorizer available for future field coloring
 }
 
 func toExecutionInfo(execCtx *workflow.ExecutionContext) ui.ExecutionInfo {

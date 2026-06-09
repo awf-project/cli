@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/interfaces/tui"
 )
@@ -437,4 +438,153 @@ func TestBridge_ValidateWorkflow_RespectsCancellation(t *testing.T) {
 	require.True(t, ok, "expected ValidationResultMsg on cancelled context, got %T", msg)
 	assert.False(t, result.Success)
 	assert.NotEmpty(t, result.Error)
+}
+
+// --- mockFacade / mockFacadeSession for SetFacade + RunWorkflowViaFacade tests ---
+
+// mockFacadeSession satisfies ports.RunSession.
+type mockFacadeSession struct {
+	id     string
+	events chan ports.Event
+	err    error
+}
+
+func newMockFacadeSession(id string) *mockFacadeSession {
+	return &mockFacadeSession{
+		id:     id,
+		events: make(chan ports.Event, 8),
+	}
+}
+
+func (s *mockFacadeSession) ID() string {
+	return s.id
+}
+
+func (s *mockFacadeSession) Events() <-chan ports.Event {
+	return s.events
+}
+
+func (s *mockFacadeSession) Respond(_ ports.InputResponse) error {
+	return nil
+}
+
+func (s *mockFacadeSession) Err() error {
+	return s.err
+}
+
+func (s *mockFacadeSession) Close() error {
+	close(s.events)
+	return nil
+}
+
+// mockFacade satisfies ports.WorkflowFacade.
+type mockFacade struct {
+	session *mockFacadeSession
+	runErr  error
+}
+
+func newMockFacade() *mockFacade {
+	return &mockFacade{
+		session: newMockFacadeSession("facade-session-1"),
+	}
+}
+
+func (f *mockFacade) List(_ context.Context) ([]ports.WorkflowSummary, error) {
+	return nil, nil
+}
+
+func (f *mockFacade) Validate(_ context.Context, _ ports.RunRequest) (ports.ValidationReport, error) { //nolint:gocritic // interface contract
+	return ports.ValidationReport{}, nil
+}
+
+func (f *mockFacade) Status(_ context.Context, _ string) (ports.RunStatus, error) {
+	return ports.RunStatus{}, nil
+}
+
+func (f *mockFacade) History(_ context.Context, _ ports.HistoryFilter) ([]ports.RunRecord, error) { //nolint:gocritic // interface contract
+	return nil, nil
+}
+
+func (f *mockFacade) Run(_ context.Context, _ ports.RunRequest) (ports.RunSession, error) { //nolint:gocritic // interface contract
+	if f.runErr != nil {
+		return nil, f.runErr
+	}
+	return f.session, nil
+}
+
+func (f *mockFacade) Resume(_ context.Context, _ string) (ports.RunSession, error) {
+	return f.session, nil
+}
+
+// --- SetFacade ---
+
+func TestBridge_SetFacade_DoesNotPanic(t *testing.T) {
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), newMockHistoryProvider())
+
+	require.NotPanics(t, func() {
+		bridge.SetFacade(newMockFacade())
+	})
+}
+
+func TestBridge_SetFacade_AcceptsNil(t *testing.T) {
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), newMockHistoryProvider())
+
+	require.NotPanics(t, func() {
+		bridge.SetFacade(nil)
+	})
+}
+
+// --- RunWorkflowViaFacade ---
+
+func TestBridge_RunWorkflowViaFacade_WithoutFacade_ReturnsErrMsg(t *testing.T) {
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), newMockHistoryProvider())
+	// facade not set
+
+	msg := bridge.RunWorkflowViaFacade(context.Background(), "wf-1", nil)()
+
+	errMsg, ok := msg.(tui.ErrMsg)
+	require.True(t, ok, "expected ErrMsg when facade is not set, got %T", msg)
+	assert.Error(t, errMsg.Err)
+}
+
+func TestBridge_RunWorkflowViaFacade_RespectsCancellation(t *testing.T) {
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge.SetFacade(newMockFacade())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	msg := bridge.RunWorkflowViaFacade(ctx, "wf-1", nil)()
+
+	errMsg, ok := msg.(tui.ErrMsg)
+	require.True(t, ok, "expected ErrMsg on cancelled context, got %T", msg)
+	assert.Error(t, errMsg.Err)
+}
+
+func TestBridge_RunWorkflowViaFacade_FacadeRunError_ReturnsErrMsg(t *testing.T) {
+	facade := newMockFacade()
+	facade.runErr = errors.New("execution unavailable")
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge.SetFacade(facade)
+
+	msg := bridge.RunWorkflowViaFacade(context.Background(), "wf-1", nil)()
+
+	errMsg, ok := msg.(tui.ErrMsg)
+	require.True(t, ok, "expected ErrMsg when facade.Run fails, got %T", msg)
+	assert.ErrorContains(t, errMsg.Err, "execution unavailable")
+}
+
+func TestBridge_RunWorkflowViaFacade_Success_EmitsExecutionStartedMsg(t *testing.T) {
+	facade := newMockFacade()
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge.SetFacade(facade)
+
+	msg := bridge.RunWorkflowViaFacade(context.Background(), "wf-1", map[string]any{"k": "v"})()
+
+	started, ok := msg.(tui.ExecutionStartedMsg)
+	require.True(t, ok, "expected ExecutionStartedMsg, got %T", msg)
+	assert.Equal(t, "wf-1", started.ExecutionID)
+	assert.Equal(t, facade.session, started.Session, "Session must be the RunSession returned by facade.Run")
+	assert.Nil(t, started.ExecCtx, "ExecCtx must be nil for facade-driven path")
+	assert.Nil(t, started.Done, "Done must be nil for facade-driven path (ExecutionFinishedMsg arrives via StartEventLoop)")
 }

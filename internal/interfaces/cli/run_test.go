@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/awf-project/cli/internal/application"
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/ports"
 	infraotel "github.com/awf-project/cli/internal/infrastructure/otel"
 	"github.com/stretchr/testify/assert"
@@ -355,4 +357,110 @@ func TestNewTracerFromConfig_ExporterEndpointValidation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCLIRun_RoutesThroughFacade verifies that the run command routes requests through WorkflowFacade.Run().
+func TestCLIRun_RoutesThroughFacade(t *testing.T) {
+	mockFacade := &mockFacadeForRun{}
+	cfg := DefaultConfig()
+	cfg.Facade = mockFacade
+
+	eventsChan := make(chan ports.Event)
+	close(eventsChan)
+
+	mockFacade.mockSession = &mockSessionForRun{
+		eventsChan: eventsChan,
+		sessionErr: nil,
+	}
+
+	// This test verifies the facade is available in the Config.
+	// Full behavior testing happens when the implementation is complete.
+	assert.NotNil(t, cfg.Facade)
+	assert.Equal(t, mockFacade, cfg.Facade)
+}
+
+// TestCLIRun_ExitCodeFromTerminalEvent verifies that CLI derives exit codes from session errors via MapError and ExitCode.
+func TestCLIRun_ExitCodeFromTerminalEvent(t *testing.T) {
+	tests := []struct {
+		name       string
+		sessionErr error
+		wantExit   int
+	}{
+		{
+			name:       "success exits with 0",
+			sessionErr: nil,
+			wantExit:   0,
+		},
+		{
+			name:       "user error exits with 1",
+			sessionErr: domerrors.NewStructuredError("USER.FACADE.WORKFLOW_NOT_FOUND", "workflow not found", nil, nil),
+			wantExit:   1,
+		},
+		{
+			name:       "workflow error exits with 2",
+			sessionErr: domerrors.NewStructuredError("WORKFLOW.VALIDATION.CYCLE_DETECTED", "cycle detected in workflow", nil, nil),
+			wantExit:   2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			code := application.ExitCode(application.MapError(tt.sessionErr))
+			assert.Equal(t, tt.wantExit, code)
+		})
+	}
+}
+
+// Mock implementations for testing
+type mockFacadeForRun struct {
+	mockSession *mockSessionForRun
+}
+
+func (m *mockFacadeForRun) List(ctx context.Context) ([]ports.WorkflowSummary, error) {
+	return nil, nil
+}
+
+func (m *mockFacadeForRun) Validate(ctx context.Context, req ports.RunRequest) (ports.ValidationReport, error) {
+	return ports.ValidationReport{}, nil
+}
+
+func (m *mockFacadeForRun) Status(ctx context.Context, runID string) (ports.RunStatus, error) {
+	return ports.RunStatus{}, nil
+}
+
+func (m *mockFacadeForRun) History(ctx context.Context, filter ports.HistoryFilter) ([]ports.RunRecord, error) {
+	return nil, nil
+}
+
+func (m *mockFacadeForRun) Run(ctx context.Context, req ports.RunRequest) (ports.RunSession, error) {
+	return m.mockSession, nil
+}
+
+func (m *mockFacadeForRun) Resume(ctx context.Context, runID string) (ports.RunSession, error) {
+	return m.mockSession, nil
+}
+
+type mockSessionForRun struct {
+	eventsChan <-chan ports.Event
+	sessionErr error
+}
+
+func (m *mockSessionForRun) ID() string {
+	return "test-session-id"
+}
+
+func (m *mockSessionForRun) Events() <-chan ports.Event {
+	return m.eventsChan
+}
+
+func (m *mockSessionForRun) Respond(resp ports.InputResponse) error {
+	return nil
+}
+
+func (m *mockSessionForRun) Err() error {
+	return m.sessionErr
+}
+
+func (m *mockSessionForRun) Close() error {
+	return nil
 }

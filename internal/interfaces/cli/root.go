@@ -33,9 +33,23 @@ func NewApp(cfg *Config) *App {
 }
 
 func NewRootCommand() *cobra.Command {
-	cfg := DefaultConfig()
+	cmd, _ := newRootCommand(false)
+	return cmd
+}
 
-	cmd := &cobra.Command{
+// NewRootCommandAutoFacade builds the root command with a CLI-wide WorkflowFacade wired
+// into cfg.Facade lazily (in PersistentPreRun, after flag parsing so --storage is honored).
+// It returns the command and a cleanup that releases facade resources (closes the history
+// store); main must call it after Execute returns.
+func NewRootCommandAutoFacade() (cmd *cobra.Command, cleanup func()) {
+	return newRootCommand(true)
+}
+
+func newRootCommand(autoFacade bool) (cmd *cobra.Command, cleanup func()) {
+	cfg := DefaultConfig()
+	var facadeCleanup func()
+
+	cmd = &cobra.Command{
 		Use:   "awf",
 		Short: "AI Workflow Framework CLI - Orchestrate AI agents through YAML workflows",
 		Long: `AWF (AI Workflow Framework CLI) is a command-line tool for orchestrating AI agents
@@ -91,6 +105,12 @@ Examples:
 			os.Exit(1)
 		}
 		cfg.OutputFormat = format
+		if autoFacade && cfg.Facade == nil {
+			if facade, cleanup := buildFacade(cfg); facade != nil {
+				cfg.Facade = facade
+				facadeCleanup = cleanup
+			}
+		}
 		if originalPreRun != nil {
 			originalPreRun(c, args)
 		}
@@ -102,6 +122,7 @@ Examples:
 	cmd.AddCommand(newListCommand(cfg))
 	cmd.AddCommand(newRunCommand(cfg))
 	cmd.AddCommand(newResumeCommand(cfg))
+	cmd.AddCommand(newResumeListCommand(cfg))
 	cmd.AddCommand(newStatusCommand(cfg))
 	cmd.AddCommand(newValidateCommand(cfg))
 	cmd.AddCommand(newHistoryCommand(cfg))
@@ -116,7 +137,11 @@ Examples:
 	cmd.AddCommand(newMCPServeCommand(Deps{}))
 	cmd.AddCommand(newACPServeCommand(Deps{}))
 
-	return cmd
+	return cmd, func() {
+		if facadeCleanup != nil {
+			facadeCleanup()
+		}
+	}
 }
 
 func newVersionCommand() *cobra.Command {
