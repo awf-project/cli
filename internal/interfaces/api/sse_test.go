@@ -5,14 +5,19 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
+	"runtime"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/danielgtaylor/huma/v2/humatest"
+	"github.com/danielgtaylor/huma/v2/sse"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/awf-project/cli/internal/domain/ports"
-	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/testutil/facadetest"
 )
 
 // mockSessionLookup implements SessionLookup for testing.
@@ -79,36 +84,78 @@ func (m *mockRunSession) setError(err error) {
 	m.err = err
 }
 
-func TestHTTPSSE_StreamConsumesRunSessionEvents(t *testing.T) {
-	// Acceptance: All events from RunSession.Events() arrive as SSE frames in order.
-	// Handler must consume from sess.Events() and emit SSE frames without dropping.
+// TestSSEStream_SentDataTypeIsRegistered is a regression guard: huma resolves a frame's
+// event name by looking up the Go type of msg.Data in the registry passed to sse.Register.
+// The handler previously registered an EMPTY map, so every frame hit huma's "unknown event
+// type" branch and dumped a goroutine stack trace to stderr. This pins the invariant that
+// whatever type the handler sends is registered via sseMessageTypes().
+func TestSSEStream_SentDataTypeIsRegistered(t *testing.T) {
+	sess := newMockRunSession("run-x")
+	lookup := newMockSessionLookup()
+	lookup.add(sess)
+	bridge := NewBridge()
+	var wg sync.WaitGroup
+	h := NewSSEHandler(bridge, &wg)
+	h.SetSessionLookup(lookup)
 
-	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
+	captured := make(chan any, 1)
+	go func() {
+		_ = h.Stream(context.Background(), &StreamInput{ID: "run-x"}, func(m sse.Message) error {
+			select {
+			case captured <- m.Data:
+			default:
+			}
+			return nil
+		})
+	}()
 
-	// Start execution to create a session
-	wf := &workflow.Workflow{
-		Name: "test-workflow",
-		Steps: map[string]*workflow.Step{
-			"step1": {Name: "step1", Command: "echo hello"},
-		},
+	sess.events <- ports.Event{Seq: 1, Kind: ports.EventStepCompleted, RunID: "run-x"}
+
+	var data any
+	select {
+	case data = <-captured:
+	case <-time.After(time.Second):
+		t.Fatal("Stream did not send any SSE frame")
 	}
-	execID, _, err := bridge.StartExecution(context.Background(), wf, nil)
-	require.NoError(t, err)
+	sess.Close()
 
-	// Verify execution is tracked
-	stored, ok := bridge.GetExecution(execID)
+	sentType := reflect.TypeOf(data)
+	registered := false
+	for _, sample := range sseMessageTypes() {
+		if reflect.TypeOf(sample) == sentType {
+			registered = true
+		}
+	}
+	assert.True(t, registered,
+		"the type sent to sse.Sender (%v) must be registered via sseMessageTypes(); "+
+			"an unregistered type makes huma log 'unknown event type' and dump a stack on every frame", sentType)
+}
+
+func TestHTTPSSE_StreamConsumesRunSessionEvents(t *testing.T) {
+	// Acceptance: A seeded execution must be tracked in the bridge so that the SSE
+	// stream endpoint can resolve it. The route must be registered (no 405).
+
+	bridge := NewBridge()
+	execID, stored := seedExecution(bridge, "test-workflow")
+
+	// Verify execution is tracked in the bridge.
+	_, ok := bridge.GetExecution(execID)
 	require.True(t, ok, "execution must be stored in bridge")
 	require.NotNil(t, stored)
 
-	// Connect to SSE stream using humatest API
-	// Stub getSession() returns nil, so this will fail with 404
-	// This assertion verifies the route is registered and handler is called
-	resp := api.Get("/api/executions/" + execID + "/events")
+	// Verify the SSE route is registered by hitting the full server.
+	srv := NewServer(bridge, ":0", WithSessionRegistry(newMockSessionLookup()))
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
 
-	// For a real implementation, we expect SSE stream to start (200 OK or streaming)
-	// Stub returns nil from getSession, so handler returns 404
-	// This assertion will fail on stub (triggering implementation)
-	assert.NotEqual(t, http.StatusMethodNotAllowed, resp.Code,
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet,
+		ts.URL+"/api/executions/"+execID+"/events", http.NoBody)
+	require.NoError(t, err)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	resp.Body.Close()
+
+	assert.NotEqual(t, http.StatusMethodNotAllowed, resp.StatusCode,
 		"SSE stream endpoint must be registered")
 }
 
@@ -116,7 +163,7 @@ func TestHTTPSSE_ReplayFromLastEventID(t *testing.T) {
 	// Acceptance: Requests with Last-Event-ID: N should receive events from Seq N+1 onward.
 	// Handler reads Last-Event-ID header and calls replayBuffered to backfill events.
 
-	bridge := NewBridge(newMockWorkflowLister("test-wf"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := NewBridge()
 
 	// Create SSE handler with bridge
 	handler := NewSSEHandler(bridge, &sync.WaitGroup{})
@@ -133,10 +180,7 @@ func TestHTTPSSE_OverflowDropDocumented(t *testing.T) {
 	// Handler must not block SSE sender on bounded replay buffer (constraint).
 	// Drop policy must be documented in code comment.
 
-	lister := newMockWorkflowLister("test-wf")
-	runner := newMockWorkflowRunner()
-	history := newMockHistoryProvider()
-	bridge := NewBridge(lister, runner, history)
+	bridge := NewBridge()
 	handler := NewSSEHandler(bridge, &sync.WaitGroup{})
 
 	// Verify handler has replayBuffered method for overflow handling
@@ -152,7 +196,8 @@ func TestHTTPRun_Returns202(t *testing.T) {
 	// Acceptance: POST /runs returns 202 Accepted with JSON body {run_id}.
 	// Response must indicate accepted status, not immediate completion.
 
-	api, _, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
+	fake := facadetest.New().WithTerminalCompleted()
+	api, _, _ := newFacadeExecutionHandlerAPI(t, fake, "test-workflow")
 
 	input := struct {
 		Inputs map[string]any `json:"inputs"`
@@ -166,7 +211,6 @@ func TestHTTPRun_Returns202(t *testing.T) {
 	require.Equal(t, 202, resp.Code, "POST /run must return 202 Accepted")
 
 	// Verify response body has execution_id and status
-	// This assertion will fail on stub if fields aren't populated
 	assert.NotNil(t, resp.Body, "response body must not be nil")
 }
 
@@ -197,7 +241,7 @@ func TestHTTP_NoApiPollIntervalRemains(t *testing.T) {
 // TestSSEHandler_GetSession_NilRegistry_ReturnsError verifies that getSession returns a
 // real error (not nil, nil) when no registry is configured, preventing nil-session panics.
 func TestSSEHandler_GetSession_NilRegistry_ReturnsError(t *testing.T) {
-	handler := NewSSEHandler(NewBridge(newMockWorkflowLister("wf"), newMockWorkflowRunner(), newMockHistoryProvider()), &sync.WaitGroup{})
+	handler := NewSSEHandler(NewBridge(), &sync.WaitGroup{})
 	// no SetSessionLookup call — sessions is nil
 
 	session, err := handler.getSession("any-id")
@@ -209,7 +253,7 @@ func TestSSEHandler_GetSession_NilRegistry_ReturnsError(t *testing.T) {
 // TestSSEHandler_GetSession_UnknownID_ReturnsError verifies that getSession returns a
 // real error for an unknown ID — never (nil, nil) — preventing nil-deref panics.
 func TestSSEHandler_GetSession_UnknownID_ReturnsError(t *testing.T) {
-	handler := NewSSEHandler(NewBridge(newMockWorkflowLister("wf"), newMockWorkflowRunner(), newMockHistoryProvider()), &sync.WaitGroup{})
+	handler := NewSSEHandler(NewBridge(), &sync.WaitGroup{})
 	handler.SetSessionLookup(newMockSessionLookup()) // empty registry
 
 	session, err := handler.getSession("does-not-exist")
@@ -224,7 +268,7 @@ func TestSSEHandler_GetSession_KnownID_ReturnsSession(t *testing.T) {
 	sess := newMockRunSession("sess-abc")
 	lookup.add(sess)
 
-	handler := NewSSEHandler(NewBridge(newMockWorkflowLister("wf"), newMockWorkflowRunner(), newMockHistoryProvider()), &sync.WaitGroup{})
+	handler := NewSSEHandler(NewBridge(), &sync.WaitGroup{})
 	handler.SetSessionLookup(lookup)
 
 	got, err := handler.getSession("sess-abc")
@@ -235,7 +279,7 @@ func TestSSEHandler_GetSession_KnownID_ReturnsSession(t *testing.T) {
 // TestSSEHandler_Stream_UnknownID_Returns404_NoPanic asserts that calling Stream with
 // an unknown execution ID returns huma 404 and does NOT panic — fixing issue #2.
 func TestSSEHandler_Stream_UnknownID_Returns404_NoPanic(t *testing.T) {
-	bridge := NewBridge(newMockWorkflowLister("wf"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := NewBridge()
 	var wg sync.WaitGroup
 	handler := NewSSEHandler(bridge, &wg)
 	handler.SetSessionLookup(newMockSessionLookup()) // empty registry
@@ -263,7 +307,7 @@ func TestSSEHandler_Stream_UnknownID_Returns404_NoPanic(t *testing.T) {
 // TestSSEHandler_Stream_NilRegistry_Returns404_NoPanic asserts that calling Stream
 // with no registry configured returns 404 and does NOT panic.
 func TestSSEHandler_Stream_NilRegistry_Returns404_NoPanic(t *testing.T) {
-	bridge := NewBridge(newMockWorkflowLister("wf"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := NewBridge()
 	var wg sync.WaitGroup
 	handler := NewSSEHandler(bridge, &wg)
 	// deliberately no SetSessionLookup
@@ -280,7 +324,7 @@ func TestSSEHandler_Stream_NilRegistry_Returns404_NoPanic(t *testing.T) {
 // important guarantee is that the server does not panic (nil-session dereference)
 // when the session is not found; the stream simply closes immediately.
 func TestSSEHTTP_UnknownID_NoPanic_ViaHTTPServer(t *testing.T) {
-	bridge := NewBridge(newMockWorkflowLister("wf"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := NewBridge()
 	srv := NewServer(bridge, ":0", WithSessionRegistry(newMockSessionLookup()))
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -324,6 +368,125 @@ func (m *mockWorkflowFacade) Run(context.Context, ports.RunRequest) (ports.RunSe
 	return nil, nil
 }
 
-func (m *mockWorkflowFacade) Resume(context.Context, string) (ports.RunSession, error) {
+func (m *mockWorkflowFacade) Resume(context.Context, ports.ResumeRequest) (ports.RunSession, error) {
 	return nil, nil
+}
+
+func (m *mockWorkflowFacade) RunStep(_ context.Context, _ ports.RunStepRequest) (ports.StepResult, error) {
+	return ports.StepResult{}, nil
+}
+
+// --- T074 tests ---
+
+// newSSETestAPI wires a Bridge + SSEHandler + humatest API for T074 acceptance tests.
+func newSSETestAPI(t *testing.T, lookup SessionLookup) (humatest.TestAPI, *SSEHandler) {
+	t.Helper()
+	bridge := NewBridge()
+	var wg sync.WaitGroup
+	h := NewSSEHandler(bridge, &wg)
+	h.SetSessionLookup(lookup)
+	_, api := humatest.New(t)
+	RegisterSSERoutes(api, h)
+	return api, h
+}
+
+// TestProjectEventToSSEFrame_WritesSSEWireFormat verifies the per-event helper used by both
+// the SSE handler and the conformance projector produces the correct wire format:
+// "event: <kind>\ndata: <json>\n\n"
+func TestProjectEventToSSEFrame_WritesSSEWireFormat(t *testing.T) {
+	ev := ports.Event{Kind: ports.EventRunStarted, RunID: "run-1"}
+	frame := ProjectEventToSSEFrame(ev)
+	require.NotEmpty(t, frame, "ProjectEventToSSEFrame must return non-empty bytes for a known event kind (stub returns nil)")
+	body := string(frame)
+	assert.Contains(t, body, "event: run.started\n", "SSE wire format must include 'event: <kind>' line")
+	assert.Contains(t, body, "data:", "SSE wire format must include 'data:' line")
+	assert.Contains(t, body, "\n\n", "SSE wire format must end with double newline")
+}
+
+// TestSSEStream_ResolvesFacadeSession is the named acceptance criterion: with a registered
+// RunSession, the SSE handler must write at least one SSE frame to the response.
+func TestSSEStream_ResolvesFacadeSession(t *testing.T) {
+	runtime.GC()
+	time.Sleep(100 * time.Millisecond)
+	before := runtime.NumGoroutine()
+	t.Cleanup(func() {
+		runtime.GC()
+		time.Sleep(100 * time.Millisecond)
+		after := runtime.NumGoroutine()
+		assert.InDelta(t, before, after, 5.0, "goroutine leak: before=%d after=%d", before, after)
+	})
+
+	sess := newMockRunSession("facade-run-1")
+	sess.events <- ports.Event{Kind: ports.EventRunStarted, RunID: "facade-run-1"}
+	close(sess.events)
+
+	lookup := newMockSessionLookup()
+	lookup.add(sess)
+	api, _ := newSSETestAPI(t, lookup)
+
+	resp := api.Get("/api/executions/facade-run-1/events")
+	body := resp.Body.String()
+	require.NotEmpty(t, body, "SSE stream must write at least one frame when session has events")
+	assert.Contains(t, body, "run.started", "SSE frame must include the event kind name (not raw uint8)")
+}
+
+// TestSSEStream_TerminalEventWrittenThenStreamCloses verifies that the terminal event is
+// rendered as an SSE frame before the stream closes (channel close ends the loop).
+func TestSSEStream_TerminalEventWrittenThenStreamCloses(t *testing.T) {
+	sess := newMockRunSession("terminal-run")
+	sess.events <- ports.Event{Kind: ports.EventWorkflowCompleted, RunID: "terminal-run"}
+	close(sess.events)
+
+	lookup := newMockSessionLookup()
+	lookup.add(sess)
+	api, _ := newSSETestAPI(t, lookup)
+
+	resp := api.Get("/api/executions/terminal-run/events")
+	body := resp.Body.String()
+	require.NotEmpty(t, body, "terminal event must be written before the stream closes")
+	assert.Contains(t, body, "workflow.completed", "terminal event must appear in the SSE stream output")
+}
+
+// TestSSEStream_ClientDisconnect_NoGoroutineLeak verifies that cancelling the request context
+// causes Stream to exit promptly. Uses runtime.NumGoroutine() delta pattern per project conventions.
+func TestSSEStream_ClientDisconnect_NoGoroutineLeak(t *testing.T) {
+	runtime.GC()
+	time.Sleep(100 * time.Millisecond)
+	before := runtime.NumGoroutine()
+	t.Cleanup(func() {
+		runtime.GC()
+		time.Sleep(100 * time.Millisecond)
+		after := runtime.NumGoroutine()
+		assert.InDelta(t, before, after, 5.0, "goroutine leak after client disconnect: before=%d after=%d", before, after)
+	})
+
+	sess := newMockRunSession("stuck")
+	// Leave events channel open and empty — Stream will block reading from it,
+	// simulating a long-running execution that never terminates.
+	lookup := newMockSessionLookup()
+	lookup.add(sess)
+
+	bridge := NewBridge()
+	var wg sync.WaitGroup
+	h := NewSSEHandler(bridge, &wg)
+	h.SetSessionLookup(lookup)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	streamDone := make(chan error, 1)
+	go func() {
+		streamDone <- h.Stream(ctx, &StreamInput{ID: "stuck"}, func(_ sse.Message) error { return nil })
+	}()
+
+	time.Sleep(50 * time.Millisecond) // let Stream reach the blocking read on Events()
+	cancel()                          // simulate client disconnect
+
+	select {
+	case <-streamDone:
+		// Stream exited promptly after ctx cancel — goroutine did not leak
+	case <-time.After(500 * time.Millisecond):
+		t.Error("Stream goroutine did not exit within 500ms after context cancel — ctx.Done() not handled")
+		close(sess.events) // unblock Stream so the test can finish
+		<-streamDone
+	}
 }

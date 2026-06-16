@@ -19,7 +19,7 @@ states:
 
       Provide initial analysis.
     options:
-      model: claude-haiku-4-5
+      model: haiku
     timeout: 30
     on_success: second_turn
     on_failure: error
@@ -33,7 +33,7 @@ states:
 
       Now provide detailed recommendations.
     options:
-      model: claude-haiku-4-5
+      model: haiku
     timeout: 30
     on_success: third_turn
     on_failure: error
@@ -48,7 +48,7 @@ states:
 
       Summarize key action items.
     options:
-      model: claude-haiku-4-5
+      model: haiku
     timeout: 30
     on_success: done
     on_failure: error

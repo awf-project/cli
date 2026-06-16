@@ -356,7 +356,9 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 		execSvc.SetEventPublisher(cfg.eventPublisher)
 	}
 
-	execSvc.SetSkillRepository(infraskills.NewFilesystemSkillRepository(s.logger))
+	skillRepo := infraskills.NewFilesystemSkillRepository(s.logger)
+	wfSvc.SetSkillRepository(skillRepo)
+	execSvc.SetSkillRepository(skillRepo)
 
 	if cfg.agentRoleRepo != nil {
 		execSvc.SetAgentRoleRepository(cfg.agentRoleRepo)

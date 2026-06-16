@@ -244,7 +244,8 @@ states:
 	t.Setenv("HOME", tmpHome)
 
 	var stdout bytes.Buffer
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&bytes.Buffer{})
 	cmd.SetArgs([]string{"list"})
@@ -318,7 +319,8 @@ states:
 	t.Setenv("HOME", tmpHome)
 
 	var stdout bytes.Buffer
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&bytes.Buffer{})
 	cmd.SetArgs([]string{"list"})

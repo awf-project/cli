@@ -5,7 +5,8 @@
 // "interfaces" layer of the hexagonal architecture: it translates HTTP requests
 // into application service calls and HTTP responses back. No domain logic or
 // infrastructure details reside here—only request parsing, response formatting,
-// middleware wiring, and coordination between the HTTP layer and the Bridge.
+// middleware wiring, and coordination between the HTTP layer, the ports.WorkflowFacade /
+// ports.WorkflowReader application ports, and the Bridge live-execution metadata store.
 //
 // # Overview
 //
@@ -29,10 +30,11 @@
 // # Architecture
 //
 // The api package sits in the interfaces layer. It depends on the application
-// layer only through the Bridge adapter, which holds narrow service ports
-// (WorkflowLister, WorkflowRunner, HistoryProvider, WorkflowResumer). It never
-// imports infrastructure packages directly—this invariant is enforced by
-// go-arch-lint.
+// layer only through the domain ports it is wired with: ports.WorkflowFacade (run,
+// resume, list, validate, status, history), ports.WorkflowReader (get, history stats),
+// and the application.SessionRegistry for live session lookup. The Bridge is a small
+// metadata store, not a read port. The package never imports infrastructure packages
+// directly—this invariant is enforced by go-arch-lint.
 //
 //	             External HTTP clients
 //	                   │
@@ -55,14 +57,14 @@
 //	WorkflowHandlers  ExecutionHandlers  SSEHandler  HistoryHandlers
 //	       │          │              │        │
 //	       └──────────┴──────────────┴────────┘
-//	                         │
-//	                         ▼
-//	                    *Bridge
-//	                         │
-//	       ┌─────────────────┼─────────────────┐
-//	       ▼                 ▼                 ▼
-//	WorkflowLister    WorkflowRunner    HistoryProvider
-//	  (app layer)      (app layer)       (app layer)
+//	            │              │              │
+//	            ▼              ▼              ▼
+//	  ports.WorkflowFacade  *Bridge   application.SessionRegistry
+//	  ports.WorkflowReader  (live     (live RunSession lookup
+//	  (list/get/validate/    exec      for SSE + status)
+//	   run/resume/history)    metadata:
+//	                          cancel,
+//	                          List/Get)
 //
 // # Key Types
 //
@@ -74,19 +76,47 @@
 //
 // ## Bridge
 //
-// Bridge holds the narrow service ports injected at startup. It acts as an
-// anti-corruption layer: handler families call Bridge methods rather than
-// application services directly, insulating handlers from service API changes.
-// Bridge also owns the in-memory sync.Map of active executions and exposes
-// StartExecution / GetExecution / CancelExecution / ListExecutions.
+// Bridge is a metadata-only store for live (in-flight) executions. It holds NO read or
+// history port: workflow listing/get/validate and history queries route through
+// ports.WorkflowFacade / ports.WorkflowReader directly from the handlers (F108 read-path
+// consolidation). Bridge owns only the in-memory sync.Map of active execution metadata and
+// exposes TrackFacadeSession / GetExecution / CancelExecution / ListExecutions / Shutdown.
+//
+// Bridge is NOT an anti-corruption read layer and is NOT responsible for executing
+// workflows. All workflow execution (Run and Resume) is routed exclusively through
+// ports.WorkflowFacade, wired via WithFacade and WithRegistryImpl on NewServer. The Bridge
+// entry is created from the returned RunSession so that List/Get/Cancel keep working while
+// the authoritative live session lives in the application.SessionRegistry.
+//
+// ## Facade execution path (F108)
+//
+// POST /api/workflows/{scope}/{name}/run and POST /api/executions/{id}/resume both
+// require a ports.WorkflowFacade and an application.SessionRegistry to be wired.
+// When either is absent, the handlers return 503 Service Unavailable immediately
+// (a generic message that does not leak internal configuration detail). Genuine
+// not-found stays 404 and request-validation failures stay 422.
+// When both are present, execution is delegated exclusively to facade.Run or
+// facade.Resume. The returned ports.RunSession is:
+//
+//  1. Registered in the SessionRegistry synchronously (FR-003: a subscriber
+//     connecting on the SSE endpoint right after /run MUST find the session).
+//  2. Tracked as lightweight metadata in Bridge.activeExecutions so that
+//     List/Get/Cancel keep working (A4 / R5).
+//
+// The RunSession's own ID() is authoritative: it is the execution ID returned in
+// the HTTP response and the key under which SessionRegistry.Get resolves later.
 //
 // ## Handler families
 //
-//   - WorkflowHandlers (handlers_workflows.go): read-only workflow operations.
+//   - WorkflowHandlers (handlers_workflows.go): read-only workflow operations,
+//     served directly by ports.WorkflowFacade / ports.WorkflowReader.
 //   - ExecutionHandlers (handlers_executions.go): lifecycle operations on async
-//     workflow runs.
+//     workflow runs. Run and Resume require a facade and a registry; List/Get/Cancel
+//     operate on Bridge live-execution metadata directly (Get overlays the live status
+//     snapshot from the registry session when available).
 //   - SSEHandler (sse.go): streams step and workflow transition events to
-//     connected clients via Server-Sent Events.
+//     connected clients via Server-Sent Events. Resolves live sessions via the
+//     SessionRegistry (SessionLookup), not Bridge metadata.
 //   - HistoryHandlers (handlers_history.go): queries past execution records and
 //     aggregate statistics.
 //
@@ -106,7 +136,9 @@
 //
 // 3. The registered handler function is called with the validated input.
 //
-// 4. The handler calls a Bridge method, which calls an application service port.
+//  4. Run/Resume handlers invoke ports.WorkflowFacade and record live metadata in the
+//     Bridge; read-only handlers (list/get/validate/history) call ports.WorkflowFacade /
+//     ports.WorkflowReader directly. Execution List/Get/Cancel read Bridge metadata.
 //
 // 5. The handler returns a typed output struct or a huma.Error*.
 //
@@ -118,18 +150,13 @@
 //
 //  1. SSEHandler.Stream increments s.sseWG (owned by Server) so Shutdown knows
 //     how many streams are active.
-//  2. A 200ms ticker polls ExecutionContext.GetAllStepStates().
-//  3. On each tick, step status transitions are compared with the previous snapshot.
-//     Changed steps emit typed SSE events: StepStartedEvent, StepCompletedEvent,
-//     StepFailedEvent.
-//  4. When the workflow reaches a terminal state (completed, failed, cancelled),
-//     WorkflowCompletedEvent or WorkflowFailedEvent is emitted and the goroutine exits.
+//  2. SSEHandler.getSession resolves the live RunSession from the SessionRegistry
+//     (SessionLookup). Returns 404 if not found.
+//  3. Events are consumed from session.Events() and serialized as SSE frames.
+//  4. When the session channel closes (terminal state or session Close), the stream
+//     exits cleanly.
 //  5. On context cancellation (client disconnect or server shutdown), the goroutine
 //     exits cleanly and decrements sseWG.
-//
-// Event types are registered in eventRegistry, which maps audit-event constants to
-// Go structs. huma/sse derives the SSE event name from the struct type name at
-// send time.
 //
 // # Error Handling
 //
@@ -139,12 +166,13 @@
 //
 // # Concurrency Model
 //
-// ## Async executions
+// ## Facade-driven executions
 //
-// RunWorkflow (POST /api/workflows/{scope}/{name}/run) starts workflow execution in a
-// background goroutine managed by Bridge.StartExecution. The client receives
-// 202 Accepted with an execution ID immediately. Subsequent calls to
-// GET /api/executions/{id} or the SSE stream observe the running state.
+// POST /api/workflows/{scope}/{name}/run delegates to ports.WorkflowFacade.Run.
+// The facade owns the execution goroutine and its lifetime; the Bridge only
+// records metadata. The client receives 202 Accepted with an execution ID
+// immediately. Subsequent GET /api/executions/{id} or SSE stream requests
+// observe the running state via the SessionRegistry.
 //
 // ## SSE goroutine lifecycle
 //
@@ -169,7 +197,8 @@
 // These invariants are enforced by go-arch-lint (NFR-001, NFR-006):
 //
 //   - interfaces/api MUST NOT import internal/infrastructure/*.
-//     All infrastructure access is mediated by application service ports via Bridge.
+//     All infrastructure access is mediated by application service ports via Bridge
+//     or ports.WorkflowFacade.
 //
 //   - All route registration MUST happen inside NewServer, never at package init
 //     or in handler constructors. This keeps the full routing table visible in a
@@ -180,6 +209,15 @@
 //   - The Bridge and handler family constructors (NewWorkflowHandlers,
 //     NewExecutionHandlers, NewSSEHandler, NewHistoryHandlers) receive their
 //     dependencies at construction time; they never fetch from global state.
+//
+//   - ExecutionHandlers.Run and ExecutionHandlers.Resume require both a
+//     ports.WorkflowFacade and an application.SessionRegistry to be wired (via
+//     WithFacade and WithRegistryImpl on NewServer). Without both, these handlers
+//     return 503 Service Unavailable immediately — there is no legacy fallback path.
+//
+//   - SSE resolves live sessions via SessionLookup (the SessionRegistry wrapped
+//     by WithSessionRegistry), NOT via Bridge.activeExecutions. This separation
+//     keeps execution ownership with the facade and metadata ownership with Bridge.
 //
 //   - The SSE WaitGroup (sseWG) is owned by Server and passed by pointer to
 //     NewSSEHandler. Handlers call wg.Add(1) and defer wg.Done() around the

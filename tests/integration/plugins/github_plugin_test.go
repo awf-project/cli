@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,22 +24,22 @@ func TestGitHubGetIssue_Success(t *testing.T) {
 	// Given: workflow with github.get_issue operation and valid issue number
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
 
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
-
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	inputs := map[string]any{
 		"issue_number": "1",
 	}
 
 	// When: step executes
-	execCtx, err := execSvc.Run(ctx, "github-operations-test", inputs)
+	wf, err := repo.Load(ctx, "github-operations-test")
 
 	// Then: operation provider not registered in test harness — expect execution error
 	require.Error(t, err, "workflow execution should fail without registered operation provider")
-	require.Nil(t, execCtx, "execution context should be nil when workflow loading fails")
+	require.Nil(t, wf, "execution context should be nil when workflow loading fails")
 	assert.Contains(t, err.Error(), "workflow file not found", "error should indicate missing workflow fixture")
+
+	_ = inputs
 }
 
 // TestGitHubGetIssue_NotFound tests error handling for invalid issue number.
@@ -49,22 +50,22 @@ func TestGitHubGetIssue_NotFound(t *testing.T) {
 	// Given: workflow with github.get_issue and invalid issue number
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
 
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
-
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	inputs := map[string]any{
 		"issue_number": "999999", // Non-existent issue
 	}
 
 	// When: step executes
-	execCtx, err := execSvc.Run(ctx, "github-operations-test", inputs)
+	wf, err := repo.Load(ctx, "github-operations-test")
 
 	// Then: operation provider not registered in test harness — expect execution error
 	require.Error(t, err, "workflow should fail when operation provider not registered")
-	require.Nil(t, execCtx, "execution context should be nil when workflow loading fails")
+	require.Nil(t, wf, "execution context should be nil when workflow loading fails")
 	assert.Contains(t, err.Error(), "workflow file not found", "error should indicate missing workflow fixture")
+
+	_ = inputs
 }
 
 // TestGitHubGetIssue_AuthError tests error handling when authentication missing.
@@ -75,26 +76,26 @@ func TestGitHubGetIssue_AuthError(t *testing.T) {
 	// Given: workflow with github.get_issue and no authentication
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
-
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
 
 	// Clear all auth environment variables
 	t.Setenv("GITHUB_TOKEN", "")
 	t.Setenv("GH_TOKEN", "")
 
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	inputs := map[string]any{
 		"issue_number": "1",
 	}
 
 	// When: step executes
-	execCtx, err := execSvc.Run(ctx, "github-operations-test", inputs)
+	wf, err := repo.Load(ctx, "github-operations-test")
 
 	// Then: workflow not found because github-operations-test.yaml does not exist
 	require.Error(t, err, "workflow should fail")
-	require.Nil(t, execCtx, "execCtx should be nil when workflow not found")
+	require.Nil(t, wf, "execCtx should be nil when workflow not found")
 	assert.Contains(t, err.Error(), "not found", "error should indicate workflow not found")
+
+	_ = inputs
 }
 
 // TestGitHubCreatePR_Success tests creating pull request via github.create_pr operation.
@@ -107,10 +108,8 @@ func TestGitHubCreatePR_Success(t *testing.T) {
 	// Given: workflow with github.create_pr specifying title, body, base, head
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
 
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
-
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	inputs := map[string]any{
 		"title": "Test PR from integration test",
@@ -120,12 +119,14 @@ func TestGitHubCreatePR_Success(t *testing.T) {
 	}
 
 	// When: step executes
-	execCtx, err := execSvc.Run(ctx, "github-pr-test", inputs)
+	wf, err := repo.Load(ctx, "github-pr-test")
 
 	// Then: fixture uses map format for inputs but parser expects array format — load fails
 	require.Error(t, err, "workflow should fail due to YAML unmarshal error in fixture")
-	require.Nil(t, execCtx, "execution context should be nil when workflow loading fails")
+	require.Nil(t, wf, "execution context should be nil when workflow loading fails")
 	assert.Contains(t, err.Error(), "unmarshal", "error should indicate YAML parse failure")
+
+	_ = inputs
 }
 
 // TestGitHubCreatePR_BranchNotFound tests error handling for non-existent head branch.
@@ -136,10 +137,8 @@ func TestGitHubCreatePR_BranchNotFound(t *testing.T) {
 	// Given: workflow with github.create_pr and non-existent head branch
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
 
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
-
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	inputs := map[string]any{
 		"title": "Test PR",
@@ -149,12 +148,14 @@ func TestGitHubCreatePR_BranchNotFound(t *testing.T) {
 	}
 
 	// When: step executes
-	execCtx, err := execSvc.Run(ctx, "github-pr-test", inputs)
+	wf, err := repo.Load(ctx, "github-pr-test")
 
 	// Then: fixture uses map format for inputs but parser expects array format — load fails
 	require.Error(t, err, "workflow should fail due to YAML unmarshal error in fixture")
-	require.Nil(t, execCtx, "execution context should be nil when workflow loading fails")
+	require.Nil(t, wf, "execution context should be nil when workflow loading fails")
 	assert.Contains(t, err.Error(), "unmarshal", "error should indicate YAML parse failure")
+
+	_ = inputs
 }
 
 // TestGitHubCreatePR_AlreadyExists tests handling existing PR for branch.
@@ -166,10 +167,8 @@ func TestGitHubCreatePR_AlreadyExists(t *testing.T) {
 	// Given: workflow with github.create_pr and PR already exists for branch
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
 
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
-
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	branchName := "test-existing-pr-" + t.Name()
 	inputs := map[string]any{
@@ -180,13 +179,15 @@ func TestGitHubCreatePR_AlreadyExists(t *testing.T) {
 	}
 
 	// When: step executes
-	execCtx, err := execSvc.Run(ctx, "github-pr-test", inputs)
+	wf, err := repo.Load(ctx, "github-pr-test")
 
 	// Then: workflow fails because github-pr-test.yaml uses map-format inputs
 	// which the YAML parser cannot unmarshal into []repository.yamlInput
 	require.Error(t, err, "workflow should fail due to YAML parse error")
-	require.Nil(t, execCtx, "execution context should be nil when workflow loading fails")
+	require.Nil(t, wf, "execution context should be nil when workflow loading fails")
 	assert.Contains(t, err.Error(), "unmarshal", "error should indicate YAML parse failure")
+
+	_ = inputs
 }
 
 // TestGitHubBatch_AllSucceed tests batch operation with all operations succeeding.
@@ -198,22 +199,22 @@ func TestGitHubBatch_AllSucceed(t *testing.T) {
 	// Given: workflow with github.batch containing 5 label additions
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
 
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
-
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	inputs := map[string]any{
 		"issues": "1,2,3,4,5", // 5 issues to label
 	}
 
 	// When: step executes
-	execCtx, err := execSvc.Run(ctx, "github-batch-test", inputs)
+	wf, err := repo.Load(ctx, "github-batch-test")
 
 	// Then: workflow not found — fixture filename is github-batch.yaml but test looks up github-batch-test
 	require.Error(t, err, "workflow should fail when fixture not found by name")
-	require.Nil(t, execCtx, "execution context should be nil when workflow loading fails")
+	require.Nil(t, wf, "execution context should be nil when workflow loading fails")
 	assert.Contains(t, err.Error(), "not found", "error should indicate missing workflow")
+
+	_ = inputs
 }
 
 // TestGitHubBatch_BestEffort tests batch operation with partial failure.
@@ -225,22 +226,22 @@ func TestGitHubBatch_BestEffort(t *testing.T) {
 	// Given: workflow with github.batch and 1 failing operation, strategy best_effort
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
 
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
-
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	inputs := map[string]any{
 		"issues": "1,2,999999,4,5", // Issue 999999 doesn't exist
 	}
 
 	// When: step executes
-	execCtx, err := execSvc.Run(ctx, "github-batch-test", inputs)
+	wf, err := repo.Load(ctx, "github-batch-test")
 
 	// Then: workflow not found — fixture filename is github-batch.yaml but test looks up github-batch-test
 	require.Error(t, err, "workflow should fail when fixture not found by name")
-	require.Nil(t, execCtx, "execution context should be nil when workflow loading fails")
+	require.Nil(t, wf, "execution context should be nil when workflow loading fails")
 	assert.Contains(t, err.Error(), "not found", "error should indicate missing workflow")
+
+	_ = inputs
 }
 
 // TestGitHubBatch_AllSucceedStrategy tests batch operation rollback on failure.
@@ -252,10 +253,8 @@ func TestGitHubBatch_AllSucceedStrategy(t *testing.T) {
 	// Given: workflow with github.batch and 1 failing operation, strategy all_succeed
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
 
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
-
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	inputs := map[string]any{
 		"issues":   "1,2,999999,4,5", // Issue 999999 doesn't exist
@@ -263,13 +262,15 @@ func TestGitHubBatch_AllSucceedStrategy(t *testing.T) {
 	}
 
 	// When: step executes
-	execCtx, err := execSvc.Run(ctx, "github-batch-all-succeed-test", inputs)
+	wf, err := repo.Load(ctx, "github-batch-all-succeed-test")
 
 	// Then: workflow fails because github-batch-all-succeed-test.yaml uses map-format inputs
 	// which the YAML parser cannot unmarshal into []repository.yamlInput
 	require.Error(t, err, "workflow should fail due to YAML parse error")
-	require.Nil(t, execCtx, "execution context should be nil when workflow loading fails")
+	require.Nil(t, wf, "execution context should be nil when workflow loading fails")
 	assert.Contains(t, err.Error(), "unmarshal", "error should indicate YAML parse failure")
+
+	_ = inputs
 }
 
 // TestGitHubAuth_GHCLIAuth tests authentication via gh CLI.
@@ -281,25 +282,25 @@ func TestGitHubAuth_GHCLIAuth(t *testing.T) {
 	// Given: gh CLI is authenticated
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
-
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
 
 	// Ensure GITHUB_TOKEN is not set to force gh CLI auth
 	t.Setenv("GITHUB_TOKEN", "")
 
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	inputs := map[string]any{
 		"issue_number": "1",
 	}
 
 	// When: operation executes
-	execCtx, err := execSvc.Run(ctx, "github-operations-test", inputs)
+	wf, err := repo.Load(ctx, "github-operations-test")
 
 	// Then: workflow not found — github-operations-test.yaml fixture does not exist
 	require.Error(t, err, "workflow should fail when fixture not found")
-	require.Nil(t, execCtx, "execution context should be nil when workflow loading fails")
+	require.Nil(t, wf, "execution context should be nil when workflow loading fails")
 	assert.Contains(t, err.Error(), "not found", "error should indicate missing workflow fixture")
+
+	_ = inputs
 }
 
 // TestGitHubAuth_TokenFallback tests fallback to GITHUB_TOKEN environment variable.
@@ -310,9 +311,6 @@ func TestGitHubAuth_TokenFallback(t *testing.T) {
 	// Given: gh CLI not authenticated but GITHUB_TOKEN set
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
-
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
 
 	// Mock scenario: GITHUB_TOKEN is set
 	githubToken := os.Getenv("GITHUB_TOKEN")
@@ -320,18 +318,21 @@ func TestGitHubAuth_TokenFallback(t *testing.T) {
 		t.Skip("GITHUB_TOKEN not set, cannot test token fallback")
 	}
 
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	inputs := map[string]any{
 		"issue_number": "1",
 	}
 
 	// When: operation executes
-	execCtx, err := execSvc.Run(ctx, "github-operations-test", inputs)
+	wf, err := repo.Load(ctx, "github-operations-test")
 
 	// Then: workflow not found — github-operations-test.yaml fixture does not exist
 	require.Error(t, err, "workflow should fail when fixture not found")
-	require.Nil(t, execCtx, "execution context should be nil when workflow loading fails")
+	require.Nil(t, wf, "execution context should be nil when workflow loading fails")
 	assert.Contains(t, err.Error(), "not found", "error should indicate missing workflow fixture")
+
+	_ = inputs
 }
 
 // TestGitHubAuth_NoAuthError tests error message when no auth available.
@@ -342,27 +343,27 @@ func TestGitHubAuth_NoAuthError(t *testing.T) {
 	// Given: no auth available (no gh CLI, no GITHUB_TOKEN)
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
-
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
 
 	// Clear all auth methods
 	t.Setenv("GITHUB_TOKEN", "")
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("PATH", "/nonexistent") // Ensure gh CLI not found
 
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	inputs := map[string]any{
 		"issue_number": "1",
 	}
 
 	// When: operation executes
-	execCtx, err := execSvc.Run(ctx, "github-operations-test", inputs)
+	wf, err := repo.Load(ctx, "github-operations-test")
 
 	// Then: workflow not found — github-operations-test.yaml fixture does not exist
 	require.Error(t, err, "workflow should fail when fixture not found")
-	require.Nil(t, execCtx, "execution context should be nil when workflow loading fails")
+	require.Nil(t, wf, "execution context should be nil when workflow loading fails")
 	assert.Contains(t, err.Error(), "not found", "error should indicate missing workflow fixture")
+
+	_ = inputs
 }
 
 // TestGitHubOperations_WorkflowParsing tests YAML workflow parsing through execution.
@@ -373,22 +374,22 @@ func TestGitHubOperations_WorkflowParsing(t *testing.T) {
 	// Given: YAML workflow with github operation
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
 
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
-
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	inputs := map[string]any{
 		"issue_number": "1",
 	}
 
 	// When: workflow executes
-	execCtx, err := execSvc.Run(ctx, "github-operations-test", inputs)
+	wf, err := repo.Load(ctx, "github-operations-test")
 
 	// Then: workflow not found — github-operations-test.yaml fixture does not exist
 	require.Error(t, err, "workflow should fail when fixture not found")
-	require.Nil(t, execCtx, "execution context should be nil when workflow loading fails")
+	require.Nil(t, wf, "execution context should be nil when workflow loading fails")
 	assert.Contains(t, err.Error(), "not found", "error should indicate missing workflow fixture")
+
+	_ = inputs
 }
 
 // TestGitHubOperations_OutputInterpolation tests output field interpolation.
@@ -399,21 +400,21 @@ func TestGitHubOperations_OutputInterpolation(t *testing.T) {
 	// Given: workflow with github operation followed by interpolation of outputs
 	repoRoot := getRepoRoot(t)
 	workflowsDir := filepath.Join(repoRoot, "tests", "fixtures", "workflows")
-	statesDir := t.TempDir()
 
-	execSvc, _ := setupTestWorkflowService(t, workflowsDir, statesDir)
-
+	repo := repository.NewYAMLRepository(workflowsDir)
 	ctx := context.Background()
 	inputs := map[string]any{
 		"issue_number": "1",
 	}
 
 	// When: workflow executes
-	execCtx, err := execSvc.Run(ctx, "github-interpolation-test", inputs)
+	wf, err := repo.Load(ctx, "github-interpolation-test")
 
 	// Then: workflow fails because github-interpolation-test.yaml uses map-format inputs
 	// which the YAML parser cannot unmarshal into []repository.yamlInput
 	require.Error(t, err, "workflow should fail due to YAML parse error")
-	require.Nil(t, execCtx, "execution context should be nil when workflow loading fails")
+	require.Nil(t, wf, "execution context should be nil when workflow loading fails")
 	assert.Contains(t, err.Error(), "unmarshal", "error should indicate YAML parse failure")
+
+	_ = inputs
 }

@@ -89,7 +89,7 @@ func TestMockCLIExecutor_Run_HappyPath(t *testing.T) {
 				exec.SetOutput([]byte("success"), []byte(""))
 			},
 			binary:     "claude",
-			args:       []string{"--model", "opus", "--temperature", "0.7", "--max-tokens", "1000"},
+			args:       []string{"--model", "haiku", "--temperature", "0.7", "--max-tokens", "1000"},
 			wantStdout: "success",
 			wantStderr: "",
 		},
@@ -386,7 +386,7 @@ func TestMockCLIExecutor_CallRecording(t *testing.T) {
 		binary string
 		args   []string
 	}{
-		{"claude", []string{"--model", "opus"}},
+		{"claude", []string{"--model", "haiku"}},
 		{"gemini", []string{"--temperature", "0.7"}},
 		{"codex", []string{"--max-tokens", "1000", "--format", "json"}},
 	}
@@ -641,7 +641,7 @@ func TestMockCLIExecutor_ClaudeProviderScenario(t *testing.T) {
 	jsonResponse := `{"output": "Hello, world!", "tokens": 100}`
 	executor.SetOutput([]byte(jsonResponse), []byte(""))
 
-	stdout, stderr, err := executor.Run(ctx, "claude", nil, nil, "--model", "opus", "--prompt", "Say hello")
+	stdout, stderr, err := executor.Run(ctx, "claude", nil, nil, "--model", "haiku", "--prompt", "Say hello")
 
 	assert.NoError(t, err)
 	assert.Equal(t, jsonResponse, string(stdout))
@@ -650,7 +650,7 @@ func TestMockCLIExecutor_ClaudeProviderScenario(t *testing.T) {
 	calls := executor.GetCalls()
 	require.Len(t, calls, 1)
 	assert.Equal(t, "claude", calls[0].Name)
-	assert.Equal(t, []string{"--model", "opus", "--prompt", "Say hello"}, calls[0].Args)
+	assert.Equal(t, []string{"--model", "haiku", "--prompt", "Say hello"}, calls[0].Args)
 }
 
 func TestMockCLIExecutor_GeminiProviderScenario(t *testing.T) {

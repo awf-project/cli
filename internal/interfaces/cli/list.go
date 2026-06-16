@@ -8,9 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
-	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
 )
@@ -36,19 +34,51 @@ func runList(cmd *cobra.Command, cfg *Config) error {
 	ctx := context.Background()
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
-	repo := NewWorkflowRepository()
-	svc := application.NewWorkflowService(repo, nil, nil, nil, nil)
-	packDirs := workflowPackSearchDirs()
-	svc.SetPackDiscoverer(workflowpkg.NewPackDiscovererAdapter(packDirs))
-
-	entries, err := svc.ListAllWorkflows(ctx)
-	if err != nil {
-		if writer.IsJSONFormat() {
-			return writer.WriteError(err, ExitUser)
+	// Route through WorkflowFacade when wired (T069). The facade's List exposes
+	// the same discovery (local/global/env/packs) the legacy path used, mapped to
+	// lightweight summaries; rendering is shared via writeWorkflowEntries.
+	if cfg.Facade != nil {
+		summaries, err := cfg.Facade.List(ctx)
+		if err != nil {
+			if writer.IsJSONFormat() {
+				return writer.WriteError(err, ExitUser)
+			}
+			return writeErrorAndExit(writer, err, ExitUser)
 		}
-		return writeErrorAndExit(writer, err, ExitUser)
+		entries := make([]workflowEntry, len(summaries))
+		for i := range summaries {
+			entries[i] = workflowEntry{
+				Name:        summaries[i].Name,
+				Version:     summaries[i].Version,
+				Description: summaries[i].Description,
+			}
+		}
+		return writeWorkflowEntries(cmd, cfg, writer, entries)
 	}
 
+	// Facade not wired: return a meaningful error stub. Production always wires
+	// the facade via NewRootCommandAutoFacade, so this branch is never reached in
+	// normal usage.
+	err := fmt.Errorf("list requires facade wiring (use NewRootCommandAutoFacade)")
+	if writer.IsJSONFormat() {
+		return writer.WriteError(err, ExitSystem)
+	}
+	return writeErrorAndExit(writer, err, ExitSystem)
+}
+
+// workflowEntry is a rendering-neutral view of a discovered workflow, populated
+// from either the facade summary (T069) or the legacy WorkflowService entry.
+type workflowEntry struct {
+	Name        string
+	Source      string
+	Version     string
+	Description string
+}
+
+// writeWorkflowEntries renders discovered workflows identically for both the
+// facade and legacy paths: empty-list "Search paths" guidance, the workflow
+// table/JSON, and the verbose footer.
+func writeWorkflowEntries(cmd *cobra.Command, cfg *Config, writer *ui.OutputWriter, entries []workflowEntry) error {
 	if len(entries) == 0 {
 		if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
 			return writer.WriteWorkflows([]ui.WorkflowInfo{})
@@ -186,44 +216,6 @@ func buildPromptInfo(path string, d fs.DirEntry, basePath, source string, seen m
 		Size:    fileInfo.Size(),
 		ModTime: fileInfo.ModTime().Format("2006-01-02 15:04:05"),
 	}, nil
-}
-
-// collectPackWorkflows loads workflow entries from installed workflow packs.
-// Returns pack/workflow entries with "pack" source label for merging into awf list output.
-func collectPackWorkflows(ctx context.Context) ([]ui.WorkflowInfo, error) {
-	loader := workflowpkg.NewPackLoader()
-	packMap := discoverAllPacks(ctx, loader)
-
-	var workflows []ui.WorkflowInfo
-
-	for packName, packDir := range packMap {
-		// Load pack state to check if enabled
-		state, stateErr := loader.LoadPackState(packDir)
-		if stateErr != nil || !state.Enabled {
-			continue
-		}
-
-		// Load manifest for workflow list and version
-		manifestData, readErr := readManifestData(packDir)
-		if readErr != nil {
-			continue
-		}
-		manifest, parseErr := workflowpkg.ParseManifest(manifestData)
-		if parseErr != nil {
-			continue
-		}
-
-		for _, wf := range manifest.Workflows {
-			workflows = append(workflows, ui.WorkflowInfo{
-				Name:        packName + "/" + wf,
-				Source:      "pack",
-				Version:     manifest.Version,
-				Description: loadWorkflowDescription(packDir, wf),
-			})
-		}
-	}
-
-	return workflows, nil
 }
 
 func collectPromptsFromPaths(paths []repository.SourcedPath) ([]ui.PromptInfo, error) {

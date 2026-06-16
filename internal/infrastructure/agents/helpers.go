@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/pkg/stringutil"
 )
 
 func cloneState(state *workflow.ConversationState) *workflow.ConversationState {
@@ -45,6 +46,10 @@ func getBoolOption(options map[string]any, key string) (value, found bool) {
 	}
 	val, ok := options[key].(bool)
 	return val, ok
+}
+
+func reverseString(s string) string {
+	return stringutil.Reverse(s)
 }
 
 func tryParseJSONResponse(output string) map[string]any {

@@ -110,11 +110,18 @@ func TestACPServe_StdinCloseUnblocksReader(t *testing.T) {
 // through the public API a server relies on.
 func TestACPServe_ShutdownDrainsRunWG(t *testing.T) {
 	logger := infralogger.NewConsoleLogger(io.Discard, infralogger.LevelInfo, false)
-	svc := application.NewACPSessionService(nil, nil, oneWorkflowRepo{name: "trivial"}, logger)
+	svc := application.NewACPSessionService(nil, oneWorkflowRepo{name: "trivial"}, logger)
 
 	entered := make(chan struct{})
-	svc.SetRunnerFactory(func(string) (application.WorkflowRunner, application.ACPInputResponder, *atomic.Bool, func(), error) {
-		return &fakeBlockingRunner{entered: entered}, fakeInputResponder{}, &atomic.Bool{}, func() {}, nil
+	// Post-facade-migration: the prompt dispatches through the WorkflowFacade, not the legacy
+	// runner. SetFacade satisfies the dispatch gate (the legacy fallback was removed); the
+	// per-session factory returns the same blocking facade that dispatchViaFacade actually
+	// drives. A blocking facade keeps the run goroutine in flight (runWG held) until Shutdown
+	// cancels the run ctx, exercising the same two-phase shutdown contract.
+	blocking := &fakeBlockingFacade{entered: entered}
+	svc.SetFacade(blocking)
+	svc.SetRunnerFactory(func(string) (application.ACPInputResponder, *atomic.Bool, func(), ports.WorkflowFacade, error) {
+		return fakeInputResponder{}, &atomic.Bool{}, func() {}, blocking, nil
 	})
 
 	baseCtx := context.Background()
@@ -140,7 +147,7 @@ func TestACPServe_ShutdownDrainsRunWG(t *testing.T) {
 	select {
 	case <-entered:
 	case <-time.After(3 * time.Second):
-		t.Fatal("runner.Run was never entered")
+		t.Fatal("facade.Run was never entered")
 	}
 
 	shutdownDone := make(chan struct{})
@@ -168,20 +175,59 @@ func TestACPServe_ShutdownDrainsRunWG(t *testing.T) {
 
 // --- fakes ---
 
-// fakeBlockingRunner signals when Run is entered then blocks until its ctx is cancelled,
-// returning ctx.Err() so the handler maps the run to a cancelled stop reason.
-type fakeBlockingRunner struct {
-	entered  chan struct{}
-	onceDone atomic.Bool
+// fakeBlockingFacade signals when its run is in flight then keeps the run goroutine blocked
+// (the session's event stream stays open) until the run ctx is cancelled at Shutdown,
+// exercising the two-phase shutdown / runWG-drain contract through the facade path.
+type fakeBlockingFacade struct {
+	entered     chan struct{}
+	onceEntered atomic.Bool
 }
 
-func (r *fakeBlockingRunner) Run(ctx context.Context, _ string, _ map[string]any) (*workflow.ExecutionContext, error) {
-	if r.onceDone.CompareAndSwap(false, true) {
-		close(r.entered)
+func (f *fakeBlockingFacade) Run(ctx context.Context, _ ports.RunRequest) (ports.RunSession, error) {
+	if f.onceEntered.CompareAndSwap(false, true) {
+		close(f.entered)
 	}
-	<-ctx.Done()
-	return nil, ctx.Err()
+	ch := make(chan ports.Event)
+	go func() {
+		<-ctx.Done()
+		close(ch)
+	}()
+	return &fakeBlockingSession{ch: ch, ctx: ctx}, nil
 }
+
+func (f *fakeBlockingFacade) Resume(context.Context, ports.ResumeRequest) (ports.RunSession, error) {
+	return nil, nil
+}
+
+func (f *fakeBlockingFacade) List(context.Context) ([]ports.WorkflowSummary, error) { return nil, nil }
+
+func (f *fakeBlockingFacade) Validate(context.Context, ports.RunRequest) (ports.ValidationReport, error) {
+	return ports.ValidationReport{}, nil
+}
+
+func (f *fakeBlockingFacade) Status(context.Context, string) (ports.RunStatus, error) {
+	return ports.RunStatus{}, nil
+}
+
+func (f *fakeBlockingFacade) History(context.Context, ports.HistoryFilter) ([]ports.RunRecord, error) {
+	return nil, nil
+}
+
+func (f *fakeBlockingFacade) RunStep(_ context.Context, _ ports.RunStepRequest) (ports.StepResult, error) {
+	return ports.StepResult{}, nil
+}
+
+// fakeBlockingSession's Events() channel stays open until the run ctx is cancelled.
+type fakeBlockingSession struct {
+	ch  chan ports.Event
+	ctx context.Context
+}
+
+func (s *fakeBlockingSession) ID() string                        { return "blocking" }
+func (s *fakeBlockingSession) Events() <-chan ports.Event        { return s.ch }
+func (s *fakeBlockingSession) Respond(ports.InputResponse) error { return nil }
+func (s *fakeBlockingSession) Err() error                        { return s.ctx.Err() }
+func (s *fakeBlockingSession) Close() error                      { return nil }
 
 // fakeInputResponder is a no-op ACPInputResponder for the drain test.
 type fakeInputResponder struct{}

@@ -52,7 +52,7 @@ func NewStartedEvent(execCtx *ExecutionContext, maskedInputs map[string]any, use
 // NewCompletedEvent creates an audit event for workflow completion.
 func NewCompletedEvent(execCtx *ExecutionContext, user, errorMsg string) AuditEvent {
 	status := "success"
-	if execCtx.ExitCode != 0 {
+	if execCtx.Status == StatusFailed || execCtx.Status == StatusCancelled || execCtx.ExitCode != 0 {
 		status = "failure"
 	}
 

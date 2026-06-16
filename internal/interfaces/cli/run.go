@@ -24,6 +24,8 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/roles"
 	"github.com/awf-project/cli/internal/infrastructure/store"
+	infraTranscript "github.com/awf-project/cli/internal/infrastructure/transcript"
+	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/awf-project/cli/pkg/interpolation"
@@ -187,22 +189,35 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		return fmt.Errorf("invalid input: %w", err)
 	}
 
+	// The facade executes the workflow on a background goroutine while this goroutine
+	// drains and renders the session's events. Every writer below (OutputWriter,
+	// Formatter→logger, per-step PrefixedWriters) and the event projector in
+	// runWorkflowViaFacade share stdout/stderr, so concurrent writes would data-race.
+	// Wrap each sink ONCE in a SyncWriter and thread that single instance through the
+	// whole run path so all writes serialize through one mutex.
+	syncOut := ui.NewSyncWriter(cmd.OutOrStdout())
+	syncErr := ui.NewSyncWriter(cmd.ErrOrStderr())
+
 	// Create output writer for JSON/quiet formats
-	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
+	writer := ui.NewOutputWriter(syncOut, syncErr, cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
 	// Create formatter for text output
-	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
+	formatter := ui.NewFormatter(syncOut, ui.FormatOptions{
 		Verbose: cfg.Verbose,
 		Quiet:   cfg.Quiet,
 		NoColor: cfg.NoColor,
 	})
 
-	// Setup output writers based on mode (only for non-JSON formats)
+	// Setup output writers based on mode (only for non-JSON formats). Both OutputStreaming
+	// ("real-time") and OutputBuffered ("show after completion") must surface a step
+	// command's stdout/stderr — only OutputSilent suppresses it. The facade migration had
+	// restricted this to OutputStreaming, which silently dropped command output in buffered
+	// mode (regression: `awf run --output buffered` showed step status but no command output).
 	var stdoutWriter, stderrWriter *ui.PrefixedWriter
-	if !cfg.Quiet && cfg.OutputMode == OutputStreaming && !writer.IsJSONFormat() {
+	if !cfg.Quiet && (cfg.OutputMode == OutputStreaming || cfg.OutputMode == OutputBuffered) && !writer.IsJSONFormat() {
 		colorizer := ui.NewColorizer(!cfg.NoColor)
-		stdoutWriter = ui.NewPrefixedWriter(cmd.OutOrStdout(), ui.PrefixStdout, "", colorizer)
-		stderrWriter = ui.NewPrefixedWriter(cmd.ErrOrStderr(), ui.PrefixStderr, "", colorizer)
+		stdoutWriter = ui.NewPrefixedWriter(syncOut, ui.PrefixStdout, "", colorizer)
+		stderrWriter = ui.NewPrefixedWriter(syncErr, ui.PrefixStderr, "", colorizer)
 	}
 
 	// Setup context with signal handling
@@ -282,6 +297,13 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	if err != nil {
 		return writeErrorAndExit(writer, err, categorizeError(err))
 	}
+
+	// NOTE: a read-only AutoFacade may already be wired into cfg.Facade (config.go
+	// buildFacade, used by list/validate/status/history). It carries a ZERO
+	// ExecutionService and therefore cannot execute, so we do NOT dispatch through it
+	// here. Instead, after the full execution stack is built below, we construct a
+	// run-capable Adapter over the real ExecutionService and dispatch through that
+	// (see the run-capable facade wiring after setupResult.Build).
 
 	// Create history store (lifecycle managed by ExecutionSetup builder via WithHistoryStore)
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
@@ -397,111 +419,18 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 
 	execSvc := setupResult.ExecService
 
-	// Show start message (text format only)
-	if !silentOutput && cfg.OutputFormat != ui.FormatQuiet {
-		formatter.Info(fmt.Sprintf("Running workflow: %s", workflowName))
+	// Run-capable facade wiring (F108 T070): build an application.Adapter over the REAL
+	// ExecutionService just built, a Resolver over the same repo+discoverer the read-only
+	// facade uses, and the SAME transcript recorder wired above so transcript events stream
+	// into the session. Dispatch through the already-tested driver runWorkflowViaFacade. When
+	// the recorder is nil (transcript init failed), buildRunCapableFacade substitutes a
+	// NopRecorder so the Adapter's sole Subscribe still has a (closed) channel to drain.
+	runFacade := buildRunCapableFacade(execSvc, setupResult.WorkflowSvc, historyStore, repo, recorder, logger)
+	if runFacade == nil {
+		return fmt.Errorf("failed to initialize execution facade")
 	}
-	startTime := time.Now()
-
-	// Execute workflow with pre-loaded workflow (avoids double I/O). Reuse runID as the
-	// execution WorkflowID so the transcript file <runID>.jsonl and the run_id stamped on
-	// every emitted event are the same identifier (F106 SC-001).
-	execCtx, execErr := execSvc.RunWithWorkflowAndRunID(ctx, wf, inputs, runID)
-
-	// Flush any remaining output from streaming writers
-	if stdoutWriter != nil {
-		stdoutWriter.Flush()
-	}
-	if stderrWriter != nil {
-		stderrWriter.Flush()
-	}
-
-	// Calculate duration
-	durationMs := time.Since(startTime).Milliseconds()
-
-	// JSON/quiet format: output result
-	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
-		result := ui.RunResult{
-			Status:     "completed",
-			DurationMs: durationMs,
-		}
-		if execCtx != nil {
-			result.WorkflowID = execCtx.WorkflowID
-			result.Status = string(execCtx.Status)
-			// Include step outputs in buffered mode
-			if cfg.OutputMode == OutputBuffered {
-				result.Steps = buildStepInfos(wf, execCtx)
-			}
-		}
-		if execErr != nil {
-			result.Status = "failed"
-			result.Error = execErr.Error()
-		}
-		if err := writer.WriteRunResult(&result); err != nil {
-			return err
-		}
-		if execErr != nil {
-			return &exitError{code: categorizeError(execErr), err: execErr}
-		}
-		return nil
-	}
-
-	// Table format: use structured output
-	if cfg.OutputFormat == ui.FormatTable {
-		result := ui.RunResult{
-			Status:     "completed",
-			DurationMs: durationMs,
-		}
-		if execCtx != nil {
-			result.WorkflowID = execCtx.WorkflowID
-			result.Status = string(execCtx.Status)
-			result.Steps = buildStepInfos(wf, execCtx)
-		}
-		if execErr != nil {
-			result.Status = "failed"
-			result.Error = execErr.Error()
-		}
-		if err := writer.WriteRunResult(&result); err != nil {
-			return err
-		}
-		if execErr != nil {
-			return &exitError{code: categorizeError(execErr), err: execErr}
-		}
-		return nil
-	}
-
-	// Text format
-	duration := time.Since(startTime).Round(time.Millisecond)
-
-	if execErr != nil {
-		// Show buffered output on error
-		if cfg.OutputMode == OutputBuffered && execCtx != nil {
-			showStepOutputs(formatter, wf, execCtx)
-		}
-		if execCtx != nil {
-			formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
-		}
-		return writeErrorAndExit(writer, execErr, categorizeError(execErr))
-	}
-
-	// F037: Show success feedback for steps with no output (silent/streaming modes)
-	if cfg.OutputMode != OutputBuffered && execCtx != nil {
-		showEmptyStepFeedback(formatter, wf, execCtx)
-	}
-
-	formatter.Success(fmt.Sprintf("Workflow completed successfully in %s", duration))
-	formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
-
-	// Show buffered output after successful completion
-	if cfg.OutputMode == OutputBuffered && execCtx != nil {
-		showStepOutputs(formatter, wf, execCtx)
-	}
-
-	if cfg.Verbose && execCtx != nil {
-		showExecutionDetails(formatter, wf, execCtx)
-	}
-
-	return nil
+	cfg.Facade = runFacade
+	return runWorkflowViaFacade(ctx, cmd, cfg, writer, formatter, workflowName, inputs)
 }
 
 // runDryRun executes a dry-run of the workflow, showing the execution plan without running commands.
@@ -569,7 +498,23 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 	return writer.WriteDryRun(plan, dryRunFormatter)
 }
 
-// runInteractive executes the workflow in interactive step-by-step mode.
+// runInteractive executes the workflow in interactive step-by-step mode (F020).
+//
+// F108 routed every interface through the single-core facade and severed the legacy
+// InteractiveExecutor wiring, which silently removed the entire interactive feature
+// (step preview, per-step continue/skip/abort/inspect/edit/retry prompts, breakpoints,
+// "Type: command/parallel" details). F110 G3 restores it.
+//
+// The facade's Run surface streams a workflow to completion with no per-step parking for
+// the legacy interactive action set, and RunStep executes a single step in isolation with
+// a fresh interpolation context (no transition resolution or cross-step state threading) —
+// neither can drive the documented stepping UX without re-architecting the facade event
+// model. The application-layer InteractiveExecutor (still present and the behavioral spec
+// mined by interactive_test.go) already owns that loop: step traversal, breakpoint gating,
+// the prompt action set, inspect/edit parking, retry, and state checkpointing. We re-wire
+// it here from the interface layer (an arch-permitted interfaces-cli -> application edge,
+// matching the pre-F108 design) so interactive runs regain full parity. Non-interactive
+// run/resume/run-step paths remain facade-routed.
 func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags, breakpointFlags []string, _ bool) error {
 	// Parse inputs
 	inputs, err := parseInputFlags(inputFlags)
@@ -577,7 +522,8 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 		return fmt.Errorf("invalid input: %w", err)
 	}
 
-	// Parse breakpoints (flatten comma-separated values)
+	// Parse breakpoints (flatten comma-separated values). An empty/nil breakpoint set means
+	// pause at every step; a non-empty set pauses only at the named steps.
 	var breakpoints []string
 	for _, bp := range breakpointFlags {
 		for b := range strings.SplitSeq(bp, ",") {
@@ -595,11 +541,13 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 		NoColor: cfg.NoColor,
 	})
 
-	// Setup context with signal handling
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
+
+	// Setup context with signal handling so Ctrl+C aborts a parked prompt gracefully.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cleanup := setupSignalHandler(ctx, cancel, nil)
-	defer cleanup()
+	signalCleanup := setupSignalHandler(ctx, cancel, nil)
+	defer signalCleanup()
 
 	// Initialize dependencies
 	repo := NewWorkflowRepository()
@@ -613,13 +561,12 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	resolver := interpolation.NewTemplateResolver()
 	exprEvaluator := infraexpression.NewExprEvaluator()
 
-	// Load project config from .awf/config.yaml
-	projectCfg, err := loadProjectConfig(logger)
-	if err != nil {
-		return fmt.Errorf("config error: %w", err)
+	// Merge config inputs with CLI inputs (CLI wins) so config-provided required inputs
+	// are honored without prompting, matching the standard run path (B007).
+	projectCfg, cfgErr := loadProjectConfig(logger)
+	if cfgErr != nil {
+		return writeErrorAndExit(writer, fmt.Errorf("config error: %w", cfgErr), categorizeError(cfgErr))
 	}
-
-	// Merge config inputs with CLI inputs (CLI wins)
 	inputs = application.MergeInputs(projectCfg.Inputs, inputs)
 
 	// Create services
@@ -627,10 +574,7 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
 	parallelExecutor := application.NewParallelExecutor(logger)
 
-	// Note: skipPlugins flag is accepted for consistency with other modes but
-	// not used in interactive mode as InteractiveExecutor doesn't use plugin providers
-
-	// Create interactive prompt
+	// Create interactive prompt bound to the command's I/O streams (tests inject stdin).
 	prompt := ui.NewCLIPrompt(cmd.InOrStdin(), cmd.OutOrStdout(), !cfg.NoColor)
 
 	// Create interactive executor
@@ -639,7 +583,7 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 		logger, resolver, exprEvaluator, prompt,
 	)
 
-	// Setup template service
+	// Setup template service for workflow template expansion
 	templatePaths := []string{
 		".awf/templates",
 		filepath.Join(cfg.StoragePath, "templates"),
@@ -649,7 +593,7 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	interactiveExec.SetTemplateService(templateSvc)
 	interactiveExec.SetAWFPaths(xdg.AWFPaths())
 
-	// Set breakpoints if specified
+	// Set breakpoints if specified (nil/empty => pause at every step).
 	if len(breakpoints) > 0 {
 		interactiveExec.SetBreakpoints(breakpoints)
 	}
@@ -657,12 +601,10 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	// Execute interactive workflow
 	_, execErr := interactiveExec.Run(ctx, workflowName, inputs)
 	if execErr != nil {
-		// Context cancellation is handled gracefully in interactive mode
+		// Context cancellation is a graceful interactive abort, not an error.
 		if errors.Is(execErr, context.Canceled) {
-			return nil // Not an error for interactive abort
+			return nil
 		}
-		// Create writer for error routing
-		writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), ui.FormatText, cfg.NoColor, cfg.NoHints)
 		return writeErrorAndExit(writer, execErr, categorizeError(execErr))
 	}
 
@@ -754,87 +696,6 @@ func resolvePromptFromPaths(relativePath string, paths []repository.SourcedPath)
 	}
 	return "", fmt.Errorf("prompt '%s' not found in any of the search paths: %s",
 		relativePath, strings.Join(searchedPaths, ", "))
-}
-
-func showExecutionDetails(formatter *ui.Formatter, wf *workflow.Workflow, execCtx *workflow.ExecutionContext) {
-	formatter.Printf("\n--- Execution Details ---\n")
-	formatter.Printf("Status: %s\n", execCtx.Status)
-	formatter.Printf("Steps executed:\n")
-
-	for _, step := range workflow.ExecutionOrder(wf) {
-		state, ok := execCtx.GetStepState(step.Name)
-		if !ok {
-			continue
-		}
-		duration := state.CompletedAt.Sub(state.StartedAt).Round(time.Millisecond)
-		formatter.StatusLine("  "+step.Name, string(state.Status), fmt.Sprintf("(%s)", duration))
-	}
-}
-
-func displayValueOf(state *workflow.StepState) string {
-	if state.DisplayOutput != "" {
-		return state.DisplayOutput
-	}
-	return state.Output
-}
-
-func showStepOutputs(formatter *ui.Formatter, wf *workflow.Workflow, execCtx *workflow.ExecutionContext) {
-	for _, step := range workflow.ExecutionOrder(wf) {
-		state, ok := execCtx.GetStepState(step.Name)
-		if !ok {
-			continue
-		}
-		displayOutput := displayValueOf(&state)
-		if displayOutput != "" {
-			formatter.Printf("\n--- [%s] stdout ---\n", step.Name)
-			formatter.Printf("%s", displayOutput)
-		}
-		if state.Stderr != "" {
-			formatter.Printf("\n--- [%s] stderr ---\n", step.Name)
-			formatter.Printf("%s", state.Stderr)
-		}
-		if state.Output == "" && state.Stderr == "" &&
-			state.Status == workflow.StatusCompleted {
-			formatter.StepSuccess(step.Name)
-		}
-	}
-}
-
-// showEmptyStepFeedback displays success message for steps that had no output.
-// Used for silent/streaming modes where showStepOutputs is not called.
-func showEmptyStepFeedback(formatter *ui.Formatter, wf *workflow.Workflow, execCtx *workflow.ExecutionContext) {
-	for _, step := range workflow.ExecutionOrder(wf) {
-		state, ok := execCtx.GetStepState(step.Name)
-		if !ok {
-			continue
-		}
-		if state.Output == "" && state.Stderr == "" &&
-			state.Status == workflow.StatusCompleted {
-			formatter.StepSuccess(step.Name)
-		}
-	}
-}
-
-func buildStepInfos(wf *workflow.Workflow, execCtx *workflow.ExecutionContext) []ui.StepInfo {
-	ordered := workflow.ExecutionOrder(wf)
-	steps := make([]ui.StepInfo, 0, len(ordered))
-	for _, step := range ordered {
-		state, ok := execCtx.GetStepState(step.Name)
-		if !ok {
-			continue
-		}
-		steps = append(steps, ui.StepInfo{
-			Name:        step.Name,
-			Status:      string(state.Status),
-			Output:      state.Output,
-			Stderr:      state.Stderr,
-			ExitCode:    state.ExitCode,
-			StartedAt:   state.StartedAt.Format(time.RFC3339),
-			CompletedAt: state.CompletedAt.Format(time.RFC3339),
-			Error:       state.Error,
-		})
-	}
-	return steps
 }
 
 // categorizeError maps errors to exit codes using a two-phase approach:
@@ -1103,14 +964,32 @@ func runSingleStep(
 
 	execSvc := stepSetupResult.ExecService
 
+	// Route through the facade so the single-step path is no longer a direct
+	// ExecutionService caller (F108 last non-facade execution path).
+	// RunStep is a CLI-only operation on ports.SingleStepRunner (M1); the
+	// production Adapter implements both WorkflowFacade and SingleStepRunner.
+	runFacade := buildRunCapableFacade(execSvc, stepSetupResult.WorkflowSvc, historyStore, repo, infraTranscript.NewNopRecorder(), logger)
+	if runFacade == nil {
+		return fmt.Errorf("failed to initialize execution facade for step")
+	}
+	stepRunner, ok := runFacade.(ports.SingleStepRunner)
+	if !ok {
+		return fmt.Errorf("execution facade does not support single-step execution")
+	}
+
 	// Show start message
 	if !cfg.Quiet {
 		formatter.Info(fmt.Sprintf("Running single step: %s from workflow: %s", stepName, workflowName))
 	}
 	startTime := time.Now()
 
-	// Execute single step
-	result, execErr := execSvc.ExecuteSingleStep(ctx, workflowName, stepName, inputs, mocks)
+	// Execute single step via SingleStepRunner
+	stepRes, execErr := stepRunner.RunStep(ctx, ports.RunStepRequest{
+		Identifier: workflowName,
+		StepName:   stepName,
+		Inputs:     inputs,
+		Mocks:      mocks,
+	})
 
 	// Calculate duration
 	duration := time.Since(startTime).Round(time.Millisecond)
@@ -1122,19 +1001,19 @@ func runSingleStep(
 	}
 
 	// Display result
-	if result.Output != "" && !cfg.Quiet {
-		formatter.Printf("\n--- [%s] stdout ---\n", result.StepName)
-		formatter.Printf("%s", result.Output)
+	if stepRes.Output != "" && !cfg.Quiet {
+		formatter.Printf("\n--- [%s] stdout ---\n", stepRes.StepName)
+		formatter.Printf("%s", stepRes.Output)
 	}
-	if result.Stderr != "" && !cfg.Quiet {
-		formatter.Printf("\n--- [%s] stderr ---\n", result.StepName)
-		formatter.Printf("%s", result.Stderr)
+	if stepRes.Stderr != "" && !cfg.Quiet {
+		formatter.Printf("\n--- [%s] stderr ---\n", stepRes.StepName)
+		formatter.Printf("%s", stepRes.Stderr)
 	}
 
-	if result.Status == workflow.StatusCompleted {
+	if stepRes.Status == ports.RunStateCompleted {
 		formatter.Success(fmt.Sprintf("Step '%s' completed successfully in %s", stepName, duration))
 	} else {
-		formatter.Error(fmt.Sprintf("Step '%s' failed (exit code: %d)", stepName, result.ExitCode))
+		formatter.Error(fmt.Sprintf("Step '%s' failed (exit code: %d)", stepName, stepRes.ExitCode))
 	}
 
 	return nil
@@ -1232,6 +1111,142 @@ func collectMissingInputsIfNeeded(
 
 	// Collect missing inputs
 	return service.CollectMissingInputs(ctx, wf, inputs)
+}
+
+// buildRunCapableFacade constructs an execution-capable ports.WorkflowFacade for the CLI
+// `run` path (F108 T070 enabler). Unlike the read-only AutoFacade in config.go (zero
+// ExecutionService), this Adapter wraps the REAL ExecutionService built by ExecutionSetup,
+// a Resolver over the same repo + pack discoverer, and the SAME transcript recorder used by
+// the run so transcript events stream into the RunSession. Returns nil when no execution
+// service is available so callers can fall back to the legacy direct-execution path.
+func buildRunCapableFacade(
+	execSvc *application.ExecutionService,
+	workflowSvc *application.WorkflowService,
+	historyStore ports.HistoryStore,
+	repo ports.WorkflowRepository,
+	recorder ports.Recorder,
+	logger ports.Logger,
+) ports.WorkflowFacade {
+	if execSvc == nil {
+		return nil
+	}
+	// The Adapter is the sole Recorder.Subscribe caller (SC-001). If transcript wiring
+	// failed (nil recorder), give it a NopRecorder whose Subscribe yields an already-closed
+	// channel — the Adapter tolerates this and still emits the terminal event.
+	facadeRecorder := recorder
+	if facadeRecorder == nil {
+		facadeRecorder = infraTranscript.NewNopRecorder()
+	}
+	discoverer := workflowpkg.NewPackDiscovererAdapter(workflowPackSearchDirs())
+	resolver := application.NewResolver(discoverer, repo)
+	historySvc := application.NewHistoryService(historyStore, logger)
+	adapter := application.NewAdapter(
+		workflowSvc,
+		execSvc,
+		historySvc,
+		resolver,
+		facadeRecorder,
+		application.NewSessionRegistry(),
+	)
+	// Wire the user-input edge so interactive conversation turns route through the
+	// RunSession parking mechanism (EventInputRequired -> RunSession.Respond) instead
+	// of a process-global stdin read that EOFs before the agent runs (F110 G4). The
+	// CLI run driver (runWorkflowViaFacade) answers these parks from stdin. The reader
+	// passed here is a non-nil signal that the CLI owns input; the Adapter binds a
+	// session-scoped bridge per run.
+	adapter.SetUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout))
+	return adapter
+}
+
+// runWorkflowViaFacade executes a workflow through the single-core ports.WorkflowFacade
+// (T068): it dispatches via cfg.Facade.Run, streams the projected events to stdout as they
+// arrive, and maps the terminal outcome to the CLI exit-code taxonomy. A dispatch rejection
+// (e.g. unknown/empty identifier) and a terminal failure both flow through categorizeError
+// so the exit codes match the legacy execSvc path.
+func runWorkflowViaFacade(
+	ctx context.Context,
+	cmd *cobra.Command,
+	cfg *Config,
+	writer *ui.OutputWriter,
+	_ *ui.Formatter,
+	workflowName string,
+	inputs map[string]any,
+) error {
+	session, err := cfg.Facade.Run(ctx, ports.RunRequest{
+		Identifier: workflowName,
+		Inputs:     inputs,
+	})
+	if err != nil {
+		return writeErrorAndExit(writer, err, categorizeError(err))
+	}
+	defer func() { _ = session.Close() }()
+
+	// Restore the legacy "Workflow started:" / "Workflow ID:" lines (F110 G2). The
+	// production facade does not emit a run.started transcript event, so no EventRunStarted
+	// reaches the session; the run ID is the session ID. Render a synthetic run-started event
+	// through the same renderer so the phrasing stays centralized (and quiet-suppressed).
+	if out := RenderFacadeEventsToTextWithOptions(
+		[]ports.Event{{Kind: ports.EventRunStarted, RunID: session.ID()}},
+		facadeRenderOptions{Quiet: cfg.Quiet},
+	); len(out) > 0 {
+		// writer.Out() is the shared SyncWriter, so projector writes serialize with the
+		// background execution goroutine's logger/step output (no stdout data race).
+		fmt.Fprint(writer.Out(), string(out))
+	}
+
+	// Interactive conversation turns park the workflow with EventInputRequired; the
+	// driver answers them from stdin and resumes via session.Respond (F110 G4). This
+	// mirrors how ACP routes input requests, so the conversation reaches the agent
+	// instead of EOFing on a process-global stdin read. A non-terminal/EOF stdin yields
+	// an empty response, which the ConversationManager treats as a graceful user exit.
+	inputReader := ui.NewStdinInputReader(cmd.InOrStdin(), writer.Out())
+
+	// Stream each projected event to stdout as it arrives (the same renderer the facade
+	// conformance test exercises). Draining to completion also guarantees the terminal
+	// event has been observed before we read the outcome. Failure is signaled either via
+	// session.Err() (the production Adapter) or via an EventWorkflowFailed terminal (the
+	// test fake, whose Err() is always nil) — handle both.
+	var failed bool
+	var failPayload any
+	for ev := range session.Events() {
+		if ev.Kind == ports.EventInputRequired {
+			value, readErr := inputReader.ReadInput(ctx)
+			if readErr != nil {
+				// EOF (non-interactive) or cancellation: respond with empty input so the
+				// conversation ends cleanly instead of stalling the parked turn.
+				value = ""
+			}
+			_ = session.Respond(ports.InputResponse{Value: value}) //nolint:errcheck // a closed/duplicate respond is non-fatal; the run terminates via its own events
+			continue
+		}
+		if ev.Kind == ports.EventWorkflowFailed {
+			failed = true
+			failPayload = ev.Payload
+		}
+		if out := RenderFacadeEventsToTextWithOptions([]ports.Event{ev}, facadeRenderOptions{Quiet: cfg.Quiet}); len(out) > 0 {
+			fmt.Fprint(writer.Out(), string(out))
+		}
+	}
+
+	if runErr := session.Err(); runErr != nil {
+		return writeErrorAndExit(writer, runErr, categorizeError(runErr))
+	}
+	if failed {
+		runErr := fmt.Errorf("workflow failed")
+		if failPayload != nil {
+			// EventWorkflowFailed always carries *ports.EnrichedTerminal (see facade_adapter.go
+			// emitTerminalEvent and input_bridge.go). Type-assert to extract the structured error
+			// message rather than formatting the raw struct pointer (which produces "&{...}").
+			if termPayload, ok := failPayload.(*ports.EnrichedTerminal); ok && termPayload.Error != "" {
+				runErr = fmt.Errorf("workflow failed: %s", termPayload.Error)
+			} else if !ok {
+				// Unexpected payload type: format as-is so debug info is not silently lost.
+				runErr = fmt.Errorf("workflow failed: %v", failPayload)
+			}
+		}
+		return writeErrorAndExit(writer, runErr, categorizeError(runErr))
+	}
+	return nil
 }
 
 // isTerminal checks if the given reader is connected to a terminal.

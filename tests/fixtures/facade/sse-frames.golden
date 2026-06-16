@@ -1,0 +1,15 @@
+event: run.started
+data: {"kind":"run.started","run_id":"run-conformance"}
+
+event: tool.call
+data: {"kind":"tool.call","run_id":"run-conformance"}
+
+event: tool.result
+data: {"kind":"tool.result","run_id":"run-conformance"}
+
+event: step.completed
+data: {"kind":"step.completed","run_id":"run-conformance"}
+
+event: workflow.completed
+data: {"kind":"workflow.completed","run_id":"","status":"completed"}
+

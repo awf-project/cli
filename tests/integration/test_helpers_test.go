@@ -7,52 +7,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sync"
 	"testing"
-
-	"github.com/awf-project/cli/internal/application"
-	"github.com/awf-project/cli/internal/domain/ports"
-	"github.com/awf-project/cli/internal/infrastructure/executor"
-	infraExpr "github.com/awf-project/cli/internal/infrastructure/expression"
-	"github.com/awf-project/cli/internal/infrastructure/repository"
-	"github.com/awf-project/cli/internal/infrastructure/store"
-	"github.com/awf-project/cli/pkg/interpolation"
 )
 
 // Feature: C019 - Shared Test Helpers
 // Common utilities for memory management and integration tests
-
-// mockLogger provides a simple logger implementation for testing.
-type mockLogger struct {
-	warnings []string
-	errors   []string
-	info     []string
-	mu       sync.Mutex
-}
-
-func (m *mockLogger) Debug(msg string, fields ...any) {}
-
-func (m *mockLogger) Info(msg string, fields ...any) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.info = append(m.info, msg)
-}
-
-func (m *mockLogger) Warn(msg string, fields ...any) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.warnings = append(m.warnings, msg)
-}
-
-func (m *mockLogger) Error(msg string, fields ...any) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.errors = append(m.errors, msg)
-}
-
-func (m *mockLogger) WithContext(ctx map[string]any) ports.Logger {
-	return m
-}
 
 // skipInCI skips the test if running in a CI environment.
 // Tests requiring external API access use this helper since CI lacks credentials.
@@ -120,28 +79,4 @@ func getRepoRoot(t *testing.T) string {
 		}
 		dir = parent
 	}
-}
-
-// setupTestWorkflowService creates a fully configured workflow service for integration tests.
-func setupTestWorkflowService(t *testing.T, workflowsDir, statesDir string) (*application.ExecutionService, ports.StateStore) {
-	t.Helper()
-
-	// Real components for integration testing
-	repo := repository.NewYAMLRepository(workflowsDir)
-	stateStore := store.NewJSONStore(statesDir)
-	exec := executor.NewShellExecutor()
-	logger := &mockLogger{}
-	resolver := interpolation.NewTemplateResolver()
-
-	// Expression evaluator for loop conditions (infrastructure adapter per C042)
-	evaluator := infraExpr.NewExprEvaluator()
-
-	// Wire up services
-	wfSvc := application.NewWorkflowService(repo, stateStore, exec, logger, infraExpr.NewExprValidator())
-	parallelExec := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionServiceWithEvaluator(
-		wfSvc, exec, parallelExec, stateStore, logger, resolver, nil, evaluator,
-	)
-
-	return execSvc, stateStore
 }

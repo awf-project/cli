@@ -30,7 +30,8 @@ func TestConversationValidation_RejectsUnimplementedFeatures(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := cli.NewRootCommand()
+			cmd, cleanup := cli.NewRootCommandAutoFacade()
+			defer cleanup()
 			buf := new(bytes.Buffer)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
@@ -77,7 +78,8 @@ func TestConversationValidation_AcceptsValidConfigs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := cli.NewRootCommand()
+			cmd, cleanup := cli.NewRootCommandAutoFacade()
+			defer cleanup()
 			buf := new(bytes.Buffer)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)

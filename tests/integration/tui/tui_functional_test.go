@@ -4,6 +4,7 @@
 package tui_test
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -13,52 +14,54 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/interfaces/tui"
 )
 
 func TestTUIModel_WorkflowExecutionLifecycle(t *testing.T) {
-	m := tui.New()
-
-	initCmd := m.Init()
-	require.NotNil(t, initCmd, "Init should return a command to trigger initial load")
-
-	initMsg := initCmd()
-	_, ok := initMsg.(tui.WorkflowsLoadedMsg)
-	require.True(t, ok, "Init command should produce WorkflowsLoadedMsg")
-
 	wf := &workflow.Workflow{Name: "deploy-app", Description: "Deploy to production"}
-	loadedMsg := tui.WorkflowsLoadedMsg{
-		Workflows: []*workflow.Workflow{wf},
-	}
+
+	// The TUI's sole execution entry point is the WorkflowFacade. Wire a fake facade
+	// (returning a live RunSession) into the bridge exactly as production does via
+	// command.go/SetFacade — no legacy ExecutionContext or Done channel is involved.
+	facade := &fakeFacade{session: newFakeRunSession("exec-abc123")}
+	bridge := tui.NewBridge(&fakeLister{wf: wf}, nil)
+	bridge.SetFacade(facade)
+	m := tui.NewWithBridge(bridge, context.Background(), "")
+
 	resizeMsg := tea.WindowSizeMsg{Width: 80, Height: 24}
 	updated, _ := m.Update(resizeMsg)
 	m = updated.(tui.Model)
 
-	updated, _ = m.Update(loadedMsg)
+	updated, _ = m.Update(tui.WorkflowsLoadedMsg{Workflows: []*workflow.Workflow{wf}})
 	m = updated.(tui.Model)
 
 	output := m.View().Content
 	assert.Contains(t, output, "1:Workflows", "tab bar should show workflows tab")
 	assert.Contains(t, output, "2:Monitoring", "tab bar should show monitoring tab")
 
-	// Switch to monitoring tab, start execution.
+	// Switch to monitoring tab.
 	updated, _ = m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
 	m = updated.(tui.Model)
 
-	execCtx := workflow.NewExecutionContext("exec-abc123", "deploy-app")
-	done := make(chan error, 1)
-	done <- nil
-	startedMsg := tui.ExecutionStartedMsg{ExecutionID: "exec-abc123", Workflow: wf, ExecCtx: execCtx, Done: done}
-	updated, _ = m.Update(startedMsg)
+	// Launch through the facade — this is exactly what LaunchWorkflowMsg triggers in
+	// production. The resulting ExecutionStartedMsg carries the live RunSession.
+	startedMsg := bridge.RunWorkflowViaFacade(context.Background(), wf.Name, nil)()
+	started, ok := startedMsg.(tui.ExecutionStartedMsg)
+	require.True(t, ok, "facade launch must yield ExecutionStartedMsg, got %T", startedMsg)
+	require.NotNil(t, started.Session, "facade-driven start must carry a live RunSession")
+
+	updated, _ = m.Update(started)
 	m = updated.(tui.Model)
 
-	finishedMsg := tui.ExecutionFinishedMsg{Err: nil}
-	updated, _ = m.Update(finishedMsg)
+	// In production the session's terminal event drives ExecutionFinishedMsg via
+	// StartEventLoop; deliver it directly here to finalize the monitoring tab.
+	updated, _ = m.Update(tui.ExecutionFinishedMsg{Err: nil})
 	m = updated.(tui.Model)
 
 	output = m.View().Content
-	assert.NotEmpty(t, output, "view should render after execution lifecycle")
+	assert.NotEmpty(t, output, "view should render after facade-driven execution lifecycle")
 }
 
 func TestTUIModel_ErrorsAreHandledGracefully(t *testing.T) {
@@ -163,3 +166,67 @@ func TestTUITailer_HandlesNonexistentFile(t *testing.T) {
 	// rotation message gracefully via logRotationMsg routing in tab_logs.go.
 	_ = cmd() // must not panic
 }
+
+// --- Facade test doubles: the TUI's only execution path is the WorkflowFacade ---
+
+// fakeRunSession is a minimal ports.RunSession with no live events; the execution
+// lifecycle is asserted at the model/message boundary, not by streaming events.
+type fakeRunSession struct {
+	id     string
+	events chan ports.Event
+}
+
+func newFakeRunSession(id string) *fakeRunSession {
+	ch := make(chan ports.Event)
+	close(ch) // StartEventLoop ranges over a closed channel and exits cleanly
+	return &fakeRunSession{id: id, events: ch}
+}
+
+func (s *fakeRunSession) ID() string                        { return s.id }
+func (s *fakeRunSession) Events() <-chan ports.Event        { return s.events }
+func (s *fakeRunSession) Respond(ports.InputResponse) error { return nil }
+func (s *fakeRunSession) Err() error                        { return nil }
+func (s *fakeRunSession) Close() error                      { return nil }
+
+// fakeFacade is a minimal ports.WorkflowFacade whose Run returns the wired session.
+type fakeFacade struct {
+	session ports.RunSession
+}
+
+func (f *fakeFacade) List(context.Context) ([]ports.WorkflowSummary, error) { return nil, nil }
+
+func (f *fakeFacade) Validate(context.Context, ports.RunRequest) (ports.ValidationReport, error) { //nolint:gocritic // interface contract: RunRequest passed by value
+	return ports.ValidationReport{}, nil
+}
+
+func (f *fakeFacade) Status(context.Context, string) (ports.RunStatus, error) {
+	return ports.RunStatus{}, nil
+}
+
+func (f *fakeFacade) History(context.Context, ports.HistoryFilter) ([]ports.RunRecord, error) {
+	return nil, nil
+}
+
+func (f *fakeFacade) Run(_ context.Context, _ ports.RunRequest) (ports.RunSession, error) { //nolint:gocritic // interface contract: RunRequest passed by value
+	return f.session, nil
+}
+
+func (f *fakeFacade) Resume(_ context.Context, _ ports.ResumeRequest) (ports.RunSession, error) { //nolint:gocritic // interface contract: ResumeRequest passed by value
+	return f.session, nil
+}
+
+// fakeLister is a minimal tui.WorkflowLister so RunWorkflowViaFacade can load the
+// workflow definition for the monitoring tab's step tree.
+type fakeLister struct {
+	wf *workflow.Workflow
+}
+
+func (l *fakeLister) ListAllWorkflows(context.Context) ([]workflow.WorkflowEntry, error) {
+	return []workflow.WorkflowEntry{{Name: l.wf.Name}}, nil
+}
+
+func (l *fakeLister) GetWorkflow(context.Context, string) (*workflow.Workflow, error) {
+	return l.wf, nil
+}
+
+func (l *fakeLister) ValidateWorkflow(context.Context, string) error { return nil }

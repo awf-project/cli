@@ -8,6 +8,7 @@ import (
 
 	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/fatih/color"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -183,6 +184,25 @@ func TestHumanErrorFormatter_ColorOutput(t *testing.T) {
 			tt.validate(t, output)
 		})
 	}
+}
+
+func TestHumanErrorFormatter_ColorDisabledIgnoresGlobalColorState(t *testing.T) {
+	previousNoColor := color.NoColor
+	color.NoColor = false
+	t.Cleanup(func() { color.NoColor = previousNoColor })
+
+	formatter := NewHumanErrorFormatter(false, false)
+	structuredErr := domainerrors.NewStructuredError(
+		domainerrors.ErrorCodeUserInputMissingFile,
+		"test error",
+		nil,
+		nil,
+	)
+
+	output := formatter.FormatError(structuredErr)
+
+	assert.NotContains(t, output, "\033[")
+	assert.False(t, color.NoColor, "formatter should not mutate global color state")
 }
 
 // TestHumanErrorFormatter_EdgeCases tests boundary conditions and unusual inputs.

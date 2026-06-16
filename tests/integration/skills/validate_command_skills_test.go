@@ -42,15 +42,24 @@ func createTestWorkflow(t *testing.T, baseDir, filename, content string) {
 	require.NoError(t, os.WriteFile(workflowPath, []byte(content), 0o644))
 }
 
-// runCLI executes a CLI command and returns output
+// runCLI executes a CLI command and returns output.
+// It uses NewRootCommandAutoFacade so the validate command is routed through
+// the WorkflowFacade (required since F108). A --storage flag pointing at a
+// temporary directory is prepended to every invocation so that buildFacade can
+// create its SQLite history store without touching the user's real data directory.
 func runCLI(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
+
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs(args)
+
+	// Prepend --storage=<tmpdir> so buildFacade can create history.db.
+	storageArgs := append([]string{"--storage=" + t.TempDir()}, args...)
+	cmd.SetArgs(storageArgs)
 
 	err := cmd.Execute()
 

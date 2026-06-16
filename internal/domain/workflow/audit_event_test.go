@@ -141,6 +141,24 @@ func TestNewCompletedEvent_FailureStatus(t *testing.T) {
 	assert.Equal(t, int64(30000), *event.DurationMs)
 }
 
+func TestNewCompletedEvent_FailedExecutionWithZeroExitCode(t *testing.T) {
+	execCtx := &workflow.ExecutionContext{
+		WorkflowID:   "exec-terminal-failure",
+		WorkflowName: "skill-injection",
+		Status:       workflow.StatusFailed,
+		StartedAt:    time.Date(2026, 2, 20, 23, 15, 0, 0, time.UTC),
+		CompletedAt:  time.Date(2026, 2, 20, 23, 15, 30, 0, time.UTC),
+		ExitCode:     0,
+	}
+
+	event := workflow.NewCompletedEvent(execCtx, "build-user", "Skill injection test FAILED")
+
+	assert.Equal(t, "failure", event.Status)
+	assert.NotNil(t, event.ExitCode)
+	assert.Equal(t, 0, *event.ExitCode)
+	assert.Equal(t, "Skill injection test FAILED", event.Error)
+}
+
 // TestNewCompletedEvent_NoErrorMessageOnSuccess tests error field is empty for success.
 func TestNewCompletedEvent_NoErrorMessageOnSuccess(t *testing.T) {
 	execCtx := &workflow.ExecutionContext{

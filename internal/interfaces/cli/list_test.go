@@ -22,7 +22,8 @@ func TestListCommand_NoWorkflows(t *testing.T) {
 	// Change to temp dir so .awf/workflows resolves to empty dir, not project root
 	t.Chdir(tmpDir)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)

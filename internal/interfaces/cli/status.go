@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/awf-project/cli/internal/domain/ports"
-	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
 )
@@ -81,11 +80,12 @@ func runStatusViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWriter
 		Quiet:   cfg.Quiet,
 		NoColor: cfg.NoColor,
 	})
-	displayRunStatus(formatter, &status)
+	displayRunStatus(formatter, &status, cfg.Verbose)
 	return nil
 }
 
 // runStatusToExecutionInfo converts a ports.RunStatus to ui.ExecutionInfo for structured output.
+// Populates Steps and CurrentStep from the enriched DTO fields for JSON/table/quiet parity.
 func runStatusToExecutionInfo(s *ports.RunStatus) ui.ExecutionInfo {
 	var durationMs int64
 	if s.CompletedAt.IsZero() && !s.StartedAt.IsZero() {
@@ -95,9 +95,10 @@ func runStatusToExecutionInfo(s *ports.RunStatus) ui.ExecutionInfo {
 	}
 
 	info := ui.ExecutionInfo{
-		WorkflowID: s.RunID,
-		Status:     s.Status,
-		DurationMs: durationMs,
+		WorkflowID:  s.RunID,
+		Status:      string(s.Status),
+		CurrentStep: s.CurrentStep,
+		DurationMs:  durationMs,
 	}
 	if !s.StartedAt.IsZero() {
 		info.StartedAt = s.StartedAt.Format(time.RFC3339)
@@ -105,15 +106,36 @@ func runStatusToExecutionInfo(s *ports.RunStatus) ui.ExecutionInfo {
 	if !s.CompletedAt.IsZero() {
 		info.CompletedAt = s.CompletedAt.Format(time.RFC3339)
 	}
+	if len(s.Steps) > 0 {
+		steps := make([]ui.StepInfo, 0, len(s.Steps))
+		for i := range s.Steps {
+			step := ui.StepInfo{
+				Name:   s.Steps[i].Name,
+				Status: string(s.Steps[i].Status),
+				Error:  s.Steps[i].Error,
+			}
+			if !s.Steps[i].StartedAt.IsZero() {
+				step.StartedAt = s.Steps[i].StartedAt.Format(time.RFC3339)
+			}
+			if !s.Steps[i].CompletedAt.IsZero() {
+				step.CompletedAt = s.Steps[i].CompletedAt.Format(time.RFC3339)
+			}
+			steps = append(steps, step)
+		}
+		info.Steps = steps
+	}
 	return info
 }
 
 // displayRunStatus renders a ports.RunStatus in human-readable text format.
-func displayRunStatus(formatter *ui.Formatter, s *ports.RunStatus) {
+// Displays CurrentStep, Progress (X/Y steps, N failed), and in verbose mode
+// the full step list (name, colored status, duration, error) plus Inputs.
+// Sections are only shown when the relevant data is present in the DTO.
+func displayRunStatus(formatter *ui.Formatter, s *ports.RunStatus, verbose bool) {
 	color := formatter.Colorizer()
 
 	formatter.Printf("ID:       %s\n", s.RunID)
-	formatter.StatusLine("Status", s.Status, "")
+	formatter.StatusLine("Status", string(s.Status), "")
 
 	var duration time.Duration
 	if s.CompletedAt.IsZero() && !s.StartedAt.IsZero() {
@@ -124,119 +146,44 @@ func displayRunStatus(formatter *ui.Formatter, s *ports.RunStatus) {
 	if duration > 0 {
 		formatter.Printf("Duration: %s\n", duration.Round(time.Millisecond))
 	}
-	_ = color // colorizer available for future field coloring
-}
 
-func toExecutionInfo(execCtx *workflow.ExecutionContext) ui.ExecutionInfo {
-	var durationMs int64
-	if execCtx.CompletedAt.IsZero() {
-		durationMs = time.Since(execCtx.StartedAt).Milliseconds()
-	} else {
-		durationMs = execCtx.CompletedAt.Sub(execCtx.StartedAt).Milliseconds()
+	// Current step (running/paused)
+	if s.CurrentStep != "" {
+		formatter.Printf("Current:  %s\n", s.CurrentStep)
 	}
 
-	steps := make([]ui.StepInfo, 0, len(execCtx.States))
-	for name, state := range execCtx.States {
-		step := ui.StepInfo{
-			Name:     name,
-			Status:   string(state.Status),
-			Output:   state.Output,
-			Stderr:   state.Stderr,
-			ExitCode: state.ExitCode,
-			Error:    state.Error,
-		}
-		if !state.StartedAt.IsZero() {
-			step.StartedAt = state.StartedAt.Format(time.RFC3339)
-		}
-		if !state.CompletedAt.IsZero() {
-			step.CompletedAt = state.CompletedAt.Format(time.RFC3339)
-		}
-		steps = append(steps, step)
-	}
-
-	info := ui.ExecutionInfo{
-		WorkflowID:   execCtx.WorkflowID,
-		WorkflowName: execCtx.WorkflowName,
-		Status:       string(execCtx.Status),
-		CurrentStep:  execCtx.CurrentStep,
-		DurationMs:   durationMs,
-		Steps:        steps,
-	}
-	if !execCtx.StartedAt.IsZero() {
-		info.StartedAt = execCtx.StartedAt.Format(time.RFC3339)
-	}
-	if !execCtx.CompletedAt.IsZero() {
-		info.CompletedAt = execCtx.CompletedAt.Format(time.RFC3339)
-	}
-	return info
-}
-
-func displayStatus(formatter *ui.Formatter, execCtx *workflow.ExecutionContext, verbose bool) {
-	color := formatter.Colorizer()
-
-	// Header
-	formatter.Printf("Workflow: %s\n", color.Bold(execCtx.WorkflowName))
-	formatter.Printf("ID:       %s\n", execCtx.WorkflowID)
-	formatter.StatusLine("Status", string(execCtx.Status), "")
-
-	// Duration
-	var duration time.Duration
-	if execCtx.CompletedAt.IsZero() {
-		duration = time.Since(execCtx.StartedAt)
-	} else {
-		duration = execCtx.CompletedAt.Sub(execCtx.StartedAt)
-	}
-	formatter.Printf("Duration: %s\n", duration.Round(time.Millisecond))
-
-	// Current step
-	if execCtx.CurrentStep != "" {
-		formatter.Printf("Current:  %s\n", execCtx.CurrentStep)
-	}
-
-	// Progress
-	completed := 0
-	failed := 0
-	total := len(execCtx.States)
-	for _, state := range execCtx.States {
-		switch state.Status {
-		case workflow.StatusCompleted:
-			completed++
-		case workflow.StatusFailed:
-			failed++
-		case workflow.StatusPending, workflow.StatusRunning, workflow.StatusCancelled:
-			// Not counted in completed or failed
-		}
-	}
-
-	if total > 0 {
-		formatter.Printf("Progress: %d/%d steps", completed, total)
-		if failed > 0 {
-			formatter.Printf(" (%d failed)", failed)
+	// Progress summary derived from the enriched DTO (populated from event stream).
+	if s.Progress.Total > 0 {
+		formatter.Printf("Progress: %d/%d steps", s.Progress.Completed, s.Progress.Total)
+		if s.Progress.Failed > 0 {
+			formatter.Printf(" (%d failed)", s.Progress.Failed)
 		}
 		formatter.Println()
 	}
 
-	// Verbose: show all steps
-	if verbose && len(execCtx.States) > 0 {
+	// Verbose: per-step table
+	if verbose && len(s.Steps) > 0 {
 		formatter.Println()
 		formatter.Println(color.Bold("Steps:"))
-
-		for name, state := range execCtx.States {
-			stepDuration := state.CompletedAt.Sub(state.StartedAt).Round(time.Millisecond)
-			statusStr := color.Status(string(state.Status), string(state.Status))
-			formatter.Printf("  %-20s %s (%s)\n", name, statusStr, stepDuration)
-
-			if state.Error != "" {
-				formatter.Printf("    Error: %s\n", color.Error(state.Error))
+		for i := range s.Steps {
+			st := &s.Steps[i]
+			var stepDuration time.Duration
+			if !st.StartedAt.IsZero() && !st.CompletedAt.IsZero() {
+				stepDuration = st.CompletedAt.Sub(st.StartedAt).Round(time.Millisecond)
+			}
+			statusStr := color.Status(string(st.Status), string(st.Status))
+			formatter.Printf("  %-20s %s (%s)\n", st.Name, statusStr, stepDuration)
+			if st.Error != "" {
+				formatter.Printf("    Error: %s\n", color.Error(st.Error))
 			}
 		}
 	}
 
-	// Inputs (verbose)
-	if verbose && len(execCtx.Inputs) > 0 {
+	// Verbose: inputs (populated only on the live-session path via setInputs)
+	if verbose && len(s.Inputs) > 0 {
 		formatter.Println()
 		formatter.Println(color.Bold("Inputs:"))
-		for k, v := range execCtx.Inputs {
+		for k, v := range s.Inputs {
 			formatter.Printf("  %s: %v\n", k, v)
 		}
 	}

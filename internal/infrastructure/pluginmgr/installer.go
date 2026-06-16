@@ -74,6 +74,32 @@ func (pi *PluginInstaller) ValidateManifest(dir string) error {
 	return nil
 }
 
+func (pi *PluginInstaller) ensurePluginBinaryExecutable(tempDir, targetDir string) error {
+	pluginName := filepath.Base(targetDir)
+	binaryPath := filepath.Join(tempDir, "awf-plugin-"+pluginName)
+
+	info, err := os.Stat(binaryPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("inspect plugin binary: %w", err)
+	}
+	if info.IsDir() {
+		return nil
+	}
+
+	mode := info.Mode()
+	if mode&0o111 != 0 {
+		return nil
+	}
+	if err := os.Chmod(binaryPath, mode|0o755); err != nil { //nolint:gosec // plugin binaries must be executable by AWF after extraction
+		return fmt.Errorf("make plugin binary executable: %w", err)
+	}
+
+	return nil
+}
+
 // Install downloads, verifies, extracts, and installs a plugin.
 // Performs atomic installation with rollback on failure.
 // Validates manifest exists after extraction.
@@ -127,6 +153,10 @@ func (pi *PluginInstaller) Install(ctx context.Context, url, checksum, targetDir
 	}
 
 	if err := pi.ValidateManifest(tempDir); err != nil {
+		return err
+	}
+
+	if err := pi.ensurePluginBinaryExecutable(tempDir, targetDir); err != nil {
 		return err
 	}
 

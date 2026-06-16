@@ -71,7 +71,7 @@ func TestHarnessFunctional_WorkflowWithHooks_ExecutesHooksCorrectly(t *testing.T
 		}).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "workflow-with-hooks", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "workflow-with-hooks-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -126,7 +126,7 @@ func TestHarnessFunctional_WorkflowWithFailureHooks_ExecutesOnFailure(t *testing
 		}).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "workflow-with-failure-hook", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "workflow-with-failure-hook-run")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "terminal failure")
@@ -176,7 +176,7 @@ func TestHarnessFunctional_StepWithHooks_ExecutesStepHooks(t *testing.T) {
 		}).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "step-level-hooks", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "step-level-hooks-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -219,7 +219,7 @@ func TestHarnessFunctional_CustomStateStore_PersistsState(t *testing.T) {
 		WithCommandResult("echo 'Step 2'", &ports.CommandResult{Stdout: "Step 2\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "stateful-workflow", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "stateful-workflow-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -266,7 +266,7 @@ func TestHarnessFunctional_CustomExecutor_ExecutesCommands(t *testing.T) {
 		WithExecutor(customExecutor).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "custom-executor-workflow", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "custom-executor-workflow-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -326,13 +326,13 @@ func TestHarnessFunctional_ConcurrentWorkflows_ThreadSafe(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		_, err := svc.Run(context.Background(), "concurrent-wf-1", nil)
+		_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf1, nil, "concurrent-wf-1-run")
 		results <- err
 	}()
 
 	go func() {
 		defer wg.Done()
-		_, err := svc.Run(context.Background(), "concurrent-wf-2", nil)
+		_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf2, nil, "concurrent-wf-2-run")
 		results <- err
 	}()
 

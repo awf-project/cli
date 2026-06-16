@@ -228,12 +228,12 @@ func TestWorkflowServiceListWorkflows(t *testing.T) {
 
 	svc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, newMockExpressionValidator())
 
-	names, err := svc.ListWorkflows(context.Background())
+	entries, err := svc.ListAllWorkflows(context.Background())
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if len(names) != 2 {
-		t.Errorf("expected 2 workflows, got %d", len(names))
+	if len(entries) != 2 {
+		t.Errorf("expected 2 workflows, got %d", len(entries))
 	}
 }
 
@@ -305,28 +305,7 @@ func TestWorkflowServiceValidateWorkflow(t *testing.T) {
 	}
 }
 
-func TestWorkflowServiceWorkflowExists(t *testing.T) {
-	repo := newMockRepository()
-	repo.workflows["exists"] = &workflow.Workflow{Name: "exists"}
-
-	svc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, newMockExpressionValidator())
-
-	exists, err := svc.WorkflowExists(context.Background(), "exists")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if !exists {
-		t.Error("expected workflow to exist")
-	}
-
-	exists, err = svc.WorkflowExists(context.Background(), "nonexistent")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if exists {
-		t.Error("expected workflow to not exist")
-	}
-}
+// removed: name-resolution moved to Resolver (F108)
 
 // mockRepo is a repository mock with explicit name ordering for ListAllWorkflows tests.
 type mockRepo struct {

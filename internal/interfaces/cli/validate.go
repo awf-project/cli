@@ -12,11 +12,6 @@ import (
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
-	"github.com/awf-project/cli/internal/infrastructure/analyzer"
-	"github.com/awf-project/cli/internal/infrastructure/expression"
-	infrastructurePlugin "github.com/awf-project/cli/internal/infrastructure/pluginmgr"
-	"github.com/awf-project/cli/internal/infrastructure/repository"
-	"github.com/awf-project/cli/internal/infrastructure/roles"
 	"github.com/awf-project/cli/internal/infrastructure/skills"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
@@ -81,108 +76,54 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
-	packName, baseName := parseWorkflowNamespace(workflowName)
-	var repo *repository.CompositeRepository
-	if packName != "" {
-		packDir := findPackDir(packName)
-		if packDir == "" {
-			return writeErrorAndExit(writer, fmt.Errorf("workflow pack %q not found", packName), ExitUser)
-		}
-		workflowsDir := filepath.Join(packDir, "workflows")
-		repo = repository.NewCompositeRepository([]repository.SourcedPath{
-			{Path: workflowsDir, Source: repository.SourceLocal},
-		})
-		workflowName = baseName
-	} else {
-		repo = NewWorkflowRepository()
+	// Route through WorkflowFacade when wired (T069). The facade owns identifier
+	// resolution and validation.
+	if cfg.Facade != nil {
+		return runValidateViaFacade(cmd, cfg, writer, ctx, workflowName, skipPlugins, validatorTimeout)
 	}
 
-	validator := expression.NewExprValidator()
-	svc := application.NewWorkflowService(repo, nil, nil, nil, validator)
+	// Facade not wired: return a meaningful error stub. Production always wires
+	// the facade via NewRootCommandAutoFacade, so this branch is never reached in
+	// normal usage.
+	err := fmt.Errorf("validate requires facade wiring (use NewRootCommandAutoFacade)")
+	return writeErrorAndExit(writer, err, ExitSystem)
+}
 
-	// Inject an OperationProvider so that mcp_proxy.plugin_tools checks run.
-	// A CompositeOperationProvider with no sub-providers returns empty results,
-	// which causes UNKNOWN_PLUGIN errors for any plugin reference — the correct
-	// behavior when no plugins are installed in the current environment.
-	svc.SetPluginOperationProvider(infrastructurePlugin.NewCompositeOperationProvider())
-
-	wf, err := svc.GetWorkflow(ctx, workflowName)
+// runValidateViaFacade validates a single workflow through ports.WorkflowFacade.Validate
+// (T069). The facade resolves the canonical identifier and reports validity; a resolver
+// rejection (e.g. unknown workflow) is returned as an error and mapped to ExitUser,
+// while a report carrying validation errors is mapped to ExitWorkflow — matching the
+// legacy path's exit-code taxonomy.
+func runValidateViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWriter, ctx context.Context, workflowName string, skipPlugins bool, validatorTimeout time.Duration) error { //nolint:revive // context.Context not first param: writer is a pre-built dependency, not a new chain
+	report, err := cfg.Facade.Validate(ctx, ports.RunRequest{
+		Identifier:   workflowName,
+		ValidateOpts: ports.ValidateOptions{SkipPlugins: skipPlugins, ValidatorTimeout: validatorTimeout},
+	})
 	if err != nil {
 		return writeErrorAndExit(writer, err, ExitUser)
 	}
 
-	validationErr := svc.ValidateWorkflow(ctx, workflowName)
-
-	if validationErr == nil {
-		templateAnalyzer := analyzer.NewInterpolationAnalyzer()
-		templateValidator := workflow.NewTemplateValidator(wf, templateAnalyzer)
-		result := templateValidator.Validate()
-		if result != nil && result.HasErrors() {
-			if len(result.Errors) == 1 {
-				validationErr = result.Errors[0]
-			} else {
-				var sb strings.Builder
-				fmt.Fprintf(&sb, "validation failed with %d errors:", len(result.Errors))
-				for _, err := range result.Errors {
-					fmt.Fprintf(&sb, "\n  %s", err.Error())
-				}
-				validationErr = fmt.Errorf("%s", sb.String())
-			}
-		}
+	// Extract human-readable messages from the typed ValidationError slice.
+	var errMessages []string
+	for _, ve := range report.Errors {
+		errMessages = append(errMessages, ve.Message)
 	}
 
-	if validationErr == nil {
-		templatePaths := []string{
-			".awf/templates",
-			filepath.Join(cfg.StoragePath, "templates"),
-		}
-		templateRepo := repository.NewYAMLTemplateRepository(templatePaths)
-		templateSvc := application.NewTemplateService(templateRepo, nil)
-
-		for name, step := range wf.Steps {
-			if step.TemplateRef != nil {
-				if err := templateSvc.ValidateTemplateRef(ctx, step.TemplateRef); err != nil {
-					validationErr = fmt.Errorf("step %q: %w", name, err)
-					break
-				}
-			}
-		}
+	var validationErr error
+	if !report.Valid && len(errMessages) > 0 {
+		validationErr = fmt.Errorf("%s", strings.Join(errMessages, "\n  "))
 	}
 
-	var skillWarnings []string
-	if validationErr == nil {
-		skillWarnings, validationErr = validateSkillRefs(wf)
-	}
-
-	var roleWarnings []string
-	if validationErr == nil {
-		roleRepo := roles.NewFilesystemAgentRoleRepository(nil)
-		roleWarnings, validationErr = validateRoleRefs(ctx, wf, roleRepo)
-	}
-
-	// Collect disabled plugin warnings (non-blocking, skipped on quiet format or when --skip-plugins)
-	var pluginWarnings []string
-	if !skipPlugins && validationErr == nil && cfg.OutputFormat != ui.FormatQuiet {
-		pluginWarnings = collectDisabledPluginWarnings(ctx, cfg, wf)
-	}
-	pluginWarnings = append(pluginWarnings, skillWarnings...)
-	pluginWarnings = append(pluginWarnings, roleWarnings...)
-
-	// validatorTimeout is reserved for plugin validator invocation (wired in GREEN phase)
-	_ = validatorTimeout
-
-	// JSON/quiet format
 	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
 		result := ui.ValidationResult{
 			Valid:    validationErr == nil,
 			Workflow: workflowName,
-			Warnings: pluginWarnings,
 		}
 		if validationErr != nil {
-			result.Errors = []string{validationErr.Error()}
+			result.Errors = errMessages
 		}
-		if err := writer.WriteValidation(result); err != nil {
-			return err
+		if writeErr := writer.WriteValidation(result); writeErr != nil {
+			return writeErr
 		}
 		if validationErr != nil {
 			return &exitError{code: ExitWorkflow, err: validationErr}
@@ -190,45 +131,16 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 		return nil
 	}
 
-	// Table format: use structured output with inputs and steps
 	if cfg.OutputFormat == ui.FormatTable {
 		result := ui.ValidationResultTable{
 			Valid:    validationErr == nil,
 			Workflow: workflowName,
-			Warnings: pluginWarnings,
 		}
 		if validationErr != nil {
-			result.Errors = []string{validationErr.Error()}
+			result.Errors = errMessages
 		}
-		for _, inp := range wf.Inputs {
-			defaultVal := ""
-			if inp.Default != nil {
-				defaultVal = fmt.Sprintf("%v", inp.Default)
-			}
-			result.Inputs = append(result.Inputs, ui.InputInfo{
-				Name:     inp.Name,
-				Type:     inp.Type,
-				Required: inp.Required,
-				Default:  defaultVal,
-			})
-		}
-		for _, step := range wf.Steps {
-			next := step.OnSuccess
-			if next == "" {
-				if step.Type == "terminal" {
-					next = "(terminal)"
-				} else {
-					next = "-"
-				}
-			}
-			result.Steps = append(result.Steps, ui.StepSummary{
-				Name: step.Name,
-				Type: string(step.Type),
-				Next: next,
-			})
-		}
-		if err := writer.WriteValidationTable(&result); err != nil {
-			return err
+		if writeErr := writer.WriteValidationTable(&result); writeErr != nil {
+			return writeErr
 		}
 		if validationErr != nil {
 			return &exitError{code: ExitWorkflow, err: validationErr}
@@ -236,84 +148,25 @@ func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugi
 		return nil
 	}
 
-	// Text format
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		Verbose: cfg.Verbose,
 		Quiet:   cfg.Quiet,
 		NoColor: cfg.NoColor,
 	})
-
 	if validationErr != nil {
 		return writeErrorAndExit(writer, validationErr, ExitWorkflow)
 	}
-
 	formatter.Success(fmt.Sprintf("Workflow '%s' is valid", workflowName))
-
-	for _, warning := range pluginWarnings {
-		fmt.Fprintf(cmd.ErrOrStderr(), "\n  warning: %s", warning)
-		fmt.Fprintf(cmd.ErrOrStderr(), "\n  Hint: Run 'awf plugin enable <name>' to re-enable")
-	}
-	if len(pluginWarnings) > 0 {
-		fmt.Fprintln(cmd.ErrOrStderr())
-	}
-
-	if cfg.Verbose {
-		formatter.Println()
-		formatter.Printf("Name:        %s\n", wf.Name)
-		if wf.Version != "" {
-			formatter.Printf("Version:     %s\n", wf.Version)
-		}
-		if wf.Description != "" {
-			formatter.Printf("Description: %s\n", wf.Description)
-		}
-		formatter.Printf("Initial:     %s\n", wf.Initial)
-		formatter.Printf("Steps:       %d\n", len(wf.Steps))
-
-		if len(wf.Inputs) > 0 {
-			formatter.Println()
-			formatter.Println("Inputs:")
-			for _, input := range wf.Inputs {
-				required := ""
-				if input.Required {
-					required = " (required)"
-				}
-				formatter.Printf("  - %s: %s%s\n", input.Name, input.Type, required)
-			}
-		}
-	}
-
 	return nil
 }
 
-// runValidateDir validates all .yaml workflow files in a directory.
-func runValidateDir(cmd *cobra.Command, cfg *Config, dir string, _ bool, _ time.Duration) error {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return fmt.Errorf("read directory %s: %w", dir, err)
-	}
-
-	absDir, err := filepath.Abs(dir)
-	if err != nil {
-		return fmt.Errorf("resolve path: %w", err)
-	}
-
-	var names []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
-			names = append(names, strings.TrimSuffix(e.Name(), ".yaml"))
-		}
-	}
-
-	if len(names) == 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "No .yaml files found in %s\n", dir)
-		return nil
-	}
-
-	repo := repository.NewCompositeRepository([]repository.SourcedPath{
-		{Path: absDir, Source: repository.SourceLocal},
-	})
-	validator := expression.NewExprValidator()
-	svc := application.NewWorkflowService(repo, nil, nil, nil, validator)
+// runValidateDir validates all .yaml workflow files in a directory by routing
+// through the ports.BatchValidator port exposed by the facade.
+//
+// The rendered output is "  OK    <name>" / "  FAIL  <name>: <error>" with a
+// summary line and exit-code propagation.
+func runValidateDir(cmd *cobra.Command, cfg *Config, dir string, skipPlugins bool, validatorTimeout time.Duration) error {
+	ctx := context.Background()
 
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		Verbose: cfg.Verbose,
@@ -321,33 +174,84 @@ func runValidateDir(cmd *cobra.Command, cfg *Config, dir string, _ bool, _ time.
 		NoColor: cfg.NoColor,
 	})
 
+	opts := ports.ValidateOptions{SkipPlugins: skipPlugins, ValidatorTimeout: validatorTimeout}
+
+	if bv, ok := cfg.Facade.(ports.BatchValidator); ok {
+		results, err := bv.ValidateDir(ctx, dir, opts)
+		if err != nil {
+			return fmt.Errorf("validate dir %s: %w", dir, err)
+		}
+		return renderBatchResults(cmd, formatter, results, dir)
+	}
+
+	// Facade not wired: return a meaningful stub error. Production always wires
+	// the facade via NewRootCommandAutoFacade, so this branch is never reached in
+	// normal usage.
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
+	err := fmt.Errorf("validate requires facade wiring (use NewRootCommandAutoFacade)")
+	return writeErrorAndExit(writer, err, ExitSystem)
+}
+
+// runValidatePack validates all workflows in an installed pack by routing
+// through the ports.BatchValidator port exposed by the facade.
+func runValidatePack(cmd *cobra.Command, cfg *Config, packName string, skipPlugins bool, validatorTimeout time.Duration) error {
+	ctx := context.Background()
+
+	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
+		Verbose: cfg.Verbose,
+		Quiet:   cfg.Quiet,
+		NoColor: cfg.NoColor,
+	})
+
+	opts := ports.ValidateOptions{SkipPlugins: skipPlugins, ValidatorTimeout: validatorTimeout}
+
+	if bv, ok := cfg.Facade.(ports.BatchValidator); ok {
+		results, err := bv.ValidatePack(ctx, packName, opts)
+		if err != nil {
+			return fmt.Errorf("validate pack %q: %w", packName, err)
+		}
+		return renderBatchResults(cmd, formatter, results, packName)
+	}
+
+	// Facade not wired: return a meaningful stub error. Production always wires
+	// the facade via NewRootCommandAutoFacade, so this branch is never reached in
+	// normal usage.
+	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
+	err := fmt.Errorf("validate requires facade wiring (use NewRootCommandAutoFacade)")
+	return writeErrorAndExit(writer, err, ExitSystem)
+}
+
+// renderBatchResults writes per-file OK/FAIL lines and a summary for the output
+// produced by ports.BatchValidator methods (ValidateDir and ValidatePack).
+// The format is identical to the legacy direct-service path so user-visible
+// output is unchanged after the facade routing migration.
+func renderBatchResults(cmd *cobra.Command, formatter *ui.Formatter, results []ports.FileValidationResult, scope string) error {
+	if len(results) == 0 {
+		fmt.Fprintf(cmd.OutOrStdout(), "No .yaml files found in %s\n", scope)
+		return nil
+	}
+
 	var failed int
-	for _, name := range names {
-		if err := svc.ValidateWorkflow(context.Background(), name); err != nil {
-			formatter.Error(fmt.Sprintf("  FAIL  %s: %s", name, err))
-			failed++
+	for i := range results {
+		r := &results[i]
+		if r.Valid {
+			formatter.Success(fmt.Sprintf("  OK    %s", r.Name))
 		} else {
-			formatter.Success(fmt.Sprintf("  OK    %s", name))
+			var msgs []string
+			for j := range r.Errors {
+				msgs = append(msgs, r.Errors[j].Message)
+			}
+			formatter.Error(fmt.Sprintf("  FAIL  %s: %s", r.Name, strings.Join(msgs, "; ")))
+			failed++
 		}
 	}
 
 	if failed > 0 {
-		return fmt.Errorf("%d of %d workflow(s) failed validation", failed, len(names))
+		return fmt.Errorf("%d of %d workflow(s) failed validation", failed, len(results))
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "\nAll %d workflow(s) valid\n", len(names))
+	fmt.Fprintf(cmd.OutOrStdout(), "\nAll %d workflow(s) valid\n", len(results))
 	return nil
-}
-
-// runValidatePack validates all workflows in an installed pack.
-func runValidatePack(cmd *cobra.Command, cfg *Config, packName string, skipPlugins bool, validatorTimeout time.Duration) error {
-	packDir := findPackDir(packName)
-	if packDir == "" {
-		return fmt.Errorf("workflow pack %q not found", packName)
-	}
-
-	workflowsDir := filepath.Join(packDir, "workflows")
-	return runValidateDir(cmd, cfg, workflowsDir, skipPlugins, validatorTimeout)
 }
 
 func validateSkillRefs(wf *workflow.Workflow) ([]string, error) {
@@ -515,34 +419,4 @@ func roleDirExistsWithoutAgentsMD(notFound *workflow.AgentRoleNotFoundError) boo
 		return false
 	}
 	return skillDirExists(notFound.Name, notFound.SearchPaths)
-}
-
-// collectDisabledPluginWarnings checks operation steps for disabled plugin references.
-// Returns warning strings for each operation whose plugin prefix is explicitly disabled.
-// Gracefully returns nil if the plugin system cannot be initialized.
-func collectDisabledPluginWarnings(ctx context.Context, cfg *Config, wf *workflow.Workflow) []string {
-	result, err := initPluginSystemReadOnly(ctx, cfg)
-	if err != nil {
-		return nil
-	}
-	defer result.Cleanup()
-
-	var warnings []string
-	for _, step := range wf.Steps {
-		if step.Type != workflow.StepTypeOperation {
-			continue
-		}
-		parts := strings.SplitN(step.Operation, ".", 2)
-		if len(parts) < 2 {
-			continue
-		}
-		pluginPrefix := parts[0]
-		if !result.Service.IsPluginEnabled(pluginPrefix) {
-			warnings = append(warnings, fmt.Sprintf(
-				"step %q uses operation %q but plugin %q is disabled",
-				step.Name, step.Operation, pluginPrefix,
-			))
-		}
-	}
-	return warnings
 }

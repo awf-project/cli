@@ -137,7 +137,7 @@
 //	wf := testutil.LoopWorkflow("while-name", "while", "{{states.check.output}} == 'continue'")
 //
 //	// Conversation workflow with agent
-//	wf := testutil.ConversationWorkflow("chat-name", "claude-sonnet", "openai")
+//	wf := testutil.ConversationWorkflow("chat-name", "haiku", "openai")
 //
 // ## Complete Test Example
 //

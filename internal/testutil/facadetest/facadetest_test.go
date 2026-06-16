@@ -132,13 +132,28 @@ func TestFakeFacade_SatisfiesPortContract(t *testing.T) {
 		assert.ErrorIs(t, err, ports.ErrInvalidRequest)
 	})
 
-	t.Run("run_ctx_canceled_propagates", func(t *testing.T) {
+	t.Run("run_ctx_canceled_still_emits_terminal", func(t *testing.T) {
 		t.Parallel()
-		f := facadetest.New()
+		// The fake emits its scripted sequence unconditionally; a pre-cancelled context
+		// does not abort Run (see Fake.Run / pump docs). This mirrors the spec-mandated
+		// TestFacadeE2E_CtxCancelProducesWorkflowFailed conformance scenario, where a
+		// cancelled run must still surface a terminal WorkflowFailed event rather than
+		// failing at the Run call.
+		f := facadetest.New().WithTerminalFailed(context.Canceled)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		_, err := f.Run(ctx, ports.RunRequest{Identifier: "pack/wf"})
-		assert.ErrorIs(t, err, context.Canceled)
+		sess, err := f.Run(ctx, ports.RunRequest{Identifier: "pack/wf"})
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = sess.Close() })
+
+		var last ports.Event
+		var got bool
+		for ev := range sess.Events() {
+			last = ev
+			got = true
+		}
+		require.True(t, got, "Run must emit at least one event even on cancel")
+		assert.Equal(t, ports.EventWorkflowFailed, last.Kind)
 	})
 
 	t.Run("respond_after_close_returns_err_session_closed", func(t *testing.T) {

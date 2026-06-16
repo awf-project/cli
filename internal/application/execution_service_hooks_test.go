@@ -82,7 +82,7 @@ func TestExecutionService_AgentStep_WithPreHook_Success(t *testing.T) {
 
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "agent-prehook", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "")
 
 	// Should succeed with pre-hook executed before agent step
 	require.NoError(t, err)
@@ -164,7 +164,7 @@ func TestExecutionService_AgentStep_WithPostHook_OnSuccess(t *testing.T) {
 
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "agent-posthook", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "")
 
 	// Should succeed with post-hook executed after agent step
 	require.NoError(t, err)
@@ -251,7 +251,7 @@ func TestExecutionService_AgentStep_WithPostHook_OnFailure(t *testing.T) {
 
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "agent-posthook-fail", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "")
 
 	// Should complete (via OnFailure transition) despite agent failure
 	require.NoError(t, err)

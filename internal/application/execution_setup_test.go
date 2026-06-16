@@ -369,7 +369,7 @@ func TestExecutionSetup_WithEventPublisher(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err = result.ExecService.Run(ctx, "test-workflow", map[string]any{})
+	_, err = result.ExecService.RunWithWorkflowAndRunID(ctx, simpleWf, map[string]any{}, "test-workflow-run")
 	require.NoError(t, err)
 
 	events := mockPublisher.GetEvents()

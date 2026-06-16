@@ -119,7 +119,7 @@ func TestExecutePluginOperation_Timeout(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			ctx, err := execSvc.Run(context.Background(), "timeout-test", nil)
+			ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "timeout-test-run")
 
 			if tt.expectTimeout && !tt.continueOnErr && tt.onFailure == "" {
 				require.Error(t, err)
@@ -205,7 +205,7 @@ func TestExecutePluginOperation_ContextCancellation(t *testing.T) {
 				}()
 			}
 
-			execCtx, err := execSvc.Run(ctx, "cancel-test", nil)
+			execCtx, err := execSvc.RunWithWorkflowAndRunID(ctx, wf, nil, "cancel-test-run")
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.expectedErrMessage)
@@ -304,7 +304,7 @@ func TestExecutePluginOperation_ContinueOnError(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			ctx, err := execSvc.Run(context.Background(), "continue-test", nil)
+			ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "continue-test-run")
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -367,7 +367,7 @@ func TestExecutePluginOperation_ExecutionErrorPropagation(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			ctx, err := execSvc.Run(context.Background(), "error-test", nil)
+			ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "error-test-run")
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "operation")
@@ -446,7 +446,7 @@ func TestExecutePluginOperation_OperationFailureWithoutMessage(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			ctx, err := execSvc.Run(context.Background(), "failure-test", nil)
+			ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "failure-test-run")
 
 			if tt.hasOnFailure {
 				require.NoError(t, err)
@@ -510,7 +510,7 @@ func TestExecutePluginOperation_PrePostHooks(t *testing.T) {
 
 			configureHookMocks(mocks, tt.preHookCommand, tt.expectPreLog, tt.postHookCommand, tt.expectPostLog)
 
-			_, _ = execSvc.Run(context.Background(), "hook-test", nil)
+			_, _ = execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "hook-test-run")
 
 			assertHookExecution(t, mocks.Executor.GetCalls(), tt.preHookCommand, tt.postHookCommand)
 		})
@@ -678,7 +678,7 @@ func TestExecutePluginOperation_InputResolution(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			ctx, err := execSvc.Run(context.Background(), "input-test", tt.workflowInput)
+			ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, tt.workflowInput, "input-test-run")
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -765,7 +765,7 @@ func TestExecutePluginOperation_OutputSerialization(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			ctx, err := execSvc.Run(context.Background(), "output-test", nil)
+			ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "output-test-run")
 
 			require.NoError(t, err)
 			assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -865,7 +865,7 @@ func TestExecutePluginOperation_StepStateRecording(t *testing.T) {
 				Build()
 			execSvc.SetOperationProvider(provider)
 
-			ctx, err := execSvc.Run(context.Background(), "state-test", nil)
+			ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "state-test-run")
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -985,7 +985,7 @@ func TestExecutePluginOperation_DisabledPlugin_ReturnsStructuredError(t *testing
 	execSvc.SetOperationProvider(provider)
 	execSvc.SetPluginService(createPluginServiceWithDisabled(t, "notify"))
 
-	_, err := execSvc.Run(context.Background(), "disabled-plugin-test", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "disabled-plugin-test-run")
 
 	require.Error(t, err)
 	var structErr *domainerrors.StructuredError
@@ -1025,7 +1025,7 @@ func TestExecutePluginOperation_NilPluginService_SkipsCheck(t *testing.T) {
 	execSvc.SetOperationProvider(provider)
 	// Intentionally: no SetPluginService call
 
-	_, err := execSvc.Run(context.Background(), "nil-plugin-svc-test", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "nil-plugin-svc-test-run")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
@@ -1066,7 +1066,7 @@ func TestExecutePluginOperation_NoDotInOperation_SkipsCheck(t *testing.T) {
 	execSvc.SetOperationProvider(provider)
 	execSvc.SetPluginService(pluginSvc)
 
-	_, err := execSvc.Run(context.Background(), "no-dot-test", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "no-dot-test-run")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")

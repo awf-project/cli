@@ -20,7 +20,7 @@ states:
       You are a task executor. Complete the task and respond with "COMPLETE" when done.
     prompt: "Execute: {{inputs.task}}"
     options:
-      model: claude-haiku-4-5
+      model: haiku
     conversation: {}
     timeout: 60
     on_success: turn_count_limit
@@ -57,7 +57,7 @@ states:
     system_prompt: "Respond thoughtfully."
     prompt: "Analyze: {{inputs.task}}"
     options:
-      model: claude-haiku-4-5
+      model: haiku
     conversation: {}
     timeout: 90
     on_success: done

@@ -124,7 +124,7 @@ func TestExecuteCustomStepType_HappyPath(t *testing.T) {
 				Build()
 			execSvc.SetStepTypeProvider(provider)
 
-			execCtx, err := execSvc.Run(context.Background(), "custom-step-test", nil)
+			execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "custom-step-test-run")
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedStatus, execCtx.Status)
@@ -187,7 +187,7 @@ func TestExecuteCustomStepType_NoProviderConfigured(t *testing.T) {
 				WithWorkflow("no-provider-test", wf).
 				Build()
 
-			execCtx, err := execSvc.Run(context.Background(), "no-provider-test", nil)
+			execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "no-provider-test-run")
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.expectedError)
@@ -270,7 +270,7 @@ func TestExecuteCustomStepType_NonZeroExitCode(t *testing.T) {
 				Build()
 			execSvc.SetStepTypeProvider(provider)
 
-			execCtx, err := execSvc.Run(context.Background(), "exit-code-test", nil)
+			execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "exit-code-test-run")
 
 			if tt.hasOnFailure || tt.hasContinueOnError {
 				// handleNonZeroExit evaluates transitions (F068):
@@ -342,7 +342,7 @@ func TestExecuteCustomStepType_ProviderError(t *testing.T) {
 				Build()
 			execSvc.SetStepTypeProvider(provider)
 
-			execCtx, err := execSvc.Run(context.Background(), "provider-error-test", nil)
+			execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "provider-error-test-run")
 
 			// Tests should fail when stub is in place
 			require.Error(t, err)
@@ -400,7 +400,7 @@ func TestExecuteCustomStepType_UnsupportedType(t *testing.T) {
 				Build()
 			execSvc.SetStepTypeProvider(provider)
 
-			execCtx, err := execSvc.Run(context.Background(), "unsupported-type-test", nil)
+			execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "unsupported-type-test-run")
 
 			require.Error(t, err)
 			assert.Equal(t, workflow.StatusFailed, execCtx.Status)

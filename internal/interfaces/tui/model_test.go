@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -10,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/awf-project/cli/internal/domain/ports"
-	"github.com/awf-project/cli/internal/domain/transcript"
 	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/testutil/facadetest"
 )
 
 // --- Tab constants ---
@@ -180,33 +181,29 @@ func TestModel_Update_HistoryLoadedMsg_PopulatesHistoryTab(t *testing.T) {
 	assert.Equal(t, stats, updated.tabMonitoring.stats)
 }
 
-func TestModel_Update_ExecutionStartedMsg_SetsExecCtxAndWorkflowOnMonitoringTab(t *testing.T) {
+func TestModel_Update_ExecutionStartedMsg_SetsWorkflowOnMonitoringTab(t *testing.T) {
 	m := New()
 	wf := &workflow.Workflow{Name: "test-wf", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	execCtx := workflow.NewExecutionContext("exec-abc", "test-wf")
-	done := make(chan error, 1)
 
-	result, _ := m.Update(ExecutionStartedMsg{ExecutionID: "exec-abc", Workflow: wf, ExecCtx: execCtx, Done: done})
+	result, _ := m.Update(ExecutionStartedMsg{ExecutionID: "exec-abc", Workflow: wf})
 
 	updated := result.(Model)
 	assert.Equal(t, wf, updated.tabMonitoring.wf)
-	assert.Equal(t, execCtx, updated.tabMonitoring.execCtx)
-	assert.True(t, updated.tabMonitoring.ticking)
 }
 
 func TestModel_Update_ExecutionFinishedMsg_StopsTicking(t *testing.T) {
 	m := New()
-	m.tabMonitoring.ticking = true
 	wf := &workflow.Workflow{
 		Name:    "test-wf",
 		Initial: "s1",
 		Steps:   map[string]*workflow.Step{"s1": {Name: "s1", Type: workflow.StepTypeTerminal}},
 	}
-	execCtx := workflow.NewExecutionContext("exec-1", "test-wf")
-	execCtx.SetStepState("s1", workflow.StepState{Name: "s1", Status: workflow.StatusCompleted})
-	m.tabMonitoring.SetExecCtx(execCtx, wf)
+	// Start a run so the monitoring tab builds its step tree from the workflow.
+	result, _ := m.Update(ExecutionStartedMsg{ExecutionID: "exec-1", Workflow: wf})
+	m = result.(Model)
+	m.tabMonitoring.ticking = true
 
-	result, _ := m.Update(ExecutionFinishedMsg{Err: nil})
+	result, _ = m.Update(ExecutionFinishedMsg{Err: nil})
 
 	updated := result.(Model)
 	assert.False(t, updated.tabMonitoring.ticking)
@@ -344,7 +341,7 @@ func TestModel_Update_FacadeEventMsg_RoutesToMonitoringTabRegardlessOfActiveTab(
 				{Name: "step-a", Type: workflow.StepTypeCommand},
 			}
 
-			payload := &transcript.StepPayload{Name: "step-a", Kind: "command"}
+			payload := &ports.EnrichedStepPayload{StepName: "step-a"}
 			event := ports.Event{
 				Seq:     1,
 				Kind:    ports.EventStepStarted,
@@ -377,14 +374,10 @@ func TestModel_Update_ExecutionStartedMsg_WithSession_StartsEventLoop(t *testing
 
 	mockSess := &mockRunSession{eventsChan: eventChan}
 	wf := &workflow.Workflow{Name: "wf", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	execCtx := workflow.NewExecutionContext("exec-1", "wf")
-	done := make(chan error, 1)
 
 	m.Update(ExecutionStartedMsg{
 		ExecutionID: "exec-1",
 		Workflow:    wf,
-		ExecCtx:     execCtx,
-		Done:        done,
 		Session:     mockSess,
 	})
 
@@ -402,11 +395,11 @@ func TestModel_Update_ExecutionStartedMsg_WithSession_StartsEventLoop(t *testing
 	}
 }
 
-// TestModel_Update_ExecutionStartedMsg_WithNilDone_DoesNotPanic verifies that the
-// facade-driven path (RunWorkflowViaFacade) can emit an ExecutionStartedMsg with a
-// nil Done channel without causing a panic or blocking the Bubble Tea event loop.
-// ExecutionFinishedMsg will arrive via StartEventLoop when a terminal event is received.
-func TestModel_Update_ExecutionStartedMsg_WithNilDone_DoesNotPanic(t *testing.T) {
+// TestModel_Update_ExecutionStartedMsg_WithSession_DoesNotPanic verifies that the
+// facade-driven path (RunWorkflowViaFacade) can emit an ExecutionStartedMsg carrying a
+// live RunSession without causing a panic or blocking the Bubble Tea event loop.
+// ExecutionFinishedMsg arrives via StartEventLoop when a terminal event is received.
+func TestModel_Update_ExecutionStartedMsg_WithSession_DoesNotPanic(t *testing.T) {
 	m := New()
 
 	eventChan := make(chan ports.Event, 1)
@@ -425,16 +418,15 @@ func TestModel_Update_ExecutionStartedMsg_WithNilDone_DoesNotPanic(t *testing.T)
 			ExecutionID: "exec-1",
 			Workflow:    wf,
 			Session:     mockSess,
-			// Done is intentionally nil — facade-driven path
 		})
 		// cmd must not be nil (at minimum the tick command from the monitoring tab)
-		assert.NotNil(t, cmd, "monCmd must be returned even when Done is nil")
+		assert.NotNil(t, cmd, "monCmd must be returned for the facade-driven path")
 	})
 }
 
-// TestModel_Update_ExecutionStartedMsg_WithNilDone_FinishesViaEventLoop verifies the
-// full flow: nil Done + Session → StartEventLoop → terminal event → ExecutionFinishedMsg.
-func TestModel_Update_ExecutionStartedMsg_WithNilDone_FinishesViaEventLoop(t *testing.T) {
+// TestModel_Update_ExecutionStartedMsg_WithSession_FinishesViaEventLoop verifies the
+// full flow: Session → StartEventLoop → terminal event → ExecutionFinishedMsg.
+func TestModel_Update_ExecutionStartedMsg_WithSession_FinishesViaEventLoop(t *testing.T) {
 	m := New()
 
 	eventChan := make(chan ports.Event, 2)
@@ -517,4 +509,28 @@ func TestModel_ActiveHelpKeys_ReturnsCorrectKeyMap(t *testing.T) {
 			assert.NotEmpty(t, km.FullHelp(), "FullHelp for %s should be non-empty", tt.name)
 		})
 	}
+}
+
+// --- T071: LaunchWorkflowMsg dispatches RunWorkflowViaFacade ---
+
+// TestModel_LaunchWorkflowMsg_DispatchesRunWorkflowViaFacade verifies that
+// sending a LaunchWorkflowMsg to the Model produces a tea.Cmd whose result is an
+// ExecutionStartedMsg with a non-nil Session field — confirming the facade path is used.
+func TestModel_LaunchWorkflowMsg_DispatchesRunWorkflowViaFacade(t *testing.T) {
+	fake := facadetest.New().WithTerminalCompleted()
+	bridge := NewBridge(nil, nil)
+	bridge.SetFacade(fake)
+
+	m := NewWithBridge(bridge, context.Background(), "")
+	wf := &workflow.Workflow{Name: "deploy", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
+
+	_, cmd := m.Update(LaunchWorkflowMsg{Workflow: wf, Inputs: nil})
+	require.NotNil(t, cmd, "LaunchWorkflowMsg must return a cmd")
+
+	msg := cmd()
+
+	started, ok := msg.(ExecutionStartedMsg)
+	require.True(t, ok, "expected ExecutionStartedMsg, got %T", msg)
+	assert.NotNil(t, started.Session, "Session must be non-nil for facade-driven run")
+	assert.Equal(t, "deploy", started.ExecutionID)
 }

@@ -25,7 +25,7 @@ import (
 // when no AgentRegistry is configured.
 func TestExecutionService_AgentStep_NoRegistryConfigured(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["agent-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "agent-test",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -44,6 +44,7 @@ func TestExecutionService_AgentStep_NoRegistryConfigured(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["agent-test"] = wf
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
@@ -57,7 +58,7 @@ func TestExecutionService_AgentStep_NoRegistryConfigured(t *testing.T) {
 	)
 	// Note: SetAgentRegistry is NOT called - registry is nil
 
-	ctx, err := execSvc.Run(context.Background(), "agent-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "agent-test-run")
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, application.ErrNoAgentRegistry)
@@ -69,7 +70,7 @@ func TestExecutionService_AgentStep_NoRegistryConfigured(t *testing.T) {
 // when the Agent configuration is missing.
 func TestExecutionService_AgentStep_MissingAgentConfig(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["agent-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "agent-test",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -85,6 +86,7 @@ func TestExecutionService_AgentStep_MissingAgentConfig(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["agent-test"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
@@ -102,7 +104,7 @@ func TestExecutionService_AgentStep_MissingAgentConfig(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "agent-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "agent-test-run")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "agent configuration missing")
@@ -113,7 +115,7 @@ func TestExecutionService_AgentStep_MissingAgentConfig(t *testing.T) {
 // when the specified provider doesn't exist in the registry.
 func TestExecutionService_AgentStep_ProviderNotFound(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["agent-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "agent-test",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -132,6 +134,7 @@ func TestExecutionService_AgentStep_ProviderNotFound(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["agent-test"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	// Don't register the provider
@@ -148,7 +151,7 @@ func TestExecutionService_AgentStep_ProviderNotFound(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "agent-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "agent-test-run")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
@@ -161,7 +164,7 @@ func TestExecutionService_AgentStep_ProviderNotFound(t *testing.T) {
 // AC4: Response captured in states.step_name.output
 func TestExecutionService_AgentStep_BasicExecution(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["agent-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "agent-test",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -184,6 +187,7 @@ func TestExecutionService_AgentStep_BasicExecution(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["agent-test"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
@@ -221,7 +225,7 @@ func TestExecutionService_AgentStep_BasicExecution(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "agent-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "agent-test-run")
 
 	// Agent step should succeed
 	require.NoError(t, err)
@@ -239,7 +243,7 @@ func TestExecutionService_AgentStep_BasicExecution(t *testing.T) {
 // can transition to an OnFailure state.
 func TestExecutionService_AgentStep_WithOnFailure(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["agent-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "agent-test",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -263,6 +267,7 @@ func TestExecutionService_AgentStep_WithOnFailure(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["agent-test"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
@@ -300,7 +305,7 @@ func TestExecutionService_AgentStep_WithOnFailure(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "agent-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "agent-test-run")
 
 	// Agent fails, but workflow should complete via OnFailure path
 	require.NoError(t, err)
@@ -318,7 +323,7 @@ func TestExecutionService_AgentStep_WithOnFailure(t *testing.T) {
 // in a workflow that also has command steps.
 func TestExecutionService_AgentStep_InMixedWorkflow(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["mixed"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "mixed",
 		Initial: "prepare",
 		Steps: map[string]*workflow.Step{
@@ -343,6 +348,7 @@ func TestExecutionService_AgentStep_InMixedWorkflow(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["mixed"] = wf
 
 	executor := newMockExecutor()
 	executor.results["echo 'preparing data'"] = &ports.CommandResult{Stdout: "preparing data\n", ExitCode: 0}
@@ -383,7 +389,7 @@ func TestExecutionService_AgentStep_InMixedWorkflow(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "mixed", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "mixed-run")
 
 	// Both steps should succeed
 	require.NoError(t, err)
@@ -408,7 +414,7 @@ func TestExecutionService_AgentStep_InMixedWorkflow(t *testing.T) {
 // AC7: Timeout handling
 func TestExecutionService_AgentStep_StepTimeout(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["agent-timeout"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "agent-timeout",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -429,6 +435,7 @@ func TestExecutionService_AgentStep_StepTimeout(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["agent-timeout"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
@@ -466,7 +473,7 @@ func TestExecutionService_AgentStep_StepTimeout(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "agent-timeout", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "agent-timeout-run")
 
 	// Should succeed (mock doesn't actually timeout)
 	require.NoError(t, err)
@@ -478,7 +485,7 @@ func TestExecutionService_AgentStep_StepTimeout(t *testing.T) {
 // AC7: Timeout handling
 func TestExecutionService_AgentStep_AgentTimeout(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["agent-timeout"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "agent-timeout",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -499,6 +506,7 @@ func TestExecutionService_AgentStep_AgentTimeout(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["agent-timeout"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
@@ -536,7 +544,7 @@ func TestExecutionService_AgentStep_AgentTimeout(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "agent-timeout", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "agent-timeout-run")
 
 	// Should succeed (mock doesn't actually timeout)
 	require.NoError(t, err)
@@ -548,7 +556,7 @@ func TestExecutionService_AgentStep_AgentTimeout(t *testing.T) {
 // AC7: Timeout handling
 func TestExecutionService_AgentStep_ContextCancellation(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["agent-cancel"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "agent-cancel",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -572,6 +580,7 @@ func TestExecutionService_AgentStep_ContextCancellation(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["agent-cancel"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
@@ -595,7 +604,7 @@ func TestExecutionService_AgentStep_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	execCtx, err := execSvc.Run(ctx, "agent-cancel", nil)
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(ctx, wf, nil, "agent-cancel-run")
 
 	// Should fail with context canceled error
 	require.Error(t, err)
@@ -608,7 +617,7 @@ func TestExecutionService_AgentStep_ContextCancellation(t *testing.T) {
 // AC10: Works with parallel steps
 func TestExecutionService_AgentStep_InParallelBranches(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["parallel-agents"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "parallel-agents",
 		Initial: "analyze_parallel",
 		Steps: map[string]*workflow.Step{
@@ -641,6 +650,7 @@ func TestExecutionService_AgentStep_InParallelBranches(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["parallel-agents"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 
@@ -702,7 +712,7 @@ func TestExecutionService_AgentStep_InParallelBranches(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "parallel-agents", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "parallel-agents-run")
 
 	// Should succeed
 	require.NoError(t, err)
@@ -725,7 +735,7 @@ func TestExecutionService_AgentStep_InParallelBranches(t *testing.T) {
 // are interpolated with context variables.
 func TestExecutionService_AgentStep_PromptInterpolation(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["agent-interpolate"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "agent-interpolate",
 		Initial: "ask",
 		Inputs: []workflow.Input{
@@ -747,6 +757,7 @@ func TestExecutionService_AgentStep_PromptInterpolation(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["agent-interpolate"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
@@ -785,9 +796,9 @@ func TestExecutionService_AgentStep_PromptInterpolation(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "agent-interpolate", map[string]any{
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, map[string]any{
 		"topic": "quantum computing",
-	})
+	}, "agent-interpolate-run")
 
 	// Should succeed
 	require.NoError(t, err)
@@ -798,7 +809,7 @@ func TestExecutionService_AgentStep_PromptInterpolation(t *testing.T) {
 // agent providers can be used in the same workflow.
 func TestExecutionService_AgentStep_MultipleProviders(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["multi-provider"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "multi-provider",
 		Initial: "claude_analysis",
 		Steps: map[string]*workflow.Step{
@@ -826,6 +837,7 @@ func TestExecutionService_AgentStep_MultipleProviders(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["multi-provider"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 
@@ -887,7 +899,7 @@ func TestExecutionService_AgentStep_MultipleProviders(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "multi-provider", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "multi-provider-run")
 
 	// Both steps should succeed
 	require.NoError(t, err)
@@ -934,7 +946,7 @@ func TestExecutionService_SetAgentRegistry(t *testing.T) {
 
 	// Create a workflow with an agent step to verify the registry is set
 	repo := newMockRepository()
-	repo.workflows["test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -953,6 +965,7 @@ func TestExecutionService_SetAgentRegistry(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["test"] = wf
 
 	wfSvc2 := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc2 := application.NewExecutionService(
@@ -966,7 +979,7 @@ func TestExecutionService_SetAgentRegistry(t *testing.T) {
 	)
 	execSvc2.SetAgentRegistry(registry)
 
-	ctx, err := execSvc2.Run(context.Background(), "test", nil)
+	ctx, err := execSvc2.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 	// Should succeed (not ErrNoAgentRegistry)
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1051,7 +1064,7 @@ func TestExecutionService_Resume_WithAgentStep(t *testing.T) {
 // can continue on error when configured.
 func TestExecutionService_AgentStep_ContinueOnError(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["continue-on-error"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "continue-on-error",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -1071,6 +1084,7 @@ func TestExecutionService_AgentStep_ContinueOnError(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["continue-on-error"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
@@ -1108,7 +1122,7 @@ func TestExecutionService_AgentStep_ContinueOnError(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "continue-on-error", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "continue-on-error-run")
 
 	// Should continue despite error
 	require.NoError(t, err)
@@ -1174,7 +1188,7 @@ func TestExecutionService_AgentStep_ErrorMessages(t *testing.T) {
 				}
 			}
 
-			repo.workflows["test"] = &workflow.Workflow{
+			wf := &workflow.Workflow{
 				Name:    "test",
 				Initial: tt.stepName,
 				Steps: map[string]*workflow.Step{
@@ -1190,6 +1204,7 @@ func TestExecutionService_AgentStep_ErrorMessages(t *testing.T) {
 					},
 				},
 			}
+			repo.workflows["test"] = wf
 
 			wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 			execSvc := application.NewExecutionService(
@@ -1211,7 +1226,7 @@ func TestExecutionService_AgentStep_ErrorMessages(t *testing.T) {
 				execSvc.SetAgentRegistry(registry)
 			}
 
-			_, err := execSvc.Run(context.Background(), "test", nil)
+			_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 			require.Error(t, err)
 			errMsg := err.Error()
@@ -1226,7 +1241,7 @@ func TestExecutionService_AgentStep_ErrorMessages(t *testing.T) {
 // provider execution errors.
 func TestExecutionService_AgentStep_ExecutionError(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["exec-error"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "exec-error",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -1250,6 +1265,7 @@ func TestExecutionService_AgentStep_ExecutionError(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["exec-error"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
@@ -1270,7 +1286,7 @@ func TestExecutionService_AgentStep_ExecutionError(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "exec-error", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "exec-error-run")
 
 	// Should transition to error state
 	require.NoError(t, err)
@@ -1366,7 +1382,7 @@ func TestExecutionService_AgentStep_ProviderInterpolation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := newMockRepository()
-			repo.workflows["provider-interp"] = &workflow.Workflow{
+			wf := &workflow.Workflow{
 				Name:    "provider-interp",
 				Initial: "ask",
 				Inputs: []workflow.Input{
@@ -1388,6 +1404,7 @@ func TestExecutionService_AgentStep_ProviderInterpolation(t *testing.T) {
 					},
 				},
 			}
+			repo.workflows["provider-interp"] = wf
 
 			configResolver := newConfigurableResolver(tt.resolveMap)
 
@@ -1421,9 +1438,9 @@ func TestExecutionService_AgentStep_ProviderInterpolation(t *testing.T) {
 			execSvc.SetAgentRegistry(registry)
 
 			// Provide input for interpolation
-			ctx, err := execSvc.Run(context.Background(), "provider-interp", map[string]any{
+			ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, map[string]any{
 				"agent": "claude",
-			})
+			}, "provider-interp-run")
 
 			if tt.expectError {
 				require.Error(t, err, "should return error")

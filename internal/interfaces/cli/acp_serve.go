@@ -156,7 +156,7 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 
 	// Create the session service before the agent — the agent wraps the service and the
 	// service is wired (via Set* calls) only after conn is created.
-	sessionSvc := application.NewACPSessionService(nil, nil, repo, logger)
+	sessionSvc := application.NewACPSessionService(nil, repo, logger)
 
 	// Agent wraps the session service and implements sdk.Agent; the Conn owns the transport.
 	agent := acpinfra.NewAgent(sessionSvc)
@@ -195,6 +195,21 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 	sessionSvc.SetServerContext(signalCtx)
 	sessionSvc.SetSessionUpdateEmitter(emitter)
 	sessionSvc.SetRunnerFactory(factory)
+	// T075: enable the facade execution path (Set*-before-Serve convention). The authoritative
+	// facade for dispatch is the PER-SESSION ports.WorkflowFacade built inside the ACPRunnerFactory
+	// (via buildACPSessionWiring) and stored on each ACPSession through ensureSessionWiring — that is what
+	// gives concurrent sessions on the same workflow distinct state paths (SC-003). This server-level
+	// facade is installed as the facade-mode flag and as a real fallback for the (production-
+	// unreachable) case where a session has no per-session facade; HandleSessionPrompt always
+	// prefers session.getFacade() for dispatch. Built best-effort: if construction fails, s.facade
+	// stays nil and the facade-mode gate refuses session/prompt (session/new and command discovery
+	// still work) — there is no longer a legacy runner fallback (deleted in T077).
+	if serverFacade, facadeCleanup, fErr := buildACPServerFacade(signalCtx, repo, shellExecutor, baseOpts, appCfg, logger); fErr != nil {
+		logger.Warn("acp-serve: server facade disabled; session/prompt will be refused until restart", "error", fErr)
+	} else {
+		defer facadeCleanup()
+		sessionSvc.SetFacade(serverFacade)
+	}
 	// Pack-aware available-command discovery. Wrapping the repository in a WorkflowService with a
 	// PackDiscoverer makes session/new advertise installed pack workflows ("pack/workflow") as
 	// slash commands — consistent with the CLI/TUI/HTTP interfaces, which all list via
@@ -285,22 +300,25 @@ type acpSessionFactoryDeps struct {
 // concrete (non-interface) fields are exposed so tests can assert wiring invariants — e.g.
 // that the output writer captured the shutdown signal context (C2).
 type acpSessionWiring struct {
-	execService application.WorkflowRunner
-	reader      application.ACPInputResponder
-	streamed    *atomic.Bool
-	textWriter  *acpTextWriter
-	cleanup     func()
+	reader     application.ACPInputResponder
+	streamed   *atomic.Bool
+	textWriter *acpTextWriter
+	cleanup    func()
+	// facade is the per-session WorkflowFacade (T075, SC-003). Each session owns a distinct
+	// Adapter rooted at its acpSessionStateDir so concurrent sessions on the same workflow
+	// write to separate state paths.
+	facade ports.WorkflowFacade
 }
 
 // buildACPSessionFactory returns the ACPRunnerFactory installed on the session service.
 // Each invocation builds a fresh, self-contained set of session-scoped I/O components.
 func buildACPSessionFactory(deps *acpSessionFactoryDeps) application.ACPRunnerFactory {
-	return func(sessionID string) (application.WorkflowRunner, application.ACPInputResponder, *atomic.Bool, func(), error) {
+	return func(sessionID string) (application.ACPInputResponder, *atomic.Bool, func(), ports.WorkflowFacade, error) {
 		w, err := buildACPSessionWiring(deps, sessionID)
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
-		return w.execService, w.reader, w.streamed, w.cleanup, nil
+		return w.reader, w.streamed, w.cleanup, w.facade, nil
 	}
 }
 
@@ -316,9 +334,11 @@ func buildACPSessionWiring(deps *acpSessionFactoryDeps, sessionID string) (*acpS
 	// that drives permission requests (the neutral PermissionGate) is delivered by F108
 	// Axis B (spec US2). Wiring an unused client would be dead code.
 
-	// Pass nil notifier: interactive input (conversation parking) is now fully supported
-	// across ACP turns. No user-facing notice is needed; the editor manages turn state.
-	reader := acpinfra.NewACPInputReader(nil)
+	// Interactive input (conversation parking) is driven through the per-session facade:
+	// EventInputRequired events surface the prompt and HandleSessionPrompt routes the
+	// continuation turn to RunSession.Respond via facadeInputBridge (T077). The legacy
+	// infrastructure ACPInputReader was deleted, so no input reader is wired here.
+	var reader application.ACPInputResponder
 
 	// I2: streamed flag — set to true by writers/renderer when an emit succeeds so
 	// HandleSessionPrompt can safely suppress the post-run aggregate.
@@ -327,6 +347,17 @@ func buildACPSessionWiring(deps *acpSessionFactoryDeps, sessionID string) (*acpS
 	// renderEmitter lets per-step renderers emit ACP SessionUpdate variants directly while
 	// still flipping `streamed` on success (replaces the legacy Sender/Message DTO).
 	renderEmitter := newStreamFlaggingEmitter(sessionEmitter, streamed)
+	// DECISION (F108): the WorkflowEventProjector is retained on purpose — it is NOT a
+	// migration residual. ACP deliberately splits live event delivery from terminal
+	// delivery: this projector consumes the ExecutionService's pluginmodel.DomainEvent
+	// stream (via WithEventPublisher below) and emits the LIVE step/workflow session/updates
+	// the editor needs as the run progresses. The facade RunSession is built with a nil
+	// recorder (see sessionFacade below), so RunSession.Events() only carries the TERMINAL
+	// outcome used for turn parking/completion — it does not carry live step events. Folding
+	// both paths onto a single facade-event projection would require giving the ACP facade a
+	// real recorder and a lossless step/tool-call event model (F108 Phase 1 follow-up); until
+	// that lands, this projector is the authoritative live-streaming path. Do not delete it
+	// without first proving RunSession.Events() carries the full live step/tool stream.
 	projector := acpinfra.NewWorkflowEventProjector(sessionID, sessionEmitter, deps.logger)
 
 	var publisher ports.EventPublisher = projector
@@ -343,7 +374,6 @@ func buildACPSessionWiring(deps *acpSessionFactoryDeps, sessionID string) (*acpS
 	opts = append(opts, deps.baseOpts...)
 	opts = append(
 		opts,
-		application.WithUserInputReader(reader),
 		application.WithEventPublisher(publisher),
 		// NOTE(F102): stdout and stderr of a workflow step are both surfaced as
 		// agent_message_chunk via the same writer; the ACP protocol output does not yet
@@ -377,13 +407,71 @@ func buildACPSessionWiring(deps *acpSessionFactoryDeps, sessionID string) (*acpS
 		res.Cleanup()
 	}
 
+	// T075 (A2): one Adapter per session, rooted at the per-session stateStore so concurrent
+	// sessions on the same workflow write to separate state paths (SC-003). The Resolver MUST
+	// be wired — without it Adapter.Run cannot resolve the dispatched workflow name and silently
+	// no-ops (executes nothing). The facade recorder stays nil: ACP surfaces live step events
+	// through the EventPublisher (WorkflowEventProjector) wired into ExecutionSetup above, not
+	// the facade recorder; the Adapter tolerates a nil recorder and still emits the terminal.
+	sessionResolver := application.NewResolver(workflowpkg.NewPackDiscovererAdapter(workflowPackSearchDirs()), deps.repo)
+	sessionFacade := application.NewAdapter(
+		res.WorkflowSvc,
+		res.ExecService,
+		res.HistorySvc,
+		sessionResolver,
+		nil,
+		application.NewSessionRegistry(),
+	)
 	return &acpSessionWiring{
-		execService: res.ExecService,
-		reader:      reader,
-		streamed:    streamed,
-		textWriter:  textWriter,
-		cleanup:     cleanup,
+		reader:     reader,
+		streamed:   streamed,
+		textWriter: textWriter,
+		cleanup:    cleanup,
+		facade:     sessionFacade,
 	}, nil
+}
+
+// buildACPServerFacade constructs the server-level ports.WorkflowFacade installed via
+// SetFacade to enable the facade execution path (T075). It is the facade-mode flag and the
+// fallback facade; the authoritative per-session facades are built in buildACPSessionWiring
+// and always win for dispatch (HandleSessionPrompt prefers session.getFacade()). The facade is
+// rooted at a server-scoped state store under the storage path — distinct from every
+// per-session acpSessionStateDir — so it never collides with session state.
+//
+// signalCtx (the shutdown signal context, C2) is passed to Build so any background resources the
+// setup acquires are torn down on shutdown. The returned cleanup releases setup resources and
+// MUST be deferred by the caller.
+func buildACPServerFacade(
+	signalCtx context.Context,
+	repo ports.WorkflowRepository,
+	shellExecutor ports.CommandExecutor,
+	baseOpts []application.SetupOption,
+	appCfg *Config,
+	logger ports.Logger,
+) (ports.WorkflowFacade, func(), error) {
+	serverStateDir := filepath.Join(appCfg.StoragePath, "acp-server-state")
+	stateStore := store.NewJSONStore(serverStateDir)
+
+	res, err := application.NewExecutionSetup(repo, stateStore, shellExecutor, logger, baseOpts...).Build(signalCtx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("build server facade: %w", err)
+	}
+	// Make pack workflows runnable through the server-level facade too, mirroring the per-session
+	// wiring; the discoverer is the same as the one used for available-command discovery.
+	res.WorkflowSvc.SetPackDiscoverer(workflowpkg.NewPackDiscovererAdapter(workflowPackSearchDirs()))
+
+	// Wire the resolver (as for per-session facades) so the server-level fallback facade can
+	// actually resolve and run the dispatched workflow rather than silently no-opping.
+	resolver := application.NewResolver(workflowpkg.NewPackDiscovererAdapter(workflowPackSearchDirs()), repo)
+	facade := application.NewAdapter(
+		res.WorkflowSvc,
+		res.ExecService,
+		res.HistorySvc,
+		resolver,
+		nil,
+		application.NewSessionRegistry(),
+	)
+	return facade, res.Cleanup, nil
 }
 
 // acpSessionStateDir returns the per-session directory used to persist workflow state for

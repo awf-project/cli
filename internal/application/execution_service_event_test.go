@@ -53,7 +53,7 @@ func TestExecutionService_EmitEvent_WorkflowStarted(t *testing.T) {
 		publisher := testmocks.NewMockEventPublisher()
 		svc.SetEventPublisher(publisher)
 
-		execCtx, err := svc.Run(context.Background(), "test-workflow", nil)
+		execCtx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-workflow-run")
 
 		require.NoError(t, err)
 		events := publisher.GetEvents()
@@ -94,7 +94,7 @@ func TestExecutionService_EmitEvent_WorkflowStarted(t *testing.T) {
 
 		svc.SetEventPublisher(nil)
 
-		execCtx, err := svc.Run(context.Background(), "test-workflow", nil)
+		execCtx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-workflow-run")
 
 		require.NoError(t, err)
 		assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
@@ -122,7 +122,7 @@ func TestExecutionService_EmitEvent_WorkflowCompleted(t *testing.T) {
 		publisher := testmocks.NewMockEventPublisher()
 		svc.SetEventPublisher(publisher)
 
-		execCtx, err := svc.Run(context.Background(), "test-workflow", nil)
+		execCtx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-workflow-run")
 
 		require.NoError(t, err)
 		events := publisher.GetEvents()
@@ -171,7 +171,7 @@ func TestExecutionService_EmitEvent_WorkflowFailed(t *testing.T) {
 		publisher := testmocks.NewMockEventPublisher()
 		svc.SetEventPublisher(publisher)
 
-		_, _ = svc.Run(context.Background(), "test-workflow", nil)
+		_, _ = svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-workflow-run")
 
 		// Workflow run may error due to no terminal step, which is expected
 		events := publisher.GetEvents()
@@ -225,7 +225,7 @@ func TestExecutionService_EmitEvent_StepStarted(t *testing.T) {
 		publisher := testmocks.NewMockEventPublisher()
 		svc.SetEventPublisher(publisher)
 
-		execCtx, err := svc.Run(context.Background(), "test-workflow", nil)
+		execCtx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-workflow-run")
 
 		require.NoError(t, err)
 		events := publisher.GetEvents()
@@ -278,7 +278,7 @@ func TestExecutionService_EmitEvent_StepCompleted(t *testing.T) {
 		publisher := testmocks.NewMockEventPublisher()
 		svc.SetEventPublisher(publisher)
 
-		execCtx, err := svc.Run(context.Background(), "test-workflow", nil)
+		execCtx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-workflow-run")
 
 		require.NoError(t, err)
 		events := publisher.GetEvents()
@@ -331,7 +331,7 @@ func TestExecutionService_EmitEvent_StepFailed(t *testing.T) {
 		publisher := testmocks.NewMockEventPublisher()
 		svc.SetEventPublisher(publisher)
 
-		execCtx, err := svc.Run(context.Background(), "test-workflow", nil)
+		execCtx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-workflow-run")
 
 		require.NoError(t, err)
 		events := publisher.GetEvents()
@@ -388,7 +388,7 @@ func TestExecutionService_EmitEvent_StepRetrying(t *testing.T) {
 		publisher := testmocks.NewMockEventPublisher()
 		svc.SetEventPublisher(publisher)
 
-		execCtx, err := svc.Run(context.Background(), "test-workflow", nil)
+		execCtx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-workflow-run")
 
 		require.NoError(t, err)
 		events := publisher.GetEvents()
@@ -443,7 +443,7 @@ func TestExecutionService_EmitEvent_AllEventsHaveSource(t *testing.T) {
 		publisher := testmocks.NewMockEventPublisher()
 		svc.SetEventPublisher(publisher)
 
-		_, err := svc.Run(context.Background(), "test-workflow", nil)
+		_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-workflow-run")
 
 		require.NoError(t, err)
 		events := publisher.GetEvents()
@@ -485,7 +485,7 @@ func TestExecutionService_EmitEvent_PublishError(t *testing.T) {
 		publisher.SetPublishError(errors.New("publish failed"))
 		svc.SetEventPublisher(publisher)
 
-		execCtx, err := svc.Run(context.Background(), "test-workflow", nil)
+		execCtx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-workflow-run")
 
 		// Workflow should still complete despite publish error
 		require.NoError(t, err)
@@ -556,7 +556,7 @@ func TestExecutionService_EmitEvent_SecretMasking(t *testing.T) {
 				tt.key: tt.value,
 			}
 
-			_, err := svc.Run(context.Background(), "test-workflow", inputs)
+			_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "test-workflow-run")
 
 			require.NoError(t, err)
 			events := publisher.GetEvents()

@@ -2,42 +2,13 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
+	"time"
 
-	"github.com/google/uuid"
-
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
-
-// WorkflowLister is the driven port for listing and loading workflow definitions.
-// It is satisfied by *application.WorkflowService.
-type WorkflowLister interface {
-	ListAllWorkflows(ctx context.Context) ([]workflow.WorkflowEntry, error)
-	GetWorkflow(ctx context.Context, name string) (*workflow.Workflow, error)
-	ValidateWorkflow(ctx context.Context, name string) error
-}
-
-// WorkflowRunner is the driven port for executing workflows.
-// It is satisfied by *application.ExecutionService.
-type WorkflowRunner interface {
-	RunWorkflowAsync(ctx context.Context, wf *workflow.Workflow, inputs map[string]any) (*workflow.ExecutionContext, <-chan error, error)
-}
-
-// WorkflowResumer is the driven port for resuming interrupted workflow executions.
-// Declared separately from WorkflowRunner per Interface Segregation Principle.
-// It is satisfied by *application.ExecutionService.
-type WorkflowResumer interface {
-	Resume(ctx context.Context, workflowID string, inputOverrides map[string]any, fromStep string) (*workflow.ExecutionContext, error)
-}
-
-// HistoryProvider is the driven port for querying execution history.
-// It is satisfied by *application.HistoryService.
-type HistoryProvider interface {
-	List(ctx context.Context, filter *workflow.HistoryFilter) ([]*workflow.ExecutionRecord, error)
-	GetStats(ctx context.Context, filter *workflow.HistoryFilter) (*workflow.HistoryStats, error)
-}
 
 // ActiveExecution holds the runtime state of an async workflow execution.
 type ActiveExecution struct {
@@ -46,92 +17,28 @@ type ActiveExecution struct {
 	Ctx              context.Context
 	Cancel           context.CancelFunc
 	ExecutionContext *workflow.ExecutionContext
-	Done             <-chan error
+	// StartedAt is stamped when a facade session is tracked. The facade path uses a
+	// NopRecorder, so the session emits no run.started event to derive a start time from;
+	// this field is the authoritative start time for facade-tracked executions.
+	StartedAt time.Time
 }
 
-// Bridge adapts application service interfaces to HTTP handlers.
+// Bridge tracks the runtime metadata of async workflow executions for the HTTP layer.
+//
+// It no longer owns any read or execution port: workflow listing/get/validate and history
+// queries route through ports.WorkflowFacade / ports.WorkflowReader (F108 read-path
+// consolidation), and execution routes through ports.WorkflowFacade.Run/Resume. Bridge's
+// sole remaining responsibility is the activeExecutions map that backs
+// GET/DELETE /api/executions and graceful shutdown.
 type Bridge struct {
-	workflows        WorkflowLister
-	runner           WorkflowRunner
-	history          HistoryProvider
-	resumer          WorkflowResumer
-	baseCtx          context.Context // server shutdown context; derived by StartExecution
 	activeExecutions sync.Map
 }
 
-// NewBridge creates a Bridge wiring the given service interface implementations.
-// runner may be nil; calling StartExecution on a nil runner returns a descriptive error.
-// workflows and history must not be nil; a nil value panics at construction time rather
-// than deferring a harder-to-diagnose panic inside a handler.
-//
-// By default StartExecution derives child contexts from context.Background(). Call
-// SetBaseContext to wire the server's shutdown context so a server stop cancels every
-// in-flight workflow (M-1 fix).
-func NewBridge(workflows WorkflowLister, runner WorkflowRunner, history HistoryProvider) *Bridge {
-	if workflows == nil {
-		panic("Bridge: workflows must not be nil")
-	}
-	if history == nil {
-		panic("Bridge: history must not be nil")
-	}
-	return &Bridge{
-		workflows: workflows,
-		runner:    runner,
-		history:   history,
-		baseCtx:   context.Background(),
-	}
-}
-
-// SetBaseContext wires the server's lifecycle context into the Bridge. After this call,
-// StartExecution derives per-execution contexts from baseCtx instead of
-// context.Background(), so a server shutdown cancels every in-flight workflow (M-1 fix).
-// Must be called before any StartExecution call; not safe for concurrent use.
-func (b *Bridge) SetBaseContext(baseCtx context.Context) { //nolint:revive // context-as-struct-field: stored as server lifecycle context, not a request context
-	if baseCtx != nil {
-		b.baseCtx = baseCtx
-	}
-}
-
-// StartExecution starts an async workflow execution and tracks it.
-// It derives a new execution ID (UUID v4), creates a cancellable child context,
-// calls runner.RunWorkflowAsync, stores the ActiveExecution in the sync.Map,
-// and spawns a cleanup goroutine that removes the entry once Done closes.
-func (b *Bridge) StartExecution(ctx context.Context, wf *workflow.Workflow, inputs map[string]any) (string, *ActiveExecution, error) {
-	if b.runner == nil {
-		return "", nil, errors.New("workflow runner is not available")
-	}
-
-	// Decouple execution lifetime from the HTTP request context so the workflow
-	// survives after the /run response is sent and the request context closes.
-	// M-1 fix: derive from b.baseCtx (the server's shutdown context) rather than
-	// context.Background() so that a server shutdown cancels all in-flight workflows.
-	childCtx, cancel := context.WithCancel(b.baseCtx)
-
-	execCtx, done, err := b.runner.RunWorkflowAsync(childCtx, wf, inputs)
-	if err != nil {
-		cancel()
-		return "", nil, err
-	}
-
-	id := uuid.NewString()
-	ae := &ActiveExecution{
-		ExecutionID:      id,
-		WorkflowName:     wf.Name,
-		Ctx:              childCtx,
-		Cancel:           cancel,
-		ExecutionContext: execCtx,
-		Done:             done,
-	}
-	b.activeExecutions.Store(id, ae)
-
-	go func() {
-		// Drain all values and wait for done to close before removing the entry.
-		for range done { //nolint:revive // empty body intentional: drain only
-		}
-		b.activeExecutions.Delete(id)
-	}()
-
-	return id, ae, nil
+// NewBridge creates an empty Bridge. It takes no dependencies because all workflow and
+// history access is now served by the facade/reader wired on NewServer; the Bridge only
+// holds in-flight execution metadata populated via TrackFacadeSession.
+func NewBridge() *Bridge {
+	return &Bridge{}
 }
 
 // GetExecution returns the active execution by ID.
@@ -166,41 +73,41 @@ func (b *Bridge) ListExecutions() []*ActiveExecution {
 	return result
 }
 
-// TrackResumedExecution wraps a synchronously-resumed ExecutionContext in an
-// ActiveExecution, assigns it a new UUID, stores it in activeExecutions, and
-// returns the assigned ID. Because resume is synchronous the execution is
-// already complete when this returns; the entry is kept intentionally so that
-// subsequent GET /api/executions/{id} (and DELETE / SSE endpoints) can serve
-// the terminal state to clients querying the just-resumed execution. Without
-// this persistence the /resume handler would return an ID that immediately
-// 404s on read. Eviction/TTL of completed entries is a separate concern.
+// TrackFacadeSession records a metadata entry for a facade-driven execution so the
+// List/Get/Cancel handlers keep working while the live RunSession itself lives in the
+// application.SessionRegistry (A4 / R5). The entry is keyed by the session's own ID()
+// so that GET /api/executions/{id} and SessionRegistry.Get(execID) resolve the same key.
 //
-// Context invariant: Ctx is set to context.Background() with a no-op Cancel
-// because no goroutine is in flight after a synchronous resume. Bridge.Shutdown()
-// calls Cancel on every tracked entry, which is safe on a no-op. The Done
-// channel is pre-closed to allow callers that drain it (e.g. SSE) to return
-// immediately without blocking. This deliberately differs from StartExecution
-// where Ctx and Cancel are wired to an in-flight goroutine.
-func (b *Bridge) TrackResumedExecution(execCtx *workflow.ExecutionContext) string {
-	id := uuid.NewString()
-	closed := make(chan error)
-	close(closed)
-
+// Cancel is wired to session.Close() (idempotent) so DELETE /api/executions/{id} tears
+// down the facade session; Bridge.Shutdown also invokes Cancel on every tracked entry.
+//
+// Ctx is a dedicated cancelable context for this ActiveExecution entry. The facade owns
+// the real execution goroutine and its session context; this Ctx is intentionally
+// decoupled from it (ports.RunSession does not expose its internal context). Cancel calls
+// both session.Close() (to stop execution) and the context cancel function (so that
+// ae.Ctx.Err() returns context.Canceled after Cancel() — required by M7 contract).
+// Done is pre-closed since the facade — not the Bridge — owns the completion signal.
+func (b *Bridge) TrackFacadeSession(session ports.RunSession, workflowName string) *ActiveExecution {
+	ctx, cancelCtx := context.WithCancel(context.Background()) //nolint:gocritic // cancelCtx is captured in ae.Cancel and called by Delete/Shutdown; intentionally not deferred here
 	ae := &ActiveExecution{
-		ExecutionID:      id,
-		WorkflowName:     execCtx.WorkflowName,
-		Ctx:              context.Background(), // no goroutine in flight; background is intentional
-		Cancel:           func() {},            // no-op: nothing to cancel for a completed resume
-		ExecutionContext: execCtx,
-		Done:             closed,
+		ExecutionID:  session.ID(),
+		WorkflowName: workflowName,
+		Ctx:          ctx,
+		Cancel: func() {
+			type cancellableSession interface {
+				CancelWithEvent(reason string) error
+			}
+			if cancellable, ok := session.(cancellableSession); ok {
+				_ = cancellable.CancelWithEvent("cancelled") //nolint:errcheck // cancellation is best-effort; Close is still idempotent
+			} else {
+				_ = session.Close() //nolint:errcheck // Close is idempotent and always returns nil
+			}
+			cancelCtx()
+		},
+		StartedAt: time.Now(),
 	}
-	b.activeExecutions.Store(id, ae)
-	return id
-}
-
-// SetResumer wires the optional WorkflowResumer dependency.
-func (b *Bridge) SetResumer(r WorkflowResumer) {
-	b.resumer = r
+	b.activeExecutions.Store(session.ID(), ae)
+	return ae
 }
 
 // Shutdown cancels every execution that is still tracked in activeExecutions.

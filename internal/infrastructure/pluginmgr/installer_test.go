@@ -81,14 +81,24 @@ func TestInstall(t *testing.T) {
 		gz := gzip.NewWriter(&buf)
 		tw := tar.NewWriter(gz)
 
-		manifest := []byte("name: test-plugin\nversion: 1.0.0\n")
+		binary := []byte("#!/bin/sh\necho test\n")
 		header := &tar.Header{
+			Name: "awf-plugin-test-plugin",
+			Size: int64(len(binary)),
+			Mode: 0o644,
+		}
+		require.NoError(t, tw.WriteHeader(header))
+		_, err := tw.Write(binary)
+		require.NoError(t, err)
+
+		manifest := []byte("name: test-plugin\nversion: 1.0.0\n")
+		header = &tar.Header{
 			Name: pluginmgr.ManifestFileName,
 			Size: int64(len(manifest)),
 			Mode: 0o644,
 		}
 		require.NoError(t, tw.WriteHeader(header))
-		_, err := tw.Write(manifest)
+		_, err = tw.Write(manifest)
 		require.NoError(t, err)
 
 		require.NoError(t, tw.Close())
@@ -110,6 +120,10 @@ func TestInstall(t *testing.T) {
 		err = installer.Install(ctx, server.URL+"/plugin.tar.gz", checksum, targetDir, false)
 		assert.NoError(t, err)
 		assert.DirExists(t, targetDir)
+
+		info, statErr := os.Stat(filepath.Join(targetDir, "awf-plugin-test-plugin"))
+		require.NoError(t, statErr)
+		assert.NotZero(t, info.Mode()&0o111, "installed plugin binary should be executable")
 	})
 
 	t.Run("plugin already exists without force", func(t *testing.T) {

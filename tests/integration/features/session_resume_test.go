@@ -23,7 +23,7 @@ func TestClaudeSessionResume_MultiTurn(t *testing.T) {
 	provider := agents.NewClaudeProviderWithOptions(agents.WithClaudeExecutor(mockExec))
 
 	mockExec.SetOutput(
-		[]byte(`{"session_id":"sess_abc123","result":"Code looks good overall.","cost_usd":0.01}`),
+		[]byte(`{"type":"result","session_id":"sess_abc123","result":"Code looks good overall.","cost_usd":0.01}`),
 		nil,
 	)
 
@@ -45,7 +45,7 @@ func TestClaudeSessionResume_MultiTurn(t *testing.T) {
 	// Turn 2: state carries SessionID from turn 1
 	mockExec.Clear()
 	mockExec.SetOutput(
-		[]byte(`{"session_id":"sess_abc123","result":"Issue #1 is the null check on line 42.","cost_usd":0.02}`),
+		[]byte(`{"type":"result","session_id":"sess_abc123","result":"Issue #1 is the null check on line 42.","cost_usd":0.02}`),
 		nil,
 	)
 
@@ -83,8 +83,8 @@ func TestAllProviders_SessionResumeFlags(t *testing.T) {
 			newProvider: func(m *mocks.MockCLIExecutor) ports.AgentProvider {
 				return agents.NewCodexProviderWithOptions(agents.WithCodexExecutor(m))
 			},
-			turn1Output: []byte("Session: codex-sess-789\nCode review complete."),
-			turn2Output: []byte("Session: codex-sess-789\nFixed the issue."),
+			turn1Output: []byte(`{"type":"thread.started","thread_id":"codex-sess-789"}` + "\n" + `{"type":"message","content":"Code review complete"}`),
+			turn2Output: []byte(`{"type":"thread.started","thread_id":"codex-sess-789"}` + "\n" + `{"type":"message","content":"Fixed the issue"}`),
 			wantID:      "codex-sess-789",
 			checkResume: func(t *testing.T, args []string) {
 				assert.Contains(t, args, "resume")
@@ -96,8 +96,8 @@ func TestAllProviders_SessionResumeFlags(t *testing.T) {
 			newProvider: func(m *mocks.MockCLIExecutor) ports.AgentProvider {
 				return agents.NewGeminiProviderWithOptions(agents.WithGeminiExecutor(m))
 			},
-			turn1Output: []byte("Session: gem-sess-456\nAnalysis complete."),
-			turn2Output: []byte("Session: gem-sess-456\nUpdated analysis."),
+			turn1Output: []byte(`{"type":"init","session_id":"gem-sess-456"}` + "\nAnalysis complete."),
+			turn2Output: []byte(`{"type":"init","session_id":"gem-sess-456"}` + "\nUpdated analysis."),
 			wantID:      "gem-sess-456",
 			checkResume: func(t *testing.T, args []string) {
 				idx := slices.Index(args, "--resume")
@@ -111,8 +111,8 @@ func TestAllProviders_SessionResumeFlags(t *testing.T) {
 			newProvider: func(m *mocks.MockCLIExecutor) ports.AgentProvider {
 				return agents.NewOpenCodeProviderWithOptions(agents.WithOpenCodeExecutor(m))
 			},
-			turn1Output: []byte("Session: oc-sess-321\nGenerated code."),
-			turn2Output: []byte("Session: oc-sess-321\nRefactored."),
+			turn1Output: []byte(`{"type":"step_start","sessionID":"oc-sess-321","timestamp":1234567890}` + "\n" + `{"type":"step_end","output":"Generated code"}`),
+			turn2Output: []byte(`{"type":"step_start","sessionID":"oc-sess-321","timestamp":1234567890}` + "\n" + `{"type":"step_end","output":"Refactored"}`),
 			wantID:      "oc-sess-321",
 			checkResume: func(t *testing.T, args []string) {
 				idx := slices.Index(args, "-s")
@@ -210,7 +210,7 @@ func TestSessionID_PersistsThroughThreeTurns(t *testing.T) {
 	for i, prompt := range []string{"Turn 1", "Turn 2", "Turn 3"} {
 		mockExec.Clear()
 		mockExec.SetOutput(
-			[]byte(`{"session_id":"sess_persistent","result":"response"}`),
+			[]byte(`{"type":"result","session_id":"sess_persistent","result":"response"}`),
 			nil,
 		)
 		result, err := provider.ExecuteConversation(context.Background(), state, prompt, nil, io.Discard, io.Discard)

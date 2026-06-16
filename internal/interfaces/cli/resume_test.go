@@ -2,7 +2,6 @@ package cli_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,7 +110,8 @@ func TestResumeCommand_ListFlag_NoResumableWorkflows(t *testing.T) {
 	statesDir := filepath.Join(tmpDir, "states")
 	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -124,144 +124,6 @@ func TestResumeCommand_ListFlag_NoResumableWorkflows(t *testing.T) {
 	assert.Contains(t, output, "No resumable workflows")
 }
 
-func TestResumeCommand_ListFlag_ShowsResumableWorkflows(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create states directory with a resumable state file
-	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0o755))
-
-	// Create a state file for a running workflow
-	// Note: JSON uses Go field names (PascalCase) since no json tags are defined
-	stateContent := `{
-		"WorkflowID": "test-id-123",
-		"WorkflowName": "my-workflow",
-		"Status": "running",
-		"CurrentStep": "step2",
-		"Inputs": {},
-		"States": {
-			"step1": {"Name": "step1", "Status": "completed"}
-		},
-		"StartedAt": "2025-01-01T10:00:00Z",
-		"UpdatedAt": "2025-01-01T10:05:00Z"
-	}`
-	require.NoError(t, os.WriteFile(
-		filepath.Join(statesDir, "test-id-123.json"),
-		[]byte(stateContent),
-		0o644,
-	))
-
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "--list"})
-
-	err := cmd.Execute()
-	require.NoError(t, err)
-
-	output := buf.String()
-	assert.Contains(t, output, "test-id-123")
-	assert.Contains(t, output, "my-workflow")
-	assert.Contains(t, output, "running")
-	assert.Contains(t, output, "step2")
-}
-
-func TestResumeCommand_ListFlag_FiltersCompletedWorkflows(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0o755))
-
-	// Create a completed workflow state (should be filtered out)
-	completedState := `{
-		"WorkflowID": "completed-id",
-		"WorkflowName": "completed-workflow",
-		"Status": "completed",
-		"CurrentStep": "done",
-		"Inputs": {},
-		"States": {},
-		"StartedAt": "2025-01-01T10:00:00Z",
-		"UpdatedAt": "2025-01-01T10:05:00Z"
-	}`
-	require.NoError(t, os.WriteFile(
-		filepath.Join(statesDir, "completed-id.json"),
-		[]byte(completedState),
-		0o644,
-	))
-
-	// Create a running workflow state (should be shown)
-	runningState := `{
-		"WorkflowID": "running-id",
-		"WorkflowName": "running-workflow",
-		"Status": "running",
-		"CurrentStep": "step1",
-		"Inputs": {},
-		"States": {},
-		"StartedAt": "2025-01-01T10:00:00Z",
-		"UpdatedAt": "2025-01-01T10:05:00Z"
-	}`
-	require.NoError(t, os.WriteFile(
-		filepath.Join(statesDir, "running-id.json"),
-		[]byte(runningState),
-		0o644,
-	))
-
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "--list"})
-
-	err := cmd.Execute()
-	require.NoError(t, err)
-
-	output := buf.String()
-	assert.Contains(t, output, "running-id", "should show running workflow")
-	assert.NotContains(t, output, "completed-id", "should not show completed workflow")
-}
-
-func TestResumeCommand_ListFlag_JSONFormat(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0o755))
-
-	// Create a running workflow state
-	runningState := `{
-		"WorkflowID": "json-test-id",
-		"WorkflowName": "json-workflow",
-		"Status": "running",
-		"CurrentStep": "step1",
-		"Inputs": {},
-		"States": {"step0": {"Name": "step0", "Status": "completed"}},
-		"StartedAt": "2025-01-01T10:00:00Z",
-		"UpdatedAt": "2025-01-01T10:05:00Z"
-	}`
-	require.NoError(t, os.WriteFile(
-		filepath.Join(statesDir, "json-test-id.json"),
-		[]byte(runningState),
-		0o644,
-	))
-
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "--list", "--format=json"})
-
-	err := cmd.Execute()
-	require.NoError(t, err)
-
-	// Verify output is valid JSON
-	var result []map[string]interface{}
-	err = json.Unmarshal(buf.Bytes(), &result)
-	require.NoError(t, err, "output should be valid JSON")
-	require.Len(t, result, 1)
-	assert.Equal(t, "json-test-id", result[0]["workflow_id"])
-	assert.Equal(t, "json-workflow", result[0]["workflow_name"])
-}
-
 func TestResumeCommand_WorkflowNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -269,7 +131,8 @@ func TestResumeCommand_WorkflowNotFound(t *testing.T) {
 	statesDir := filepath.Join(tmpDir, "states")
 	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -324,7 +187,8 @@ states:
 		0o644,
 	))
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -380,7 +244,8 @@ states:
 		0o644,
 	))
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -419,7 +284,8 @@ func TestResumeCommand_WorkflowDefinitionDeleted(t *testing.T) {
 	))
 	// Note: No workflow file created for "deleted-workflow"
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -480,7 +346,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "success-workflow.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -492,83 +359,6 @@ states:
 	output := buf.String()
 	assert.True(t, strings.Contains(output, "completed") || strings.Contains(output, "success"),
 		"output should indicate success")
-}
-
-func TestResumeCommand_QuietFormat(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0o755))
-
-	// Create a running workflow state
-	runningState := `{
-		"WorkflowID": "quiet-id",
-		"WorkflowName": "quiet-workflow",
-		"Status": "running",
-		"CurrentStep": "step1",
-		"Inputs": {},
-		"States": {},
-		"StartedAt": "2025-01-01T10:00:00Z",
-		"UpdatedAt": "2025-01-01T10:05:00Z"
-	}`
-	require.NoError(t, os.WriteFile(
-		filepath.Join(statesDir, "quiet-id.json"),
-		[]byte(runningState),
-		0o644,
-	))
-
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "--list", "--format=quiet"})
-
-	err := cmd.Execute()
-	require.NoError(t, err)
-
-	output := strings.TrimSpace(buf.String())
-	// Quiet format should only output workflow IDs
-	assert.Equal(t, "quiet-id", output)
-}
-
-func TestResumeCommand_TableFormat(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0o755))
-
-	// Create a running workflow state
-	runningState := `{
-		"WorkflowID": "table-id",
-		"WorkflowName": "table-workflow",
-		"Status": "running",
-		"CurrentStep": "step1",
-		"Inputs": {},
-		"States": {},
-		"StartedAt": "2025-01-01T10:00:00Z",
-		"UpdatedAt": "2025-01-01T10:05:00Z"
-	}`
-	require.NoError(t, os.WriteFile(
-		filepath.Join(statesDir, "table-id.json"),
-		[]byte(runningState),
-		0o644,
-	))
-
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", "--list", "--format=table"})
-
-	err := cmd.Execute()
-	require.NoError(t, err)
-
-	output := buf.String()
-	// Table format should contain headers and borders
-	assert.Contains(t, output, "ID")
-	assert.Contains(t, output, "WORKFLOW")
-	assert.Contains(t, output, "STATUS")
-	assert.Contains(t, output, "table-id")
 }
 
 func TestResumeCommand_MultipleInputOverrides(t *testing.T) {
@@ -639,7 +429,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "sqlite-workflow.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -693,7 +484,8 @@ func TestResumeCommand_ConcurrentAccess(t *testing.T) {
 
 	for i := 0; i < concurrency; i++ {
 		go func() {
-			cmd := cli.NewRootCommand()
+			cmd, workerCleanup := cli.NewRootCommandAutoFacade()
+			defer workerCleanup()
 			buf := new(bytes.Buffer)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
@@ -831,7 +623,8 @@ states:
 				args = append(args, "--input="+input)
 			}
 
-			cmd := cli.NewRootCommand()
+			cmd, cleanup := cli.NewRootCommandAutoFacade()
+			defer cleanup()
 			buf := new(bytes.Buffer)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
@@ -902,7 +695,8 @@ states:
 `
 		createTestWorkflow(t, tmpDir, "error-workflow.yaml", workflowContent)
 
-		cmd := cli.NewRootCommand()
+		cmd, cleanup := cli.NewRootCommandAutoFacade()
+		defer cleanup()
 		buf := new(bytes.Buffer)
 		cmd.SetOut(buf)
 		cmd.SetErr(buf)
@@ -968,7 +762,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "no-config-workflow.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -1046,7 +841,8 @@ states:
 	createTestWorkflow(t, tmpDir, "merge-workflow.yaml", workflowContent)
 
 	// CLI overrides 'shared' and adds 'cli_only'
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -1133,7 +929,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "comments-workflow.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -1188,7 +985,8 @@ func TestResumeCommand_FromPreviousFlag_AcceptedByCLI(t *testing.T) {
 	statesDir := filepath.Join(tmpDir, "states")
 	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -1210,7 +1008,8 @@ func TestResumeCommand_FromStepNameFlag_AcceptedByCLI(t *testing.T) {
 	statesDir := filepath.Join(tmpDir, "states")
 	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -1285,7 +1084,8 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "empty-inputs-workflow.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)

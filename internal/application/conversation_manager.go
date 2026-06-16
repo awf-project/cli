@@ -39,6 +39,17 @@ type ConversationManager struct {
 	userInputReader ports.UserInputReader
 	agentRoleRepo   ports.AgentRoleRepository
 	toolProxy       *tools.ProxyService
+	// emitTurn, when set, records each conversation turn as a transcript message event so
+	// live event consumers (TUI monitoring, SSE) can display the agent's question and the
+	// user's answers as the conversation unfolds. The multi-turn path owns no recorder;
+	// ExecutionService wires this to route emission through the per-run recorder resolved
+	// from ctx. nil => no-op (e.g. ACP, which streams via its own EventPublisher; tests).
+	emitTurn func(ctx context.Context, ec *workflow.ExecutionContext, role workflow.TurnRole, provider, content string)
+}
+
+// SetTurnEmitter wires the optional per-turn transcript emitter (see emitTurn).
+func (m *ConversationManager) SetTurnEmitter(fn func(ctx context.Context, ec *workflow.ExecutionContext, role workflow.TurnRole, provider, content string)) {
+	m.emitTurn = fn
 }
 
 func NewConversationManager(
@@ -235,7 +246,15 @@ func (m *ConversationManager) ExecuteConversation(
 		}
 	}()
 
-	if m.userInputReader == nil {
+	// Prefer a per-run, session-bound reader injected by the facade (context-scoped)
+	// over the static setup-time reader. The session reader routes interactive turns
+	// through the RunSession parking mechanism (EventInputRequired -> Respond), keeping
+	// conversation input wiring consistent across every facade-driven interface.
+	inputReader := m.userInputReader
+	if ctxReader := userInputReaderFrom(ctx); ctxReader != nil {
+		inputReader = ctxReader
+	}
+	if inputReader == nil {
 		return nil, errors.New("conversation mode requires a UserInputReader; none configured")
 	}
 
@@ -253,6 +272,11 @@ func (m *ConversationManager) ExecuteConversation(
 			Status:       workflow.StatusRunning,
 			Conversation: previewState,
 		})
+		// Emit the outgoing turn as a transcript message event so event-only consumers
+		// (TUI monitoring, SSE) see the prompt/answer before the provider responds.
+		if m.emitTurn != nil {
+			m.emitTurn(ctx, execCtx, workflow.TurnRoleUser, resolvedProvider, resolvedPrompt)
+		}
 
 		result, err := m.executeTurn(ctx, provider, state, resolvedPrompt, options, stdoutW, stderrW)
 		if err != nil {
@@ -273,8 +297,13 @@ func (m *ConversationManager) ExecuteConversation(
 			Conversation: state,
 			Output:       result.Output,
 		})
+		// Emit the agent's response (the question the user is about to answer) so it is
+		// visible before ReadInput parks the conversation waiting for input.
+		if m.emitTurn != nil {
+			m.emitTurn(ctx, execCtx, workflow.TurnRoleAssistant, resolvedProvider, result.Output)
+		}
 
-		userInput, err := m.userInputReader.ReadInput(ctx)
+		userInput, err := inputReader.ReadInput(ctx)
 		if err != nil {
 			state.StoppedBy = workflow.StopReasonError
 			lastResult.State = state

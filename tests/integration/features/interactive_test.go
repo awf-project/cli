@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -14,6 +15,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var ansiEscapeRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func stripANSI(s string) string {
+	return ansiEscapeRE.ReplaceAllString(s, "")
+}
 
 //
 // Acceptance Criteria:
@@ -230,7 +237,7 @@ func TestInteractive_SkipJumpsToNextStep_Integration(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	output := stdout.String()
+	output := stripANSI(stdout.String())
 	assert.Contains(t, output, "kipped")
 	// The command preview shows the resolved command, but skip means no execution
 	// Check that step_one was not executed (no "Executing step_one" message)
@@ -448,7 +455,7 @@ func TestInteractive_RetryReExecutesStep_Integration(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	output := stdout.String()
+	output := stripANSI(stdout.String())
 	// Should show step_one execution twice
 	execCount := strings.Count(output, "Executing step_one")
 	assert.GreaterOrEqual(t, execCount, 2)

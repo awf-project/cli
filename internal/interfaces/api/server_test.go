@@ -11,16 +11,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
 func newTestServer(t *testing.T) (*Server, *Bridge) {
 	t.Helper()
-	lister := newMockWorkflowLister("wf-1")
-	runner := newMockWorkflowRunner()
-	history := newMockHistoryProvider()
-	bridge := NewBridge(lister, runner, history)
+	bridge := NewBridge()
 	srv := NewServer(bridge, ":0")
 	return srv, bridge
 }
@@ -30,13 +25,9 @@ func TestServer_RegistersAllRoutes(t *testing.T) {
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
-	// Pre-register an active execution in terminal state so GET/DELETE
-	// /api/executions/{id} reach the handler body, and the SSE endpoint
-	// sees a completed workflow and closes the stream immediately.
-	execCtx := newMockWorkflowRunner().execCtx
-	execCtx.SetStatus(workflow.StatusCompleted)
-	execCtx.SetCompletedAt(time.Now())
-	knownID := bridge.TrackResumedExecution(execCtx)
+	// Pre-register an active execution so GET/DELETE /api/executions/{id} reach the
+	// handler body, and the SSE route is verified as registered (returns non-404).
+	knownID, _ := seedExecution(bridge, "wf-1")
 
 	routes := []struct {
 		method string
@@ -143,8 +134,7 @@ func TestServer_GracefulShutdown_Within30s_WithActiveSSE(t *testing.T) {
 }
 
 func TestWithShutdownTimeout_SetsOption(t *testing.T) {
-	lister := newMockWorkflowLister()
-	bridge := NewBridge(lister, newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := NewBridge()
 
 	want := 5 * time.Second
 	srv := NewServer(bridge, ":0", WithShutdownTimeout(want))

@@ -165,7 +165,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case LaunchWorkflowMsg:
 		m.activeTab = TabMonitoring
 		if m.bridge != nil && msg.Workflow != nil {
-			return m, m.bridge.RunWorkflow(m.ctx, msg.Workflow, msg.Inputs)
+			return m, m.bridge.RunWorkflowViaFacade(m.ctx, msg.Workflow.Name, msg.Inputs)
 		}
 		return m, nil
 
@@ -181,28 +181,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ExecutionStartedMsg:
-		m.tabMonitoring.SetExecCtx(msg.ExecCtx, msg.Workflow)
+		m.tabMonitoring.SetWorkflow(msg.Workflow)
 		if m.bridge != nil && m.bridge.stream != nil {
 			m.bridge.stream.Reset()
 			m.tabMonitoring.SetStream(m.bridge.stream)
 		}
 		m.lastErr = ""
-		// Start event-loop goroutine when a RunSession is available (D27, FR-011).
-		// The goroutine ranges over sess.Events() and forwards each as facadeEventMsg
-		// via the sender wired by SetSender. When the session carries a terminal event,
-		// StartEventLoop also sends ExecutionFinishedMsg so the tick loop stops even when
-		// no Done channel is present (facade-driven path via RunWorkflowViaFacade).
+		// Start event-loop goroutine for the live RunSession (D27, FR-011). The goroutine
+		// ranges over sess.Events() and forwards each as facadeEventMsg via the sender
+		// wired by SetSender. On a terminal event it also sends ExecutionFinishedMsg so
+		// the monitoring tab finalizes (facade-driven path via RunWorkflowViaFacade).
 		if msg.Session != nil {
-			m.tabMonitoring.StartEventLoop(msg.Session)
+			m.tabMonitoring.StartEventLoop(m.ctx, msg.Session)
 		}
 		var monCmd tea.Cmd
 		m.tabMonitoring, monCmd = m.tabMonitoring.Update(msg)
-		// Done may be nil when the facade path (RunWorkflowViaFacade) is used — in that
-		// case ExecutionFinishedMsg arrives via the StartEventLoop goroutine instead.
-		if msg.Done == nil {
-			return m, monCmd
+		if msg.Session != nil && monCmd == nil {
+			// T072: tab no longer emits a tick cmd in push-event mode; deliver one
+			// spinner tick so the Bubble Tea runtime has a cmd to execute while
+			// waiting for the first facadeEventMsg from StartEventLoop.
+			sp := m.tabMonitoring.spinner
+			return m, func() tea.Msg { return sp.Tick() }
 		}
-		return m, tea.Batch(monCmd, WaitForExecution(msg.Done))
+		return m, monCmd
 
 	case ExecutionFinishedMsg:
 		if msg.Err != nil {
@@ -213,7 +214,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		var monCmd tea.Cmd
 		m.tabMonitoring, monCmd = m.tabMonitoring.Update(msg)
-		return m, monCmd
+		// Refresh history so the just-finished run appears in the History tab without
+		// quitting and relaunching the TUI (it is otherwise only loaded once at Init).
+		cmds := []tea.Cmd{monCmd}
+		if m.bridge != nil && m.bridge.history != nil {
+			cmds = append(cmds, m.bridge.LoadHistory(m.ctx))
+		}
+		return m, tea.Batch(cmds...)
 
 	case ErrMsg:
 		if msg.Err != nil {
@@ -240,11 +247,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case InputRequestedMsg:
 		m.activeTab = TabMonitoring
-		var cmd tea.Cmd
-		m.tabMonitoring, cmd = m.tabMonitoring.Update(msg)
-		return m, cmd
-
-	case tickMsg, executionPollMsg:
 		var cmd tea.Cmd
 		m.tabMonitoring, cmd = m.tabMonitoring.Update(msg)
 		return m, cmd

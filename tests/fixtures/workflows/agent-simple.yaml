@@ -19,7 +19,7 @@ states:
       Please help with this task:
       {{inputs.task}}
     options:
-      model: claude-haiku-4-5
+      model: haiku
     timeout: 30
     on_success: done
     on_failure: error

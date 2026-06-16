@@ -52,7 +52,7 @@ func TestExecutionService_Run_SingleStepWorkflow(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -82,7 +82,7 @@ func TestExecutionService_Run_MultiStepWorkflow(t *testing.T) {
 		WithWorkflow("multi", wf).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "multi", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "multi-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -119,7 +119,7 @@ func TestExecutionService_Run_FailureTransition(t *testing.T) {
 		WithCommandResult("exit 1", &ports.CommandResult{ExitCode: 1, Stderr: "failed"}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "fail-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "fail-test-run")
 
 	require.NoError(t, err) // workflow completes, just via error path
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -152,7 +152,7 @@ func TestExecutionService_Run_FailureNoTransition(t *testing.T) {
 		WithCommandResult("exit 1", &ports.CommandResult{ExitCode: 1}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "fail-no-transition", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "fail-no-transition-run")
 
 	require.Error(t, err) // workflow fails
 	assert.Equal(t, workflow.StatusFailed, ctx.Status)
@@ -186,16 +186,19 @@ func TestExecutionService_Run_StepTimeout(t *testing.T) {
 		WithExecutor(executor).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "timeout-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "timeout-test-run")
 
 	require.NoError(t, err) // workflow completes via error path
 	assert.Equal(t, "error", ctx.CurrentStep)
 }
 
 func TestExecutionService_Run_WorkflowNotFound(t *testing.T) {
-	execSvc, _ := NewTestHarness(t).Build()
+	// removed: name-resolution moved to Resolver (F108)
+	// Verify that the repository returns not-found for unknown names,
+	// which is the underlying behavior this test originally exercised.
+	_, mocks := NewTestHarness(t).Build()
 
-	_, err := execSvc.Run(context.Background(), "nonexistent", nil)
+	_, err := mocks.Repository.Load(context.Background(), "nonexistent")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
@@ -216,7 +219,7 @@ func TestExecutionService_Run_WithInputs(t *testing.T) {
 		Build()
 
 	inputs := map[string]any{"name": "test", "count": 42}
-	ctx, err := execSvc.Run(context.Background(), "input-test", inputs)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "input-test-run")
 
 	require.NoError(t, err)
 
@@ -247,7 +250,7 @@ func TestExecutionService_Run_StepNotFound(t *testing.T) {
 		WithWorkflow("bad-ref", wf).
 		Build()
 
-	_, err := execSvc.Run(context.Background(), "bad-ref", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "bad-ref-run")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
@@ -266,7 +269,7 @@ func TestExecutionService_Run_ImmediateTerminal(t *testing.T) {
 		WithWorkflow("immediate", wf).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "immediate", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "immediate-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -303,7 +306,7 @@ func TestExecutionService_Run_ExecutorError(t *testing.T) {
 		WithExecutor(executor).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "exec-error", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "exec-error-run")
 
 	require.NoError(t, err) // workflow should complete via error path
 	assert.Equal(t, "error", ctx.CurrentStep)
@@ -332,7 +335,7 @@ func TestExecutionService_Run_WithDir(t *testing.T) {
 		WithExecutor(executor).
 		Build()
 
-	_, err := execSvc.Run(context.Background(), "dir-test", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "dir-test-run")
 
 	require.NoError(t, err)
 	require.NotNil(t, executor.lastCmd, "executor should have received a command")
@@ -361,7 +364,7 @@ func TestExecutionService_Run_WithDirEmpty(t *testing.T) {
 		WithExecutor(executor).
 		Build()
 
-	_, err := execSvc.Run(context.Background(), "no-dir-test", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "no-dir-test-run")
 
 	require.NoError(t, err)
 	require.NotNil(t, executor.lastCmd, "executor should have received a command")
@@ -384,7 +387,7 @@ func TestExecutionService_Run_SavesCheckpoints(t *testing.T) {
 		WithWorkflow("checkpoint-test", wf).
 		Build()
 
-	execCtx, err := execSvc.Run(context.Background(), "checkpoint-test", nil)
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "checkpoint-test-run")
 	require.NoError(t, err)
 
 	// State should have been saved (checkpointed)
@@ -428,7 +431,7 @@ func TestExecutionService_Run_ContinueOnErrorFollowsOnSuccess(t *testing.T) {
 		WithCommandResult("exit 1", &ports.CommandResult{ExitCode: 1, Stderr: "command failed"}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "continue-on-error", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "continue-on-error-run")
 
 	require.NoError(t, err, "workflow should complete without error")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -467,7 +470,7 @@ func TestExecutionService_Run_ContinueOnErrorWithExecutorError(t *testing.T) {
 		WithExecutor(executor).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "continue-exec-error", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "continue-exec-error-run")
 
 	require.NoError(t, err, "workflow should complete without error")
 	assert.Equal(t, "success", ctx.CurrentStep, "should follow on_success despite executor error")
@@ -497,7 +500,7 @@ func TestExecutionService_Run_ContinueOnErrorFalseFollowsOnFailure(t *testing.T)
 		WithCommandResult("exit 1", &ports.CommandResult{ExitCode: 1}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "normal-failure", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "normal-failure-run")
 
 	require.NoError(t, err) // workflow completes via failure path
 	assert.Equal(t, "failure", ctx.CurrentStep, "should follow on_failure when continue_on_error is false")
@@ -544,7 +547,7 @@ func TestExecutionService_Run_ContinueOnErrorMultipleSteps(t *testing.T) {
 		WithCommandResult("success", &ports.CommandResult{ExitCode: 0}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "multi-continue", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "multi-continue-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "done", ctx.CurrentStep, "should reach done despite step1 and step2 failures")
@@ -582,7 +585,7 @@ func TestExecutionService_Run_ContinueOnErrorNoOnFailure(t *testing.T) {
 		WithCommandResult("exit 1", &ports.CommandResult{ExitCode: 1}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "continue-no-onfailure", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "continue-no-onfailure-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "done", ctx.CurrentStep, "should follow on_success when continue_on_error is true")
@@ -628,7 +631,7 @@ func TestExecutionService_Run_InputValidation_ValidInputs(t *testing.T) {
 		"count": 50,
 	}
 
-	ctx, err := execSvc.Run(context.Background(), "input-validation", inputs)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "input-validation-run")
 
 	require.NoError(t, err, "workflow should complete with valid inputs")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -664,7 +667,7 @@ func TestExecutionService_Run_InputValidation_InvalidEmail(t *testing.T) {
 		"email": "not-an-email",
 	}
 
-	_, err := execSvc.Run(context.Background(), "invalid-email", inputs)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "invalid-email-run")
 
 	require.Error(t, err, "should fail with invalid email")
 	assert.Contains(t, err.Error(), "validation")
@@ -694,7 +697,7 @@ func TestExecutionService_Run_InputValidation_RequiredMissing(t *testing.T) {
 		Build()
 
 	// Empty inputs - required field missing
-	_, err := execSvc.Run(context.Background(), "required-missing", map[string]any{})
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, map[string]any{}, "required-missing-run")
 
 	require.Error(t, err, "should fail with missing required input")
 	assert.Contains(t, err.Error(), "validation")
@@ -733,7 +736,7 @@ func TestExecutionService_Run_InputValidation_IntegerOutOfRange(t *testing.T) {
 		"count": 150,
 	}
 
-	_, err := execSvc.Run(context.Background(), "integer-range", inputs)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "integer-range-run")
 
 	require.Error(t, err, "should fail with integer out of range")
 	assert.Contains(t, err.Error(), "validation")
@@ -770,7 +773,7 @@ func TestExecutionService_Run_InputValidation_EnumInvalid(t *testing.T) {
 		"env": "local",
 	}
 
-	_, err := execSvc.Run(context.Background(), "enum-validation", inputs)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "enum-validation-run")
 
 	require.Error(t, err, "should fail with invalid enum value")
 	assert.Contains(t, err.Error(), "validation")
@@ -827,7 +830,7 @@ func TestExecutionService_Run_InputValidation_MultipleErrors(t *testing.T) {
 		"env":   "local",
 	}
 
-	_, err := execSvc.Run(context.Background(), "multiple-errors", inputs)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "multiple-errors-run")
 
 	require.Error(t, err, "should fail with multiple validation errors")
 	assert.Contains(t, err.Error(), "validation")
@@ -863,7 +866,7 @@ func TestExecutionService_Run_InputValidation_DefaultAppliedBeforeValidation(t *
 		Build()
 
 	// No inputs provided - default should be used
-	ctx, err := execSvc.Run(context.Background(), "default-values", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "default-values-run")
 
 	require.NoError(t, err, "should succeed with default value")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -906,7 +909,7 @@ func TestExecutionService_Run_InputValidation_TypeCoercion(t *testing.T) {
 		"count": "42",
 	}
 
-	ctx, err := execSvc.Run(context.Background(), "type-coercion", inputs)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "type-coercion-run")
 
 	require.NoError(t, err, "should succeed with coerced type")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -939,7 +942,7 @@ func TestExecutionService_Run_InputValidation_NoValidationRules(t *testing.T) {
 		"name": "anything_goes",
 	}
 
-	ctx, err := execSvc.Run(context.Background(), "no-validation", inputs)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "no-validation-run")
 
 	require.NoError(t, err, "should succeed without validation rules")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -966,7 +969,7 @@ func TestExecutionService_Run_InputValidation_NoInputDefinitions(t *testing.T) {
 		"extra": "value",
 	}
 
-	ctx, err := execSvc.Run(context.Background(), "no-inputs", inputs)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "no-inputs-run")
 
 	require.NoError(t, err, "should succeed without input definitions")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1011,7 +1014,7 @@ func TestExecutionService_Run_InputValidation_BooleanType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inputs := map[string]any{"verbose": tt.input}
-			_, err := execSvc.Run(context.Background(), "boolean-validation", inputs)
+			_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "boolean-validation-run")
 
 			if tt.wantErr {
 				require.Error(t, err, "should fail with invalid boolean")
@@ -1050,21 +1053,21 @@ func TestExecutionService_Run_InputValidation_OptionalWithValidation(t *testing.
 		Build()
 
 	t.Run("not provided should succeed", func(t *testing.T) {
-		ctx, err := execSvc.Run(context.Background(), "optional-validation", nil)
+		ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "optional-validation-run")
 		require.NoError(t, err)
 		assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	})
 
 	t.Run("valid value should succeed", func(t *testing.T) {
 		inputs := map[string]any{"count": 50}
-		ctx, err := execSvc.Run(context.Background(), "optional-validation", inputs)
+		ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "optional-validation-run")
 		require.NoError(t, err)
 		assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	})
 
 	t.Run("invalid value should fail", func(t *testing.T) {
 		inputs := map[string]any{"count": 999}
-		_, err := execSvc.Run(context.Background(), "optional-validation", inputs)
+		_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "optional-validation-run")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "validation")
 	})
@@ -1551,7 +1554,7 @@ func TestExecutionService_Run_CallWorkflow_DispatcherRouting(t *testing.T) {
 		WithWorkflow("parent", parentWf).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "parent", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "parent-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1614,7 +1617,7 @@ func TestExecutionService_Run_CallWorkflow_InSequence(t *testing.T) {
 		WithWorkflow("sequence", sequenceWf).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "sequence", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), sequenceWf, nil, "sequence-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1671,7 +1674,7 @@ func TestExecutionService_Run_CallWorkflow_FailureTransition(t *testing.T) {
 		WithCommandResult("exit 1", &ports.CommandResult{ExitCode: 1, Stderr: "command failed"}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "parent-with-handler", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "parent-with-handler-run")
 
 	require.NoError(t, err) // Workflow completes via error handler
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1801,7 +1804,7 @@ func TestExecutionService_Run_CallWorkflow_MixedStepTypes(t *testing.T) {
 		WithWorkflow("mixed-types", mixedTypesWf).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "mixed-types", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), mixedTypesWf, nil, "mixed-types-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1858,7 +1861,7 @@ func TestExecutionService_Run_CallWorkflow_DefaultStep(t *testing.T) {
 		WithWorkflow("only-call", onlyCallWf).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "only-call", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), onlyCallWf, nil, "only-call-run")
 
 	// Should succeed without trying to execute empty command
 	require.NoError(t, err)

@@ -193,7 +193,7 @@ func TestClassifyErrorType(t *testing.T) {
 				})
 			}
 
-			_, err := svc.Run(context.Background(), "test", nil)
+			_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 			if !tt.wantWorkflowError {
 				// Success case: no error expected
@@ -290,7 +290,7 @@ func TestClassifyErrorType_EdgeCases(t *testing.T) {
 				ExitCode: 1,
 			})
 
-			_, err := svc.Run(context.Background(), "test", nil)
+			_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 			require.Error(t, err)
 
@@ -344,7 +344,7 @@ func TestClassifyErrorType_ErrorHookContext(t *testing.T) {
 		ExitCode: 1,
 	})
 
-	_, err := svc.Run(context.Background(), "test", nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.Error(t, err)
 	messages := mocks.Logger.GetMessages()

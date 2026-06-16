@@ -344,7 +344,8 @@ func TestRunHistory_NoHistory(t *testing.T) {
 	historyDir := filepath.Join(tmpDir, "history")
 	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -413,7 +414,8 @@ func TestRunHistory_ValidSinceFormat(t *testing.T) {
 	historyDir := filepath.Join(tmpDir, "history")
 	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -430,7 +432,8 @@ func TestRunHistory_Stats(t *testing.T) {
 	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
 	t.Run("text format shows statistics", func(t *testing.T) {
-		cmd := cli.NewRootCommand()
+		cmd, cleanup := cli.NewRootCommandAutoFacade()
+		defer cleanup()
 		var out bytes.Buffer
 		cmd.SetOut(&out)
 		cmd.SetErr(&out)
@@ -448,7 +451,8 @@ func TestRunHistory_Stats(t *testing.T) {
 	})
 
 	t.Run("json format shows statistics", func(t *testing.T) {
-		cmd := cli.NewRootCommand()
+		cmd, cleanup := cli.NewRootCommandAutoFacade()
+		defer cleanup()
 		var out bytes.Buffer
 		cmd.SetOut(&out)
 		cmd.SetErr(&out)
@@ -476,7 +480,8 @@ func TestRunHistory_JSONFormat(t *testing.T) {
 	historyDir := filepath.Join(tmpDir, "history")
 	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -529,7 +534,8 @@ func TestRunHistory_Filters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := cli.NewRootCommand()
+			cmd, cleanup := cli.NewRootCommandAutoFacade()
+			defer cleanup()
 			var out bytes.Buffer
 			cmd.SetOut(&out)
 			cmd.SetErr(&out)
@@ -547,7 +553,8 @@ func TestRunHistory_TextOutput(t *testing.T) {
 	historyDir := filepath.Join(tmpDir, "history")
 	require.NoError(t, os.MkdirAll(historyDir, 0o755))
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -569,7 +576,8 @@ func TestRunHistory_TextOutput(t *testing.T) {
 func TestHistoryCommand_SQLiteHistoryStore_Wiring(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -602,7 +610,8 @@ func TestHistoryCommand_ConcurrentAccess(t *testing.T) {
 
 	for i := 0; i < numConcurrent; i++ {
 		go func(workerID int) {
-			cmd := cli.NewRootCommand()
+			cmd, cleanup := cli.NewRootCommandAutoFacade()
+			defer cleanup()
 			var out bytes.Buffer
 			cmd.SetOut(&out)
 			cmd.SetErr(&out)
@@ -637,7 +646,8 @@ func TestHistoryCommand_ConcurrentAccess(t *testing.T) {
 func TestHistoryCommand_Stats_SQLiteIntegration(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -686,7 +696,8 @@ func TestHistoryCommand_FilterWithSQLite(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 
-			cmd := cli.NewRootCommand()
+			cmd, cleanup := cli.NewRootCommandAutoFacade()
+			defer cleanup()
 			var out bytes.Buffer
 			cmd.SetOut(&out)
 			cmd.SetErr(&out)
@@ -705,7 +716,8 @@ func TestHistoryCommand_FilterWithSQLite(t *testing.T) {
 func TestHistoryCommand_JSONOutput_SQLite(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -728,7 +740,8 @@ func TestHistoryCommand_JSONOutput_SQLite(t *testing.T) {
 func TestHistoryCommand_StatsJSON_SQLite(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -778,7 +791,8 @@ func TestRunHistory_FullIDDisplay(t *testing.T) {
 	historyStore.Close()
 
 	t.Run("text output shows full UUID and workflow name without truncation", func(t *testing.T) {
-		cmd := cli.NewRootCommand()
+		cmd, cleanup := cli.NewRootCommandAutoFacade()
+		defer cleanup()
 		var out bytes.Buffer
 		cmd.SetOut(&out)
 		cmd.SetErr(&out)
@@ -794,7 +808,8 @@ func TestRunHistory_FullIDDisplay(t *testing.T) {
 	})
 
 	t.Run("json output preserves full IDs", func(t *testing.T) {
-		cmd := cli.NewRootCommand()
+		cmd, cleanup := cli.NewRootCommandAutoFacade()
+		defer cleanup()
 		var out bytes.Buffer
 		cmd.SetOut(&out)
 		cmd.SetErr(&out)
@@ -813,7 +828,8 @@ func TestRunHistory_FullIDDisplay(t *testing.T) {
 	})
 
 	t.Run("filtered output preserves full IDs", func(t *testing.T) {
-		cmd := cli.NewRootCommand()
+		cmd, cleanup := cli.NewRootCommandAutoFacade()
+		defer cleanup()
 		var out bytes.Buffer
 		cmd.SetOut(&out)
 		cmd.SetErr(&out)

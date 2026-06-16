@@ -47,7 +47,7 @@ func TestExecutionService_buildInterpolationContext_PopulatesAWFPaths(t *testing
 		}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test-awf-context", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-awf-context-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -85,7 +85,7 @@ func TestExecutionService_buildInterpolationContext_AWFConfigDir(t *testing.T) {
 		}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test-config-dir", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-config-dir-run")
 
 	require.NoError(t, err)
 	state, ok := ctx.GetStepState("start")
@@ -121,7 +121,7 @@ func TestExecutionService_buildInterpolationContext_AWFDataDir(t *testing.T) {
 		}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test-data-dir", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-data-dir-run")
 
 	require.NoError(t, err)
 	state, ok := ctx.GetStepState("start")
@@ -157,7 +157,7 @@ func TestExecutionService_buildInterpolationContext_AWFWorkflowsDir(t *testing.T
 		}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test-workflows-dir", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-workflows-dir-run")
 
 	require.NoError(t, err)
 	state, ok := ctx.GetStepState("start")
@@ -193,7 +193,7 @@ func TestExecutionService_buildInterpolationContext_AWFPluginsDir(t *testing.T) 
 		}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test-plugins-dir", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-plugins-dir-run")
 
 	require.NoError(t, err)
 	state, ok := ctx.GetStepState("start")
@@ -235,7 +235,7 @@ func TestExecutionService_buildInterpolationContext_AllAWFPathsAvailable(t *test
 		}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test-all-paths", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-all-paths-run")
 
 	require.NoError(t, err)
 	state, ok := ctx.GetStepState("start")
@@ -298,7 +298,7 @@ func TestExecutionService_buildInterpolationContext_XDGOverride(t *testing.T) {
 		}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test-xdg-override", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-xdg-override-run")
 
 	require.NoError(t, err)
 	state, ok := ctx.GetStepState("start")
@@ -345,7 +345,7 @@ func TestExecutionService_buildInterpolationContext_AWFContextInMultipleSteps(t 
 		}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test-multi-step-awf", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-multi-step-awf-run")
 
 	require.NoError(t, err)
 
@@ -397,7 +397,7 @@ func TestExecutionService_buildInterpolationContext_AWFContextWithStateReference
 		}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test-awf-with-state", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-awf-with-state-run")
 
 	require.NoError(t, err)
 
@@ -432,7 +432,7 @@ func TestExecutionService_buildInterpolationContext_EmptyAWFMapInitialized(t *te
 		}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test-empty-awf", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-empty-awf-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)

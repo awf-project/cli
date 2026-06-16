@@ -558,6 +558,43 @@ func TestRPCPluginManager_Init_ConnectionTimeout(t *testing.T) {
 	}
 }
 
+func TestRPCPluginManager_ResolvePluginBinary_NotExecutable(t *testing.T) {
+	parser := NewManifestParser()
+	loader := NewFileSystemLoader(parser)
+	manager := NewRPCPluginManager(loader)
+
+	pluginDir := filepath.Join(t.TempDir(), "not-executable")
+	if err := os.MkdirAll(pluginDir, 0o750); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	binaryPath := filepath.Join(pluginDir, "awf-plugin-not-executable")
+	if err := os.WriteFile(binaryPath, []byte("#!/bin/sh\necho test\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	manager.mu.Lock()
+	manager.plugins["not-executable"] = &pluginmodel.PluginInfo{
+		Manifest: &pluginmodel.Manifest{
+			Name:    "not-executable",
+			Version: "1.0.0",
+		},
+		Status: pluginmodel.StatusLoaded,
+		Path:   pluginDir,
+	}
+	manager.mu.Unlock()
+
+	_, _, err := manager.resolvePluginBinary("not-executable")
+	if err == nil {
+		t.Fatal("resolvePluginBinary() error = nil, want not executable error")
+	}
+	if !strings.Contains(err.Error(), "plugin binary is not executable") {
+		t.Fatalf("resolvePluginBinary() error = %q, want not executable message", err)
+	}
+	if !strings.Contains(err.Error(), "chmod +x") {
+		t.Fatalf("resolvePluginBinary() error = %q, want chmod hint", err)
+	}
+}
+
 func TestRPCPluginManager_Init_ContextCancellation(t *testing.T) {
 	parser := NewManifestParser()
 	loader := NewFileSystemLoader(parser)

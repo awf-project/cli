@@ -61,30 +61,6 @@ func (m *mockWorkflowLister) ValidateWorkflow(_ context.Context, _ string) error
 	return m.validErr
 }
 
-// mockWorkflowRunner satisfies tui.WorkflowRunner.
-type mockWorkflowRunner struct {
-	execCtx *workflow.ExecutionContext
-	runErr  error
-}
-
-func newMockWorkflowRunner() *mockWorkflowRunner {
-	ctx := workflow.NewExecutionContext("exec-001", "test-workflow")
-	return &mockWorkflowRunner{execCtx: ctx}
-}
-
-func (m *mockWorkflowRunner) RunWorkflowAsync(
-	_ context.Context,
-	_ *workflow.Workflow,
-	_ map[string]any,
-) (*workflow.ExecutionContext, <-chan error, error) {
-	if m.runErr != nil {
-		return nil, nil, m.runErr
-	}
-	done := make(chan error, 1)
-	done <- nil
-	return m.execCtx, done, nil
-}
-
 // mockHistoryProvider satisfies tui.HistoryProvider.
 type mockHistoryProvider struct {
 	records  []*workflow.ExecutionRecord
@@ -121,24 +97,23 @@ func (m *mockHistoryProvider) GetStats(_ context.Context, _ *workflow.HistoryFil
 
 // --- helpers ---
 
-// newTestBridge builds a Bridge backed by mocks for all three interfaces.
-func newTestBridge(t *testing.T) (*tui.Bridge, *mockWorkflowLister, *mockWorkflowRunner, *mockHistoryProvider) {
+// newTestBridge builds a Bridge backed by mocks for WorkflowLister and HistoryProvider.
+// The WorkflowRunner is no longer part of Bridge; all execution routes through the facade.
+func newTestBridge(t *testing.T) (*tui.Bridge, *mockWorkflowLister, *mockHistoryProvider) {
 	t.Helper()
 	lister := newMockWorkflowLister("test-workflow")
-	runner := newMockWorkflowRunner()
 	history := newMockHistoryProvider()
-	bridge := tui.NewBridge(lister, runner, history)
-	return bridge, lister, runner, history
+	bridge := tui.NewBridge(lister, history)
+	return bridge, lister, history
 }
 
 // --- NewBridge ---
 
 func TestBridge_NewBridge_WiresDependencies(t *testing.T) {
 	lister := newMockWorkflowLister("wf-1")
-	runner := newMockWorkflowRunner()
 	history := newMockHistoryProvider()
 
-	bridge := tui.NewBridge(lister, runner, history)
+	bridge := tui.NewBridge(lister, history)
 
 	require.NotNil(t, bridge)
 }
@@ -146,7 +121,7 @@ func TestBridge_NewBridge_WiresDependencies(t *testing.T) {
 // --- LoadWorkflows ---
 
 func TestBridge_LoadWorkflows_ReturnsNonNilCmd(t *testing.T) {
-	bridge, _, _, _ := newTestBridge(t)
+	bridge, _, _ := newTestBridge(t)
 
 	cmd := bridge.LoadWorkflows(context.Background())
 
@@ -154,7 +129,7 @@ func TestBridge_LoadWorkflows_ReturnsNonNilCmd(t *testing.T) {
 }
 
 func TestBridge_LoadWorkflows_EmitsWorkflowsLoadedMsg(t *testing.T) {
-	bridge, _, _, _ := newTestBridge(t)
+	bridge, _, _ := newTestBridge(t)
 
 	msg := bridge.LoadWorkflows(context.Background())()
 
@@ -167,7 +142,7 @@ func TestBridge_LoadWorkflows_EmitsWorkflowsLoadedMsg(t *testing.T) {
 }
 
 func TestBridge_LoadWorkflows_RespectsCancellation(t *testing.T) {
-	bridge, _, _, _ := newTestBridge(t)
+	bridge, _, _ := newTestBridge(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // pre-cancel
 
@@ -181,7 +156,7 @@ func TestBridge_LoadWorkflows_RespectsCancellation(t *testing.T) {
 func TestBridge_LoadWorkflows_ListError_EmitsErrMsg(t *testing.T) {
 	lister := newMockWorkflowLister()
 	lister.listErr = errors.New("repository unavailable")
-	bridge := tui.NewBridge(lister, newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := tui.NewBridge(lister, newMockHistoryProvider())
 
 	msg := bridge.LoadWorkflows(context.Background())()
 
@@ -193,7 +168,7 @@ func TestBridge_LoadWorkflows_ListError_EmitsErrMsg(t *testing.T) {
 func TestBridge_LoadWorkflows_GetWorkflowError_SkipsFailedWorkflow(t *testing.T) {
 	lister := newMockWorkflowLister("wf-1")
 	lister.getErr = errors.New("workflow load failed")
-	bridge := tui.NewBridge(lister, newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := tui.NewBridge(lister, newMockHistoryProvider())
 
 	msg := bridge.LoadWorkflows(context.Background())()
 
@@ -218,7 +193,7 @@ func TestBridge_LoadWorkflows_PackWorkflow_NormalizesName(t *testing.T) {
 			},
 		},
 	}
-	bridge := tui.NewBridge(lister, newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := tui.NewBridge(lister, newMockHistoryProvider())
 
 	msg := bridge.LoadWorkflows(context.Background())()
 
@@ -233,7 +208,7 @@ func TestBridge_LoadWorkflows_PackWorkflow_NormalizesName(t *testing.T) {
 
 func TestBridge_LoadWorkflows_EmptyList_EmitsEmptySlice(t *testing.T) {
 	lister := newMockWorkflowLister() // no workflows
-	bridge := tui.NewBridge(lister, newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := tui.NewBridge(lister, newMockHistoryProvider())
 
 	msg := bridge.LoadWorkflows(context.Background())()
 
@@ -246,7 +221,7 @@ func TestBridge_LoadWorkflows_EmptyList_EmitsEmptySlice(t *testing.T) {
 // --- LoadHistory ---
 
 func TestBridge_LoadHistory_ReturnsNonNilCmd(t *testing.T) {
-	bridge, _, _, _ := newTestBridge(t)
+	bridge, _, _ := newTestBridge(t)
 
 	cmd := bridge.LoadHistory(context.Background())
 
@@ -254,7 +229,7 @@ func TestBridge_LoadHistory_ReturnsNonNilCmd(t *testing.T) {
 }
 
 func TestBridge_LoadHistory_EmitsHistoryLoadedMsg(t *testing.T) {
-	bridge, _, _, history := newTestBridge(t)
+	bridge, _, history := newTestBridge(t)
 
 	msg := bridge.LoadHistory(context.Background())()
 
@@ -267,7 +242,7 @@ func TestBridge_LoadHistory_EmitsHistoryLoadedMsg(t *testing.T) {
 }
 
 func TestBridge_LoadHistory_RespectsCancellation(t *testing.T) {
-	bridge, _, _, _ := newTestBridge(t)
+	bridge, _, _ := newTestBridge(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -281,7 +256,7 @@ func TestBridge_LoadHistory_RespectsCancellation(t *testing.T) {
 func TestBridge_LoadHistory_ListError_EmitsErrMsg(t *testing.T) {
 	history := newMockHistoryProvider()
 	history.listErr = errors.New("history store offline")
-	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), history)
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), history)
 
 	msg := bridge.LoadHistory(context.Background())()
 
@@ -293,7 +268,7 @@ func TestBridge_LoadHistory_ListError_EmitsErrMsg(t *testing.T) {
 func TestBridge_LoadHistory_StatsError_EmitsErrMsg(t *testing.T) {
 	history := newMockHistoryProvider()
 	history.statsErr = errors.New("stats query failed")
-	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), history)
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), history)
 
 	msg := bridge.LoadHistory(context.Background())()
 
@@ -302,100 +277,10 @@ func TestBridge_LoadHistory_StatsError_EmitsErrMsg(t *testing.T) {
 	assert.ErrorContains(t, errMsg.Err, "stats query failed")
 }
 
-// --- RunWorkflow ---
-
-func TestBridge_RunWorkflow_ReturnsNonNilCmd(t *testing.T) {
-	bridge, _, _, _ := newTestBridge(t)
-	wf := &workflow.Workflow{
-		Name:  "test-workflow",
-		Steps: map[string]*workflow.Step{"step-1": {Name: "step-1"}},
-	}
-
-	cmd := bridge.RunWorkflow(context.Background(), wf, nil)
-
-	assert.NotNil(t, cmd, "RunWorkflow must return a non-nil tea.Cmd")
-}
-
-func TestBridge_RunWorkflow_EmitsExecutionStartedMsg(t *testing.T) {
-	bridge, _, runner, _ := newTestBridge(t)
-	wf := &workflow.Workflow{
-		Name:  "test-workflow",
-		Steps: map[string]*workflow.Step{"step-1": {Name: "step-1"}},
-	}
-
-	msg := bridge.RunWorkflow(context.Background(), wf, map[string]any{"key": "value"})()
-
-	started, ok := msg.(tui.ExecutionStartedMsg)
-	require.True(t, ok, "expected ExecutionStartedMsg, got %T", msg)
-	assert.Equal(t, "test-workflow", started.ExecutionID)
-	assert.NotNil(t, started.Done, "Done channel must be set")
-	_ = runner // runner executes asynchronously
-}
-
-func TestBridge_RunWorkflow_WithEmptySteps_FetchesWorkflowFirst(t *testing.T) {
-	bridge, lister, _, _ := newTestBridge(t)
-	lister.wfs["test-workflow"] = &workflow.Workflow{
-		Name:  "test-workflow",
-		Steps: map[string]*workflow.Step{"step-loaded": {Name: "step-loaded"}},
-	}
-
-	wf := &workflow.Workflow{Name: "test-workflow"}
-
-	msg := bridge.RunWorkflow(context.Background(), wf, nil)()
-
-	started, ok := msg.(tui.ExecutionStartedMsg)
-	require.True(t, ok, "expected ExecutionStartedMsg, got %T", msg)
-	assert.Equal(t, "test-workflow", started.ExecutionID)
-	assert.NotNil(t, started.Done, "Done channel must be set")
-}
-
-func TestBridge_RunWorkflow_RespectsCancellation(t *testing.T) {
-	bridge, _, _, _ := newTestBridge(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	msg := bridge.RunWorkflow(ctx, &workflow.Workflow{Name: "test"}, nil)()
-
-	errMsg, ok := msg.(tui.ErrMsg)
-	require.True(t, ok, "expected ErrMsg on cancelled context, got %T", msg)
-	assert.Error(t, errMsg.Err)
-}
-
-func TestBridge_RunWorkflow_RunnerError_ReturnsErrMsgDirectly(t *testing.T) {
-	runner := newMockWorkflowRunner()
-	runner.runErr = errors.New("execution failed")
-	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), runner, newMockHistoryProvider())
-	wf := &workflow.Workflow{
-		Name:  "wf-1",
-		Steps: map[string]*workflow.Step{"step-1": {Name: "step-1"}},
-	}
-
-	msg := bridge.RunWorkflow(context.Background(), wf, nil)()
-
-	errMsg, ok := msg.(tui.ErrMsg)
-	require.True(t, ok, "expected ErrMsg when runner fails, got %T", msg)
-	assert.ErrorContains(t, errMsg.Err, "execution failed")
-}
-
-func TestBridge_RunWorkflow_Success_ExecCtxIsLive(t *testing.T) {
-	bridge, _, runner, _ := newTestBridge(t)
-	wf := &workflow.Workflow{
-		Name:  "test-workflow",
-		Steps: map[string]*workflow.Step{"step-1": {Name: "step-1"}},
-	}
-
-	msg := bridge.RunWorkflow(context.Background(), wf, nil)()
-
-	started, ok := msg.(tui.ExecutionStartedMsg)
-	require.True(t, ok, "expected ExecutionStartedMsg, got %T", msg)
-	assert.Equal(t, runner.execCtx, started.ExecCtx)
-	assert.NotNil(t, started.Done)
-}
-
 // --- ValidateWorkflow ---
 
 func TestBridge_ValidateWorkflow_ReturnsNonNilCmd(t *testing.T) {
-	bridge, _, _, _ := newTestBridge(t)
+	bridge, _, _ := newTestBridge(t)
 
 	cmd := bridge.ValidateWorkflow(context.Background(), "test-workflow")
 
@@ -403,7 +288,7 @@ func TestBridge_ValidateWorkflow_ReturnsNonNilCmd(t *testing.T) {
 }
 
 func TestBridge_ValidateWorkflow_Success_EmitsValidationResultMsg(t *testing.T) {
-	bridge, _, _, _ := newTestBridge(t)
+	bridge, _, _ := newTestBridge(t)
 
 	msg := bridge.ValidateWorkflow(context.Background(), "test-workflow")()
 
@@ -417,7 +302,7 @@ func TestBridge_ValidateWorkflow_Success_EmitsValidationResultMsg(t *testing.T) 
 func TestBridge_ValidateWorkflow_ValidationError_EmitsValidationResultMsg(t *testing.T) {
 	lister := newMockWorkflowLister("bad-workflow")
 	lister.validErr = errors.New("invalid workflow: missing initial state")
-	bridge := tui.NewBridge(lister, newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := tui.NewBridge(lister, newMockHistoryProvider())
 
 	msg := bridge.ValidateWorkflow(context.Background(), "bad-workflow")()
 
@@ -428,7 +313,7 @@ func TestBridge_ValidateWorkflow_ValidationError_EmitsValidationResultMsg(t *tes
 }
 
 func TestBridge_ValidateWorkflow_RespectsCancellation(t *testing.T) {
-	bridge, _, _, _ := newTestBridge(t)
+	bridge, _, _ := newTestBridge(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -512,14 +397,18 @@ func (f *mockFacade) Run(_ context.Context, _ ports.RunRequest) (ports.RunSessio
 	return f.session, nil
 }
 
-func (f *mockFacade) Resume(_ context.Context, _ string) (ports.RunSession, error) {
+func (f *mockFacade) Resume(_ context.Context, _ ports.ResumeRequest) (ports.RunSession, error) {
 	return f.session, nil
+}
+
+func (f *mockFacade) RunStep(_ context.Context, _ ports.RunStepRequest) (ports.StepResult, error) {
+	return ports.StepResult{}, nil
 }
 
 // --- SetFacade ---
 
 func TestBridge_SetFacade_DoesNotPanic(t *testing.T) {
-	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockHistoryProvider())
 
 	require.NotPanics(t, func() {
 		bridge.SetFacade(newMockFacade())
@@ -527,7 +416,7 @@ func TestBridge_SetFacade_DoesNotPanic(t *testing.T) {
 }
 
 func TestBridge_SetFacade_AcceptsNil(t *testing.T) {
-	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockHistoryProvider())
 
 	require.NotPanics(t, func() {
 		bridge.SetFacade(nil)
@@ -537,7 +426,7 @@ func TestBridge_SetFacade_AcceptsNil(t *testing.T) {
 // --- RunWorkflowViaFacade ---
 
 func TestBridge_RunWorkflowViaFacade_WithoutFacade_ReturnsErrMsg(t *testing.T) {
-	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockHistoryProvider())
 	// facade not set
 
 	msg := bridge.RunWorkflowViaFacade(context.Background(), "wf-1", nil)()
@@ -548,7 +437,7 @@ func TestBridge_RunWorkflowViaFacade_WithoutFacade_ReturnsErrMsg(t *testing.T) {
 }
 
 func TestBridge_RunWorkflowViaFacade_RespectsCancellation(t *testing.T) {
-	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockHistoryProvider())
 	bridge.SetFacade(newMockFacade())
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -564,7 +453,7 @@ func TestBridge_RunWorkflowViaFacade_RespectsCancellation(t *testing.T) {
 func TestBridge_RunWorkflowViaFacade_FacadeRunError_ReturnsErrMsg(t *testing.T) {
 	facade := newMockFacade()
 	facade.runErr = errors.New("execution unavailable")
-	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockHistoryProvider())
 	bridge.SetFacade(facade)
 
 	msg := bridge.RunWorkflowViaFacade(context.Background(), "wf-1", nil)()
@@ -576,7 +465,7 @@ func TestBridge_RunWorkflowViaFacade_FacadeRunError_ReturnsErrMsg(t *testing.T) 
 
 func TestBridge_RunWorkflowViaFacade_Success_EmitsExecutionStartedMsg(t *testing.T) {
 	facade := newMockFacade()
-	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockHistoryProvider())
 	bridge.SetFacade(facade)
 
 	msg := bridge.RunWorkflowViaFacade(context.Background(), "wf-1", map[string]any{"k": "v"})()
@@ -585,6 +474,29 @@ func TestBridge_RunWorkflowViaFacade_Success_EmitsExecutionStartedMsg(t *testing
 	require.True(t, ok, "expected ExecutionStartedMsg, got %T", msg)
 	assert.Equal(t, "wf-1", started.ExecutionID)
 	assert.Equal(t, facade.session, started.Session, "Session must be the RunSession returned by facade.Run")
-	assert.Nil(t, started.ExecCtx, "ExecCtx must be nil for facade-driven path")
-	assert.Nil(t, started.Done, "Done must be nil for facade-driven path (ExecutionFinishedMsg arrives via StartEventLoop)")
+	// The workflow definition must be supplied so the monitoring tab can build the
+	// step tree and clear its "No active execution" empty state (SetWorkflow needs a
+	// non-nil *workflow.Workflow; without it BuildTree returns no nodes and the panel
+	// stays blank even while facade events flow).
+	require.NotNil(t, started.Workflow, "Workflow must be loaded so the monitoring tab renders the step tree")
+	assert.Equal(t, "wf-1", started.Workflow.Name)
+}
+
+// TestBridge_RunWorkflowViaFacade_WorkflowLoadError_StillEmitsExecutionStartedMsg verifies that a
+// failure to load the workflow definition (used only for the monitoring step tree) does NOT abort
+// the already-started run: the ExecutionStartedMsg is still emitted with the live Session, just with
+// a nil Workflow.
+func TestBridge_RunWorkflowViaFacade_WorkflowLoadError_StillEmitsExecutionStartedMsg(t *testing.T) {
+	facade := newMockFacade()
+	lister := newMockWorkflowLister("wf-1")
+	lister.getErr = errors.New("definition unavailable")
+	bridge := tui.NewBridge(lister, newMockHistoryProvider())
+	bridge.SetFacade(facade)
+
+	msg := bridge.RunWorkflowViaFacade(context.Background(), "wf-1", nil)()
+
+	started, ok := msg.(tui.ExecutionStartedMsg)
+	require.True(t, ok, "expected ExecutionStartedMsg even when workflow load fails, got %T", msg)
+	assert.Equal(t, facade.session, started.Session, "Session must still be delivered")
+	assert.Nil(t, started.Workflow, "Workflow is nil when its definition cannot be loaded")
 }

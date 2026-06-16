@@ -88,7 +88,7 @@ func TestDisplayEvents_CrossProviderConsistency(t *testing.T) {
 
 	t.Run("claude_extracts_text_from_mixed_fixture", func(t *testing.T) {
 		result, err := claudeProvider.Execute(context.Background(), "prompt",
-			map[string]any{"output_format": "text", "model": "claude-sonnet-4-5"}, io.Discard, io.Discard)
+			map[string]any{"output_format": "text", "model": "haiku"}, io.Discard, io.Discard)
 		require.NoError(t, err)
 		assert.NotEmpty(t, result.DisplayOutput, "claude must extract text from assistant event containing both text and tool_use")
 	})
@@ -212,7 +212,7 @@ func TestDisplayEvents_StreamFilterPipeline(t *testing.T) {
 	result, err := claudeProvider.Execute(
 		context.Background(),
 		"test prompt",
-		map[string]any{"output_format": "text", "model": "claude-sonnet-4-5"},
+		map[string]any{"output_format": "text", "model": "haiku"},
 		&liveOutput,
 		io.Discard,
 	)
@@ -261,7 +261,7 @@ func TestDisplayEvents_MalformedInput(t *testing.T) {
 			var buf bytes.Buffer
 			assert.NotPanics(t, func() {
 				result, _ := p.Execute(context.Background(), "x",
-					map[string]any{"output_format": "text", "model": "claude-sonnet-4-5"},
+					map[string]any{"output_format": "text", "model": "haiku"},
 					&buf, io.Discard)
 				if result != nil {
 					assert.Empty(t, result.DisplayOutput,

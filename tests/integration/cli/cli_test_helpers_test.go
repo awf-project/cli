@@ -77,6 +77,28 @@ func runCLI(t *testing.T, args ...string) (string, error) {
 	return out.String(), err
 }
 
+// runCLIFacade creates a root command wired with AutoFacade, prepends
+// --storage <tmpDir> so buildFacade can create history.db in an isolated
+// temp directory, and executes the command. It returns combined
+// stdout+stderr output and any error. Use this for commands that are routed
+// through the WorkflowFacade (validate, list, history, resume --list, etc.).
+func runCLIFacade(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
+
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs(append([]string{"--storage=" + tmpDir}, args...))
+
+	err := cmd.Execute()
+
+	return out.String(), err
+}
+
 // findRepoRoot walks up the directory tree to find the repository root
 // by looking for go.mod file.
 func findRepoRoot() (string, error) {

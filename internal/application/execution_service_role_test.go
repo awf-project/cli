@@ -27,7 +27,7 @@ func (r *testResolverWithValues) Resolve(template string, _ *interpolation.Conte
 
 func TestExecutionService_AgentStep_SingleMode_RoleAndSystemPrompt(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["role-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "role-test",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -48,6 +48,7 @@ func TestExecutionService_AgentStep_SingleMode_RoleAndSystemPrompt(t *testing.T)
 			},
 		},
 	}
+	repo.workflows["role-test"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	provider := mocks.NewMockAgentProvider("claude")
@@ -98,7 +99,7 @@ func TestExecutionService_AgentStep_SingleMode_RoleAndSystemPrompt(t *testing.T)
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetAgentRoleRepository(roleRepo)
 
-	ctx, err := execSvc.Run(context.Background(), "role-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "role-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -106,7 +107,7 @@ func TestExecutionService_AgentStep_SingleMode_RoleAndSystemPrompt(t *testing.T)
 
 func TestExecutionService_AgentStep_SingleMode_RoleOnly(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["role-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "role-test",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -126,6 +127,7 @@ func TestExecutionService_AgentStep_SingleMode_RoleOnly(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["role-test"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	provider := mocks.NewMockAgentProvider("claude")
@@ -175,7 +177,7 @@ func TestExecutionService_AgentStep_SingleMode_RoleOnly(t *testing.T) {
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetAgentRoleRepository(roleRepo)
 
-	ctx, err := execSvc.Run(context.Background(), "role-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "role-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -183,7 +185,7 @@ func TestExecutionService_AgentStep_SingleMode_RoleOnly(t *testing.T) {
 
 func TestExecutionService_AgentStep_SingleMode_NoRole_BackwardCompat(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["role-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "role-test",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -202,6 +204,7 @@ func TestExecutionService_AgentStep_SingleMode_NoRole_BackwardCompat(t *testing.
 			},
 		},
 	}
+	repo.workflows["role-test"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	provider := mocks.NewMockAgentProvider("claude")
@@ -228,7 +231,7 @@ func TestExecutionService_AgentStep_SingleMode_NoRole_BackwardCompat(t *testing.
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "role-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "role-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -236,7 +239,7 @@ func TestExecutionService_AgentStep_SingleMode_NoRole_BackwardCompat(t *testing.
 
 func TestExecutionService_AgentStep_SingleMode_SystemPromptOnly(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["role-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "role-test",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -256,6 +259,7 @@ func TestExecutionService_AgentStep_SingleMode_SystemPromptOnly(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["role-test"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	provider := mocks.NewMockAgentProvider("claude")
@@ -287,7 +291,7 @@ func TestExecutionService_AgentStep_SingleMode_SystemPromptOnly(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "role-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "role-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -295,7 +299,7 @@ func TestExecutionService_AgentStep_SingleMode_SystemPromptOnly(t *testing.T) {
 
 func TestExecutionService_AgentStep_SingleMode_InterpolatedRole(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["role-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "role-test",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -315,6 +319,7 @@ func TestExecutionService_AgentStep_SingleMode_InterpolatedRole(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["role-test"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	provider := mocks.NewMockAgentProvider("claude")
@@ -370,9 +375,9 @@ func TestExecutionService_AgentStep_SingleMode_InterpolatedRole(t *testing.T) {
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetAgentRoleRepository(roleRepo)
 
-	ctx, err := execSvc.Run(context.Background(), "role-test", map[string]any{
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, map[string]any{
 		"persona": "designer",
-	})
+	}, "role-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -380,7 +385,7 @@ func TestExecutionService_AgentStep_SingleMode_InterpolatedRole(t *testing.T) {
 
 func TestExecutionService_AgentStep_ResumableMode_WithRole(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["role-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "role-test",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -402,6 +407,7 @@ func TestExecutionService_AgentStep_ResumableMode_WithRole(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["role-test"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	provider := mocks.NewMockAgentProvider("claude")
@@ -453,7 +459,7 @@ func TestExecutionService_AgentStep_ResumableMode_WithRole(t *testing.T) {
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetAgentRoleRepository(roleRepo)
 
-	ctx, err := execSvc.Run(context.Background(), "role-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "role-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -461,7 +467,7 @@ func TestExecutionService_AgentStep_ResumableMode_WithRole(t *testing.T) {
 
 func TestExecutionService_AgentStep_SingleMode_MissingRepository(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["role-test"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "role-test",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
@@ -481,6 +487,7 @@ func TestExecutionService_AgentStep_SingleMode_MissingRepository(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["role-test"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	_ = registry.Register(mocks.NewMockAgentProvider("claude"))
@@ -497,7 +504,7 @@ func TestExecutionService_AgentStep_SingleMode_MissingRepository(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "role-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "role-test-run")
 
 	require.Error(t, err)
 	assert.Equal(t, workflow.StatusFailed, ctx.Status)

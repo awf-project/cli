@@ -11,15 +11,6 @@ import (
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
-// WorkflowRunner is the subset of *ExecutionService the ACP session service drives to
-// dispatch a workflow. Declaring it as a consumer interface keeps HandleSessionPrompt
-// unit-testable with a fake runner and avoids constructing the full ExecutionService in
-// application-layer tests (which would require infrastructure). *ExecutionService
-// satisfies it directly.
-type WorkflowRunner interface {
-	Run(ctx context.Context, name string, inputs map[string]any) (*workflow.ExecutionContext, error)
-}
-
 // MCPEnvVariable mirrors one ACP McpServerStdio env entry. The ACP wire format serializes
 // env vars as a JSON array of {name, value} objects, NOT a JSON object — so the field below
 // MUST decode the array form. Decoding into a map[string]string fails json.Unmarshal for the
@@ -56,13 +47,14 @@ type ACPInputResponder interface {
 	SetParkHooks(onPark, onUnpark func())
 }
 
-// ACPRunnerFactory builds a per-session WorkflowRunner with session-scoped wiring
-// (input reader, event publisher, output writers, display renderer). It also returns
-// the session's input reader (so continuation turns can route text to it), the
-// streamed flag (set to true by the output writers/renderer when an emit succeeds),
-// and a cleanup that releases that session's resources. Injected by the interfaces/cli
-// wiring layer; nil in unit tests, where the shared runner field is used instead.
-type ACPRunnerFactory func(sessionID string) (WorkflowRunner, ACPInputResponder, *atomic.Bool, func(), error)
+// ACPRunnerFactory builds the per-session wiring for one ACP session. It returns the
+// session's input reader (so continuation turns can route text to it), the streamed flag
+// (set to true by the output writers/renderer when an emit succeeds), a cleanup that
+// releases that session's resources, and the per-session facade (T075: one
+// ports.WorkflowFacade per session, rooted at the session-scoped stateStore — the sole
+// workflow execution entry point). Injected by the interfaces/cli wiring layer; nil in
+// unit tests, where dispatch falls back to the service-level facade (SetFacade).
+type ACPRunnerFactory func(sessionID string) (ACPInputResponder, *atomic.Bool, func(), ports.WorkflowFacade, error)
 
 // inputReaderHolder wraps an ACPInputResponder so that atomic.Pointer[inputReaderHolder]
 // holds a concrete pointer rather than an interface value. Storing a pointer-to-interface
@@ -80,8 +72,8 @@ type inputReaderHolder struct {
 // US2 conversation parking: a single workflow run spans multiple ACP turns. The run
 // executes on its own goroutine (so HandleSessionPrompt can return a stopReason while the
 // workflow is still parked, letting the editor re-enable its input field). parkedCh
-// signals a turn boundary (the workflow blocked in ReadInput awaiting the next user turn);
-// doneCh is closed when runner.Run returns.
+// signals a turn boundary (the workflow blocked awaiting the next user turn);
+// doneCh is closed when the run goroutine returns.
 //
 // The outcome fields (execCtx/runErr/cancelled) are written by the run goroutine BEFORE
 // close(doneCh) and read only AFTER <-doneCh, so the channel close establishes the
@@ -89,7 +81,7 @@ type inputReaderHolder struct {
 type acpRun struct {
 	// parkedCh is buffered (cap 1): the park hook performs a non-blocking send so the
 	// workflow goroutine is never blocked, and each parked turn boundary is delivered to
-	// exactly one waiting turn. doneCh is closed (not sent) when runner.Run returns.
+	// exactly one waiting turn. doneCh is closed (not sent) when the run goroutine returns.
 	parkedCh     chan struct{}
 	doneCh       chan struct{}
 	workflowName string
@@ -127,16 +119,12 @@ type ACPSession struct {
 	sessionCancel context.CancelFunc
 
 	// inputReader holds the session's ACPInputResponder wrapped in inputReaderHolder.
-	// Written once under runnerMu in ensureRunner and read by HandleSessionPrompt
+	// Written once under runnerMu in ensureSessionWiring and read by HandleSessionPrompt
 	// (parking check) without the lock. An atomic.Pointer[inputReaderHolder] makes the
-	// publish/consume race-free — the same pattern already used for execCtx (M7 fix).
+	// publish/consume race-free — the atomic-pointer publish/consume pattern.
 	// The holder wrapper avoids the pointer-on-interface anti-pattern (C-2 fix).
 	inputReader atomic.Pointer[inputReaderHolder]
 
-	// execCtx holds the ExecutionContext of the most recent run. It is written by the
-	// session/prompt handler and read by workflowOutputText; an atomic.Pointer makes the
-	// publish/consume race-free without taking mu (verified by -race).
-	execCtx  atomic.Pointer[workflow.ExecutionContext]
 	InFlight atomic.Bool
 
 	// run holds the coordination state for the current in-flight workflow run (US2
@@ -151,7 +139,7 @@ type ACPSession struct {
 	ParkedTurnCount atomic.Int32
 
 	// runWG tracks the in-flight workflow run goroutine(s) for this session. The
-	// session/prompt handler adds before runner.Run and decrements after; Shutdown waits
+	// session/prompt handler adds before dispatch and decrements after; Shutdown waits
 	// on it (after cancelling) so no per-session resource is released while a workflow is
 	// still touching it (SQLite, temp files, etc.).
 	runWG sync.WaitGroup
@@ -162,13 +150,19 @@ type ACPSession struct {
 	mu       sync.Mutex
 	cancelFn context.CancelFunc
 
-	// Per-session lazily-built runner state. runnerMu serializes construction and allows
-	// a failed factory call to be retried on the next prompt (unlike sync.Once, which would
-	// permanently brick the session). runnerBuilt is set true only after a successful build.
+	// Per-session lazily-built wiring state (input reader, streamed flag, facade, cleanup).
+	// runnerMu serializes construction and allows a failed factory call to be retried on the
+	// next prompt (unlike sync.Once, which would permanently brick the session). runnerBuilt
+	// is set true only after a successful build.
 	runnerMu      sync.Mutex
 	runnerBuilt   bool
-	runner        WorkflowRunner
 	runnerCleanup func()
+
+	// sessionFacade is the per-session WorkflowFacade built by buildACPSessionWiring and
+	// stored here by ensureSessionWiring (T075). Protected by facadeMu for concurrent getter/setter
+	// access (CLAUDE.md: "use mutex-protected getter/setter methods for concurrent shared state").
+	facadeMu      sync.Mutex
+	sessionFacade ports.WorkflowFacade
 
 	// streamed is set to true by the output writers / renderer when at least one emit
 	// succeeds during a run. It is reset to false at the start of each run so the
@@ -223,6 +217,20 @@ func (s *ACPSession) shutdown() {
 	if s.sessionCancel != nil {
 		s.sessionCancel()
 	}
+}
+
+// getFacade returns the per-session WorkflowFacade stored by ensureSessionWiring (T075).
+func (s *ACPSession) getFacade() ports.WorkflowFacade {
+	s.facadeMu.Lock()
+	defer s.facadeMu.Unlock()
+	return s.sessionFacade
+}
+
+// setFacade stores the per-session WorkflowFacade built by buildACPSessionWiring (T075).
+func (s *ACPSession) setFacade(f ports.WorkflowFacade) {
+	s.facadeMu.Lock()
+	s.sessionFacade = f
+	s.facadeMu.Unlock()
 }
 
 // parseInputPairs splits "key=value" strings into a map.

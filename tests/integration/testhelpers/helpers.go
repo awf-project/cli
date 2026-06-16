@@ -6,17 +6,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"testing"
 
-	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
-	"github.com/awf-project/cli/internal/infrastructure/executor"
-	infraExpr "github.com/awf-project/cli/internal/infrastructure/expression"
-	"github.com/awf-project/cli/internal/infrastructure/repository"
-	"github.com/awf-project/cli/internal/infrastructure/store"
-	"github.com/awf-project/cli/pkg/interpolation"
 )
 
 // MockLogger provides a simple logger implementation for testing.
@@ -77,36 +70,12 @@ func SkipInCI(t *testing.T) {
 	}
 }
 
-// SkipIfRoot skips the test if running as root user.
-func SkipIfRoot(t *testing.T) {
-	t.Helper()
-	if os.Getuid() == 0 {
-		t.Skip("Test requires non-root user")
-	}
-}
-
 // SkipIfCLIMissing skips the test if a required CLI tool is not installed.
 func SkipIfCLIMissing(t *testing.T, cliName string) {
 	t.Helper()
 	if _, err := exec.LookPath(cliName); err != nil {
 		t.Skipf("CLI tool %q not found in PATH", cliName)
 	}
-}
-
-// SkipOnPlatform skips the test if running on specified platform(s).
-func SkipOnPlatform(t *testing.T, platforms ...string) {
-	t.Helper()
-	for _, platform := range platforms {
-		if runtime.GOOS == platform {
-			t.Skipf("Test skipped on platform: %s", platform)
-		}
-	}
-}
-
-// SkipIfToolMissing is an alias for SkipIfCLIMissing.
-func SkipIfToolMissing(t *testing.T, toolName string) {
-	t.Helper()
-	SkipIfCLIMissing(t, toolName)
 }
 
 // GetRepoRoot returns the repository root directory.
@@ -129,24 +98,4 @@ func GetRepoRoot(t *testing.T) string {
 		}
 		dir = parent
 	}
-}
-
-// SetupTestWorkflowService creates a fully configured workflow service for integration tests.
-func SetupTestWorkflowService(t *testing.T, workflowsDir, statesDir string) (*application.ExecutionService, ports.StateStore) {
-	t.Helper()
-
-	repo := repository.NewYAMLRepository(workflowsDir)
-	stateStore := store.NewJSONStore(statesDir)
-	shellExec := executor.NewShellExecutor()
-	logger := &MockLogger{}
-	resolver := interpolation.NewTemplateResolver()
-	evaluator := infraExpr.NewExprEvaluator()
-
-	wfSvc := application.NewWorkflowService(repo, stateStore, shellExec, logger, infraExpr.NewExprValidator())
-	parallelExec := application.NewParallelExecutor(logger)
-	execSvc := application.NewExecutionServiceWithEvaluator(
-		wfSvc, shellExec, parallelExec, stateStore, logger, resolver, nil, evaluator,
-	)
-
-	return execSvc, stateStore
 }

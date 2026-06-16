@@ -71,7 +71,7 @@ func TestAgent_Initialize(t *testing.T) {
 	}{
 		{
 			name: "success with valid service",
-			svc:  application.NewACPSessionService(nil, nil, nil, nil),
+			svc:  application.NewACPSessionService(nil, nil, nil),
 			checkResp: func(t *testing.T, resp sdk.InitializeResponse) {
 				assert.NotEmpty(t, resp.ProtocolVersion)
 				assert.NotNil(t, resp.AgentCapabilities)
@@ -141,7 +141,7 @@ func TestAgent_NewSession(t *testing.T) {
 			name:       "service returns internal error",
 			cwd:        "/home/user",
 			mcpServers: nil,
-			svcErr:     &application.ACPHandlerError{Kind: application.ACPErrInternal, Message: "workflow runner not configured"},
+			svcErr:     &application.ACPHandlerError{Kind: application.ACPErrInternal, Message: "workflow facade not configured"},
 			wantErr:    true,
 			wantCode:   -32603,
 		},
@@ -397,7 +397,7 @@ func TestAgent_UnsupportedMethods(t *testing.T) {
 		},
 	}
 
-	agent := NewAgent(application.NewACPSessionService(nil, nil, nil, nil))
+	agent := NewAgent(application.NewACPSessionService(nil, nil, nil))
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

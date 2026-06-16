@@ -133,14 +133,6 @@
 //     SecretMasker interface is also declared here; it is satisfied by *logger.SecretMasker
 //     and injected at construction time.
 //
-//   - input_reader.go
-//     ACPInputReader. Satisfies ports.UserInputReader for ACP-driven workflows via a
-//     size-1 buffered responseCh and balanced ParkHook callbacks (OnPark/OnUnpark).
-//     The park/unpark seam lets the application layer track parked goroutines without
-//     this package importing application. EndTurnNotifier fires once on ReadInput
-//     entry to signal that the current prompt should close with end_turn while the
-//     goroutine awaits the next prompt.
-//
 //   - fanout_publisher.go
 //     FanoutPublisher. Implements ports.EventPublisher by delegating each Publish to
 //     an ordered slice of target publishers sequentially within a bounded timeout.

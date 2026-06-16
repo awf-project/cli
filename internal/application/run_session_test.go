@@ -15,7 +15,7 @@ import (
 )
 
 func TestRunSession_CloseIdempotent(t *testing.T) {
-	s := newRunSession("test-id", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-id", 256)
 
 	var closeErrs [3]error
 	var wg sync.WaitGroup
@@ -35,7 +35,7 @@ func TestRunSession_CloseIdempotent(t *testing.T) {
 }
 
 func TestRunSession_RespondAfterCloseReturnsErrSessionClosed(t *testing.T) {
-	s := newRunSession("test-id", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-id", 256)
 	err := s.Close()
 	require.NoError(t, err)
 
@@ -46,7 +46,7 @@ func TestRunSession_RespondAfterCloseReturnsErrSessionClosed(t *testing.T) {
 }
 
 func TestRunSession_ReplayFromSeqMonotonic(t *testing.T) {
-	s := newRunSession("test-id", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-id", 256)
 
 	for i := 0; i < 10; i++ {
 		ev := ports.Event{
@@ -72,7 +72,7 @@ func TestRunSession_ReplayFromSeqMonotonic(t *testing.T) {
 
 func TestRunSession_ReplayBufferOverflowDropsOldest(t *testing.T) {
 	bufferSize := 10
-	s := newRunSession("test-id", context.Background(), bufferSize)
+	s := newRunSession(context.Background(), "test-id", bufferSize)
 
 	for i := 0; i < 20; i++ {
 		ev := ports.Event{
@@ -91,7 +91,7 @@ func TestRunSession_ReplayBufferOverflowDropsOldest(t *testing.T) {
 
 func TestRunSession_ErrReflectsTerminalCause(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	s := newRunSession("test-id", ctx, 256)
+	s := newRunSession(ctx, "test-id", 256)
 
 	cancel()
 	s.setErr(context.Canceled)
@@ -106,7 +106,7 @@ func TestRunSession_NoGoroutineLeakOnClose(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	s := newRunSession("test-id", ctx, 256)
+	s := newRunSession(ctx, "test-id", 256)
 
 	ev := ports.Event{
 		Seq:  1,
@@ -124,12 +124,12 @@ func TestRunSession_NoGoroutineLeakOnClose(t *testing.T) {
 }
 
 func TestRunSession_ID(t *testing.T) {
-	s := newRunSession("unique-id", context.Background(), 256)
+	s := newRunSession(context.Background(), "unique-id", 256)
 	assert.Equal(t, "unique-id", s.ID())
 }
 
 func TestRunSession_RespondBeforeCloseSucceeds(t *testing.T) {
-	s := newRunSession("test-id", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-id", 256)
 
 	resp := ports.InputResponse{Value: "test-response"}
 	err := s.Respond(resp)
@@ -141,7 +141,7 @@ func TestRunSession_RespondBeforeCloseSucceeds(t *testing.T) {
 }
 
 func TestRunSession_RespondDuplicateReturnsErrDuplicateResponse(t *testing.T) {
-	s := newRunSession("test-id", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-id", 256)
 
 	resp1 := ports.InputResponse{Value: "first"}
 	err1 := s.Respond(resp1)
@@ -154,7 +154,7 @@ func TestRunSession_RespondDuplicateReturnsErrDuplicateResponse(t *testing.T) {
 }
 
 func TestRunSession_EventsChannelClosedAfterClose(t *testing.T) {
-	s := newRunSession("test-id", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-id", 256)
 
 	err := s.Close()
 	require.NoError(t, err)
@@ -164,7 +164,7 @@ func TestRunSession_EventsChannelClosedAfterClose(t *testing.T) {
 }
 
 func TestRunSession_ReplayFromSeqMissing(t *testing.T) {
-	s := newRunSession("test-id", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-id", 256)
 
 	for i := 0; i < 5; i++ {
 		ev := ports.Event{Seq: uint64(i), Kind: ports.EventRunStarted}
@@ -176,7 +176,7 @@ func TestRunSession_ReplayFromSeqMissing(t *testing.T) {
 }
 
 func TestRunSession_AppendEventIntoReplayBuffer(t *testing.T) {
-	s := newRunSession("test-id", context.Background(), 5)
+	s := newRunSession(context.Background(), "test-id", 5)
 
 	for i := 0; i < 3; i++ {
 		ev := ports.Event{Seq: uint64(i), Kind: ports.EventRunStarted}
@@ -195,12 +195,12 @@ func TestRunSession_AppendEventIntoReplayBuffer(t *testing.T) {
 }
 
 func TestRunSession_ErrorNilByDefault(t *testing.T) {
-	s := newRunSession("test-id", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-id", 256)
 	assert.Nil(t, s.Err())
 }
 
 func TestRunSession_ErrPersistsAfterSet(t *testing.T) {
-	s := newRunSession("test-id", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-id", 256)
 	expectedErr := errors.New("test error")
 	s.setErr(expectedErr)
 
@@ -208,7 +208,7 @@ func TestRunSession_ErrPersistsAfterSet(t *testing.T) {
 }
 
 func TestRunSession_DefaultBufferSize(t *testing.T) {
-	s := newRunSession("test-id", context.Background(), 0)
+	s := newRunSession(context.Background(), "test-id", 0)
 
 	for i := 0; i < 300; i++ {
 		ev := ports.Event{Seq: uint64(i), Kind: ports.EventRunStarted}
@@ -225,7 +225,7 @@ func TestRunSession_DefaultBufferSize(t *testing.T) {
 // Bug #1: select+default does NOT guard a closed channel — the fix adds a s.closed bool
 // checked under s.mu before any send.
 func TestRunSession_AppendEventNoPanicAfterClose(t *testing.T) {
-	s := newRunSession("panic-test", context.Background(), 256)
+	s := newRunSession(context.Background(), "panic-test", 256)
 
 	const numWorkers = 20
 	const eventsPerWorker = 100
@@ -271,7 +271,7 @@ func TestRunSession_AppendEventNoPanicAfterClose(t *testing.T) {
 // that concurrent readers using `range session.Events()` expected to receive.
 func TestRunSession_ClosePreservesBufferedEvents(t *testing.T) {
 	const numEvents = 10
-	s := newRunSession("preserve-test", context.Background(), numEvents+4)
+	s := newRunSession(context.Background(), "preserve-test", numEvents+4)
 
 	for i := 0; i < numEvents; i++ {
 		s.appendEvent(ports.Event{
@@ -291,7 +291,7 @@ func TestRunSession_ClosePreservesBufferedEvents(t *testing.T) {
 }
 
 func TestRunSession_ConcurrentAppendAndReplay(t *testing.T) {
-	s := newRunSession("test-id", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-id", 256)
 
 	var wg sync.WaitGroup
 	done := make(chan struct{})
@@ -321,4 +321,58 @@ func TestRunSession_ConcurrentAppendAndReplay(t *testing.T) {
 
 	wg.Wait()
 	<-done
+}
+
+func TestRunSession_StatusSnapshot(t *testing.T) {
+	t.Run("no events yields running", func(t *testing.T) {
+		s := newRunSession(context.Background(), "run-1", 0)
+		snap := s.StatusSnapshot()
+		assert.Equal(t, "run-1", snap.RunID)
+		assert.Equal(t, ports.RunStateRunning, snap.Status)
+		assert.Empty(t, snap.CurrentStep)
+		assert.True(t, snap.CompletedAt.IsZero())
+	})
+
+	t.Run("step started is reflected as current step", func(t *testing.T) {
+		s := newRunSession(context.Background(), "run-2", 0)
+		s.appendEvent(ports.Event{Kind: ports.EventStepStarted, Payload: &ports.EnrichedStepPayload{StepName: "build"}})
+		snap := s.StatusSnapshot()
+		assert.Equal(t, ports.RunStateRunning, snap.Status)
+		assert.Equal(t, "build", snap.CurrentStep)
+	})
+
+	t.Run("step completed clears current step", func(t *testing.T) {
+		s := newRunSession(context.Background(), "run-3", 0)
+		s.appendEvent(ports.Event{Kind: ports.EventStepStarted, Payload: &ports.EnrichedStepPayload{StepName: "build"}})
+		s.appendEvent(ports.Event{Kind: ports.EventStepCompleted, Payload: &ports.EnrichedStepPayload{StepName: "build"}})
+		snap := s.StatusSnapshot()
+		assert.Equal(t, ports.RunStateRunning, snap.Status)
+		assert.Empty(t, snap.CurrentStep)
+	})
+
+	t.Run("terminal completed", func(t *testing.T) {
+		s := newRunSession(context.Background(), "run-4", 0)
+		ts := time.Unix(1000, 0).UTC()
+		s.appendEvent(ports.Event{Kind: ports.EventWorkflowCompleted, Timestamp: ts})
+		snap := s.StatusSnapshot()
+		assert.Equal(t, ports.RunStateCompleted, snap.Status)
+		assert.Equal(t, ts, snap.CompletedAt)
+	})
+
+	t.Run("terminal failed", func(t *testing.T) {
+		s := newRunSession(context.Background(), "run-5", 0)
+		ts := time.Unix(2000, 0).UTC()
+		s.appendEvent(ports.Event{Kind: ports.EventWorkflowFailed, Timestamp: ts})
+		snap := s.StatusSnapshot()
+		assert.Equal(t, ports.RunStateFailed, snap.Status)
+		assert.Equal(t, ts, snap.CompletedAt)
+	})
+
+	t.Run("snapshot survives Close (closed session keeps buffer)", func(t *testing.T) {
+		s := newRunSession(context.Background(), "run-6", 0)
+		s.appendEvent(ports.Event{Kind: ports.EventWorkflowCompleted, Timestamp: time.Unix(3000, 0).UTC()})
+		require.NoError(t, s.Close())
+		snap := s.StatusSnapshot()
+		assert.Equal(t, ports.RunStateCompleted, snap.Status)
+	})
 }

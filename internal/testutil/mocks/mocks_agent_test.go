@@ -53,7 +53,7 @@ func TestMockAgentRegistry_RegisterAndGet_HappyPath(t *testing.T) {
 		},
 		{
 			name:         "register provider with hyphenated name",
-			providerName: "claude-3-opus",
+			providerName: "haiku",
 			wantErr:      false,
 		},
 		{
@@ -706,7 +706,7 @@ func TestMockAgentProvider_Name_HappyPath(t *testing.T) {
 		},
 		{
 			name:         "hyphenated name",
-			providerName: "claude-3-opus",
+			providerName: "haiku",
 		},
 		{
 			name:         "underscored name",

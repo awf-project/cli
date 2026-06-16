@@ -51,7 +51,7 @@ func TestFacadeResume_RestoresState(t *testing.T) {
 	require.NoError(t, sess.Close())
 
 	// Resume via facade — RED: fake returns nil session until real state persistence is wired.
-	resumed, err := fake.Resume(ctx, runID)
+	resumed, err := fake.Resume(ctx, ports.ResumeRequest{RunID: runID})
 	require.NoError(t, err, "Resume must not return an error")
 	require.NotNil(t, resumed,
 		"Resume must return a live RunSession (RED: implement real state restore in GREEN phase)")

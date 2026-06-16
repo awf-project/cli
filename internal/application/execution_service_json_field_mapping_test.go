@@ -71,7 +71,7 @@ func TestExecutionService_buildInterpolationContext_MapsJSONFieldToStepStateData
 	_ = registry.Register(claude)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "json-field-mapping-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "json-field-mapping-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -132,7 +132,7 @@ func TestExecutionService_buildInterpolationContext_JSONFieldNilWhenNotSet(t *te
 		}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "no-json-field-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "no-json-field-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -200,7 +200,7 @@ func TestExecutionService_buildInterpolationContext_JSONFieldNestedObjectAccess(
 	_ = registry.Register(claude)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "nested-json-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "nested-json-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -300,7 +300,7 @@ func TestExecutionService_buildInterpolationContext_JSONFieldFromMultipleSteps(t
 	_ = registry.Register(claude)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "multi-json-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "multi-json-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -378,7 +378,7 @@ func TestExecutionService_buildInterpolationContext_JSONFieldWithBothResponseAnd
 	_ = registry.Register(claude)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "dual-field-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "dual-field-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)

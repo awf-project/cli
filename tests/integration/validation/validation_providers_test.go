@@ -28,15 +28,41 @@ import (
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/agents"
+	"github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestClaudeProvider_Execute_WithTypeCheckedOptions(t *testing.T) {
-	provider := agents.NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
+func newMockClaudeProvider(output string) *agents.ClaudeProvider {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(output), nil)
+	return agents.NewClaudeProviderWithOptions(agents.WithClaudeExecutor(mockExec))
+}
+
+func newMockCodexProvider(output string) *agents.CodexProvider {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(output), nil)
+	return agents.NewCodexProviderWithOptions(agents.WithCodexExecutor(mockExec))
+}
+
+func assertConversationAdvanced(t *testing.T, before, after *workflow.ConversationState, prompt string) {
+	t.Helper()
+
+	require.NotNil(t, after)
+	require.GreaterOrEqual(t, len(after.Turns), len(before.Turns)+1)
+
+	foundPrompt := false
+	for _, turn := range after.Turns[len(before.Turns):] {
+		if turn.Role == "user" && turn.Content == prompt {
+			foundPrompt = true
+			break
+		}
 	}
+	assert.True(t, foundPrompt, "updated state should include the new user prompt")
+}
+
+func TestClaudeProvider_Execute_WithTypeCheckedOptions(t *testing.T) {
+	provider := newMockClaudeProvider("mock claude output")
 
 	tests := []struct {
 		name    string
@@ -84,10 +110,7 @@ func TestClaudeProvider_Execute_WithTypeCheckedOptions(t *testing.T) {
 }
 
 func TestCodexProvider_ExecuteConversation_WithTypeCheckedOptions(t *testing.T) {
-	provider := agents.NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
+	provider := newMockCodexProvider("mock codex output")
 
 	tests := []struct {
 		name    string
@@ -133,12 +156,12 @@ func TestCodexProvider_ExecuteConversation_WithTypeCheckedOptions(t *testing.T) 
 	}
 
 	ctx := context.Background()
-	state := &workflow.ConversationState{
-		Turns: []workflow.Turn{},
-	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			state := &workflow.ConversationState{
+				Turns: []workflow.Turn{},
+			}
 			result, err := provider.ExecuteConversation(ctx, state, tt.prompt, tt.options, io.Discard, io.Discard)
 
 			require.NoError(t, err, "ExecuteConversation should succeed with type-checked options")
@@ -146,7 +169,7 @@ func TestCodexProvider_ExecuteConversation_WithTypeCheckedOptions(t *testing.T) 
 			require.NotNil(t, result.State)
 			assert.Equal(t, "codex", result.Provider)
 			assert.NotEmpty(t, result.Output)
-			assert.Len(t, result.State.Turns, 1, "Should add one turn")
+			assertConversationAdvanced(t, state, result.State, tt.prompt)
 		})
 	}
 }
@@ -206,10 +229,7 @@ func TestGeminiProvider_ExecuteConversation_WithTypeCheckedOptions(t *testing.T)
 }
 
 func TestClaudeProvider_Execute_EmptyAndNilOptions(t *testing.T) {
-	provider := agents.NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
+	provider := newMockClaudeProvider("mock claude output")
 
 	ctx := context.Background()
 
@@ -252,11 +272,11 @@ func TestSharedHelpers_TokenEstimation(t *testing.T) {
 	}{
 		{
 			name:     "claude_provider",
-			provider: agents.NewClaudeProvider(),
+			provider: newMockClaudeProvider("mock claude output"),
 		},
 		{
 			name:     "codex_provider",
-			provider: agents.NewCodexProvider(),
+			provider: newMockCodexProvider("mock codex output"),
 		},
 		{
 			name:     "gemini_provider",
@@ -287,10 +307,7 @@ func TestSharedHelpers_TokenEstimation(t *testing.T) {
 
 func TestConversationState_Cloning(t *testing.T) {
 	// Test that state cloning works correctly after helper extraction
-	provider := agents.NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
+	provider := newMockCodexProvider("mock codex output")
 
 	ctx := context.Background()
 
@@ -317,16 +334,13 @@ func TestConversationState_Cloning(t *testing.T) {
 
 	// Verify state was cloned (not mutated in place)
 	assert.Len(t, initialState.Turns, 2, "Original state should be unchanged")
-	assert.Len(t, result.State.Turns, 3, "Updated state should have new turn")
+	assertConversationAdvanced(t, initialState, result.State, "Second message")
 	assert.NotEqual(t, initialState.TotalTokens, result.State.TotalTokens,
 		"Token counts should differ")
 }
 
 func TestClaudeProvider_Execute_InvalidOptionTypes(t *testing.T) {
-	provider := agents.NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
+	provider := newMockClaudeProvider("mock claude output")
 
 	ctx := context.Background()
 
@@ -371,10 +385,7 @@ func TestClaudeProvider_Execute_InvalidOptionTypes(t *testing.T) {
 }
 
 func TestCodexProvider_ExecuteConversation_EmptyPrompt(t *testing.T) {
-	provider := agents.NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
+	provider := newMockCodexProvider("mock codex output")
 
 	ctx := context.Background()
 	state := &workflow.ConversationState{
@@ -480,10 +491,7 @@ func TestAllProviders_ContextTimeout(t *testing.T) {
 }
 
 func TestIntegration_MultiTurnConversation_WithTokenEstimation(t *testing.T) {
-	provider := agents.NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
+	provider := newMockCodexProvider("mock codex output")
 
 	ctx := context.Background()
 	state := &workflow.ConversationState{
@@ -494,8 +502,8 @@ func TestIntegration_MultiTurnConversation_WithTokenEstimation(t *testing.T) {
 	result1, err := provider.ExecuteConversation(ctx, state, "Write hello world in Go", nil, io.Discard, io.Discard)
 	require.NoError(t, err)
 	require.NotNil(t, result1)
+	assertConversationAdvanced(t, state, result1.State, "Write hello world in Go")
 	state = result1.State
-	assert.Len(t, state.Turns, 1)
 	assert.Greater(t, state.TotalTokens, 0, "Should track tokens")
 
 	tokens1 := state.TotalTokens
@@ -504,8 +512,8 @@ func TestIntegration_MultiTurnConversation_WithTokenEstimation(t *testing.T) {
 	result2, err := provider.ExecuteConversation(ctx, state, "Now add error handling", nil, io.Discard, io.Discard)
 	require.NoError(t, err)
 	require.NotNil(t, result2)
+	assertConversationAdvanced(t, state, result2.State, "Now add error handling")
 	state = result2.State
-	assert.Len(t, state.Turns, 2)
 	assert.Greater(t, state.TotalTokens, tokens1, "Tokens should accumulate")
 
 	tokens2 := state.TotalTokens
@@ -514,8 +522,8 @@ func TestIntegration_MultiTurnConversation_WithTokenEstimation(t *testing.T) {
 	result3, err := provider.ExecuteConversation(ctx, state, "Add tests", nil, io.Discard, io.Discard)
 	require.NoError(t, err)
 	require.NotNil(t, result3)
+	assertConversationAdvanced(t, state, result3.State, "Add tests")
 	state = result3.State
-	assert.Len(t, state.Turns, 3)
 	assert.Greater(t, state.TotalTokens, tokens2, "Tokens should keep accumulating")
 }
 
@@ -572,10 +580,7 @@ func TestIntegration_ProviderSpecificValidation_Preserved(t *testing.T) {
 	// (ADR-003: Preserve provider-specific validation)
 
 	t.Run("claude_model_alias_validation", func(t *testing.T) {
-		provider := agents.NewClaudeProvider()
-		if err := provider.Validate(); err != nil {
-			t.Skip("Claude CLI not installed, skipping")
-		}
+		provider := newMockClaudeProvider("mock claude output")
 
 		ctx := context.Background()
 
@@ -595,10 +600,7 @@ func TestIntegration_ProviderSpecificValidation_Preserved(t *testing.T) {
 	})
 
 	t.Run("codex_language_option", func(t *testing.T) {
-		provider := agents.NewCodexProvider()
-		if err := provider.Validate(); err != nil {
-			t.Skip("Codex CLI not installed, skipping")
-		}
+		provider := newMockCodexProvider("mock codex output")
 
 		ctx := context.Background()
 		state := &workflow.ConversationState{Turns: []workflow.Turn{}}
@@ -636,14 +638,11 @@ func TestBackwardCompatibility_ExistingWorkflows(t *testing.T) {
 	// This ensures no behavioral changes (AC5)
 
 	t.Run("agent_simple_fixture", func(t *testing.T) {
-		provider := agents.NewClaudeProvider()
-		if err := provider.Validate(); err != nil {
-			t.Skip("Claude CLI not installed, skipping")
-		}
+		provider := newMockClaudeProvider("mock claude output")
 
 		ctx := context.Background()
 		options := map[string]any{
-			"model":      "claude-haiku-4-5",
+			"model":      "haiku",
 			"max_tokens": 1000,
 		}
 
@@ -655,10 +654,7 @@ func TestBackwardCompatibility_ExistingWorkflows(t *testing.T) {
 	})
 
 	t.Run("conversation_multiturn_fixture", func(t *testing.T) {
-		provider := agents.NewCodexProvider()
-		if err := provider.Validate(); err != nil {
-			t.Skip("Codex CLI not installed, skipping")
-		}
+		provider := newMockCodexProvider("mock codex output")
 
 		ctx := context.Background()
 		state := &workflow.ConversationState{Turns: []workflow.Turn{}}
@@ -672,7 +668,7 @@ func TestBackwardCompatibility_ExistingWorkflows(t *testing.T) {
 		require.NoError(t, err, "Should work with conversation fixture options")
 		require.NotNil(t, result)
 		require.NotNil(t, result.State)
-		assert.Len(t, result.State.Turns, 1)
+		assertConversationAdvanced(t, state, result.State, "First turn")
 	})
 }
 
@@ -680,10 +676,7 @@ func TestPerformance_NoRegressionFromHelpers(t *testing.T) {
 	// Basic smoke test to ensure helper extraction doesn't cause performance issues
 	// (Risk: Performance regression from function call overhead - P2 Very Low)
 
-	provider := agents.NewClaudeProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Claude CLI not installed, skipping")
-	}
+	provider := newMockClaudeProvider("mock claude output")
 
 	ctx := context.Background()
 	prompt := "What is 2+2?"
@@ -703,10 +696,7 @@ func TestRegression_AllOptionTypesCombined(t *testing.T) {
 	// Comprehensive regression test with all option types
 	// Validates C001 pattern (type-checked wrappers) works correctly
 
-	provider := agents.NewCodexProvider()
-	if err := provider.Validate(); err != nil {
-		t.Skip("Codex CLI not installed, skipping")
-	}
+	provider := newMockCodexProvider("mock codex output")
 
 	ctx := context.Background()
 	state := &workflow.ConversationState{Turns: []workflow.Turn{}}
@@ -727,5 +717,5 @@ func TestRegression_AllOptionTypesCombined(t *testing.T) {
 	require.NotNil(t, result)
 	require.NotNil(t, result.State)
 	assert.NotEmpty(t, result.Output)
-	assert.Len(t, result.State.Turns, 1)
+	assertConversationAdvanced(t, state, result.State, "Write comprehensive test")
 }

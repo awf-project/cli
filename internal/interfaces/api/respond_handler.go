@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -42,6 +43,12 @@ func (h *RespondHandler) Respond(_ context.Context, in *RespondInput) (*struct{}
 	}
 
 	if err := session.Respond(in.Body.Response); err != nil {
+		// ErrSessionClosed and ErrDuplicateResponse are plain sentinels (not StructuredError)
+		// emitted directly by the session implementation. They indicate a lifecycle conflict
+		// rather than a malformed request, so 409 Conflict is more accurate than 422.
+		if errors.Is(err, ports.ErrSessionClosed) || errors.Is(err, ports.ErrDuplicateResponse) {
+			return nil, huma.Error409Conflict(fmt.Sprintf("cannot respond: %s", err))
+		}
 		return nil, huma.Error422UnprocessableEntity(fmt.Sprintf("failed to send response: %s", err))
 	}
 

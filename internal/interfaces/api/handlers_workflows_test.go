@@ -13,14 +13,13 @@ import (
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
-// newWorkflowHandlerAPI wires a Bridge + WorkflowHandlers + humatest API
-// around the given mock lister and returns the API for assertions. Runner is nil
-// because workflow-handler tests never exercise execution paths; history uses a
-// no-op stub to satisfy the non-nil invariant enforced by NewBridge (M-2 fix).
-func newWorkflowHandlerAPI(t *testing.T, lister WorkflowLister) humatest.TestAPI {
+// newWorkflowHandlerAPI wires a read facade (backed by the given mock lister) + WorkflowHandlers
+// + humatest API and returns the API for assertions. The handlers consume the facade/reader
+// ports (F108), so the mock lister is adapted via readFacade rather than a Bridge.
+func newWorkflowHandlerAPI(t *testing.T, lister *mockWorkflowLister) humatest.TestAPI {
 	t.Helper()
-	bridge := NewBridge(lister, nil, newMockHistoryProvider())
-	handler := NewWorkflowHandlers(bridge)
+	rf := &readFacade{lister: lister, history: newMockHistoryProvider()}
+	handler := NewWorkflowHandlers(rf, rf)
 	_, api := humatest.New(t)
 	RegisterWorkflowRoutes(api, handler)
 	return api

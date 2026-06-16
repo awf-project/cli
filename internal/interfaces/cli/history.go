@@ -3,15 +3,11 @@ package cli
 import (
 	"context"
 	"fmt"
-	"io"
-	"path/filepath"
 	"text/tabwriter"
 	"time"
 
-	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
-	"github.com/awf-project/cli/internal/infrastructure/logger"
-	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
 )
@@ -73,43 +69,97 @@ func runHistory(cmd *cobra.Command, cfg *Config, workflowName, status, since str
 	ctx := context.Background()
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
-	historyPath := filepath.Join(cfg.StoragePath, "history.db")
-	historyStore, err := store.NewSQLiteHistoryStore(historyPath)
-	if err != nil {
-		return writeErrorAndExit(writer, fmt.Errorf("open history store: %w", err), ExitSystem)
-	}
-	defer func() { _ = historyStore.Close() }()
-
-	log := logger.NewConsoleLogger(io.Discard, logger.LevelWarn, cfg.NoColor)
-	historySvc := application.NewHistoryService(historyStore, log)
-
-	filter := &workflow.HistoryFilter{
-		WorkflowName: workflowName,
-		Status:       status,
-		Limit:        limit,
-	}
+	var sinceTime time.Time
 	if since != "" {
 		t, parseErr := time.Parse("2006-01-02", since)
 		if parseErr != nil {
 			return writeErrorAndExit(writer, fmt.Errorf("invalid --since format, expected YYYY-MM-DD: %w", parseErr), ExitUser)
 		}
-		filter.Since = t
+		sinceTime = t
 	}
 
-	if showStats {
-		stats, statsErr := historySvc.GetStats(ctx, filter)
-		if statsErr != nil {
-			return writeErrorAndExit(writer, fmt.Errorf("get stats: %w", statsErr), ExitSystem)
+	// Route through WorkflowFacade when wired (T069). Both the record-listing and
+	// --stats paths go through the facade: stats are computed client-side from the
+	// RunRecord slice returned by cfg.Facade.History (ports.WorkflowFacade has no
+	// dedicated stats method and must not be modified by this task).
+	if cfg.Facade != nil {
+		records, err := cfg.Facade.History(ctx, ports.HistoryFilter{
+			WorkflowName: workflowName,
+			Status:       status,
+			Since:        sinceTime,
+			Limit:        limit,
+		})
+		if err != nil {
+			return writeErrorAndExit(writer, fmt.Errorf("list history: %w", err), ExitSystem)
 		}
-		return writeHistoryStats(writer, stats)
+		if showStats {
+			return writeHistoryRunRecordsStats(writer, records)
+		}
+		return writeHistoryRunRecords(writer, records)
 	}
 
-	records, err := historySvc.List(ctx, filter)
-	if err != nil {
-		return writeErrorAndExit(writer, fmt.Errorf("list history: %w", err), ExitSystem)
-	}
+	// Facade not wired: return a meaningful error stub. Production always wires
+	// the facade via NewRootCommandAutoFacade, so this branch is never reached in
+	// normal usage.
+	err := fmt.Errorf("history requires facade wiring (use NewRootCommandAutoFacade)")
+	return writeErrorAndExit(writer, err, ExitSystem)
+}
 
-	return writeHistoryRecords(writer, records)
+// writeHistoryRunRecords renders facade RunRecords as HistoryInfo rows. The
+// mapping is field-for-field, so JSON and table output stay identical
+// regardless of the underlying source.
+func writeHistoryRunRecords(writer *ui.OutputWriter, records []ports.RunRecord) error {
+	infos := make([]HistoryInfo, len(records))
+	for i := range records {
+		r := &records[i]
+		infos[i] = HistoryInfo{
+			ID:           r.RunID,
+			WorkflowID:   r.WorkflowID,
+			WorkflowName: r.WorkflowName,
+			Status:       string(r.Status),
+			StartedAt:    r.StartedAt.Format(time.RFC3339),
+			CompletedAt:  r.CompletedAt.Format(time.RFC3339),
+			DurationMs:   r.DurationMs,
+			ErrorMessage: r.ErrorMessage,
+		}
+	}
+	return writeHistoryInfos(writer, infos)
+}
+
+// writeHistoryRunRecordsStats computes execution statistics client-side from
+// the RunRecord slice returned by cfg.Facade.History and renders them in the
+// same format as writeHistoryStats. This avoids requiring a dedicated stats
+// method on ports.WorkflowFacade (which must not be modified by T069).
+func writeHistoryRunRecordsStats(writer *ui.OutputWriter, records []ports.RunRecord) error {
+	var total, success, failed, cancelled int
+	var totalDurationMs int64
+	for i := range records {
+		r := &records[i]
+		total++
+		switch r.Status {
+		case ports.RunStateCompleted:
+			success++
+		case ports.RunStateFailed:
+			failed++
+		case ports.RunStateCancelled:
+			cancelled++
+		case ports.RunStatePending, ports.RunStateRunning:
+			// in-progress: not counted as terminal outcome
+		}
+		totalDurationMs += r.DurationMs
+	}
+	var avgDurationMs int64
+	if total > 0 {
+		avgDurationMs = totalDurationMs / int64(total)
+	}
+	stats := &workflow.HistoryStats{
+		TotalExecutions: total,
+		SuccessCount:    success,
+		FailedCount:     failed,
+		CancelledCount:  cancelled,
+		AvgDurationMs:   avgDurationMs,
+	}
+	return writeHistoryStats(writer, stats)
 }
 
 func writeHistoryStats(writer *ui.OutputWriter, stats *workflow.HistoryStats) error {
@@ -138,22 +188,10 @@ func writeHistoryStats(writer *ui.OutputWriter, stats *workflow.HistoryStats) er
 	return nil
 }
 
-func writeHistoryRecords(writer *ui.OutputWriter, records []*workflow.ExecutionRecord) error {
-	infos := make([]HistoryInfo, len(records))
-	for i, r := range records {
-		infos[i] = HistoryInfo{
-			ID:           r.ID,
-			WorkflowID:   r.WorkflowID,
-			WorkflowName: r.WorkflowName,
-			Status:       r.Status,
-			ExitCode:     r.ExitCode,
-			StartedAt:    r.StartedAt.Format(time.RFC3339),
-			CompletedAt:  r.CompletedAt.Format(time.RFC3339),
-			DurationMs:   r.DurationMs,
-			ErrorMessage: r.ErrorMessage,
-		}
-	}
-
+// writeHistoryInfos renders a prepared HistoryInfo slice in JSON or table form.
+// Shared by the facade RunRecord rendering paths so output formatting stays
+// identical regardless of the caller.
+func writeHistoryInfos(writer *ui.OutputWriter, infos []HistoryInfo) error {
 	if writer.IsJSONFormat() {
 		return writer.WriteJSON(infos)
 	}

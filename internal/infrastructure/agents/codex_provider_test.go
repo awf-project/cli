@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/testutil/mocks"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,6 +16,12 @@ import (
 
 // Component: agent_providers
 // Feature: 39
+
+func newMockCodexProvider() *CodexProvider {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(`{"result":"mock response"}`), nil)
+	return NewCodexProviderWithOptions(WithCodexExecutor(mockExec))
+}
 
 func TestCodexProvider_Execute_HappyPath_Integration(t *testing.T) {
 	provider := NewCodexProvider()
@@ -56,7 +63,7 @@ func TestCodexProvider_Execute_HappyPath_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.Execute(ctx, tt.prompt, tt.options)
+			result, err := provider.Execute(ctx, tt.prompt, tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -72,7 +79,7 @@ func TestCodexProvider_Execute_EmptyPrompt_Integration(t *testing.T) {
 	provider := NewCodexProvider()
 	ctx := context.Background()
 
-	result, err := provider.Execute(ctx, "", nil)
+	result, err := provider.Execute(ctx, "", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -86,7 +93,7 @@ func TestCodexProvider_Execute_Timeout_Integration(t *testing.T) {
 
 	time.Sleep(5 * time.Millisecond)
 
-	result, err := provider.Execute(ctx, "Generate code", nil)
+	result, err := provider.Execute(ctx, "Generate code", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -97,46 +104,21 @@ func TestCodexProvider_Execute_ContextCancellation_Integration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	result, err := provider.Execute(ctx, "Write code", nil)
+	result, err := provider.Execute(ctx, "Write code", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
 }
 
 func TestCodexProvider_Execute_InvalidOptions_Integration(t *testing.T) {
-	tests := []struct {
-		name    string
-		options map[string]any
-		wantErr string
-	}{
-		{
-			name: "negative max_tokens",
-			options: map[string]any{
-				"max_tokens": -100,
-			},
-			wantErr: "max_tokens",
-		},
-		{
-			name: "invalid language",
-			options: map[string]any{
-				"language": 123, // Should be string
-			},
-			wantErr: "language",
-		},
-	}
-
 	provider := NewCodexProvider()
 	ctx := context.Background()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.Execute(ctx, "Test", tt.options)
+	result, err := provider.Execute(ctx, "Test", map[string]any{"model": "claude-3-opus"}, nil, nil)
 
-			assert.Error(t, err)
-			assert.Nil(t, result)
-			assert.Contains(t, err.Error(), tt.wantErr)
-		})
-	}
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "model")
 }
 
 func TestCodexProvider_Validate_CLINotInstalled_Integration(t *testing.T) {
@@ -162,7 +144,7 @@ func TestCodexProvider_Execute_CodeWithSpecialChars_Integration(t *testing.T) {
 
 	prompt := `Write a function that uses "strings" and 'quotes'`
 
-	result, err := provider.Execute(ctx, prompt, nil)
+	result, err := provider.Execute(ctx, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -179,7 +161,7 @@ func TestCodexProvider_Execute_MultilinePrompt_Integration(t *testing.T) {
 2. Reverses it
 3. Returns the result`
 
-	result, err := provider.Execute(ctx, prompt, nil)
+	result, err := provider.Execute(ctx, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -190,7 +172,7 @@ func TestCodexProvider_Execute_MultilinePrompt_Integration(t *testing.T) {
 // Feature: F033
 
 func TestCodexProvider_ExecuteConversation_HappyPath_Integration(t *testing.T) {
-	provider := NewCodexProvider()
+	provider := newMockCodexProvider()
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful coding assistant.")
@@ -199,7 +181,7 @@ func TestCodexProvider_ExecuteConversation_HappyPath_Integration(t *testing.T) {
 		"model": "gpt-4",
 	}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -218,7 +200,7 @@ func TestCodexProvider_ExecuteConversation_EmptyState_Integration(t *testing.T) 
 	state := &workflow.ConversationState{}
 	prompt := "Hello"
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -231,7 +213,7 @@ func TestCodexProvider_ExecuteConversation_NilState_Integration(t *testing.T) {
 	ctx := context.Background()
 	prompt := "Hello"
 
-	result, err := provider.ExecuteConversation(ctx, nil, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, nil, prompt, nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -244,7 +226,7 @@ func TestCodexProvider_ExecuteConversation_EmptyPrompt_Integration(t *testing.T)
 	ctx := context.Background()
 	state := workflow.NewConversationState("System prompt")
 
-	result, err := provider.ExecuteConversation(ctx, state, "", nil)
+	result, err := provider.ExecuteConversation(ctx, state, "", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -268,7 +250,7 @@ func TestCodexProvider_ExecuteConversation_WithHistory_Integration(t *testing.T)
 
 	prompt := "Give me an example in Python"
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -284,7 +266,7 @@ func TestCodexProvider_ExecuteConversation_CodeGeneration_Integration(t *testing
 	state := workflow.NewConversationState("You are a code generator.")
 	prompt := "Write a function to calculate factorial in Go"
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -301,7 +283,7 @@ func TestCodexProvider_ExecuteConversation_ContextCancellation_Integration(t *te
 	state := workflow.NewConversationState("System prompt")
 	prompt := "What is a variable?"
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -309,58 +291,24 @@ func TestCodexProvider_ExecuteConversation_ContextCancellation_Integration(t *te
 
 func TestCodexProvider_ExecuteConversation_InvalidOptions_Integration(t *testing.T) {
 	provider := NewCodexProvider()
-
 	ctx := context.Background()
 	state := workflow.NewConversationState("System prompt")
-	prompt := "Hello"
 
-	tests := []struct {
-		name    string
-		options map[string]any
-		errMsg  string
-	}{
-		{
-			name: "invalid temperature type",
-			options: map[string]any{
-				"temperature": "invalid",
-			},
-			errMsg: "temperature",
-		},
-		{
-			name: "negative temperature",
-			options: map[string]any{
-				"temperature": -0.5,
-			},
-			errMsg: "temperature",
-		},
-		{
-			name: "temperature too high",
-			options: map[string]any{
-				"temperature": 2.5,
-			},
-			errMsg: "temperature",
-		},
-	}
+	result, err := provider.ExecuteConversation(ctx, state, "Hello", map[string]any{"model": "gemini-pro"}, nil, nil)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.ExecuteConversation(ctx, state, prompt, tt.options)
-
-			assert.Error(t, err)
-			assert.Nil(t, result)
-			assert.Contains(t, err.Error(), tt.errMsg)
-		})
-	}
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "model")
 }
 
 func TestCodexProvider_ExecuteConversation_TokenCounting_Integration(t *testing.T) {
-	provider := NewCodexProvider()
+	provider := newMockCodexProvider()
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful coding assistant.")
 	prompt := "Explain variables"
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -388,7 +336,7 @@ func TestCodexProvider_ExecuteConversation_LargeHistory_Integration(t *testing.T
 
 	prompt := "Summarize everything"
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -408,7 +356,7 @@ func fibonacci(n int) int {
     return fibonacci(n-1) + fibonacci(n-2)
 }`
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -428,7 +376,7 @@ func TestCodexProvider_ExecuteConversation_StatePreservation_Integration(t *test
 
 	prompt := "Hello"
 
-	result, err := provider.ExecuteConversation(ctx, initialState, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, initialState, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)

@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -20,119 +19,6 @@ import (
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
-
-// ---------------------------------------------------------------------------
-// C1 — race lifecycle Shutdown/Prompt (runWG.Add before ensureRunner)
-// ---------------------------------------------------------------------------
-
-// TestACPSessionService_C1_ShutdownDuringRunnerInit reproduces the CRITIQUE-4 window:
-// a SIGTERM arrives while ensureRunner is building the per-session runner. Before the
-// fix, runWG.Add(1) came AFTER ensureRunner returned, so Shutdown could see runWG==0,
-// call runnerCleanup(), and leave the session in a torn-down state just as the prompt
-// handler started calling runner.Run on its freshly built runner.
-//
-// The test synchronizes via a gate channel: the factory signals "building" and then
-// waits until it is told to proceed. In that window, Shutdown races. The test asserts:
-//  1. Shutdown completes without panicking or racing (verified by -race).
-//  2. The workflow run OBSERVES a cancelled context (stopReason=cancelled or ctx.Err()),
-//     not a nil/dead runner crash. This is the central property of C4: Shutdown cancels
-//     every session's run context, so the runner's Run must see ctx.Done().
-//
-// R9 fix: the factory returns a blocking runner (block=true) that waits on ctx.Done()
-// and returns ctx.Err(). The test captures HandleSessionPrompt's result and asserts the
-// run observed the cancellation — not merely "no deadlock".
-func TestACPSessionService_C1_ShutdownDuringRunnerInit(t *testing.T) {
-	factoryEntered := make(chan struct{})
-	factoryProceed := make(chan struct{})
-
-	var cleanupCalled atomic.Bool
-	factory := func(sessionID string) (WorkflowRunner, ACPInputResponder, *atomic.Bool, func(), error) {
-		close(factoryEntered) // signal that factory is in progress
-		<-factoryProceed      // wait for the test to release
-		cleanup := func() { cleanupCalled.Store(true) }
-		// block=true: Run blocks on ctx.Done() and returns ctx.Err() so the test can assert
-		// that the runner observes cancellation (C4 property).
-		return &fakeRunner{block: true}, &fakeInputResponder{}, &atomic.Bool{}, cleanup, nil
-	}
-
-	mockRepo := new(MockWorkflowRepository)
-	baseCtx := context.Background()
-	mockRepo.On("ListWithSource", baseCtx).Return([]ports.WorkflowInfo{
-		{Name: "trivial", Source: ports.SourceLocal, Path: "/p/trivial.yaml"},
-	}, nil)
-	mockRepo.On("Load", baseCtx, "trivial").Return(testWorkflow("trivial"), nil)
-
-	svc := &ACPSessionService{logger: ports.NopLogger{}, workflowRepo: mockRepo, emitter: &fakeEmitter{}}
-	svc.SetRunnerFactory(factory)
-
-	newResult, acpErr := svc.HandleSessionNew(baseCtx, json.RawMessage(`{"cwd":"/h","mcpServers":[]}`))
-	require.Nil(t, acpErr)
-	sessionID, _ := resultMap(t, newResult)["sessionId"].(string)
-
-	promptParams, _ := json.Marshal(map[string]any{
-		"sessionId": sessionID,
-		"prompt":    []map[string]any{{"type": "text", "text": "/trivial"}},
-	})
-
-	// In production, the server passes a context derived from the signal/shutdown context to
-	// every handler. When the server shuts down, it cancels that parent context, which flows
-	// through to the runCtx in HandleSessionPrompt and unblocks any blocking runner.Run call.
-	// Reproduce that mechanism here: give HandleSessionPrompt a cancellable context.
-	promptCtx, promptCancel := context.WithCancel(baseCtx)
-	defer promptCancel()
-
-	type promptOutcome struct {
-		result any
-		acpErr *ACPHandlerError
-	}
-	promptDone := make(chan promptOutcome, 1)
-	go func() {
-		r, e := svc.HandleSessionPrompt(promptCtx, promptParams)
-		promptDone <- promptOutcome{result: r, acpErr: e}
-	}()
-
-	// Wait until factory is in progress (ensureRunner holds runnerMu).
-	<-factoryEntered
-
-	// Shutdown races while factory is building the runner. It is launched before unblocking
-	// the factory so that the race window (Shutdown arrives before setCancel is called) is
-	// exercised. Shutdown's session.shutdown() run-cancel is a no-op here (cancelFn not yet registered).
-	shutdownDone := make(chan struct{})
-	go func() {
-		defer close(shutdownDone)
-		svc.Shutdown()
-	}()
-
-	// Let the factory finish so the prompt can proceed to runner.Run. The Shutdown cancel
-	// (session.shutdown's run-cancel) fired before setCancel, so it was a no-op. Cancel the promptCtx now
-	// to simulate the JSON-RPC server cancelling the request context at shutdown — this is
-	// what unblocks the blocking runner (runCtx is derived from promptCtx).
-	close(factoryProceed)
-	// Give the prompt goroutine time to reach runner.Run before we cancel.
-	// Use a small sleep-free polling approach: cancel promptCtx right after unblocking;
-	// the runner's select { case <-ctx.Done() } will pick it up on the next schedule.
-	promptCancel()
-
-	select {
-	case <-shutdownDone:
-	case <-time.After(3 * time.Second):
-		t.Fatal("Shutdown did not return within timeout")
-	}
-
-	var outcome promptOutcome
-	select {
-	case outcome = <-promptDone:
-	case <-time.After(3 * time.Second):
-		t.Fatal("HandleSessionPrompt did not return after Shutdown")
-	}
-
-	// Central C4 assertion: the runner must observe context cancellation. The handler maps
-	// a cancelled run to stopReason=cancelled (runCtx.Err() != nil path). This proves the
-	// runner was not left blocking on a dead session after Shutdown.
-	require.Nil(t, outcome.acpErr, "Shutdown-induced cancellation must not be a JSON-RPC error")
-	assert.Equal(t, "cancelled", stopReasonOf(t, outcome.result),
-		"runner must observe the cancelled context — either from Shutdown or parent ctx (C4 property)")
-}
 
 // ---------------------------------------------------------------------------
 // R5 — fallthrough silencieux quand ParkedTurnCount > 0 mais inputReader == nil
@@ -146,8 +32,7 @@ func TestACPSessionService_C1_ShutdownDuringRunnerInit(t *testing.T) {
 // This exercises the invariant guard added in the R5 fix: a non-nil ParkedTurnCount with a
 // nil inputReader is a factory wiring bug; the handler must not silently mishandle it.
 func TestACPSessionService_R5_ParkedWithNilInputReaderReturnsInternalError(t *testing.T) {
-	runner := &fakeRunner{}
-	svc := &ACPSessionService{logger: ports.NopLogger{}, runner: runner, emitter: &fakeEmitter{}}
+	svc := &ACPSessionService{logger: ports.NopLogger{}, emitter: &fakeEmitter{}}
 
 	// Inject a session with ParkedTurnCount > 0 but NO inputReader stored (nil atomic.Pointer).
 	session := &ACPSession{ID: "sess-broken-park"}
@@ -161,9 +46,7 @@ func TestACPSessionService_R5_ParkedWithNilInputReaderReturnsInternalError(t *te
 	require.NotNil(t, acpErr, "invariant violation must return a structured error, not fall through")
 	assert.Equal(t, ACPErrInternal, acpErr.Kind,
 		"a parked session without an input reader is a factory wiring bug: must be ACPErrInternal")
-	// The runner must NOT have been called: the handler should have returned before dispatching.
-	assert.Equal(t, 0, runner.callCount(),
-		"runner must not be invoked when the invariant guard catches the broken state")
+	// The handler must have returned at the invariant guard, before any facade dispatch.
 }
 
 // ---------------------------------------------------------------------------
@@ -174,8 +57,8 @@ func TestACPSessionService_R5_ParkedWithNilInputReaderReturnsInternalError(t *te
 // the sessions sync.Map is empty. Before the fix, sessions were never deleted and
 // the map grew unboundedly across many client sessions.
 func TestACPSessionService_C2_ShutdownCleansSessionMap(t *testing.T) {
-	factory := func(string) (WorkflowRunner, ACPInputResponder, *atomic.Bool, func(), error) {
-		return &fakeRunner{}, &fakeInputResponder{}, &atomic.Bool{}, func() {}, nil
+	factory := func(string) (ACPInputResponder, *atomic.Bool, func(), ports.WorkflowFacade, error) {
+		return &fakeInputResponder{}, &atomic.Bool{}, func() {}, nil, nil
 	}
 
 	mockRepo := new(MockWorkflowRepository)
@@ -201,125 +84,6 @@ func TestACPSessionService_C2_ShutdownCleansSessionMap(t *testing.T) {
 	var countAfter int
 	svc.sessions.Range(func(_, _ any) bool { countAfter++; return true })
 	assert.Equal(t, 0, countAfter, "sessions sync.Map must be empty after Shutdown")
-}
-
-// ---------------------------------------------------------------------------
-// M7 — InputReader and streamed read outside lock (atomic.Pointer)
-// ---------------------------------------------------------------------------
-
-// TestACPSessionService_M7_InputReaderAtomicIsDefenseInDepth documents that
-// session.inputReader is an atomic.Pointer[ACPInputResponder] as a defense-in-depth
-// measure. In the current architecture, the race between ensureRunner writing inputReader
-// (under runnerMu) and HandleSessionPrompt reading it cannot occur in practice: the
-// InFlight CAS serializes all prompt handlers so only one prompt can run at a time,
-// and ensureRunner is always called from within that single inflight handler before any
-// read of inputReader.
-//
-// The atomic.Pointer is therefore defense-in-depth — it costs nothing at runtime and
-// protects against future refactors that relax the InFlight serialization. This test
-// documents that invariant explicitly, and verifies that concurrent prompts (which race
-// on InFlight itself) still correctly observe inputReader via the atomic, without data
-// races detectable by -race.
-func TestACPSessionService_M7_InputReaderAtomicIsDefenseInDepth(t *testing.T) {
-	var wg sync.WaitGroup
-	const goroutines = 20
-
-	mockRepo := new(MockWorkflowRepository)
-	ctx := context.Background()
-	mockRepo.On("ListWithSource", ctx).Return([]ports.WorkflowInfo{
-		{Name: "trivial", Source: ports.SourceLocal, Path: "/p/trivial.yaml"},
-	}, nil)
-	mockRepo.On("Load", ctx, "trivial").Return(testWorkflow("trivial"), nil)
-
-	factory := func(string) (WorkflowRunner, ACPInputResponder, *atomic.Bool, func(), error) {
-		reader := &fakeInputResponder{}
-		return &fakeRunner{}, reader, &atomic.Bool{}, func() {}, nil
-	}
-
-	svc := &ACPSessionService{logger: ports.NopLogger{}, workflowRepo: mockRepo, emitter: &fakeEmitter{}}
-	svc.SetRunnerFactory(factory)
-
-	newResult, acpErr := svc.HandleSessionNew(ctx, json.RawMessage(`{"cwd":"/h","mcpServers":[]}`))
-	require.Nil(t, acpErr)
-	sessionID, _ := resultMap(t, newResult)["sessionId"].(string)
-
-	// Concurrently submit prompts: half are slash commands (trigger ensureRunner + write),
-	// half are plain text (hit the parking-check read path). InFlight serializes them, but
-	// the atomic.Pointer ensures correctness even under -race analysis, which detects
-	// happens-before violations regardless of the serialization.
-	for i := range goroutines {
-		wg.Add(1)
-		promptText := "/trivial"
-		if i%2 == 0 {
-			promptText = "not a slash command — exercises the inputReader.Load() read path"
-		}
-		go func(text string) {
-			defer wg.Done()
-			params, _ := json.Marshal(map[string]any{
-				"sessionId": sessionID,
-				"prompt":    []map[string]any{{"type": "text", "text": text}},
-			})
-			svc.HandleSessionPrompt(ctx, params) //nolint:errcheck // defense-in-depth race check only
-		}(promptText)
-	}
-	wg.Wait()
-	// -race must report no data races: atomic.Pointer provides the necessary synchronization.
-}
-
-// TestACPSessionService_M7_StreamedResetBetweenRuns verifies that the streamed flag is
-// reset to false at the start of each run so the aggregate-suppression check in
-// HandleSessionPrompt reflects only the current run, not a previous run's flag value.
-//
-// Note: this test exercises two SEQUENTIAL prompts (not concurrent) because InFlight
-// serializes prompt handlers — only one can run at a time. The test therefore documents
-// and verifies the per-run reset behavior, not a concurrent race. The streamed field is
-// stored as atomic.Pointer[atomic.Bool] as defense-in-depth (consistent with inputReader
-// and execCtx) but the race between ensureRunner writing it and HandleSessionPrompt
-// reading it cannot occur while InFlight is held. The -race flag confirms no violations.
-func TestACPSessionService_M7_StreamedResetBetweenRuns(t *testing.T) {
-	exec := workflow.NewExecutionContext("trivial", "Trivial")
-	exec.SetStepState("run", workflow.StepState{Output: "out\n"})
-
-	mockRepo := new(MockWorkflowRepository)
-	ctx := context.Background()
-	mockRepo.On("ListWithSource", ctx).Return([]ports.WorkflowInfo{
-		{Name: "trivial", Source: ports.SourceLocal, Path: "/p/trivial.yaml"},
-	}, nil)
-	mockRepo.On("Load", ctx, "trivial").Return(testWorkflow("trivial"), nil)
-
-	factory := func(string) (WorkflowRunner, ACPInputResponder, *atomic.Bool, func(), error) {
-		streamed := &atomic.Bool{}
-		return &fakeRunner{execCtx: exec}, &fakeInputResponder{}, streamed, func() {}, nil
-	}
-
-	emitter := &fakeEmitter{}
-	svc := &ACPSessionService{logger: ports.NopLogger{}, workflowRepo: mockRepo, emitter: emitter}
-	svc.SetRunnerFactory(factory)
-
-	newResult, acpErr := svc.HandleSessionNew(ctx, json.RawMessage(`{"cwd":"/h","mcpServers":[]}`))
-	require.Nil(t, acpErr)
-	sessionID, _ := resultMap(t, newResult)["sessionId"].(string)
-
-	params, _ := json.Marshal(map[string]any{
-		"sessionId": sessionID,
-		"prompt":    []map[string]any{{"type": "text", "text": "/trivial"}},
-	})
-
-	// First prompt builds runner (streamed flag is false → aggregate is sent).
-	_, acpErr = svc.HandleSessionPrompt(ctx, params)
-	require.Nil(t, acpErr)
-	firstText := emitter.agentText()
-	assert.Contains(t, firstText, "out", "first run: aggregate must be sent when streamed=false")
-
-	// Second prompt: streamed flag must have been reset to false at the start of the run,
-	// so the aggregate is sent again (the fakeRunner never sets streamed=true). If the reset
-	// were missing, the flag could carry over true from a previous run that DID stream.
-	_, acpErr = svc.HandleSessionPrompt(ctx, params)
-	require.Nil(t, acpErr)
-	secondText := emitter.agentText()
-	// agentText() is cumulative; second run appended to first.
-	assert.Contains(t, secondText, "out",
-		"second run: aggregate must be sent when streamed is reset to false between runs")
 }
 
 // ---------------------------------------------------------------------------
@@ -447,7 +211,7 @@ func TestACPSessionService_M5a_WorkflowDiscoveryErrorIsOpaque(t *testing.T) {
 // returns an error, the JSON-RPC response does not propagate the raw error string.
 func TestACPSessionService_M5a_FactoryErrorIsOpaque(t *testing.T) {
 	sensitiveDetail := "sqlite: cannot open /run/awf/sess-abc/state.db: permission denied"
-	factory := func(string) (WorkflowRunner, ACPInputResponder, *atomic.Bool, func(), error) {
+	factory := func(string) (ACPInputResponder, *atomic.Bool, func(), ports.WorkflowFacade, error) {
 		return nil, nil, nil, nil, &sensitiveInfraError{msg: sensitiveDetail}
 	}
 

@@ -37,8 +37,10 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "valid.yaml", workflowContent)
 
-	// WHEN: Running validate command
-	cmd := cli.NewRootCommand()
+	// WHEN: Running validate command through the facade-wired root (single-core path)
+	t.Setenv("AWF_WORKFLOWS_PATH", filepath.Join(tmpDir, ".awf", "workflows"))
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -46,7 +48,7 @@ states:
 
 	err := cmd.Execute()
 
-	// THEN: Command succeeds (validator is wired and validates successfully)
+	// THEN: Command succeeds (validator is wired through the facade and validates successfully)
 	require.NoError(t, err, "validate command should succeed with valid workflow")
 	assert.Contains(t, out.String(), "valid", "output should mention workflow name")
 }

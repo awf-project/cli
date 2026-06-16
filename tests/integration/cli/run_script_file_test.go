@@ -281,7 +281,7 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "mutual-exclusivity.yaml", workflowContent)
 
-	output, err := runCLI(t, "validate", "mutual-exclusivity")
+	output, err := runCLIFacade(t, "validate", "mutual-exclusivity")
 	require.Error(t, err, "validation should fail when both command and script_file are set")
 	assert.Contains(t, output, "mutually exclusive", "error should mention mutual exclusivity")
 }

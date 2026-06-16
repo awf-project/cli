@@ -17,17 +17,13 @@ type HistoryLoadedMsg struct {
 	Stats   *workflow.HistoryStats
 }
 
-// ExecutionStartedMsg signals a workflow run has begun in a background goroutine.
-// ExecCtx is the live execution context, observable via GetAllStepStates() during execution.
-// Done receives nil on success or an error when execution completes.
-// Session is optional: when non-nil the model calls MonitoringTab.StartEventLoop to
-// consume facade events instead of relying solely on the 200 ms polling tick (D27).
+// ExecutionStartedMsg signals a workflow run has begun via the WorkflowFacade.
+// Session carries the live RunSession whose Events() channel drives the monitoring
+// tab: the model calls MonitoringTab.StartEventLoop to consume facade events (D27).
 type ExecutionStartedMsg struct {
 	ExecutionID string
 	Workflow    *workflow.Workflow
-	ExecCtx     *workflow.ExecutionContext
-	Done        <-chan error
-	Session     ports.RunSession // optional; nil = polling only
+	Session     ports.RunSession
 }
 
 // ExecutionFinishedMsg signals the workflow run has ended.
@@ -38,7 +34,7 @@ type ExecutionFinishedMsg struct {
 
 // LaunchWorkflowMsg requests that the Model launch the given workflow.
 // It is emitted by WorkflowsTab when the user presses Enter on a selected item.
-// The Model handles it by switching to TabMonitoring and calling bridge.RunWorkflow.
+// The Model handles it by switching to TabMonitoring and calling Bridge.RunWorkflowViaFacade.
 type LaunchWorkflowMsg struct {
 	Workflow *workflow.Workflow
 	Inputs   map[string]any

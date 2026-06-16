@@ -1,16 +1,19 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
-	"github.com/awf-project/cli/internal/domain/transcript"
+	"github.com/awf-project/cli/internal/infrastructure/analyzer"
+	"github.com/awf-project/cli/internal/infrastructure/expression"
+	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
+	"github.com/awf-project/cli/internal/infrastructure/skills"
 	"github.com/awf-project/cli/internal/infrastructure/store"
+	infraTranscript "github.com/awf-project/cli/internal/infrastructure/transcript"
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
@@ -121,36 +124,28 @@ func NewWorkflowRepository() *repository.CompositeRepository {
 	return repository.NewCompositeRepository(BuildWorkflowPaths())
 }
 
-// nopRecorder is a no-op ports.Recorder for the CLI-wide read-only facade, which never
-// drives execution (the run command keeps the legacy execution path). Subscribe yields an
-// already-closed channel so any accidental consumer terminates immediately.
-type nopRecorder struct{}
-
-func (nopRecorder) Record(context.Context, transcript.ExchangeEvent) error { //nolint:gocritic // hugeParam: ports.Recorder contract requires value type
-	return nil
-}
-
-func (nopRecorder) Subscribe() (ch <-chan transcript.ExchangeEvent, cancel func()) {
-	c := make(chan transcript.ExchangeEvent)
-	close(c)
-	return c, func() {}
-}
-
-func (nopRecorder) Close() error { return nil }
-
 // buildFacade constructs a CLI-wide ports.WorkflowFacade for the read/validate operations
-// (list, history, status, validate). Execution still uses the legacy path, so a no-op
-// recorder and a zero ExecutionService suffice. It returns the facade and a cleanup that
-// closes the history store. On any setup error it returns (nil, no-op) so callers fall
-// back to the legacy path rather than failing.
+// (list, history, status, validate). Execution paths build their own run-capable facade
+// (buildRunCapableFacade), so this read-only facade carries a no-op recorder and a zero
+// ExecutionService. It returns the facade and a cleanup that closes the history store. On
+// any setup error it returns (nil, no-op) so callers degrade gracefully rather than failing.
 func buildFacade(cfg *Config) (facade ports.WorkflowFacade, cleanup func()) {
 	noop := func() {}
 
 	repo := NewWorkflowRepository()
 	discoverer := workflowpkg.NewPackDiscovererAdapter(workflowPackSearchDirs())
 
-	workflowSvc := application.NewWorkflowService(repo, nil, nil, nil, nil)
+	workflowSvc := application.NewWorkflowService(repo, nil, nil, nil, expression.NewExprValidator())
 	workflowSvc.SetPackDiscoverer(discoverer)
+	// Wire the template-reference validation phase ({{error.*}} outside error hooks,
+	// forward references, unknown namespaces) so facade-routed `awf validate` keeps the
+	// full validation pipeline the legacy runValidate ran.
+	workflowSvc.SetTemplateAnalyzer(analyzer.NewInterpolationAnalyzer())
+	// Inject an OperationProvider so facade-routed validation runs the mcp_proxy.plugin_tools
+	// checks (UNKNOWN_PLUGIN/UNKNOWN_OPERATION/NAME_COLLISION). An empty composite returns no
+	// operations, matching the legacy runValidate wiring; service.go skips the check when nil.
+	workflowSvc.SetPluginOperationProvider(pluginmgr.NewCompositeOperationProvider())
+	workflowSvc.SetSkillRepository(skills.NewFilesystemSkillRepository(&cliLogger{silent: cfg.Quiet}))
 
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
 	if err != nil {
@@ -165,7 +160,7 @@ func buildFacade(cfg *Config) (facade ports.WorkflowFacade, cleanup func()) {
 		&application.ExecutionService{},
 		historySvc,
 		resolver,
-		nopRecorder{},
+		infraTranscript.NewNopRecorder(),
 		application.NewSessionRegistry(),
 	)
 

@@ -54,7 +54,7 @@ func TestOpenCodeProvider_Execute_HappyPath_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.Execute(ctx, tt.prompt, tt.options)
+			result, err := provider.Execute(ctx, tt.prompt, tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -70,7 +70,7 @@ func TestOpenCodeProvider_Execute_EmptyPrompt_Integration(t *testing.T) {
 	provider := NewOpenCodeProvider()
 	ctx := context.Background()
 
-	result, err := provider.Execute(ctx, "", nil)
+	result, err := provider.Execute(ctx, "", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -84,7 +84,7 @@ func TestOpenCodeProvider_Execute_Timeout_Integration(t *testing.T) {
 
 	time.Sleep(5 * time.Millisecond)
 
-	result, err := provider.Execute(ctx, "Generate code", nil)
+	result, err := provider.Execute(ctx, "Generate code", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -96,7 +96,7 @@ func TestOpenCodeProvider_Execute_ContextCancellation_Integration(t *testing.T) 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	result, err := provider.Execute(ctx, "Run task", nil)
+	result, err := provider.Execute(ctx, "Run task", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -130,7 +130,7 @@ func TestOpenCodeProvider_Execute_InvalidOptions_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.Execute(ctx, "Test", tt.options)
+			result, err := provider.Execute(ctx, "Test", tt.options, nil, nil)
 
 			assert.Error(t, err)
 			assert.Nil(t, result)
@@ -166,7 +166,7 @@ func TestOpenCodeProvider_Execute_ComplexPrompt_Integration(t *testing.T) {
 - Implements CRUD operations
 - Has unit tests`
 
-	result, err := provider.Execute(ctx, prompt, nil)
+	result, err := provider.Execute(ctx, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -180,7 +180,7 @@ func TestOpenCodeProvider_Execute_SpecialCharactersInPrompt_Integration(t *testi
 
 	prompt := `Handle strings with "quotes", 'apostrophes', and $variables`
 
-	result, err := provider.Execute(ctx, prompt, nil)
+	result, err := provider.Execute(ctx, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)

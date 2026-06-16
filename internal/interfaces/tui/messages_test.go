@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
@@ -74,17 +75,14 @@ func TestHistoryLoadedMsg_NilRecordsAndStats(t *testing.T) {
 // --- ExecutionStartedMsg ---
 
 func TestExecutionStartedMsg_CarriesExecutionID(t *testing.T) {
-	done := make(chan error, 1)
-	execCtx := workflow.NewExecutionContext("exec-abc-123", "test")
-	msg := ExecutionStartedMsg{ExecutionID: "exec-abc-123", Workflow: &workflow.Workflow{Name: "test"}, ExecCtx: execCtx, Done: done}
+	msg := ExecutionStartedMsg{ExecutionID: "exec-abc-123", Workflow: &workflow.Workflow{Name: "test"}}
 
 	assert.Equal(t, "exec-abc-123", msg.ExecutionID)
-	assert.NotNil(t, msg.ExecCtx)
+	assert.NotNil(t, msg.Workflow)
 }
 
 func TestExecutionStartedMsg_EmptyID(t *testing.T) {
-	done := make(chan error, 1)
-	msg := ExecutionStartedMsg{ExecutionID: "", Workflow: &workflow.Workflow{Name: "test"}, Done: done}
+	msg := ExecutionStartedMsg{ExecutionID: ""}
 
 	assert.Empty(t, msg.ExecutionID)
 }
@@ -142,20 +140,95 @@ func TestErrMsg_WithCustomError_ImplementsError(t *testing.T) {
 	assert.Equal(t, "custom workflow error", msg.Error())
 }
 
+// --- facadeEventMsg ---
+
+func TestFacadeEventMsg_CarriesEvent(t *testing.T) {
+	event := ports.Event{
+		Seq:   1,
+		Kind:  ports.EventRunStarted,
+		RunID: "run-123",
+	}
+
+	msg := facadeEventMsg{Event: event}
+
+	assert.Equal(t, uint64(1), msg.Event.Seq)
+	assert.Equal(t, ports.EventRunStarted, msg.Event.Kind)
+	assert.Equal(t, "run-123", msg.Event.RunID)
+}
+
+func TestFacadeEventMsg_WithEventStepStarted(t *testing.T) {
+	payload := &ports.EnrichedStepPayload{
+		StepName: "deploy",
+	}
+	event := ports.Event{
+		Seq:     2,
+		Kind:    ports.EventStepStarted,
+		Payload: payload,
+	}
+
+	msg := facadeEventMsg{Event: event}
+
+	assert.Equal(t, uint64(2), msg.Event.Seq)
+	assert.Equal(t, ports.EventStepStarted, msg.Event.Kind)
+	assert.Equal(t, payload, msg.Event.Payload)
+}
+
+func TestFacadeEventMsg_WithEventWorkflowCompleted(t *testing.T) {
+	event := ports.Event{
+		Seq:   3,
+		Kind:  ports.EventWorkflowCompleted,
+		RunID: "run-456",
+	}
+
+	msg := facadeEventMsg{Event: event}
+
+	assert.Equal(t, uint64(3), msg.Event.Seq)
+	assert.Equal(t, ports.EventWorkflowCompleted, msg.Event.Kind)
+}
+
+func TestFacadeEventMsg_WithEventWorkflowFailed(t *testing.T) {
+	event := ports.Event{
+		Seq:     4,
+		Kind:    ports.EventWorkflowFailed,
+		RunID:   "run-789",
+		Payload: &ports.EnrichedTerminal{Error: "step execution failed"},
+	}
+
+	msg := facadeEventMsg{Event: event}
+
+	assert.Equal(t, uint64(4), msg.Event.Seq)
+	assert.Equal(t, ports.EventWorkflowFailed, msg.Event.Kind)
+	terminal, ok := msg.Event.Payload.(*ports.EnrichedTerminal)
+	require.True(t, ok, "payload should be EnrichedTerminal")
+	assert.Equal(t, "step execution failed", terminal.Error)
+}
+
+func TestFacadeEventMsg_WithNilPayload(t *testing.T) {
+	event := ports.Event{
+		Seq:     5,
+		Kind:    ports.EventRunStarted,
+		Payload: nil,
+	}
+
+	msg := facadeEventMsg{Event: event}
+
+	assert.Nil(t, msg.Event.Payload)
+}
+
 // --- Message lifecycle integration ---
 
 func TestMessages_AllTypesCanCoexist(t *testing.T) {
-	done := make(chan error, 1)
 	messages := []any{
 		WorkflowsLoadedMsg{Workflows: []*workflow.Workflow{{Name: "wf1"}}},
 		HistoryLoadedMsg{Records: []*workflow.ExecutionRecord{{ID: "exec-1"}}},
-		ExecutionStartedMsg{ExecutionID: "exec-1", Workflow: &workflow.Workflow{Name: "wf1"}, Done: done},
+		ExecutionStartedMsg{ExecutionID: "exec-1", Workflow: &workflow.Workflow{Name: "wf1"}},
 		ExecutionFinishedMsg{Err: nil},
 		LogLineMsg{Entry: LogEntry{Event: "workflow.started", WorkflowName: "test"}},
 		ErrMsg{Err: errors.New("oops")},
+		facadeEventMsg{Event: ports.Event{Seq: 1, Kind: ports.EventRunStarted}},
 	}
 
-	assert.Len(t, messages, 6)
+	assert.Len(t, messages, 7)
 	for _, msg := range messages {
 		assert.NotNil(t, msg)
 	}

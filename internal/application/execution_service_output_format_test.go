@@ -62,7 +62,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_StripsFencesAndParsesJSON(
 
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "json-output-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "json-output-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -127,7 +127,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_NoFences_ParsesDirectly(t 
 
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "json-no-fence-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "json-no-fence-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -195,7 +195,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_InvalidJSON_FailsStep(t *t
 
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "invalid-json-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "invalid-json-test-run")
 
 	// Execution should fail when JSON validation fails
 	require.Error(t, err)
@@ -255,7 +255,7 @@ func TestExecutionService_AgentStep_OutputFormat_Text_StripsFencesOnly(t *testin
 
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "text-output-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "text-output-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -315,7 +315,7 @@ func TestExecutionService_AgentStep_OutputFormat_None_BackwardCompatibility(t *t
 
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "no-format-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "no-format-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -374,7 +374,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_ArrayParsing(t *testing.T)
 
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "json-array-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "json-array-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -441,7 +441,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_LargeOutput(t *testing.T) 
 
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "large-json-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "large-json-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -511,7 +511,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_ConversationMode(t *testin
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
-	ctx, err := execSvc.Run(context.Background(), "conversation-json-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "conversation-json-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -574,7 +574,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_NestedFences(t *testing.T)
 
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "nested-fences-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "nested-fences-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -651,7 +651,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_MultiStepInterpolation(t *
 
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.Run(context.Background(), "multi-step-json-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "multi-step-json-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -749,7 +749,7 @@ func TestExecutionService_AgentStep_OutputFormat_Text_DifferentLanguageTags(t *t
 
 			execSvc.SetAgentRegistry(registry)
 
-			ctx, err := execSvc.Run(context.Background(), "text-tag-test", nil)
+			ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "text-tag-test-run")
 
 			require.NoError(t, err)
 			assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -836,7 +836,7 @@ func TestExecutionService_AgentStep_OutputFormat_JSON_EmptyOutput(t *testing.T) 
 
 			execSvc.SetAgentRegistry(registry)
 
-			ctx, err := execSvc.Run(context.Background(), "empty-json-test", nil)
+			ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "empty-json-test-run")
 
 			require.NoError(t, err)
 			assert.Equal(t, workflow.StatusCompleted, ctx.Status)

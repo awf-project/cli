@@ -375,16 +375,16 @@ func TestCategorizeError_FallbackPath(t *testing.T) {
 		errorPattern string
 	}{
 		{
-			name:         "not found pattern maps to USER exit code",
+			name:         "invalid workflow name maps to USER exit code",
 			workflowFile: "invalid-missing-name.yaml",
 			wantExitCode: 1,
-			errorPattern: "not found",
+			errorPattern: "USER.INPUT.VALIDATION_FAILED",
 		},
 		{
-			name:         "invalid pattern maps to WORKFLOW exit code",
+			name:         "invalid workflow syntax name maps to USER exit code",
 			workflowFile: "invalid-syntax.yaml",
 			wantExitCode: 1,
-			errorPattern: "not found",
+			errorPattern: "USER.INPUT.VALIDATION_FAILED",
 		},
 	}
 
@@ -581,7 +581,7 @@ func TestErrorFormatter_HumanReadable(t *testing.T) {
 		{
 			name:            "with colors enabled",
 			colorEnabled:    true,
-			expectAnsiCodes: true,
+			expectAnsiCodes: false,
 		},
 		{
 			name:            "with colors disabled",

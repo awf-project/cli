@@ -11,7 +11,7 @@ states:
   agent_step:
     type: agent
     provider: anthropic
-    model: claude-3-5-sonnet-20241022
+    model: haiku
     prompt: "Say hello"
     max_tokens: 100
     on_success: check_response

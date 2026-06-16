@@ -41,7 +41,7 @@ func TestGeminiProvider_Execute_HappyPath_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.Execute(ctx, tt.prompt, tt.options)
+			result, err := provider.Execute(ctx, tt.prompt, tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -57,7 +57,7 @@ func TestGeminiProvider_Execute_EmptyPrompt_Integration(t *testing.T) {
 	provider := NewGeminiProvider()
 	ctx := context.Background()
 
-	result, err := provider.Execute(ctx, "", nil)
+	result, err := provider.Execute(ctx, "", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -71,7 +71,7 @@ func TestGeminiProvider_Execute_Timeout_Integration(t *testing.T) {
 
 	time.Sleep(5 * time.Millisecond)
 
-	result, err := provider.Execute(ctx, "Explain quantum computing", nil)
+	result, err := provider.Execute(ctx, "Explain quantum computing", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -83,7 +83,7 @@ func TestGeminiProvider_Execute_ContextCancellation_Integration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	result, err := provider.Execute(ctx, "Answer this", nil)
+	result, err := provider.Execute(ctx, "Answer this", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -110,7 +110,7 @@ func TestGeminiProvider_Execute_InvalidOptions_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.Execute(ctx, "Test", tt.options)
+			result, err := provider.Execute(ctx, "Test", tt.options, nil, nil)
 
 			assert.Error(t, err)
 			assert.Nil(t, result)
@@ -146,7 +146,7 @@ func TestGeminiProvider_Execute_LongPrompt_Integration(t *testing.T) {
 		longPrompt += "This is sentence number " + fmt.Sprintf("%d", i) + ". "
 	}
 
-	result, err := provider.Execute(ctx, longPrompt, nil)
+	result, err := provider.Execute(ctx, longPrompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -160,7 +160,7 @@ func TestGeminiProvider_Execute_SpecialCharacters_Integration(t *testing.T) {
 
 	prompt := "Explain: 'quotes', \"double quotes\", and $variables"
 
-	result, err := provider.Execute(ctx, prompt, nil)
+	result, err := provider.Execute(ctx, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)

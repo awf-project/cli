@@ -53,7 +53,8 @@ func TestConversationYAML_MinimalValidConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := cli.NewRootCommand()
+			cmd, cleanup := cli.NewRootCommandAutoFacade()
+			defer cleanup()
 			buf := new(bytes.Buffer)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
@@ -108,7 +109,8 @@ func TestConversationContinueFrom_CrossStepResume(t *testing.T) {
 	// Feature: F083 + F074 — ContinueFrom preserved; validates cross-step resume
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -127,7 +129,8 @@ func TestConversationValidation_InvalidContinueFrom_Rejected(t *testing.T) {
 	// Feature: F083 + F074 — Validation rejects invalid continue_from references
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -147,7 +150,8 @@ func TestConversationList_IncludesAllWorkflows(t *testing.T) {
 	// Feature: F083 — Conversation workflows remain discoverable
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)

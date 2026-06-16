@@ -89,11 +89,9 @@ func NewHumanErrorFormatter(colorEnabled, noHints bool, generators ...domainerro
 func (f *HumanErrorFormatter) FormatError(err *domainerrors.StructuredError) string {
 	var builder strings.Builder
 
-	// Create color helper
 	red := color.New(color.FgRed)
 	if !f.colorEnabled {
-		color.NoColor = true
-		defer func() { color.NoColor = false }()
+		red.DisableColor()
 	}
 
 	// Format error code in brackets with color
@@ -220,11 +218,9 @@ func (f *HumanErrorFormatter) renderHints(builder *strings.Builder, hints []doma
 		return
 	}
 
-	// Create dim color helper for hints
 	dim := color.New(color.Faint)
 	if !f.colorEnabled {
-		color.NoColor = true
-		defer func() { color.NoColor = false }()
+		dim.DisableColor()
 	}
 
 	// Render each hint

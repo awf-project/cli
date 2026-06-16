@@ -177,6 +177,56 @@ func TestGetBoolOption(t *testing.T) {
 	}
 }
 
+func TestReverseString(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "empty",
+			in:   "",
+			want: "",
+		},
+		{
+			name: "ascii",
+			in:   "workflow",
+			want: "wolfkrow",
+		},
+		{
+			name: "palindrome",
+			in:   "level",
+			want: "level",
+		},
+		{
+			name: "unicode",
+			in:   "héllo",
+			want: "olléh",
+		},
+		{
+			name: "combining_mark",
+			in:   "he\u0301llo",
+			want: "olle\u0301h",
+		},
+		{
+			name: "regional_indicator_flag",
+			in:   "a🇫🇷b",
+			want: "b🇫🇷a",
+		},
+		{
+			name: "zero_width_joiner_sequence",
+			in:   "a👨‍👩‍👧‍👦b",
+			want: "b👨‍👩‍👧‍👦a",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, reverseString(tt.in))
+		})
+	}
+}
+
 func TestTryParseJSONResponse(t *testing.T) {
 	tests := []struct {
 		name    string

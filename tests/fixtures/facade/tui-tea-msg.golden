@@ -1,0 +1,5 @@
+facadeEventMsg{Seq:0 Kind:"run.started" RunID:"run-conformance"}
+facadeEventMsg{Seq:0 Kind:"tool.call" RunID:"run-conformance"}
+facadeEventMsg{Seq:0 Kind:"tool.result" RunID:"run-conformance"}
+facadeEventMsg{Seq:0 Kind:"step.completed" RunID:"run-conformance"}
+facadeEventMsg{Seq:0 Kind:"workflow.completed" RunID:""}

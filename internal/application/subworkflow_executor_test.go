@@ -114,9 +114,9 @@ func TestExecuteCallWorkflowStep_BasicSuccess(t *testing.T) {
 		WithWorkflow("child", childWf).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "parent", map[string]any{
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, map[string]any{
 		"parent_input": "hello",
-	})
+	}, "parent-run")
 
 	require.NoError(t, err, "sub-workflow execution should succeed")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -167,7 +167,7 @@ func TestExecuteCallWorkflowStep_NoInputs(t *testing.T) {
 		WithWorkflow("simple-parent", parentWf).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "simple-parent", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "simple-parent-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -229,10 +229,10 @@ func TestExecuteCallWorkflowStep_InputMapping(t *testing.T) {
 		WithWorkflow("input-parent", parentWf).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "input-parent", map[string]any{
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, map[string]any{
 		"target_file":    "test.txt",
 		"operation_mode": "strict",
-	})
+	}, "input-parent-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -298,7 +298,7 @@ func TestExecuteCallWorkflowStep_InputMappingFromStepOutput(t *testing.T) {
 		}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "step-output-parent", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "step-output-parent-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -317,9 +317,9 @@ func TestExecuteCallWorkflowStep_OutputMapping(t *testing.T) {
 		WithWorkflow("output-child", childWf).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "output-parent", map[string]any{
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, map[string]any{
 		"parent_input": "test_value",
-	})
+	}, "output-parent-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -384,7 +384,7 @@ func TestExecuteCallWorkflowStep_MultipleOutputs(t *testing.T) {
 		WithWorkflow("multi-output-parent", parentWf).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "multi-output-parent", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "multi-output-parent-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -415,7 +415,7 @@ func TestExecuteCallWorkflowStep_CircularDetection_Direct(t *testing.T) {
 		WithWorkflow("self-caller", wf).
 		Build()
 
-	_, err := execSvc.Run(context.Background(), "self-caller", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "self-caller-run")
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, application.ErrCircularWorkflowCall)
@@ -466,7 +466,7 @@ func TestExecuteCallWorkflowStep_CircularDetection_Indirect(t *testing.T) {
 		WithWorkflow("workflow-b", wfB).
 		Build()
 
-	_, err := execSvc.Run(context.Background(), "workflow-a", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wfA, nil, "workflow-a-run")
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, application.ErrCircularWorkflowCall)
@@ -528,7 +528,7 @@ func TestExecuteCallWorkflowStep_CircularDetection_ThreeLevel(t *testing.T) {
 		WithWorkflow("wf-c", wfC).
 		Build()
 
-	_, err := execSvc.Run(context.Background(), "wf-a", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wfA, nil, "wf-a-run")
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, application.ErrCircularWorkflowCall)
@@ -588,7 +588,7 @@ func TestExecuteCallWorkflowStep_NestedThreeLevels_Success(t *testing.T) {
 		WithWorkflow("level-c", levelC).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "level-a", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), levelA, nil, "level-a-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -603,6 +603,7 @@ func TestExecuteCallWorkflowStep_MaxNestingExceeded(t *testing.T) {
 	// That's 11 call_workflow steps, with the 11th triggering the depth check at depth=10
 	harness := NewTestHarness(t)
 
+	var deepAWf *workflow.Workflow
 	for i := 1; i <= 12; i++ {
 		name := "deep-" + string(rune('a'+i-1))
 		var nextWorkflow string
@@ -627,6 +628,9 @@ func TestExecuteCallWorkflowStep_MaxNestingExceeded(t *testing.T) {
 				},
 			}
 			harness = harness.WithWorkflow(name, wf)
+			if i == 1 {
+				deepAWf = wf
+			}
 		} else {
 			// Last one is a terminal
 			wf := &workflow.Workflow{
@@ -647,7 +651,7 @@ func TestExecuteCallWorkflowStep_MaxNestingExceeded(t *testing.T) {
 	}
 
 	execSvc, _ := harness.Build()
-	_, err := execSvc.Run(context.Background(), "deep-a", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), deepAWf, nil, "deep-a-run")
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, application.ErrMaxNestingExceeded)
@@ -697,7 +701,7 @@ func TestExecuteCallWorkflowStep_ChildFailure_PropagatesError(t *testing.T) {
 		WithExecutor(executor).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "error-parent", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "error-parent-run")
 
 	require.Error(t, err)
 	assert.Equal(t, workflow.StatusFailed, ctx.Status)
@@ -752,7 +756,7 @@ func TestExecuteCallWorkflowStep_ChildFailure_OnFailureTransition(t *testing.T) 
 		WithExecutor(executor).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "handled-parent", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "handled-parent-run")
 
 	require.NoError(t, err, "workflow should complete via error handler")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -801,7 +805,7 @@ func TestExecuteCallWorkflowStep_ContinueOnError(t *testing.T) {
 		WithExecutor(executor).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "continue-parent", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "continue-parent-run")
 
 	require.NoError(t, err, "workflow should continue despite child failure")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -830,7 +834,7 @@ func TestExecuteCallWorkflowStep_SubWorkflowNotFound(t *testing.T) {
 		WithWorkflow("missing-child-parent", parentWf).
 		Build()
 
-	_, err := execSvc.Run(context.Background(), "missing-child-parent", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "missing-child-parent-run")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "workflow file not found")
@@ -884,7 +888,7 @@ func TestExecuteCallWorkflowStep_Timeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err := execSvc.Run(ctx, "timeout-parent", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(ctx, parentWf, nil, "timeout-parent-run")
 	// Should timeout or error
 	if err != nil {
 		assert.True(t, errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled),
@@ -926,7 +930,7 @@ func TestExecuteCallWorkflowStep_MissingCallWorkflowConfig(t *testing.T) {
 		WithWorkflow("bad-config", wf).
 		Build()
 
-	_, err := execSvc.Run(context.Background(), "bad-config", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "bad-config-run")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "call_workflow configuration is required")
@@ -982,7 +986,7 @@ func TestExecuteCallWorkflowStep_MixedWithCommandSteps(t *testing.T) {
 		WithWorkflow("mixed", mixedWf).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "mixed", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), mixedWf, nil, "mixed-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1001,13 +1005,13 @@ func TestExecuteCallWorkflowStep_MixedWithCommandSteps(t *testing.T) {
 func TestExecuteCallWorkflowStep_ErrorMessages_IncludeContext(t *testing.T) {
 	tests := []struct {
 		name          string
-		setupHarness  func(*testing.T) *application.ExecutionService
-		workflowName  string
+		setupHarness  func(*testing.T) (*application.ExecutionService, *workflow.Workflow)
+		runID         string
 		expectedParts []string
 	}{
 		{
 			name: "missing workflow includes step and workflow name",
-			setupHarness: func(t *testing.T) *application.ExecutionService {
+			setupHarness: func(t *testing.T) (*application.ExecutionService, *workflow.Workflow) {
 				wf := &workflow.Workflow{
 					Name:    "parent",
 					Initial: "call",
@@ -1024,14 +1028,14 @@ func TestExecuteCallWorkflowStep_ErrorMessages_IncludeContext(t *testing.T) {
 					},
 				}
 				execSvc, _ := NewTestHarness(t).WithWorkflow("parent", wf).Build()
-				return execSvc
+				return execSvc, wf
 			},
-			workflowName:  "parent",
+			runID:         "parent-run",
 			expectedParts: []string{"call", "missing-workflow"},
 		},
 		{
 			name: "circular error includes call stack",
-			setupHarness: func(t *testing.T) *application.ExecutionService {
+			setupHarness: func(t *testing.T) (*application.ExecutionService, *workflow.Workflow) {
 				loopA := &workflow.Workflow{
 					Name:    "loop-a",
 					Initial: "call",
@@ -1066,17 +1070,17 @@ func TestExecuteCallWorkflowStep_ErrorMessages_IncludeContext(t *testing.T) {
 					WithWorkflow("loop-a", loopA).
 					WithWorkflow("loop-b", loopB).
 					Build()
-				return execSvc
+				return execSvc, loopA
 			},
-			workflowName:  "loop-a",
+			runID:         "loop-a-run",
 			expectedParts: []string{"circular", "loop-a"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			execSvc := tt.setupHarness(t)
-			_, err := execSvc.Run(context.Background(), tt.workflowName, nil)
+			execSvc, startWf := tt.setupHarness(t)
+			_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), startWf, nil, tt.runID)
 
 			require.Error(t, err)
 			errMsg := err.Error()
@@ -1096,9 +1100,9 @@ func TestExecuteCallWorkflowStep_RecordsStepState(t *testing.T) {
 		WithWorkflow("state-child", childWf).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "state-parent", map[string]any{
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, map[string]any{
 		"parent_input": "test_value",
-	})
+	}, "state-parent-run")
 
 	require.NoError(t, err)
 
@@ -1154,7 +1158,7 @@ func TestExecuteCallWorkflowStep_FailedChildRecordsError(t *testing.T) {
 		WithExecutor(executor).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "error-parent", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "error-parent-run")
 
 	require.NoError(t, err) // Workflow completes via error path
 
@@ -1213,7 +1217,7 @@ func TestExecuteCallWorkflowStep_ContextCancellation(t *testing.T) {
 		cancel()
 	}()
 
-	result, err := execSvc.Run(ctx, "cancel-parent", nil)
+	result, err := execSvc.RunWithWorkflowAndRunID(ctx, parentWf, nil, "cancel-parent-run")
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, context.Canceled),
@@ -1286,7 +1290,7 @@ func TestExecuteCallWorkflowStep_CircularDetection_DiamondPattern(t *testing.T) 
 		WithWorkflow("diamond-d", diamondD).
 		Build()
 
-	_, err := execSvc.Run(context.Background(), "diamond-a", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), diamondA, nil, "diamond-a-run")
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, application.ErrCircularWorkflowCall)
@@ -1354,7 +1358,7 @@ func TestExecuteCallWorkflowStep_SameWorkflowCalledFromDifferentParents_NotCircu
 		WithWorkflow("shared-a", sharedA).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "shared-a", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), sharedA, nil, "shared-a-run")
 
 	require.NoError(t, err, "calling same workflow from different parents should not be circular")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1406,7 +1410,7 @@ func TestExecuteCallWorkflowStep_TimeoutZero_InheritsParentContext(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	_, err := execSvc.Run(ctx, "inherit-parent", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(ctx, parentWf, nil, "inherit-parent-run")
 
 	// Should timeout from parent context since child Timeout is 0
 	require.Error(t, err)
@@ -1480,7 +1484,7 @@ func TestExecuteCallWorkflowStep_NestedTimeouts_MostRestrictiveWins(t *testing.T
 	defer cancel()
 
 	start := time.Now()
-	_, err := execSvc.Run(ctx, "outer-parent", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(ctx, outerParent, nil, "outer-parent-run")
 	elapsed := time.Since(start)
 
 	require.Error(t, err)
@@ -1494,6 +1498,7 @@ func TestExecuteCallWorkflowStep_MaxNestingExactlyAtLimit(t *testing.T) {
 	// This should succeed, not fail
 	harness := NewTestHarness(t)
 
+	var exact1Wf *workflow.Workflow
 	for i := 1; i <= workflow.MaxCallStackDepth; i++ {
 		name := fmt.Sprintf("exact-%d", i)
 		var nextWorkflow string
@@ -1518,6 +1523,9 @@ func TestExecuteCallWorkflowStep_MaxNestingExactlyAtLimit(t *testing.T) {
 				},
 			}
 			harness = harness.WithWorkflow(name, wf)
+			if i == 1 {
+				exact1Wf = wf
+			}
 		} else {
 			// Last one is a terminal with command
 			wf := &workflow.Workflow{
@@ -1538,7 +1546,7 @@ func TestExecuteCallWorkflowStep_MaxNestingExactlyAtLimit(t *testing.T) {
 	}
 
 	execSvc, _ := harness.Build()
-	ctx, err := execSvc.Run(context.Background(), "exact-1", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), exact1Wf, nil, "exact-1-run")
 
 	require.NoError(t, err, "exactly MaxCallStackDepth levels should succeed")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -1610,7 +1618,7 @@ func TestExecuteCallWorkflowStep_CallStackCleanedOnError(t *testing.T) {
 		WithExecutor(executor).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "cleanup-parent", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), cleanupParent, nil, "cleanup-parent-run")
 
 	// Should succeed via recovery path
 	require.NoError(t, err, "workflow should complete via recovery path")
@@ -1743,9 +1751,9 @@ func TestExecuteCallWorkflowStep_NamespacedWorkflow_WithLoader(t *testing.T) {
 		return childWf, "/pack/utils", nil
 	})
 
-	ctx, err := execSvc.Run(context.Background(), "parent", map[string]any{
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, map[string]any{
 		"msg": "test",
-	})
+	}, "parent-run")
 
 	require.NoError(t, err)
 	assert.True(t, loaderCalled, "pack workflow loader should be called")
@@ -1778,7 +1786,7 @@ func TestExecuteCallWorkflowStep_NamespacedWorkflow_NoLoader(t *testing.T) {
 
 	// Don't set pack workflow loader
 
-	_, err := execSvc.Run(context.Background(), "parent", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "parent-run")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "pack workflow loader not configured")
@@ -1812,7 +1820,7 @@ func TestExecuteCallWorkflowStep_NamespacedWorkflow_LoaderError(t *testing.T) {
 		return nil, "", fmt.Errorf("pack not found")
 	})
 
-	_, err := execSvc.Run(context.Background(), "parent", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "parent-run")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "load sub-workflow")
@@ -1868,7 +1876,7 @@ func TestExecuteCallWorkflowStep_UnnamespacedWorkflow_WithLoader(t *testing.T) {
 		return nil, "", fmt.Errorf("should not be called for unnamespaced workflows")
 	})
 
-	ctx, err := execSvc.Run(context.Background(), "parent", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "parent-run")
 
 	require.NoError(t, err)
 	assert.False(t, loaderCalled, "loader should not be called for unnamespaced workflows")

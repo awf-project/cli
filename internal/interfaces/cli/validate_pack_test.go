@@ -64,6 +64,11 @@ func TestRunValidateDir_ValidWorkflows(t *testing.T) {
 
 	cmd, buf := newTestCmd(t)
 	cfg := newTestConfig()
+	cfg.StoragePath = t.TempDir()
+	facade, cleanup := buildFacade(cfg)
+	require.NotNil(t, facade)
+	defer cleanup()
+	cfg.Facade = facade
 
 	err := runValidateDir(cmd, cfg, dir, true, 5*time.Second)
 
@@ -82,6 +87,11 @@ func TestRunValidateDir_InvalidWorkflow(t *testing.T) {
 
 	cmd, buf := newTestCmd(t)
 	cfg := newTestConfig()
+	cfg.StoragePath = t.TempDir()
+	facade, cleanup := buildFacade(cfg)
+	require.NotNil(t, facade)
+	defer cleanup()
+	cfg.Facade = facade
 
 	err := runValidateDir(cmd, cfg, dir, true, 5*time.Second)
 
@@ -102,6 +112,11 @@ func TestRunValidateDir_EmptyDir(t *testing.T) {
 
 	cmd, buf := newTestCmd(t)
 	cfg := newTestConfig()
+	cfg.StoragePath = t.TempDir()
+	facade, cleanup := buildFacade(cfg)
+	require.NotNil(t, facade)
+	defer cleanup()
+	cfg.Facade = facade
 
 	err := runValidateDir(cmd, cfg, dir, true, 5*time.Second)
 
@@ -117,6 +132,11 @@ func TestRunValidateDir_NonExistentDir(t *testing.T) {
 	cmd, buf := newTestCmd(t)
 	_ = buf
 	cfg := newTestConfig()
+	cfg.StoragePath = t.TempDir()
+	facade, cleanup := buildFacade(cfg)
+	require.NotNil(t, facade)
+	defer cleanup()
+	cfg.Facade = facade
 
 	err := runValidateDir(cmd, cfg, nonExistent, true, 5*time.Second)
 
@@ -125,10 +145,9 @@ func TestRunValidateDir_NonExistentDir(t *testing.T) {
 
 // TestRunValidatePack_ResolvesPackDir verifies that runValidatePack finds an
 // installed pack relative to the current working directory and validates its
-// workflows successfully.
+// workflows successfully. Uses a wired facade (buildFacade) with the pack
+// discoverer so the BatchValidator.ValidatePack route is exercised.
 func TestRunValidatePack_ResolvesPackDir(t *testing.T) {
-	// findPackDir searches ".awf/workflow-packs/<name>" relative to cwd.
-	// We set cwd to our temp project root so the lookup resolves correctly.
 	projectDir := t.TempDir()
 	origWD, err := os.Getwd()
 	require.NoError(t, err)
@@ -146,6 +165,11 @@ func TestRunValidatePack_ResolvesPackDir(t *testing.T) {
 
 	cmd, buf := newTestCmd(t)
 	cfg := newTestConfig()
+	cfg.StoragePath = t.TempDir()
+	facade, cleanup := buildFacade(cfg)
+	require.NotNil(t, facade)
+	defer cleanup()
+	cfg.Facade = facade
 
 	err = runValidatePack(cmd, cfg, "testpack", true, 5*time.Second)
 
@@ -154,7 +178,8 @@ func TestRunValidatePack_ResolvesPackDir(t *testing.T) {
 }
 
 // TestRunValidatePack_NotFound verifies that a non-existent pack name returns
-// an error that mentions "not found".
+// an error that mentions "not found". Uses a wired facade (buildFacade) so the
+// BatchValidator.ValidatePack route is exercised.
 func TestRunValidatePack_NotFound(t *testing.T) {
 	// Use a fresh temp directory as cwd so no packs are present.
 	projectDir := t.TempDir()
@@ -166,6 +191,11 @@ func TestRunValidatePack_NotFound(t *testing.T) {
 	cmd, buf := newTestCmd(t)
 	_ = buf
 	cfg := newTestConfig()
+	cfg.StoragePath = t.TempDir()
+	facade, cleanup := buildFacade(cfg)
+	require.NotNil(t, facade)
+	defer cleanup()
+	cfg.Facade = facade
 
 	err = runValidatePack(cmd, cfg, "ghost-pack", true, 5*time.Second)
 
@@ -196,6 +226,11 @@ func TestRunValidate_PackNamespaceSyntax(t *testing.T) {
 
 	cmd, buf := newTestCmd(t)
 	cfg := newTestConfig()
+	cfg.StoragePath = projectDir
+	facade, cleanup := buildFacade(cfg)
+	require.NotNil(t, facade, "facade should be wired for validate routing")
+	defer cleanup()
+	cfg.Facade = facade
 
 	err = runValidate(cmd, cfg, "mypack/myworkflow", true, 5*time.Second)
 
@@ -238,6 +273,11 @@ func TestRunValidate_StandardWorkflow_StillWorks(t *testing.T) {
 
 	cmd, buf := newTestCmd(t)
 	cfg := newTestConfig()
+	cfg.StoragePath = t.TempDir()
+	facade, cleanup := buildFacade(cfg)
+	require.NotNil(t, facade, "facade should be wired for validate routing")
+	defer cleanup()
+	cfg.Facade = facade
 
 	err := runValidate(cmd, cfg, "plain-wf", true, 5*time.Second)
 
