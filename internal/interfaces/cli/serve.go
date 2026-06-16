@@ -15,6 +15,7 @@ import (
 	infraotel "github.com/awf-project/cli/internal/infrastructure/otel"
 	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/infrastructure/store"
+	infraTranscript "github.com/awf-project/cli/internal/infrastructure/transcript"
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/api"
@@ -65,7 +66,7 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 		xdg.LocalPluginsDir(),
 		xdg.AWFPluginsDir(),
 	}
-	pluginResult, pluginErr := pluginmgr.InitSystem(context.Background(), pluginDirs, filepath.Join(storagePath, "plugins"), "", logger)
+	pluginResult, pluginErr := pluginmgr.InitSystem(ctx, pluginDirs, filepath.Join(storagePath, "plugins"), "", logger)
 
 	otelEndpoint := ""
 	otelServiceName := ""
@@ -148,8 +149,12 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 		return fmt.Errorf("serve: failed to initialize services: %w", buildErr)
 	}
 
+	// Defer secondary resources (tracer, audit, plugins) that have no ordering
+	// constraint relative to execution goroutines.  result.Cleanup() is NOT deferred
+	// here: it must run AFTER bridge.Shutdown() drains in-flight executions so facade
+	// goroutines do not write to the history store after it is closed (see shutdown
+	// sequence below).
 	defer func() {
-		result.Cleanup()
 		tracerShutdown()
 		auditCleanup()
 		if pluginErr == nil && pluginResult != nil {
@@ -159,11 +164,31 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 
 	result.WorkflowSvc.SetPackDiscoverer(workflowpkg.NewPackDiscovererAdapter(workflowPackSearchDirs()))
 
-	bridge := api.NewBridge(result.WorkflowSvc, result.ExecService, result.HistorySvc)
-	bridge.SetBaseContext(ctx) // M-1: propagate server shutdown context to in-flight workflows
-	bridge.SetResumer(result.ExecService)
+	// F108: the Bridge holds no read or execution port — workflow list/get/validate and
+	// history queries route through ports.WorkflowFacade / ports.WorkflowReader (wired below
+	// via WithFacade / WithWorkflowReader), and execution routes through Run/Resume. The
+	// Bridge only tracks metadata (List/Get/Cancel) for sessions started by the facade.
+	bridge := api.NewBridge()
+
+	// Build a single shared session registry for the HTTP interface. The same registry
+	// is used by both the Adapter (which adds/removes sessions via onClose) and the
+	// execution handler (which resolves sessions for SSE). A single shared registry is
+	// the source of truth — there must be no private registry inside buildHTTPFacade
+	// (B2: split-registry memory leak and ErrSessionExists on resume).
+	httpRegistry := application.NewSessionRegistry()
+
+	// Build a run-capable facade for the HTTP interface so all workflow execution
+	// routes through ports.WorkflowFacade (Run and Resume). A per-run transcript recorder
+	// is wired so SSE/GET receive LIVE step and message events (not just the terminal one).
+	httpFacade := buildHTTPFacade(result, repo, historyStore, storagePath, httpRegistry)
+
 	addr := fmt.Sprintf("%s:%d", host, port)
-	srv := api.NewServer(bridge, addr)
+	srv := api.NewServer(
+		bridge, addr,
+		api.WithFacade(httpFacade),
+		api.WithWorkflowReader(httpFacade),
+		api.WithRegistryImpl(httpRegistry),
+	)
 
 	cmd.Printf("AWF API server listening on http://%s\n", addr)
 	cmd.Printf("Swagger UI: http://%s/docs\n", addr)
@@ -175,15 +200,66 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 
 	select {
 	case serveErr := <-errCh:
+		// Server exited before a signal (e.g. listen error). Clean up execution
+		// resources on the way out; no in-flight runs to drain.
+		result.Cleanup()
 		return serveErr
 	case <-ctx.Done():
 		cmd.Println("Shutting down server...")
+		// Shutdown ordering (must be preserved):
+		//  1. srv.Shutdown — stops accepting new HTTP requests and waits for
+		//     in-flight HTTP handlers to return (SSE streams included via sseWG).
+		//  2. bridge.Shutdown — cancels every active execution context so facade
+		//     goroutines (startExecution) begin winding down.
+		//  3. result.Cleanup — closes the history store and other shared stores.
+		//     This must come AFTER bridge.Shutdown so that execution goroutines
+		//     have received their cancellation signal and have had a chance to
+		//     finish their last write before the store is closed.
+		//     The facade exposes no WaitGroup join, so there is an inherent
+		//     window between context cancellation and goroutine exit. The HTTP
+		//     server's graceful shutdown (step 1) ensures no new work starts,
+		//     and the context cancel (step 2) makes existing work exit promptly;
+		//     result.Cleanup immediately following is the closest safe ordering
+		//     available without a facade-side WaitGroup (tracked for future work).
 		shutdownErr := srv.Shutdown(context.Background())
-		// Cancel all in-flight async executions now that the HTTP server has
-		// stopped accepting requests.  This prevents goroutines from writing to
-		// stores that are about to be closed.
 		bridge.Shutdown()
+		result.Cleanup()
 		cmd.Println("Server stopped.")
 		return shutdownErr
 	}
+}
+
+// buildHTTPFacade constructs a run-capable ports.WorkflowFacade for the HTTP serve path
+// (F108). It mirrors buildRunCapableFacade from run.go and wires a PER-RUN transcript
+// recorder factory so each async run owns its recorder: live step/message events flow to
+// the right session's stream (SSE, GET) with no cross-run contamination, and each run also
+// gets a transcript file at storage/transcripts/{runID}.jsonl (parity with CLI). The
+// constructor recorder stays a NopRecorder as a safe fallback when the factory fails.
+//
+// registry MUST be the same *application.SessionRegistry wired into WithRegistryImpl so that
+// the Adapter's onClose hook (which calls registry.Remove) and the execution handler (which
+// calls registry.Get) operate on the same map. Passing two different registries caused a
+// memory leak (B2): sessions added to httpRegistry were never removed because onClose only
+// removed from the private registry inside the Adapter, and ErrSessionExists was triggered
+// on resume because both registries held the same ID after a run.
+// buildHTTPFacade returns the concrete *application.Adapter (not the ports.WorkflowFacade
+// interface) so the caller can wire it as BOTH the execution facade (WithFacade) and the
+// read-only port (WithWorkflowReader) — the Adapter implements both.
+func buildHTTPFacade(result *application.SetupResult, repo ports.WorkflowRepository, historyStore ports.HistoryStore, storagePath string, registry *application.SessionRegistry) *application.Adapter {
+	discoverer := workflowpkg.NewPackDiscovererAdapter(workflowPackSearchDirs())
+	resolver := application.NewResolver(discoverer, repo)
+	historySvc := application.NewHistoryService(historyStore, &cliLogger{silent: true})
+	adapter := application.NewAdapter(
+		result.WorkflowSvc,
+		result.ExecService,
+		historySvc,
+		resolver,
+		infraTranscript.NewNopRecorder(),
+		registry,
+	)
+	adapter.SetRunRecorderFactory(func(runID string) (ports.Recorder, error) {
+		rec, _, err := WireTranscript(runID, storagePath)
+		return rec, err
+	})
+	return adapter
 }

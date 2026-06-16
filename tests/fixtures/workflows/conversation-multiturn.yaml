@@ -21,7 +21,7 @@ states:
     prompt: |
       {{inputs.initial_request}}
     options:
-      model: claude-haiku-4-5
+      model: haiku
     conversation: {}
     timeout: 60
     on_success: second_turn

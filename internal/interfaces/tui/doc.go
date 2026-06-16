@@ -14,11 +14,13 @@
 //   - The Bridge adapter translates between service interfaces and tea.Cmd factories
 //   - Tab sub-models encapsulate per-tab state and rendering
 //   - The Model delegates business operations to application service ports
-//     (WorkflowLister, WorkflowRunner, HistoryProvider)
+//     (WorkflowLister, WorkflowFacade, HistoryProvider)
 //
 // The TUI depends on application service ports defined in bridge.go; it never
 // imports infrastructure packages directly. Service implementations are injected
-// via NewCommand and buildBridge at CLI startup.
+// via NewCommand and buildBridge at CLI startup. All workflow execution routes
+// through the WorkflowFacade port (ports.WorkflowFacade) — the legacy
+// WorkflowRunner port has been removed (F108 TUI-DC-001/002/003).
 //
 // # Bubbletea Model-Update-View Pattern
 //
@@ -35,7 +37,9 @@
 //
 // # Tab Architecture
 //
-// The Model hosts five tabs, each implemented as a standalone sub-model:
+// The Model hosts four tabs (Tab enum: TabWorkflows, TabMonitoring, TabHistory,
+// TabExternalLogs; labels in tabLabels [4]string), each implemented as a standalone
+// sub-model:
 //
 // ## Tab 1: Workflows (tab_workflows.go)
 //
@@ -53,10 +57,14 @@
 //   - Left panel (40%): execution tree with step status icons (see tree.go)
 //   - Right panel (60%): scrollable viewport showing selected step output
 //
-// A 200 ms tick loop polls ExecutionContext.GetAllStepStates() during active
-// runs. Navigation keys (up/k, down/j) move the tree selection; 'f' jumps to
-// the bottom and re-enables auto-scroll. The tab auto-selects the first failed
-// node to surface errors immediately.
+// State is updated event-driven, not by polling: MonitoringTab.StartEventLoop
+// spawns a goroutine that ranges over ports.RunSession.Events() and forwards each
+// facade event into the Bubbletea update loop as a facadeEventMsg (terminal events
+// also emit an ExecutionFinishedMsg). The earlier 200 ms tick loop that polled
+// ExecutionContext.GetAllStepStates() has been removed. Navigation keys (up/k,
+// down/j) move the tree selection; 'f' jumps to the bottom and re-enables
+// auto-scroll. The tab auto-selects the first failed node to surface errors
+// immediately.
 //
 // ## Tab 3: History (tab_history.go)
 //
@@ -69,13 +77,13 @@
 // Statistics footer shows total, success, failed, cancelled counts and average
 // duration in milliseconds.
 //
-// ## Tab 4: Agent Conversations (tab_agent.go)
+// Agent conversation turns are NOT a separate tab: they are surfaced inline by
+// the Monitoring tab (tab_monitoring.go), which buffers agent_step events from
+// the facade RunSession stream and renders them alongside step progress. An
+// earlier design sketched a dedicated "Agent Conversations (tab_agent.go)" tab;
+// it was never implemented and the responsibility folded into Monitoring.
 //
-// Read-only viewport displaying agent conversation turns from the most recent
-// execution. Content is populated via agent display events forwarded from the
-// execution pipeline. Supports page-up/page-down and mouse wheel scrolling.
-//
-// ## Tab 5: External Logs (tab_logs.go)
+// ## Tab 4: External Logs (tab_logs.go)
 //
 // Tailed view of the AWF audit JSONL log file.
 // An offset-based Tailer reads one line per poll interval from the AWF
@@ -94,7 +102,7 @@
 //
 //   - Bridge.LoadWorkflows: fetches all workflow definitions → WorkflowsLoadedMsg
 //   - Bridge.LoadHistory: fetches execution records and stats → HistoryLoadedMsg
-//   - Bridge.RunWorkflow: starts a workflow execution → ExecutionStartedMsg
+//   - Bridge.RunWorkflowViaFacade: starts a workflow execution via facade → ExecutionStartedMsg
 //   - Bridge.ValidateWorkflow: validates a workflow by name → ValidationResultMsg or ErrMsg
 //
 // Bridge fields may be nil independently; a nil dependency returns ErrMsg with
@@ -105,13 +113,18 @@
 // the update loop starts cleanly. Bridgeless mode is suitable for read-only
 // display of local state without live service calls.
 //
+// All workflow execution is facade-driven. Bridge.RunWorkflowViaFacade (F108) is
+// the sole execution entry point; the WorkflowRunner port and the legacy
+// RunWorkflowAsync path have been removed. SetFacade must be called before any
+// execution command is issued.
+//
 // # Message Flow
 //
 // Messages flow through the Update loop in this order:
 //
-//  1. Global key messages (1–5 for tab switching, q/ctrl+c to quit) are handled
+//  1. Global key messages (1–4 for tab switching, q/ctrl+c to quit) are handled
 //     by the root Model before delegation.
-//  2. tea.WindowSizeMsg is propagated to all five tab sub-models simultaneously
+//  2. tea.WindowSizeMsg is propagated to all four tab sub-models simultaneously
 //     so each can reflow its layout.
 //  3. Domain messages (WorkflowsLoadedMsg, ExecutionStartedMsg, etc.) are
 //     handled by the root Model and update the relevant tab's state fields.
@@ -153,7 +166,7 @@
 //   - Integration with bubbles/help for contextual help display
 //
 // Global (handled by root Model):
-//   - 1–5: switch to the corresponding tab (keyTab1–keyTab5)
+//   - 1–4: switch to the corresponding tab (keyTab1–keyTab4)
 //   - q: quit (keyQuit), ctrl+c: force quit (keyForceQuit)
 //   - ?: toggle help bar (keyHelp)
 //
@@ -175,7 +188,7 @@
 //   - esc: close detail view (keyBack)
 //   - /: focus text filter (keyFilter)
 //
-// Agent/Logs tabs:
+// Monitoring/Logs tabs (scrollable viewports):
 //   - f: jump to bottom and re-enable auto-scroll (keyFollow)
 //   - PageUp/PageDown, ↑/↓: scroll viewport (delegated to viewport)
 //
@@ -189,16 +202,17 @@
 // # Spinner Integration (bubbles/spinner)
 //
 // MonitoringTab and WorkflowsTab embed a spinner.Model for async operation
-// feedback. The monitoring spinner is visible while waiting for an execution
-// context (showSpinner=true between ExecutionStartedMsg and first
-// executionPollMsg). The workflows spinner is visible during validation
+// feedback. The monitoring spinner is visible while waiting for the execution to
+// begin emitting events; showSpinner is cleared once execution state arrives
+// (ExecutionStartedMsg / ExecutionFinishedMsg on the event-driven path). The
+// workflows spinner is visible during validation
 // (validating=true between handleValidate and ValidationResultMsg).
 //
 // # Auto-Scroll Helper (viewportscroll.go)
 //
 // viewportAutoScroll(vp, &autoScroll, msg) wraps vp.Update(msg) and clears
 // the autoScroll flag when the user scrolls away from the bottom. Used by
-// MonitoringTab, AgentTab, and LogsTab to eliminate duplicated scroll-tracking
+// MonitoringTab and LogsTab to eliminate duplicated scroll-tracking
 // logic. The follow key (keyFollow) re-enables auto-scroll and jumps to bottom.
 //
 // # Design Principles

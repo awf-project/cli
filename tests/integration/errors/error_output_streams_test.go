@@ -133,7 +133,7 @@ func TestJSONErrorOutput_ExitCodeMatchesErrorType_Integration(t *testing.T) {
 		name         string
 		args         []string
 		wantExitCode int
-		jsonOnStderr bool // pre-execution errors go to stderr; execution errors produce JSON on stdout
+		jsonOnStderr bool // JSON error payloads are emitted on stderr for these CLI failures
 	}{
 		{
 			name:         "user error maps to exit code 1",
@@ -145,7 +145,7 @@ func TestJSONErrorOutput_ExitCodeMatchesErrorType_Integration(t *testing.T) {
 			name:         "execution error maps to exit code 3",
 			args:         []string{"--format", "json", "run", "exit-execution-error.yaml"},
 			wantExitCode: 3,
-			jsonOnStderr: false,
+			jsonOnStderr: true,
 		},
 	}
 

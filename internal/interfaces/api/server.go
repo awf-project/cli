@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"sync"
@@ -14,8 +15,17 @@ import (
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 
+	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
 )
+
+// sessionLookup adapts *application.SessionRegistry to the SessionLookup interface
+// for SSE handler wiring. Risk R5 adapter.
+type sessionLookup struct{ reg *application.SessionRegistry }
+
+func (sl sessionLookup) GetSession(id string) (ports.RunSession, bool) {
+	return sl.reg.Get(id)
+}
 
 // Option configures a Server on construction.
 type Option func(*Server)
@@ -34,12 +44,30 @@ func WithFacade(facade ports.WorkflowFacade) Option {
 	}
 }
 
+// WithWorkflowReader wires the focused read-only port used by the single-workflow GET and
+// history-stats endpoints. It is typically the same application.Adapter passed to WithFacade.
+// Without it, those two endpoints degrade to 503.
+func WithWorkflowReader(reader ports.WorkflowReader) Option {
+	return func(s *Server) {
+		s.reader = reader
+	}
+}
+
 // WithSessionRegistry wires a SessionLookup into handlers that need to resolve live
 // RunSessions by ID (SSEHandler and RespondHandler). Without this option those
 // handlers return 404 for every request — no panic, but no streaming either.
 func WithSessionRegistry(sl SessionLookup) Option {
 	return func(s *Server) {
 		s.sessions = sl
+	}
+}
+
+// WithRegistryImpl wires an application.SessionRegistry into the server.
+// It also creates a sessionLookup adapter and sets it as the SessionLookup for SSE/respond handlers.
+func WithRegistryImpl(reg *application.SessionRegistry) Option {
+	return func(s *Server) {
+		s.reg = reg
+		s.sessions = sessionLookup{reg}
 	}
 }
 
@@ -52,7 +80,9 @@ type Server struct {
 	shutdownTimeout time.Duration
 	sseWG           sync.WaitGroup
 	facade          ports.WorkflowFacade
+	reader          ports.WorkflowReader
 	sessions        SessionLookup
+	reg             *application.SessionRegistry
 }
 
 // NewServer assembles a Server with middleware and all route families on addr.
@@ -74,8 +104,15 @@ func NewServer(bridge *Bridge, addr string, opts ...Option) *Server {
 	config.Info.Description = "AWF workflow execution and management API"
 	s.api = humachi.New(s.mux, config)
 
-	RegisterWorkflowRoutes(s.api, NewWorkflowHandlers(bridge))
-	RegisterExecutionRoutes(s.api, NewExecutionHandlers(bridge))
+	RegisterWorkflowRoutes(s.api, NewWorkflowHandlers(s.facade, s.reader))
+	execHandlers := NewExecutionHandlers(bridge)
+	if s.facade != nil {
+		execHandlers.SetFacade(s.facade)
+	}
+	if s.reg != nil {
+		execHandlers.SetSessionRegistry(s.reg)
+	}
+	RegisterExecutionRoutes(s.api, execHandlers)
 	sseHandler := NewSSEHandler(bridge, &s.sseWG)
 	if s.sessions != nil {
 		sseHandler.SetSessionLookup(s.sessions)
@@ -88,7 +125,7 @@ func NewServer(bridge *Bridge, addr string, opts ...Option) *Server {
 		}
 		RegisterRespondRoutes(s.api, respondHandler)
 	}
-	RegisterHistoryRoutes(s.api, NewHistoryHandlers(bridge))
+	RegisterHistoryRoutes(s.api, NewHistoryHandlers(s.facade, s.reader))
 
 	s.httpSrv = &http.Server{
 		Addr:              addr,
@@ -109,12 +146,38 @@ func (s *Server) Start(ctx context.Context) error {
 	return nil
 }
 
-// Shutdown gracefully stops the HTTP server within shutdownTimeout and waits for active SSE goroutines.
+// sseWaitTimeout is the maximum time Shutdown will block for SSE goroutines to drain after
+// the HTTP server has stopped accepting new connections. A misbehaving long-running SSE
+// consumer must not hold up the process indefinitely; 10 s is generous for real clients
+// that honor the server-close signal, and short enough to be tolerable in CI.
+const sseWaitTimeout = 10 * time.Second
+
+// Shutdown gracefully stops the HTTP server within shutdownTimeout and waits for active
+// SSE goroutines with a bounded deadline.
+//
+// Ordering:
+//  1. httpSrv.Shutdown closes the listener and drains open connections (within shutdownTimeout).
+//  2. sseWG.Wait races against sseWaitTimeout. If SSE goroutines do not drain in time, a
+//     warning is logged and Shutdown returns — it does not block forever.
 func (s *Server) Shutdown(ctx context.Context) error {
 	shutdownCtx, cancel := context.WithTimeout(ctx, s.shutdownTimeout)
 	defer cancel()
 	err := s.httpSrv.Shutdown(shutdownCtx)
-	s.sseWG.Wait()
+
+	// Drain SSE goroutines with a hard cap so a misbehaving consumer cannot block shutdown.
+	done := make(chan struct{})
+	go func() {
+		s.sseWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// All SSE goroutines finished cleanly.
+	case <-time.After(sseWaitTimeout):
+		slog.Warn("SSE goroutines did not drain within deadline; forcing shutdown",
+			slog.Duration("timeout", sseWaitTimeout))
+	}
+
 	if err != nil {
 		return fmt.Errorf("http server shutdown: %w", err)
 	}

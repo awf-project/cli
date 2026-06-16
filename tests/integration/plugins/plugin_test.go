@@ -148,6 +148,13 @@ func TestPluginManifestFullFields_Integration(t *testing.T) {
 // Acceptance Criteria: Plugin lifecycle (load, init, shutdown)
 func TestPluginManager_Lifecycle_Integration(t *testing.T) {
 	fixturesPath := "../../fixtures/plugins"
+	binaryPath := filepath.Join(fixturesPath, "valid-simple", "awf-plugin-valid-simple")
+	if _, err := os.Stat(binaryPath); err != nil {
+		if os.IsNotExist(err) {
+			t.Skipf("plugin lifecycle integration requires fixture binary at %s", binaryPath)
+		}
+		require.NoError(t, err)
+	}
 
 	parser := pluginmgr.NewManifestParser()
 	loader := pluginmgr.NewFileSystemLoader(parser)

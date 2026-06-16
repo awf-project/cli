@@ -61,7 +61,7 @@ func TestExecutionService_ConversationStep_RoutingToConversationMode(t *testing.
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
-	ctx, err := execSvc.Run(context.Background(), "conv-test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "conv-test-run")
 
 	// F051: T009 - executeConversationStep is now implemented
 	// The test should succeed since ConversationManager is properly configured
@@ -122,7 +122,7 @@ func TestExecutionService_ConversationStep_WithInputInterpolation(t *testing.T) 
 		"code": "func main() { println(\"hello\") }",
 	}
 
-	ctx, err := execSvc.Run(context.Background(), "conv-input-test", inputs)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "conv-input-test-run")
 
 	// F051: T009 - executeConversationStep is now implemented
 	require.NoError(t, err)
@@ -186,7 +186,7 @@ func TestExecutionService_ConversationStep_WithHooks(t *testing.T) {
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
-	ctx, err := execSvc.Run(context.Background(), "conv-hooks", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "conv-hooks-run")
 
 	// F051: T009 - executeConversationStep is now implemented
 	// Hooks should execute successfully
@@ -244,7 +244,7 @@ func TestExecutionService_ConversationStep_SingleModeSkipsConversation(t *testin
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
-	ctx, err := execSvc.Run(context.Background(), "single-mode", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "single-mode-run")
 
 	// Should succeed with single execution (not conversation)
 	require.NoError(t, err)
@@ -306,7 +306,7 @@ func TestExecutionService_ConversationStep_EmptyModeDefaultsToSingle(t *testing.
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
-	ctx, err := execSvc.Run(context.Background(), "default-mode", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "default-mode-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -358,7 +358,7 @@ func TestExecutionService_ConversationStep_MinimalConversationConfig(t *testing.
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
-	ctx, err := execSvc.Run(context.Background(), "minimal-conv", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "minimal-conv-run")
 
 	// F051: T009 - executeConversationStep is now implemented
 	require.NoError(t, err)
@@ -374,7 +374,7 @@ func TestExecutionService_ConversationStep_MinimalConversationConfig(t *testing.
 // that conversation steps fail gracefully when conversation manager is not set
 func TestExecutionService_ConversationStep_NoConversationManagerConfigured(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["no-mgr"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "no-mgr",
 		Initial: "chat",
 		Steps: map[string]*workflow.Step{
@@ -394,6 +394,7 @@ func TestExecutionService_ConversationStep_NoConversationManagerConfigured(t *te
 			},
 		},
 	}
+	repo.workflows["no-mgr"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
@@ -412,7 +413,7 @@ func TestExecutionService_ConversationStep_NoConversationManagerConfigured(t *te
 	execSvc.SetAgentRegistry(registry)
 	// NOTE: SetConversationManager is NOT called - manager is nil
 
-	ctx, err := execSvc.Run(context.Background(), "no-mgr", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "no-mgr-run")
 
 	// F051: T009 - Should fail with "conversation manager not configured" error
 	require.Error(t, err)
@@ -425,7 +426,7 @@ func TestExecutionService_ConversationStep_NoConversationManagerConfigured(t *te
 // OnFailure transitions would work for conversation steps (in GREEN phase)
 func TestExecutionService_ConversationStep_WithOnFailureTransition(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["conv-failure"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "conv-failure",
 		Initial: "chat",
 		Steps: map[string]*workflow.Step{
@@ -450,6 +451,7 @@ func TestExecutionService_ConversationStep_WithOnFailureTransition(t *testing.T)
 			},
 		},
 	}
+	repo.workflows["conv-failure"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
@@ -473,7 +475,7 @@ func TestExecutionService_ConversationStep_WithOnFailureTransition(t *testing.T)
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
 
-	ctx, err := execSvc.Run(context.Background(), "conv-failure", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "conv-failure-run")
 
 	// F051: T009 - executeConversationStep is now implemented
 	// Should complete successfully (mock provider succeeds)
@@ -490,7 +492,7 @@ func TestExecutionService_ConversationStep_WithOnFailureTransition(t *testing.T)
 // conversation execution respects context cancellation
 func TestExecutionService_ConversationStep_ContextCancellation(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["conv-cancel"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "conv-cancel",
 		Initial: "chat",
 		Steps: map[string]*workflow.Step{
@@ -510,6 +512,7 @@ func TestExecutionService_ConversationStep_ContextCancellation(t *testing.T) {
 			},
 		},
 	}
+	repo.workflows["conv-cancel"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
@@ -537,7 +540,7 @@ func TestExecutionService_ConversationStep_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Immediately cancel
 
-	execCtx, err := execSvc.Run(ctx, "conv-cancel", nil)
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(ctx, wf, nil, "conv-cancel-run")
 
 	// F051: T009 - executeConversationStep is now implemented and respects context cancellation
 	require.Error(t, err)
@@ -556,7 +559,7 @@ func TestExecutionService_ConversationStep_ContextCancellation(t *testing.T) {
 // conversation steps can access previous step states via interpolation
 func TestExecutionService_ConversationStep_InterpolationContextAccess(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["conv-context"] = &workflow.Workflow{
+	wf := &workflow.Workflow{
 		Name:    "conv-context",
 		Initial: "setup",
 		Inputs: []workflow.Input{
@@ -585,6 +588,7 @@ func TestExecutionService_ConversationStep_InterpolationContextAccess(t *testing
 			},
 		},
 	}
+	repo.workflows["conv-context"] = wf
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
@@ -618,7 +622,7 @@ func TestExecutionService_ConversationStep_InterpolationContextAccess(t *testing
 		"initial_data": "test-data",
 	}
 
-	execCtx, err := execSvc.Run(context.Background(), "conv-context", inputs)
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "conv-context-run")
 
 	// F051: T009 - executeConversationStep is now implemented
 	require.NoError(t, err)

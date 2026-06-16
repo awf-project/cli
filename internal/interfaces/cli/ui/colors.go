@@ -14,12 +14,15 @@ type Colorizer struct {
 }
 
 // NewColorizer creates a new colorizer.
+//
+// Color enablement is set per *color.Color instance rather than through the
+// fatih/color package global (color.NoColor). Mutating that global here raced with
+// concurrent Sprint reads from the facade execution goroutine and the event
+// projector (both build/use colorizers on the shared run path). Pinning each
+// instance's state via Enable/DisableColor makes Sprint read the per-instance flag
+// and never touch the package global.
 func NewColorizer(enabled bool) *Colorizer {
-	if !enabled {
-		color.NoColor = true
-	}
-
-	return &Colorizer{
+	c := &Colorizer{
 		enabled: enabled,
 		success: color.New(color.FgGreen),
 		err:     color.New(color.FgRed),
@@ -28,6 +31,16 @@ func NewColorizer(enabled bool) *Colorizer {
 		bold:    color.New(color.Bold),
 		dim:     color.New(color.Faint),
 	}
+
+	for _, instance := range []*color.Color{c.success, c.err, c.warning, c.info, c.bold, c.dim} {
+		if enabled {
+			instance.EnableColor()
+		} else {
+			instance.DisableColor()
+		}
+	}
+
+	return c
 }
 
 // Success formats text as success (green).

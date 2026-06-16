@@ -154,7 +154,6 @@ func TestDocGo_InternalLayoutFiles(t *testing.T) {
 		"emitter.go",
 		"event_projector.go",
 		"renderer.go",
-		"input_reader.go",
 		"fanout_publisher.go",
 		"permission.go",
 		"architecture_test.go",

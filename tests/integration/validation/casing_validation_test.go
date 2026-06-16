@@ -26,6 +26,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// newValidateCmd builds a facade-wired root command with output captured in buf.
+// It prepends --storage=<tmpdir> so buildFacade can create history.db without
+// touching the user's real data directory (required since F108).
+// The caller must defer the returned cleanup.
+func newValidateCmd(t *testing.T, args ...string) (*bytes.Buffer, func() error) {
+	t.Helper()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs(append([]string{"--storage=" + t.TempDir()}, args...))
+	return buf, func() error {
+		defer cleanup()
+		return cmd.Execute()
+	}
+}
+
 // TestValidate_SingleLowercaseError tests that a workflow with a single
 // lowercase property reference fails validation with a helpful suggestion.
 //
@@ -33,13 +50,9 @@ import (
 func TestValidate_SingleLowercaseError(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"validate", "lowercase-single"})
+	buf, run := newValidateCmd(t, "validate", "lowercase-single")
 
-	err := cmd.Execute()
+	err := run()
 	require.Error(t, err, "validation should fail for lowercase property")
 
 	output := buf.String()
@@ -61,13 +74,9 @@ func TestValidate_SingleLowercaseError(t *testing.T) {
 func TestValidate_MultipleLowercaseErrors(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"validate", "lowercase-multiple"})
+	buf, run := newValidateCmd(t, "validate", "lowercase-multiple")
 
-	err := cmd.Execute()
+	err := run()
 	require.Error(t, err, "validation should fail for multiple lowercase properties")
 
 	output := buf.String()
@@ -93,13 +102,9 @@ func TestValidate_MultipleLowercaseErrors(t *testing.T) {
 func TestValidate_UppercasePropertiesPass(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"validate", "uppercase-valid"})
+	buf, run := newValidateCmd(t, "validate", "uppercase-valid")
 
-	err := cmd.Execute()
+	err := run()
 	require.NoError(t, err, "validation should pass for uppercase properties")
 
 	output := buf.String()
@@ -117,13 +122,9 @@ func TestValidate_UppercasePropertiesPass(t *testing.T) {
 func TestValidate_MixedCasing(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"validate", "mixed-casing"})
+	buf, run := newValidateCmd(t, "validate", "mixed-casing")
 
-	err := cmd.Execute()
+	err := run()
 	require.Error(t, err, "validation should fail for mixed casing workflow")
 
 	output := buf.String()
@@ -154,13 +155,9 @@ func TestValidate_MixedCasing(t *testing.T) {
 func TestValidate_LoopConditionLowercase(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"validate", "loop-lowercase"})
+	buf, run := newValidateCmd(t, "validate", "loop-lowercase")
 
-	err := cmd.Execute()
+	err := run()
 	// Validation does not inspect loop while-conditions for casing;
 	// lowercase property references in loop conditions pass validation.
 	require.NoError(t, err, "loop conditions are not subject to casing validation")
@@ -176,13 +173,9 @@ func TestValidate_LoopConditionLowercase(t *testing.T) {
 func TestValidate_HookLowercase(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"validate", "hook-lowercase"})
+	buf, run := newValidateCmd(t, "validate", "hook-lowercase")
 
-	err := cmd.Execute()
+	err := run()
 	// The hook-lowercase fixture self-references risky_operation in its own command,
 	// so forward reference validation fires before casing validation.
 	require.Error(t, err, "validation should fail for forward reference")
@@ -201,13 +194,9 @@ func TestValidate_HookLowercase(t *testing.T) {
 func TestValidate_ErrorMessageQuality(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"validate", "lowercase-single"})
+	buf, run := newValidateCmd(t, "validate", "lowercase-single")
 
-	err := cmd.Execute()
+	err := run()
 	require.Error(t, err)
 
 	output := buf.String()
@@ -279,13 +268,9 @@ states:
 
 	t.Setenv("AWF_WORKFLOWS_PATH", tmpDir)
 
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"validate", "test-allcaps"})
+	buf, run := newValidateCmd(t, "validate", "test-allcaps")
 
-	err = cmd.Execute()
+	err = run()
 	require.Error(t, err, "validation should fail for all-caps OUTPUT")
 
 	output := buf.String()
@@ -311,13 +296,9 @@ func TestValidate_NoFalsePositives(t *testing.T) {
 
 	for _, workflow := range validWorkflows {
 		t.Run(workflow, func(t *testing.T) {
-			cmd := cli.NewRootCommand()
-			buf := new(bytes.Buffer)
-			cmd.SetOut(buf)
-			cmd.SetErr(buf)
-			cmd.SetArgs([]string{"validate", workflow})
+			buf, run := newValidateCmd(t, "validate", workflow)
 
-			err := cmd.Execute()
+			err := run()
 
 			// These workflows should pass validation
 			require.NoError(t, err, "valid workflow %s should pass validation", workflow)
@@ -379,13 +360,9 @@ states:
 
 	t.Setenv("AWF_WORKFLOWS_PATH", tmpDir)
 
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"validate", "test-empty"})
+	buf, run := newValidateCmd(t, "validate", "test-empty")
 
-	err = cmd.Execute()
+	err = run()
 	require.NoError(t, err, "workflow without state references should pass")
 
 	output := buf.String()
@@ -451,12 +428,8 @@ states:
 	// large workflows without errors. Manual performance testing can verify
 	// the <100ms requirement.
 
-	cmd := cli.NewRootCommand()
-	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"validate", "test-large"})
+	_, run := newValidateCmd(t, "validate", "test-large")
 
-	err = cmd.Execute()
+	err = run()
 	require.NoError(t, err, "large workflow should validate successfully")
 }

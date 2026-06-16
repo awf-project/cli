@@ -281,12 +281,12 @@ func TestValidateCodexOptions_ErrorMessageQuality(t *testing.T) {
 }
 
 func TestValidateCodexOptions_WithOtherOptions(t *testing.T) {
-	// Verify validation only checks model, ignores other options
+	// Verify validation only checks model, ignores other options.
 	options := map[string]any{
 		"model":       "gpt-4o",
-		"temperature": 2.5,     // Invalid temp
-		"max_tokens":  -100,    // Invalid tokens
-		"unknown":     "value", // Unknown option
+		"temperature": 2.5,     // Ignored by Codex provider.
+		"max_tokens":  -100,    // Ignored by Codex provider.
+		"unknown":     "value", // Unknown option.
 	}
 
 	err := validateCodexOptions(options)

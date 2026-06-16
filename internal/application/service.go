@@ -25,6 +25,8 @@ type WorkflowService struct {
 	validatorProvider      ports.WorkflowValidatorProvider
 	packDiscoverer         ports.PackDiscoverer
 	opProvider             ports.OperationProvider
+	templateAnalyzer       workflow.TemplateAnalyzer
+	skillRepo              ports.SkillRepository
 	lastValidationWarnings []workflow.ValidationError
 }
 
@@ -54,6 +56,19 @@ func (s *WorkflowService) SetPackDiscoverer(d ports.PackDiscoverer) {
 
 func (s *WorkflowService) SetPluginOperationProvider(p ports.OperationProvider) {
 	s.opProvider = p
+}
+
+// SetTemplateAnalyzer wires the analyzer used by the template-reference validation
+// phase (forward references, unknown namespaces, {{error.*}} outside error hooks).
+// It is an optional dependency: when no analyzer is wired, ValidateLoadedWorkflow
+// skips that phase, preserving read-only-facade behavior for callers that only need
+// the structural and expression-compilation checks.
+func (s *WorkflowService) SetTemplateAnalyzer(a workflow.TemplateAnalyzer) {
+	s.templateAnalyzer = a
+}
+
+func (s *WorkflowService) SetSkillRepository(repo ports.SkillRepository) {
+	s.skillRepo = repo
 }
 
 // LastValidationWarnings returns the structured ValidationError warnings from the most
@@ -96,14 +111,6 @@ func (s *WorkflowService) ListAllWorkflows(ctx context.Context) ([]workflow.Work
 	return entries, nil
 }
 
-func (s *WorkflowService) ListWorkflows(ctx context.Context) ([]string, error) {
-	workflows, err := s.repo.List(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list workflows: %w", err)
-	}
-	return workflows, nil
-}
-
 func (s *WorkflowService) GetWorkflow(ctx context.Context, name string) (*workflow.Workflow, error) {
 	if packName, wfName, ok := strings.Cut(name, "/"); ok && s.packDiscoverer != nil {
 		wf, err := s.packDiscoverer.LoadWorkflow(ctx, packName, wfName)
@@ -125,37 +132,125 @@ func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) err
 	if err != nil {
 		return err
 	}
-	if err := wf.Validate(s.validator.Compile, nil); err != nil {
-		var stateRefErr *workflow.StateReferenceError
-		if errors.As(err, &stateRefErr) {
-			availableAny := make([]any, len(stateRefErr.AvailableStates))
-			for i, s := range stateRefErr.AvailableStates {
-				availableAny[i] = s
+	return s.ValidateLoadedWorkflow(ctx, wf, name, ports.ValidateOptions{})
+}
+
+// ValidateLoadedWorkflow runs the full validation pipeline (domain state/expression
+// validation, prompt files, plugin validators, MCP proxy) on an already-loaded workflow.
+// It is shared by ValidateWorkflow (load-then-validate) and the WorkflowFacade adapter,
+// which loads via the canonical-identifier Resolver and must not re-load by bare name.
+// A nil validator skips only the expression-compilation step so a read-only facade without
+// an expression validator wired still performs the remaining structural checks.
+// opts controls the plugin-validator phase: SkipPlugins suppresses it entirely;
+// ValidatorTimeout > 0 bounds it with a context deadline.
+func (s *WorkflowService) ValidateLoadedWorkflow(ctx context.Context, wf *workflow.Workflow, name string, opts ports.ValidateOptions) error {
+	if s.validator != nil {
+		if err := wf.Validate(s.validator.Compile, nil); err != nil {
+			var stateRefErr *workflow.StateReferenceError
+			if errors.As(err, &stateRefErr) {
+				availableAny := make([]any, len(stateRefErr.AvailableStates))
+				for i, s := range stateRefErr.AvailableStates {
+					availableAny[i] = s
+				}
+				return domerrors.NewWorkflowError(
+					domerrors.ErrorCodeWorkflowValidationMissingState,
+					stateRefErr.Error(),
+					map[string]any{
+						"state":            stateRefErr.ReferencedState,
+						"available_states": availableAny,
+						"step":             stateRefErr.StepName,
+						"field":            stateRefErr.Field,
+					},
+					err,
+				)
 			}
-			return domerrors.NewWorkflowError(
-				domerrors.ErrorCodeWorkflowValidationMissingState,
-				stateRefErr.Error(),
-				map[string]any{
-					"state":            stateRefErr.ReferencedState,
-					"available_states": availableAny,
-					"step":             stateRefErr.StepName,
-					"field":            stateRefErr.Field,
-				},
-				err,
-			)
+			return fmt.Errorf("validate workflow %s: %w", name, err)
 		}
-		return fmt.Errorf("validate workflow %s: %w", name, err)
 	}
 
 	if err := s.validatePromptFiles(wf); err != nil {
 		return err
 	}
 
-	if err := s.validateWithPluginProvider(ctx, wf); err != nil {
+	if err := s.validateSkillRefs(ctx, wf); err != nil {
 		return err
 	}
 
-	return s.validateMCPProxy(wf)
+	if err := s.validateWithPluginProvider(ctx, wf, opts); err != nil {
+		return err
+	}
+
+	if err := s.validateMCPProxy(wf); err != nil {
+		return err
+	}
+
+	return s.validateTemplateReferences(wf)
+}
+
+func (s *WorkflowService) validateSkillRefs(ctx context.Context, wf *workflow.Workflow) error {
+	if s.skillRepo == nil {
+		return nil
+	}
+
+	for _, step := range wf.Steps {
+		for _, ref := range step.Skills {
+			if _, err := resolveSkillRef(ctx, s.skillRepo, ref, wf.SourceDir); err != nil {
+				var notFound *workflow.SkillNotFoundError
+				if errors.As(err, &notFound) && skillDirExists(notFound.Name, notFound.SearchPaths) {
+					return workflow.ValidationError{
+						Level:   workflow.ValidationLevelError,
+						Code:    workflow.ErrSkillMissingSkillMD,
+						Message: fmt.Sprintf("skill %q has no SKILL.md", notFound.Name),
+						Path:    fmt.Sprintf("states.%s.skills", step.Name),
+					}
+				}
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func skillDirExists(name string, searchPaths []string) bool {
+	for _, searchPath := range searchPaths {
+		if info, err := os.Stat(filepath.Join(searchPath, name)); err == nil && info.IsDir() {
+			return true
+		}
+	}
+	return false
+}
+
+// validateTemplateReferences runs the template-interpolation reference checks
+// (forward references, unknown namespaces, {{error.*}} used outside error-hook
+// contexts) via the domain TemplateValidator. It is skipped when no TemplateAnalyzer
+// is wired, so read-only facades without an analyzer keep performing only the
+// structural and expression-compilation checks. Multiple errors are aggregated into a
+// single error, mirroring the validate command's historical multi-error formatting.
+func (s *WorkflowService) validateTemplateReferences(wf *workflow.Workflow) error {
+	if s.templateAnalyzer == nil {
+		return nil
+	}
+
+	tv := workflow.NewTemplateValidator(wf, s.templateAnalyzer)
+	if tv == nil {
+		return nil
+	}
+
+	result := tv.Validate()
+	if result == nil || !result.HasErrors() {
+		return nil
+	}
+
+	if len(result.Errors) == 1 {
+		return result.Errors[0]
+	}
+
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "validation failed with %d errors:", len(result.Errors))
+	for i := range result.Errors {
+		fmt.Fprintf(&sb, "\n  %s", result.Errors[i].Error())
+	}
+	return fmt.Errorf("%s", sb.String())
 }
 
 // promptFileError constructs an ErrorCodeUserInputMissingFile structured error
@@ -226,9 +321,18 @@ func (s *WorkflowService) validatePromptFiles(wf *workflow.Workflow) error {
 	return nil
 }
 
-func (s *WorkflowService) validateWithPluginProvider(ctx context.Context, wf *workflow.Workflow) error {
+func (s *WorkflowService) validateWithPluginProvider(ctx context.Context, wf *workflow.Workflow, opts ports.ValidateOptions) error {
+	if opts.SkipPlugins {
+		return nil
+	}
 	if s.validatorProvider == nil {
 		return nil
+	}
+
+	if opts.ValidatorTimeout > 0 {
+		ctx2, cancel := context.WithTimeout(ctx, opts.ValidatorTimeout)
+		defer cancel()
+		ctx = ctx2
 	}
 
 	workflowJSON, err := json.Marshal(wf)
@@ -379,12 +483,4 @@ func (s *WorkflowService) validateMCPProxyExposedOps(stepName string, toolIdx in
 		}
 	}
 	return errs
-}
-
-func (s *WorkflowService) WorkflowExists(ctx context.Context, name string) (bool, error) {
-	exists, err := s.repo.Exists(ctx, name)
-	if err != nil {
-		return false, fmt.Errorf("check workflow exists %s: %w", name, err)
-	}
-	return exists, nil
 }

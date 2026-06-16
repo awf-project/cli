@@ -2,10 +2,8 @@ package facadetest
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
-	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
 )
 
@@ -41,11 +39,17 @@ func (f *Fake) WithTerminalCompleted() *Fake {
 }
 
 // WithTerminalFailed appends an EventWorkflowFailed terminal event.
-// The event Payload is set to the ErrorCode mapped from err via application.MapError.
+// The Payload is *ports.EnrichedTerminal carrying the error message, matching
+// the production emitTerminalEvent behavior. All consumers type-assert to
+// *ports.EnrichedTerminal, so the fake must emit the same concrete type (B1).
 func (f *Fake) WithTerminalFailed(err error) *Fake {
+	var payload *ports.EnrichedTerminal
+	if err != nil {
+		payload = &ports.EnrichedTerminal{Error: err.Error()}
+	}
 	return f.Script(ports.Event{
 		Kind:    ports.EventWorkflowFailed,
-		Payload: application.MapError(err),
+		Payload: payload,
 	})
 }
 
@@ -92,13 +96,10 @@ func (f *Fake) History(_ context.Context, _ ports.HistoryFilter) ([]ports.RunRec
 
 // Run creates a FakeSession that emits the scripted event sequence.
 // Returns ErrInvalidRequest if req.Identifier is empty.
-// Returns the context error if ctx is already cancelled.
+// Always succeeds even if ctx is already cancelled — the scripted events are emitted unconditionally.
 func (f *Fake) Run(ctx context.Context, req ports.RunRequest) (ports.RunSession, error) {
 	if req.Identifier == "" {
 		return nil, ports.ErrInvalidRequest
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("facadetest: run context: %w", err)
 	}
 	f.mu.Lock()
 	script := make([]ports.Event, len(f.script))
@@ -109,9 +110,18 @@ func (f *Fake) Run(ctx context.Context, req ports.RunRequest) (ports.RunSession,
 	return sess, nil
 }
 
-// Resume returns nil (zero-value stub).
-func (f *Fake) Resume(_ context.Context, _ string) (ports.RunSession, error) {
-	return nil, nil
+// RunStep is intentionally absent from Fake: WorkflowFacade no longer includes
+// single-step isolation (M1). Single-step execution is a CLI-only concern exposed
+// through ports.SingleStepRunner, implemented by *application.Adapter directly.
+
+// Resume returns a live FakeSession seeded from req.RunID with no scripted events.
+// The session's Events() channel closes immediately (empty script).
+// req.InputOverrides and req.FromStep satisfy the ports.WorkflowFacade contract
+// but are not used by the fake — it always emits the scripted sequence regardless.
+func (f *Fake) Resume(ctx context.Context, req ports.ResumeRequest) (ports.RunSession, error) {
+	sess := newFakeSession(req.RunID, nil)
+	go sess.pump(ctx)
+	return sess, nil
 }
 
 // FakeSession emits scripted events on Events() in order.
@@ -142,7 +152,8 @@ func newFakeSession(id string, script []ports.Event) *FakeSession {
 // pump sends scripted events onto the events channel.
 // Pauses after EventInputRequired until Respond is called.
 // Closes the events channel when the script is exhausted, a terminal event is emitted,
-// the context is cancelled, or doneCh is signaled.
+// or doneCh is signaled. Ctx cancellation does NOT abort event delivery — scripted events
+// are always emitted. Ctx is only respected when waiting for an InputRequired response.
 func (s *FakeSession) pump(ctx context.Context) {
 	defer close(s.pumpDone)
 	defer close(s.events)
@@ -150,8 +161,6 @@ func (s *FakeSession) pump(ctx context.Context) {
 		select {
 		case s.events <- ev:
 		case <-s.doneCh:
-			return
-		case <-ctx.Done():
 			return
 		}
 		if ev.Kind == ports.EventInputRequired {
@@ -203,6 +212,34 @@ func (s *FakeSession) Respond(_ ports.InputResponse) error {
 
 // Err always returns nil for the fake.
 func (s *FakeSession) Err() error { return nil }
+
+// StatusSnapshot derives a coarse status from the scripted events, mirroring
+// *application.RunSession.StatusSnapshot so interface-layer status overlays (e.g. the HTTP
+// GET /executions/{id} handler) can be exercised against the fake.
+func (s *FakeSession) StatusSnapshot() ports.RunStatus {
+	snap := ports.RunStatus{RunID: s.id, Status: ports.RunStateRunning}
+	for _, ev := range s.script {
+		switch ev.Kind {
+		case ports.EventStepStarted:
+			if p, ok := ev.Payload.(*ports.EnrichedStepPayload); ok {
+				snap.CurrentStep = p.StepName
+			}
+		case ports.EventStepCompleted:
+			snap.CurrentStep = ""
+		case ports.EventWorkflowCompleted:
+			snap.Status = ports.RunStateCompleted
+			snap.CurrentStep = ""
+			snap.CompletedAt = ev.Timestamp
+		case ports.EventWorkflowFailed:
+			snap.Status = ports.RunStateFailed
+			snap.CurrentStep = ""
+			snap.CompletedAt = ev.Timestamp
+		default:
+			// Other event kinds do not change the coarse run status.
+		}
+	}
+	return snap
+}
 
 // Close stops event emission and waits for the pump goroutine to exit.
 // Idempotent: multiple calls return nil without panicking.

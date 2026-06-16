@@ -1,0 +1,3 @@
+{"kind":"workflow_started","run_id":"run-conformance"}
+{"kind":"step_completed","run_id":"run-conformance"}
+{"kind":"workflow_completed","run_id":""}

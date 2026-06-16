@@ -13,7 +13,6 @@ import (
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
-	"github.com/awf-project/cli/internal/domain/transcript"
 	"github.com/awf-project/cli/internal/infrastructure/audit"
 	"github.com/awf-project/cli/internal/infrastructure/config"
 	"github.com/awf-project/cli/internal/infrastructure/executor"
@@ -21,6 +20,7 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/store"
+	infraTranscript "github.com/awf-project/cli/internal/infrastructure/transcript"
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 )
@@ -57,20 +57,25 @@ func runTUI(_ *cobra.Command) error {
 		return err
 	}
 
-	bridge, inputReader, cleanup, err := buildBridge()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	bridge, inputReader, cleanup, err := buildBridge(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to initialize TUI services: %w", err)
 	}
 	defer cleanup()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	model := NewWithBridge(bridge, ctx, findAWFAuditLog())
 	model.tabMonitoring.SetInputReader(inputReader)
 	p := tea.NewProgram(model)
 
 	inputReader.SetSender(p.Send)
+	// Wire the monitoring tab's event dispatcher so StartEventLoop can push facade events
+	// into the update loop. Without this the Monitoring tab stays blank: the event goroutine
+	// has no sender. The tab's senderRef is a shared pointer created before NewProgram, so
+	// setting it here reaches the program's model copy (same mechanism as inputReader).
+	model.tabMonitoring.SetSender(p.Send)
 
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("tui: %w", err)
@@ -92,7 +97,7 @@ func validateTerminal() error {
 
 // buildBridge constructs infrastructure services using the ExecutionSetup builder
 // and returns a wired Bridge and TUIInputReader. The returned cleanup function releases all resources.
-func buildBridge() (*Bridge, *TUIInputReader, func(), error) {
+func buildBridge(ctx context.Context) (*Bridge, *TUIInputReader, func(), error) {
 	storagePath := xdg.AWFDataDir()
 	nopCleanup := func() {}
 
@@ -107,7 +112,9 @@ func buildBridge() (*Bridge, *TUIInputReader, func(), error) {
 		xdg.LocalPluginsDir(),
 		xdg.AWFPluginsDir(),
 	}
-	pluginResult, pluginErr := pluginmgr.InitSystem(context.Background(), pluginDirs, filepath.Join(storagePath, "plugins"), "", &nopLogger{})
+	// Use the caller's cancellable ctx (mirrors the M8 fix in cli/serve.go) so plugin
+	// initialization is interruptible rather than tied to context.Background().
+	pluginResult, pluginErr := pluginmgr.InitSystem(ctx, pluginDirs, filepath.Join(storagePath, "plugins"), "", &nopLogger{})
 
 	// Initialize tracer (same as CLI).
 	otelCfg := infraotel.TracerConfig{
@@ -130,7 +137,7 @@ func buildBridge() (*Bridge, *TUIInputReader, func(), error) {
 	// History store.
 	historyStore, histErr := store.NewSQLiteHistoryStore(filepath.Join(storagePath, "history.db"))
 	if histErr != nil {
-		return NewBridge(nil, nil, nil), nil, nopCleanup, nil
+		return NewBridge(nil, nil), nil, nopCleanup, nil
 	}
 
 	// Core infrastructure dependencies.
@@ -187,7 +194,7 @@ func buildBridge() (*Bridge, *TUIInputReader, func(), error) {
 	result, buildErr := application.NewExecutionSetup(repo, stateStore, shellExecutor, logger, setupOpts...).Build(context.Background())
 	if buildErr != nil {
 		_ = historyStore.Close()
-		return NewBridge(nil, nil, nil), nil, nopCleanup, nil
+		return NewBridge(nil, nil), nil, nopCleanup, nil
 	}
 
 	// Wire pack discovery into WorkflowService for unified listing.
@@ -206,15 +213,15 @@ func buildBridge() (*Bridge, *TUIInputReader, func(), error) {
 		}
 	}
 
-	bridge := NewBridge(result.WorkflowSvc, result.ExecService, result.HistorySvc)
+	bridge := NewBridge(result.WorkflowSvc, result.HistorySvc)
 	bridge.stream = streamBuf
 
 	// Wire the facade for event-driven execution (T061, D27, FR-011).
 	// The facade uses the same services already wired into the bridge so there is no
-	// duplicate resource ownership. The recorder is a no-op: transcript events flow
-	// through the execution service's internal recorder (wired by ExecutionSetup), not
-	// through this facade-level nopRecorder which is only required by the Adapter constructor.
-	if facade := buildTUIFacade(result); facade != nil {
+	// duplicate resource ownership. A per-run transcript recorder factory is wired so the
+	// monitoring tab receives LIVE step/message events from Session.Events() — not just the
+	// terminal event — and each run gets a transcript file at storage/transcripts/{runID}.
+	if facade := buildTUIFacade(result, storagePath, inputReader); facade != nil {
 		bridge.SetFacade(facade)
 	}
 
@@ -272,11 +279,15 @@ func findAWFAuditLog() string {
 // result. It mirrors the pattern used by cli.buildFacade (T060) but reuses the services
 // that ExecutionSetup already wired rather than constructing new ones.
 //
-// The facade's Adapter receives a tuiNopRecorder because ExecutionSetup wires its own
-// per-execution recorder internally; the facade-level recorder is only required by the
+// The facade's Adapter receives a transcript.NopRecorder because ExecutionSetup wires its
+// own per-execution recorder internally; the facade-level recorder is only required by the
 // Adapter constructor and is never called in the code paths exercised by the TUI.
+//
+// inputReader must be the same TUIInputReader wired into buildBridge so that interactive
+// conversation turns route through the unified EventInputRequired path (F107). Passing nil
+// disables multi-turn input — the adapter skips newSessionInputReader instantiation.
 // Returns nil on any setup error so the caller falls back gracefully.
-func buildTUIFacade(result *application.SetupResult) ports.WorkflowFacade {
+func buildTUIFacade(result *application.SetupResult, storagePath string, inputReader *TUIInputReader) ports.WorkflowFacade {
 	if result == nil || result.WorkflowSvc == nil {
 		return nil
 	}
@@ -296,34 +307,35 @@ func buildTUIFacade(result *application.SetupResult) ports.WorkflowFacade {
 		execSvc = &application.ExecutionService{}
 	}
 
-	return application.NewAdapter(
+	adapter := application.NewAdapter(
 		result.WorkflowSvc,
 		execSvc,
 		result.HistorySvc,
 		resolver,
-		tuiNopRecorder{},
+		infraTranscript.NewNopRecorder(),
 		application.NewSessionRegistry(),
 	)
+	// Wire the TUI input reader so that interactive conversation turns route through the
+	// unified EventInputRequired / RunSession.Respond path (F107). This mirrors the
+	// adapter.SetUserInputReader call in cli.buildFacade (~run.go:1229). The inputReader
+	// is the same instance already registered with ExecutionSetup via WithUserInputReader,
+	// so there is no double-wiring — both paths share a single TUIInputReader.
+	// When inputReader is nil (test or degraded startup) the adapter falls back safely:
+	// userInputReader == nil skips newSessionInputReader instantiation.
+	if inputReader != nil {
+		adapter.SetUserInputReader(inputReader)
+	}
+	// Per-run transcript recorder: each run owns its recorder so live step/message events
+	// reach this session's stream (monitoring tab) without contaminating concurrent runs.
+	adapter.SetRunRecorderFactory(func(runID string) (ports.Recorder, error) {
+		dir := filepath.Join(storagePath, "transcripts")
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			return nil, err
+		}
+		return infraTranscript.NewRecorder(filepath.Join(dir, runID+".jsonl"))
+	})
+	return adapter
 }
-
-// tuiNopRecorder is a no-op ports.Recorder for the TUI facade. The TUI facade
-// Adapter needs a Recorder in its constructor (SC-001 / sole-subscriber contract)
-// but the actual transcript recording is handled by the ExecutionService's own
-// per-execution recorder wired by ExecutionSetup. This recorder's Subscribe channel
-// is immediately closed so any accidental consumer terminates without blocking.
-type tuiNopRecorder struct{}
-
-func (tuiNopRecorder) Record(_ context.Context, _ transcript.ExchangeEvent) error { //nolint:gocritic // hugeParam: ports.Recorder contract requires value type
-	return nil
-}
-
-func (tuiNopRecorder) Subscribe() (ch <-chan transcript.ExchangeEvent, cancel func()) {
-	c := make(chan transcript.ExchangeEvent)
-	close(c)
-	return c, func() {}
-}
-
-func (tuiNopRecorder) Close() error { return nil }
 
 // nopLogger satisfies ports.Logger for silent TUI operation.
 type nopLogger struct{}

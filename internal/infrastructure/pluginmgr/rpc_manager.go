@@ -453,6 +453,9 @@ func (m *RPCPluginManager) resolvePluginBinary(name string) (string, *pluginmode
 	if binaryInfo.IsDir() {
 		return "", nil, NewRPCManagerError("init", name, fmt.Sprintf("plugin binary path is a directory, not executable: %s", binaryPath))
 	}
+	if binaryInfo.Mode()&0o111 == 0 {
+		return "", nil, NewRPCManagerError("init", name, fmt.Sprintf("plugin binary is not executable: %s (run: chmod +x %s)", binaryPath, binaryPath))
+	}
 
 	return binaryPath, info, nil
 }

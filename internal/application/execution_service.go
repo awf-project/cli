@@ -135,6 +135,29 @@ func (s *ExecutionService) SetEvaluator(evaluator ports.ExpressionEvaluator) {
 // Accepts ConversationExecutor interface to allow dependency injection and testing with mocks.
 func (s *ExecutionService) SetConversationManager(mgr ConversationExecutor) {
 	s.conversationMgr = mgr
+	// Route the multi-turn loop's per-turn emission through this service's recorder-backed
+	// transcript emitters (the ConversationManager owns no recorder). This makes the agent's
+	// questions and the user's answers visible to event-only consumers (TUI monitoring, SSE).
+	if e, ok := mgr.(interface {
+		SetTurnEmitter(func(ctx context.Context, ec *workflow.ExecutionContext, role workflow.TurnRole, provider, content string))
+	}); ok {
+		e.SetTurnEmitter(s.emitConversationTurn)
+	}
+}
+
+// emitConversationTurn records a single conversation turn as a transcript message event,
+// reusing the same recorder-backed emitters as single-turn agent steps. User turns capture
+// the outgoing prompt/answer (router fidelity); assistant turns capture the agent's response
+// text (no raw NDJSON is available per turn here, so the text is emitted as a single block).
+func (s *ExecutionService) emitConversationTurn(ctx context.Context, ec *workflow.ExecutionContext, role workflow.TurnRole, provider, content string) {
+	switch role {
+	case workflow.TurnRoleUser:
+		s.emitTranscriptAgentMessage(ctx, ec, content, "")
+	case workflow.TurnRoleAssistant:
+		s.emitTranscriptAgentResponse(ctx, ec, provider, "", content)
+	case workflow.TurnRoleSystem:
+		// System turns are composed into the user message's system block; not emitted here.
+	}
 }
 
 func (s *ExecutionService) SetSkillRepository(repo ports.SkillRepository) {
@@ -392,25 +415,6 @@ func NewExecutionServiceWithEvaluator(
 	}
 }
 
-// Run executes a workflow by name with the given inputs.
-func (s *ExecutionService) Run(
-	ctx context.Context,
-	workflowName string,
-	inputs map[string]any,
-) (*workflow.ExecutionContext, error) {
-	return s.runWithCallStack(ctx, workflowName, inputs, nil, "", "")
-}
-
-// RunWithWorkflow executes a pre-loaded workflow with the given inputs.
-// This avoids double-loading when the workflow has already been loaded (e.g., for input validation).
-func (s *ExecutionService) RunWithWorkflow(
-	ctx context.Context,
-	wf *workflow.Workflow,
-	inputs map[string]any,
-) (*workflow.ExecutionContext, error) {
-	return s.runWithCallStackAndWorkflow(ctx, "", wf, inputs, nil, "", "")
-}
-
 // RunWithWorkflowAndRunID executes a pre-loaded workflow using runID as the execution's
 // WorkflowID. This lets callers (e.g. the CLI run command) reuse the same identifier for
 // the transcript filename (<run-id>.jsonl) and the run_id stamped on every emitted event,
@@ -422,31 +426,6 @@ func (s *ExecutionService) RunWithWorkflowAndRunID(
 	runID string,
 ) (*workflow.ExecutionContext, error) {
 	return s.runWithCallStackAndWorkflow(ctx, "", wf, inputs, nil, runID, "")
-}
-
-// RunWorkflowAsync starts workflow execution and returns the ExecutionContext immediately.
-// The returned context is observable via GetAllStepStates() while execution runs in a
-// background goroutine. The done channel receives nil on success or the execution error.
-func (s *ExecutionService) RunWorkflowAsync(
-	ctx context.Context,
-	wf *workflow.Workflow,
-	inputs map[string]any,
-) (*workflow.ExecutionContext, <-chan error, error) {
-	spanCtx, span, execCtx, err := s.prepareExecution(ctx, wf, inputs, nil, "", "")
-	if err != nil {
-		if span != nil {
-			span.End()
-		}
-		return nil, nil, err
-	}
-
-	done := make(chan error, 1)
-	go func() {
-		defer span.End()
-		done <- s.runExecutionLoop(spanCtx, wf, execCtx)
-	}()
-
-	return execCtx, done, nil
 }
 
 // prepareExecution handles workflow setup: span creation, template expansion, context
@@ -516,8 +495,12 @@ func (s *ExecutionService) prepareExecution(
 		execCtx.Status = workflow.StatusFailed
 		s.checkpoint(ctx, execCtx)
 		s.recordExecutionEnd(ctx, execCtx, err.Error())
+		s.emitWorkflowTerminalEvent(ctx, execCtx, err)
 		span.End()
-		return ctx, nil, nil, fmt.Errorf("workflow_start hook failed: %w", err)
+		// Return the failed execCtx (not nil) so callers can surface the aborted-but-
+		// recorded execution state to the user, matching the Resume path contract.
+		// span is nil to signal callers must not End() it again (already ended above).
+		return ctx, nil, execCtx, fmt.Errorf("workflow_start hook failed: %w", err)
 	}
 
 	return ctx, span, execCtx, nil
@@ -701,7 +684,10 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 
 	spanCtx, span, execCtx, err := s.prepareExecution(ctx, wf, inputs, parentCallStack, runID, parentRunID)
 	if err != nil {
-		return nil, err
+		// execCtx is non-nil when a workflow_start hook aborted after the execution
+		// context was built and marked failed; propagate it so callers (and the test
+		// suite) can observe the failed-but-recorded execution rather than a bare error.
+		return execCtx, err
 	}
 	defer span.End()
 
@@ -1822,6 +1808,7 @@ func (s *ExecutionService) Resume(
 		execCtx.Status = workflow.StatusFailed
 		s.checkpoint(ctx, execCtx)
 		s.recordExecutionEnd(ctx, execCtx, err.Error())
+		s.emitWorkflowTerminalEvent(ctx, execCtx, err)
 		return execCtx, fmt.Errorf("workflow_start hook failed: %w", err)
 	}
 
@@ -2766,7 +2753,7 @@ func (s *ExecutionService) executeConversationStep(
 		state.Status = workflow.StatusFailed
 		state.Error = err.Error()
 		execCtx.SetStepState(step.Name, state)
-		return "", fmt.Errorf("conversation execution failed: %w", err)
+		return "", fmt.Errorf("agent conversation step %q failed: %w", step.Name, err)
 	}
 
 	// 8. Mark as completed

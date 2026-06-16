@@ -180,7 +180,7 @@ func TestServiceTestHarness_Build_ServiceCanExecuteWorkflow(t *testing.T) {
 		}).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "executable", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "executable-run")
 
 	require.NoError(t, err, "workflow execution should succeed")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -361,7 +361,7 @@ func TestServiceTestHarness_Integration_FullWorkflowExecution(t *testing.T) {
 		}).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "integration-test", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "integration-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -400,7 +400,7 @@ func TestServiceTestHarness_Integration_UseTestutilFixtures(t *testing.T) {
 		}).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "fixture-test", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "fixture-test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)

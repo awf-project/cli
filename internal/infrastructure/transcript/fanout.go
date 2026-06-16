@@ -67,7 +67,14 @@ func (fo *FanOut) Subscribe() (events <-chan transcript.ExchangeEvent, unsubscri
 	defer fo.mu.Unlock()
 
 	if fo.closed {
-		return nil, func() {}
+		// Return an already-closed channel so callers can safely range/select on
+		// it without blocking forever. A nil channel blocks forever in select and
+		// would silently drop all events; a closed buffered channel of capacity 0
+		// yields the zero value and ok=false immediately, which is the correct
+		// "recorder has ended" signal (B3).
+		closed := make(chan transcript.ExchangeEvent)
+		close(closed)
+		return closed, func() {}
 	}
 
 	id := uuid.New()

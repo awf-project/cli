@@ -436,8 +436,12 @@ func (m *mockFacadeForRun) Run(ctx context.Context, req ports.RunRequest) (ports
 	return m.mockSession, nil
 }
 
-func (m *mockFacadeForRun) Resume(ctx context.Context, runID string) (ports.RunSession, error) {
+func (m *mockFacadeForRun) Resume(_ context.Context, _ ports.ResumeRequest) (ports.RunSession, error) {
 	return m.mockSession, nil
+}
+
+func (m *mockFacadeForRun) RunStep(_ context.Context, _ ports.RunStepRequest) (ports.StepResult, error) {
+	return ports.StepResult{}, nil
 }
 
 type mockSessionForRun struct {

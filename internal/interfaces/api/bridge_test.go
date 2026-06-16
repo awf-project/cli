@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -11,7 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	domainerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/testutil/facadetest"
 )
 
 // --- mock implementations of Bridge interfaces ---
@@ -81,42 +82,6 @@ func (m *mockWorkflowLister) ValidateWorkflow(_ context.Context, name string) er
 	return m.validErr
 }
 
-type mockWorkflowRunner struct {
-	execCtx *workflow.ExecutionContext
-	runErr  error
-	done    <-chan error
-}
-
-func newMockWorkflowRunner() *mockWorkflowRunner {
-	ctx := workflow.NewExecutionContext("exec-001", "test-workflow")
-	return &mockWorkflowRunner{execCtx: ctx}
-}
-
-func newMockWorkflowRunnerWithDone(done <-chan error) *mockWorkflowRunner {
-	ctx := workflow.NewExecutionContext("exec-001", "test-workflow")
-	return &mockWorkflowRunner{execCtx: ctx, done: done}
-}
-
-func (m *mockWorkflowRunner) RunWorkflowAsync(
-	_ context.Context,
-	wf *workflow.Workflow,
-	_ map[string]any,
-) (*workflow.ExecutionContext, <-chan error, error) {
-	if m.runErr != nil {
-		return nil, nil, m.runErr
-	}
-	// If a custom done channel was set, use it; otherwise create a buffered one
-	done := m.done
-	if done == nil {
-		buffered := make(chan error, 1)
-		buffered <- nil
-		done = buffered
-	}
-	// Create a fresh execution context for each run with workflow name
-	execCtx := workflow.NewExecutionContext(wf.Name+"-ctx", wf.Name)
-	return execCtx, done, nil
-}
-
 type mockHistoryProvider struct {
 	records  []*workflow.ExecutionRecord
 	stats    *workflow.HistoryStats
@@ -150,84 +115,50 @@ func (m *mockHistoryProvider) GetStats(_ context.Context, _ *workflow.HistoryFil
 	return m.stats, nil
 }
 
+// --- seedExecution: white-box test helper ---
+
+// seedExecution inserts a synthetic ActiveExecution into b.activeExecutions.
+// It derives a real cancellable context from context.Background() so that
+// callers can verify CancelExecution / Shutdown propagate cancellation.
+// The Done channel is pre-closed (the entry is already complete from the bridge's
+// perspective) — this mirrors the contract of TrackFacadeSession.
+// Returns the execution ID stored as the map key.
+func seedExecution(b *Bridge, workflowName string) (string, *ActiveExecution) {
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is stored in ActiveExecution.Cancel and invoked by CancelExecution/Shutdown under test
+	execCtx := workflow.NewExecutionContext(workflowName+"-ctx", workflowName)
+	id := workflowName + "-seed-" + "001"
+	ae := &ActiveExecution{
+		ExecutionID:      id,
+		WorkflowName:     workflowName,
+		Ctx:              ctx,
+		Cancel:           cancel,
+		ExecutionContext: execCtx,
+	}
+	b.activeExecutions.Store(id, ae)
+	return id, ae
+}
+
+// seedExecutionWithID inserts a synthetic ActiveExecution with a caller-chosen ID.
+// Useful when the test needs two entries with distinct workflow names and stable IDs.
+func seedExecutionWithID(b *Bridge, id, workflowName string) *ActiveExecution {
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is stored in ActiveExecution.Cancel and invoked by CancelExecution/Shutdown under test
+	execCtx := workflow.NewExecutionContext(workflowName+"-ctx", workflowName)
+	ae := &ActiveExecution{
+		ExecutionID:      id,
+		WorkflowName:     workflowName,
+		Ctx:              ctx,
+		Cancel:           cancel,
+		ExecutionContext: execCtx,
+	}
+	b.activeExecutions.Store(id, ae)
+	return ae
+}
+
 // --- tests ---
 
-func TestBridge_NewBridge_PanicsOnNilWorkflows(t *testing.T) {
-	require.Panics(t, func() {
-		NewBridge(nil, newMockWorkflowRunner(), newMockHistoryProvider())
-	}, "NewBridge must panic when workflows is nil")
-}
-
-func TestBridge_NewBridge_PanicsOnNilHistory(t *testing.T) {
-	require.Panics(t, func() {
-		NewBridge(newMockWorkflowLister(), newMockWorkflowRunner(), nil)
-	}, "NewBridge must panic when history is nil")
-}
-
-func TestBridge_NewBridge_WiresDependencies(t *testing.T) {
-	lister := newMockWorkflowLister("wf-1")
-	runner := newMockWorkflowRunner()
-	history := newMockHistoryProvider()
-
-	bridge := NewBridge(lister, runner, history)
-
-	require.NotNil(t, bridge)
-	assert.NotNil(t, bridge.workflows, "workflows dep must be wired")
-	assert.NotNil(t, bridge.runner, "runner dep must be wired")
-	assert.NotNil(t, bridge.history, "history dep must be wired")
-}
-
-func TestBridge_StartExecution_StoresInMap_AndReturnsID(t *testing.T) {
-	// Use a blocking channel so the cleanup goroutine does not remove the entry
-	// before GetExecution is called below.
-	block := make(chan error)
-	t.Cleanup(func() { close(block) })
-
-	runner := newMockWorkflowRunnerWithDone(block)
-	bridge := NewBridge(newMockWorkflowLister("wf-1"), runner, newMockHistoryProvider())
-	wf := &workflow.Workflow{Name: "wf-1", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-
-	id, exec, err := bridge.StartExecution(context.Background(), wf, nil)
-
-	require.NoError(t, err)
-	assert.NotEmpty(t, id, "must return a non-empty execution ID")
-	require.NotNil(t, exec)
-	assert.Equal(t, id, exec.ExecutionID)
-	assert.Equal(t, "wf-1", exec.WorkflowName)
-	assert.NotNil(t, exec.Cancel)
-	assert.NotNil(t, exec.Done)
-	assert.NotNil(t, exec.ExecutionContext)
-
-	stored, ok := bridge.GetExecution(id)
-	assert.True(t, ok, "execution must be stored in sync.Map")
-	assert.Equal(t, exec, stored)
-}
-
-func TestBridge_StartExecution_RunnerError_ReturnsError(t *testing.T) {
-	runner := newMockWorkflowRunner()
-	runner.runErr = errors.New("runner failed")
-	bridge := NewBridge(newMockWorkflowLister("wf-1"), runner, newMockHistoryProvider())
-	wf := &workflow.Workflow{Name: "wf-1", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-
-	id, exec, err := bridge.StartExecution(context.Background(), wf, nil)
-
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "runner failed")
-	assert.Empty(t, id)
-	assert.Nil(t, exec)
-}
-
 func TestBridge_CancelExecution_CallsCancelFunc(t *testing.T) {
-	// Blocking channel keeps the entry in sync.Map until the test completes,
-	// so both CancelExecution calls find it and the first does not return "not found".
-	block := make(chan error)
-	t.Cleanup(func() { close(block) })
-
-	runner := newMockWorkflowRunnerWithDone(block)
-	bridge := NewBridge(newMockWorkflowLister("wf-1"), runner, newMockHistoryProvider())
-	wf := &workflow.Workflow{Name: "wf-1", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	id, exec, err := bridge.StartExecution(context.Background(), wf, nil)
-	require.NoError(t, err)
+	bridge := NewBridge()
+	id, exec := seedExecution(bridge, "wf-1")
 
 	cancelErr := bridge.CancelExecution(id)
 
@@ -240,7 +171,7 @@ func TestBridge_CancelExecution_CallsCancelFunc(t *testing.T) {
 }
 
 func TestBridge_CancelExecution_UnknownID_ReturnsError(t *testing.T) {
-	bridge := NewBridge(newMockWorkflowLister(), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := NewBridge()
 
 	err := bridge.CancelExecution("does-not-exist")
 
@@ -249,16 +180,8 @@ func TestBridge_CancelExecution_UnknownID_ReturnsError(t *testing.T) {
 }
 
 func TestBridge_GetExecution_LiveSnapshot(t *testing.T) {
-	// Blocking channel prevents the cleanup goroutine from removing the entry
-	// before GetExecution is called.
-	block := make(chan error)
-	t.Cleanup(func() { close(block) })
-
-	runner := newMockWorkflowRunnerWithDone(block)
-	bridge := NewBridge(newMockWorkflowLister("wf-1"), runner, newMockHistoryProvider())
-	wf := &workflow.Workflow{Name: "wf-1", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	id, _, err := bridge.StartExecution(context.Background(), wf, nil)
-	require.NoError(t, err)
+	bridge := NewBridge()
+	id, _ := seedExecution(bridge, "wf-1")
 
 	exec, ok := bridge.GetExecution(id)
 
@@ -268,55 +191,11 @@ func TestBridge_GetExecution_LiveSnapshot(t *testing.T) {
 	assert.Equal(t, "wf-1", exec.WorkflowName)
 }
 
-func TestBridge_TrackResumedExecution_PersistsEntryForSubsequentQueries(t *testing.T) {
-	// Resumed executions are intentionally persisted so the /resume handler can
-	// return an ID that subsequent GET /api/executions/{id} (and the SSE/DELETE
-	// endpoints) can serve. Eviction/TTL of completed entries is out of scope
-	// here; this test guards against accidental immediate-cleanup regressions.
-	bridge := NewBridge(newMockWorkflowLister(), newMockWorkflowRunner(), newMockHistoryProvider())
-	execCtx := workflow.NewExecutionContext("resumed-001", "my-workflow")
-
-	id := bridge.TrackResumedExecution(execCtx)
-	require.NotEmpty(t, id, "must return a non-empty execution ID")
-
-	stored, ok := bridge.GetExecution(id)
-	require.True(t, ok, "entry must be queryable immediately after TrackResumedExecution")
-	require.NotNil(t, stored)
-	assert.Equal(t, id, stored.ExecutionID)
-	assert.Equal(t, "my-workflow", stored.WorkflowName)
-	assert.Same(t, execCtx, stored.ExecutionContext)
-}
-
 func TestBridge_Shutdown_CancelsAllActiveExecutions(t *testing.T) {
-	// Two blocking executions stay live until explicitly closed.
-	blockA := make(chan error)
-	blockB := make(chan error)
-	t.Cleanup(func() {
-		// Drain so the Bridge cleanup goroutines can exit.
-		select {
-		case <-blockA:
-		default:
-		}
-		select {
-		case <-blockB:
-		default:
-		}
-	})
+	bridge := NewBridge()
 
-	runner := &mockWorkflowRunner{
-		execCtx: workflow.NewExecutionContext("exec-a", "wf-a"),
-	}
-	bridge := NewBridge(newMockWorkflowLister("wf-a", "wf-b"), runner, newMockHistoryProvider())
-
-	wfA := &workflow.Workflow{Name: "wf-a", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	runner.done = blockA
-	_, execA, err := bridge.StartExecution(context.Background(), wfA, nil)
-	require.NoError(t, err)
-
-	wfB := &workflow.Workflow{Name: "wf-b", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	runner.done = blockB
-	_, execB, err := bridge.StartExecution(context.Background(), wfB, nil)
-	require.NoError(t, err)
+	execA := seedExecutionWithID(bridge, "exec-a", "wf-a")
+	execB := seedExecutionWithID(bridge, "exec-b", "wf-b")
 
 	// Both contexts must be live before Shutdown.
 	require.NoError(t, execA.Ctx.Err(), "execA context must not be cancelled before Shutdown")
@@ -328,62 +207,74 @@ func TestBridge_Shutdown_CancelsAllActiveExecutions(t *testing.T) {
 	assert.ErrorIs(t, execA.Ctx.Err(), context.Canceled)
 	assert.Error(t, execB.Ctx.Err(), "execB context must be cancelled after Shutdown")
 	assert.ErrorIs(t, execB.Ctx.Err(), context.Canceled)
-
-	// Close channels so cleanup goroutines can finish (prevents goroutine leak).
-	close(blockA)
-	close(blockB)
 }
 
 func TestBridge_Shutdown_EmptyMap_DoesNotPanic(t *testing.T) {
-	bridge := NewBridge(newMockWorkflowLister(), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := NewBridge()
 	// Must not panic when no executions are tracked.
 	assert.NotPanics(t, func() { bridge.Shutdown() })
 }
 
 func TestBridge_Shutdown_Idempotent(t *testing.T) {
-	block := make(chan error)
-	t.Cleanup(func() {
-		select {
-		case <-block:
-		default:
-			close(block)
-		}
-	})
-
-	runner := newMockWorkflowRunnerWithDone(block)
-	bridge := NewBridge(newMockWorkflowLister("wf-1"), runner, newMockHistoryProvider())
-	wf := &workflow.Workflow{Name: "wf-1", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	_, _, err := bridge.StartExecution(context.Background(), wf, nil)
-	require.NoError(t, err)
+	bridge := NewBridge()
+	seedExecution(bridge, "wf-1")
 
 	// Second Shutdown must not panic — context.CancelFunc is idempotent.
 	assert.NotPanics(t, func() {
 		bridge.Shutdown()
 		bridge.Shutdown()
 	})
-	close(block)
+}
+
+// --- T073: TrackFacadeSession ---
+
+// TestBridge_TrackFacadeSession_StoresSessionIDAndWorkflowName verifies that
+// TrackFacadeSession stores the facade RunSession in activeExecutions so that
+// subsequent List/Get/Cancel calls resolve by the session's own ID.
+func TestBridge_TrackFacadeSession_StoresSessionIDAndWorkflowName(t *testing.T) {
+	bridge := NewBridge()
+
+	fake := facadetest.New().WithTerminalCompleted()
+	sess, err := fake.Run(context.Background(), ports.RunRequest{Identifier: "deploy-prod"})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sess.Close() })
+
+	ae := bridge.TrackFacadeSession(sess, "deploy-prod")
+
+	require.NotNil(t, ae, "TrackFacadeSession must return a non-nil ActiveExecution")
+	assert.Equal(t, sess.ID(), ae.ExecutionID, "ActiveExecution.ExecutionID must equal session.ID()")
+	assert.Equal(t, "deploy-prod", ae.WorkflowName)
+
+	stored, ok := bridge.GetExecution(sess.ID())
+	assert.True(t, ok, "entry must be stored in activeExecutions under session.ID()")
+	assert.NotNil(t, stored)
+}
+
+// TestBridge_TrackFacadeSession_GetExecutionReturnsEntry verifies that an entry
+// created via TrackFacadeSession is returned by GetExecution so that the HTTP
+// GET /api/executions/{id} handler resolves it correctly.
+func TestBridge_TrackFacadeSession_GetExecutionReturnsEntry(t *testing.T) {
+	bridge := NewBridge()
+
+	fake := facadetest.New().WithTerminalCompleted()
+	sess, err := fake.Run(context.Background(), ports.RunRequest{Identifier: "wf-x"})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sess.Close() })
+
+	bridge.TrackFacadeSession(sess, "wf-x")
+
+	stored, ok := bridge.GetExecution(sess.ID())
+	require.True(t, ok)
+	require.NotNil(t, stored)
+	assert.Equal(t, sess.ID(), stored.ExecutionID)
+	assert.Equal(t, "wf-x", stored.WorkflowName)
 }
 
 func TestBridge_ListExecutions_ReturnsActiveAndCompleted(t *testing.T) {
-	// Use blocking channels to prevent cleanup goroutine from removing entries
-	blockA := make(chan error)
-	blockB := make(chan error)
-	t.Cleanup(func() { close(blockA); close(blockB) })
+	bridge := NewBridge()
 
-	runner := &mockWorkflowRunner{
-		execCtx: workflow.NewExecutionContext("exec-a", "wf-a"),
-	}
-	bridge := NewBridge(newMockWorkflowLister("wf-a", "wf-b"), runner, newMockHistoryProvider())
-
-	wfA := &workflow.Workflow{Name: "wf-a", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	runner.done = blockA
-	_, _, err := bridge.StartExecution(context.Background(), wfA, nil)
-	require.NoError(t, err)
-
-	wfB := &workflow.Workflow{Name: "wf-b", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	runner.done = blockB
-	_, _, err = bridge.StartExecution(context.Background(), wfB, nil)
-	require.NoError(t, err)
+	seedExecutionWithID(bridge, "id-list-a", "wf-a")
+	seedExecutionWithID(bridge, "id-list-b", "wf-b")
 
 	time.Sleep(10 * time.Millisecond)
 

@@ -268,7 +268,7 @@ func TestResolveOperationValue(t *testing.T) {
 				Build()
 			svc.SetOperationProvider(provider)
 
-			_, err := svc.Run(context.Background(), "resolve-test", tt.workflowInputs)
+			_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, tt.workflowInputs, "resolve-test-run")
 
 			if tt.wantErr {
 				require.Error(t, err, "expected error but got none")
@@ -376,7 +376,7 @@ func TestResolveOperationValue_EdgeCases(t *testing.T) {
 				Build()
 			svc.SetOperationProvider(provider)
 
-			_, err := svc.Run(context.Background(), "edge-test", tt.workflowInputs)
+			_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, tt.workflowInputs, "edge-test-run")
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -457,7 +457,7 @@ func TestResolveOperationValue_ErrorPropagation(t *testing.T) {
 				Build()
 			svc.SetOperationProvider(provider)
 
-			_, err := svc.Run(context.Background(), "error-test", tt.workflowInputs)
+			_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, tt.workflowInputs, "error-test-run")
 
 			require.Error(t, err, "expected error from interpolation failure")
 			assert.Contains(t, err.Error(), fmt.Sprintf("input %q", tt.errorField),

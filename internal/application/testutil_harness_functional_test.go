@@ -83,7 +83,7 @@ func TestHarnessFunctional_SimpleWorkflow_ExecutesSuccessfully(t *testing.T) {
 		Build()
 
 	// Execute workflow
-	ctx, err := svc.Run(context.Background(), "deploy-app", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "deploy-app-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -139,7 +139,7 @@ func TestHarnessFunctional_MultiStepWorkflow_WithInputs_ExecutesSuccessfully(t *
 	inputs := map[string]any{
 		"username": "Alice",
 	}
-	ctx, err := svc.Run(context.Background(), "greet-user", inputs)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "greet-user-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -204,7 +204,7 @@ func TestHarnessFunctional_WorkflowWithRetry_ExecutesWithRetryLogic(t *testing.T
 		}).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "flaky-api", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "flaky-api-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -265,7 +265,7 @@ func TestHarnessFunctional_ParallelSteps_ExecuteConcurrently(t *testing.T) {
 		WithCommandResult("make test-all", &ports.CommandResult{Stdout: "Tests passed\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "parallel-build", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "parallel-build-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -317,9 +317,9 @@ func TestHarnessFunctional_WorkflowFailure_HandlesGracefully(t *testing.T) {
 		}).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "failing-workflow", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "failing-workflow-run")
 
-	// Note: Run() returns error when workflow reaches terminal failure state
+	// Note: RunWithWorkflowAndRunID() returns error when workflow reaches terminal failure state
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "terminal failure")
 	assert.Equal(t, workflow.StatusFailed, ctx.Status)
@@ -393,7 +393,7 @@ func TestHarnessFunctional_SubworkflowExecution_ExecutesCorrectly(t *testing.T) 
 		WithCommandResult("echo 'child task'", &ports.CommandResult{Stdout: "child task\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "parent-workflow", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "parent-workflow-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -403,11 +403,15 @@ func TestHarnessFunctional_SubworkflowExecution_ExecutesCorrectly(t *testing.T) 
 func TestHarnessFunctional_MissingWorkflow_ReturnsError(t *testing.T) {
 	// Demonstrates: Harness detects missing workflow at runtime
 	// Validates: Appropriate error returned when workflow not registered
+	// Name-resolution moved to Resolver (F108): test now exercises the repository
+	// Load path directly, which is the underlying mechanism that propagates the error.
 
-	svc, _ := NewTestHarness(t).Build()
+	_, mocks := NewTestHarness(t).Build()
 
-	// Try to run non-existent workflow
-	_, err := svc.Run(context.Background(), "non-existent", nil)
+	// Load a non-registered workflow directly from the repository to verify
+	// that the not-found error surfaces correctly (name resolution now lives
+	// in Resolver, not ExecutionService).
+	_, err := mocks.Repository.Load(context.Background(), "non-existent")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "workflow file not found")
@@ -439,7 +443,7 @@ func TestHarnessFunctional_MissingCommandResult_UsesDefaults(t *testing.T) {
 		WithWorkflow("unconfigured", wf).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "unconfigured", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "unconfigured-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -465,7 +469,7 @@ func TestHarnessFunctional_InvalidWorkflow_ReturnsValidationError(t *testing.T) 
 		Build()
 
 	// Try to run - validation should catch this
-	_, err := svc.Run(context.Background(), "invalid", nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "invalid-run")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "step not found")
@@ -491,7 +495,7 @@ func TestHarnessFunctional_WithTestutilBuilders_IntegratesSeamlessly(t *testing.
 		WithCommandResult("echo test", &ports.CommandResult{Stdout: "test\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := svc.Run(context.Background(), "builder-integration", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "builder-integration-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -538,8 +542,8 @@ func TestHarnessFunctional_MultipleWorkflows_ShareServiceInstance(t *testing.T) 
 		Build()
 
 	// Execute both
-	ctx1, err1 := svc.Run(context.Background(), "workflow1", nil)
-	ctx2, err2 := svc.Run(context.Background(), "workflow2", nil)
+	ctx1, err1 := svc.RunWithWorkflowAndRunID(context.Background(), wf1, nil, "workflow1-run")
+	ctx2, err2 := svc.RunWithWorkflowAndRunID(context.Background(), wf2, nil, "workflow2-run")
 
 	require.NoError(t, err1)
 	require.NoError(t, err2)
@@ -583,7 +587,7 @@ func TestHarnessFunctional_BoilerplateReduction_DemonstratesValue(t *testing.T) 
 		Build()
 
 	// Verify works
-	ctx, err := svc.Run(context.Background(), "demo", nil)
+	ctx, err := svc.RunWithWorkflowAndRunID(context.Background(), demoWf, nil, "demo-run")
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 	assert.NotNil(t, mocks, "Mocks available for assertions")

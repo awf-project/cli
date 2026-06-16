@@ -2,42 +2,13 @@ package cli
 
 import (
 	"bytes"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestWriteHistoryRecords_DisplaysFullValues(t *testing.T) {
-	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
-
-	now := time.Now()
-	records := []*workflow.ExecutionRecord{
-		{
-			ID:           "550e8400-e29b-41d4-a716-446655440000",
-			WorkflowID:   "wf-001",
-			WorkflowName: "deploy-staging-eu-west-1",
-			Status:       "success",
-			ExitCode:     0,
-			StartedAt:    now.Add(-5 * time.Minute),
-			CompletedAt:  now,
-			DurationMs:   300000,
-		},
-	}
-
-	err := writeHistoryRecords(writer, records)
-	require.NoError(t, err)
-
-	output := out.String()
-	assert.Contains(t, output, "550e8400-e29b-41d4-a716-446655440000")
-	assert.Contains(t, output, "deploy-staging-eu-west-1")
-	assert.NotContains(t, output, "...")
-}
 
 func TestFormatDuration(t *testing.T) {
 	tests := []struct {
@@ -132,116 +103,6 @@ func TestWriteHistoryStats_JSON(t *testing.T) {
 	assert.Contains(t, output, `"avg_duration_ms": 2000`)
 }
 
-func TestWriteHistoryRecords_Empty(t *testing.T) {
-	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
-
-	err := writeHistoryRecords(writer, []*workflow.ExecutionRecord{})
-	require.NoError(t, err)
-
-	output := out.String()
-	assert.Contains(t, output, "No execution history found")
-}
-
-func TestWriteHistoryRecords_Text(t *testing.T) {
-	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
-
-	now := time.Now()
-	records := []*workflow.ExecutionRecord{
-		{
-			ID:           "exec-12345",
-			WorkflowID:   "wf-001",
-			WorkflowName: "deploy",
-			Status:       "success",
-			ExitCode:     0,
-			StartedAt:    now.Add(-5 * time.Minute),
-			CompletedAt:  now,
-			DurationMs:   300000,
-		},
-		{
-			ID:           "exec-67890",
-			WorkflowID:   "wf-002",
-			WorkflowName: "test",
-			Status:       "failed",
-			ExitCode:     1,
-			StartedAt:    now.Add(-10 * time.Minute),
-			CompletedAt:  now.Add(-5 * time.Minute),
-			DurationMs:   300000,
-			ErrorMessage: "test failed",
-		},
-	}
-
-	err := writeHistoryRecords(writer, records)
-	require.NoError(t, err)
-
-	output := out.String()
-	assert.Contains(t, output, "ID")
-	assert.Contains(t, output, "WORKFLOW")
-	assert.Contains(t, output, "STATUS")
-	assert.Contains(t, output, "DURATION")
-	assert.Contains(t, output, "deploy")
-	assert.Contains(t, output, "test")
-	assert.Contains(t, output, "success")
-	assert.Contains(t, output, "failed")
-}
-
-func TestWriteHistoryRecords_JSON(t *testing.T) {
-	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatJSON, true, false)
-
-	now := time.Now()
-	records := []*workflow.ExecutionRecord{
-		{
-			ID:           "exec-12345",
-			WorkflowID:   "wf-001",
-			WorkflowName: "deploy",
-			Status:       "success",
-			ExitCode:     0,
-			StartedAt:    now.Add(-5 * time.Minute),
-			CompletedAt:  now,
-			DurationMs:   300000,
-		},
-	}
-
-	err := writeHistoryRecords(writer, records)
-	require.NoError(t, err)
-
-	output := out.String()
-	assert.Contains(t, output, `"id": "exec-12345"`)
-	assert.Contains(t, output, `"workflow_name": "deploy"`)
-	assert.Contains(t, output, `"status": "success"`)
-	assert.Contains(t, output, `"duration_ms": 300000`)
-}
-
-func TestWriteHistoryRecords_DisplaysFullID(t *testing.T) {
-	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
-
-	now := time.Now()
-	longID := "this-is-a-very-long-execution-id-that-exceeds-20-chars"
-	longWorkflowName := "very-long-workflow-name-that-exceeds-limit"
-	records := []*workflow.ExecutionRecord{
-		{
-			ID:           longID,
-			WorkflowID:   "wf-001",
-			WorkflowName: longWorkflowName,
-			Status:       "success",
-			ExitCode:     0,
-			StartedAt:    now.Add(-5 * time.Minute),
-			CompletedAt:  now,
-			DurationMs:   1500,
-		},
-	}
-
-	err := writeHistoryRecords(writer, records)
-	require.NoError(t, err)
-
-	output := out.String()
-	assert.Contains(t, output, longID)
-	assert.Contains(t, output, longWorkflowName)
-}
-
 func TestHistoryInfo_Struct(t *testing.T) {
 	info := HistoryInfo{
 		ID:           "test-id",
@@ -258,70 +119,6 @@ func TestHistoryInfo_Struct(t *testing.T) {
 	assert.Equal(t, "success", info.Status)
 	assert.Equal(t, 0, info.ExitCode)
 	assert.Equal(t, int64(300000), info.DurationMs)
-}
-
-func TestWriteHistoryRecords_TabwriterFormattedTable(t *testing.T) {
-	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
-
-	now := time.Now()
-	records := []*workflow.ExecutionRecord{
-		{
-			ID:           "exec-tabwriter-001",
-			WorkflowID:   "wf-001",
-			WorkflowName: "deploy",
-			Status:       "success",
-			StartedAt:    now.Add(-2 * time.Minute),
-			CompletedAt:  now,
-			DurationMs:   120000,
-		},
-	}
-
-	err := writeHistoryRecords(writer, records)
-	require.NoError(t, err)
-
-	output := out.String()
-	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
-	require.GreaterOrEqual(t, len(lines), 3, "tabwriter output must have header, separator, and data rows")
-
-	headerLine := lines[0]
-	for _, col := range []string{"ID", "WORKFLOW", "STATUS", "DURATION", "COMPLETED"} {
-		assert.Contains(t, headerLine, col, "header must contain column %q", col)
-	}
-
-	assert.Contains(t, lines[1], "----")
-
-	dataLine := lines[2]
-	assert.Contains(t, dataLine, "exec-tabwriter-001")
-	assert.Contains(t, dataLine, "deploy")
-	assert.Contains(t, dataLine, "success")
-}
-
-func TestWriteHistoryRecords_NoTruncation(t *testing.T) {
-	var out bytes.Buffer
-	writer := ui.NewOutputWriter(&out, &out, ui.FormatText, true, false)
-
-	now := time.Now()
-	longExecID := "exec-" + strings.Repeat("abcdef01234567890", 4)
-	longWorkflowName := "deploy-" + strings.Repeat("region-failover-", 3)
-	records := []*workflow.ExecutionRecord{
-		{
-			ID:           longExecID,
-			WorkflowID:   "wf-001",
-			WorkflowName: longWorkflowName,
-			Status:       "success",
-			StartedAt:    now.Add(-time.Minute),
-			CompletedAt:  now,
-			DurationMs:   60000,
-		},
-	}
-
-	err := writeHistoryRecords(writer, records)
-	require.NoError(t, err)
-
-	output := out.String()
-	assert.Contains(t, output, longExecID, "execution ID must not be truncated")
-	assert.Contains(t, output, longWorkflowName, "workflow name must not be truncated")
 }
 
 func TestHistoryStatsInfo_Struct(t *testing.T) {

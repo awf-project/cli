@@ -59,12 +59,6 @@ type WorkflowLister interface {
 	ValidateWorkflow(ctx context.Context, name string) error
 }
 
-// WorkflowRunner is the driven port for executing workflows.
-// It is satisfied by *application.ExecutionService.
-type WorkflowRunner interface {
-	RunWorkflowAsync(ctx context.Context, wf *workflow.Workflow, inputs map[string]any) (*workflow.ExecutionContext, <-chan error, error)
-}
-
 // HistoryProvider is the driven port for querying execution history.
 // It is satisfied by *application.HistoryService.
 type HistoryProvider interface {
@@ -80,7 +74,6 @@ type HistoryProvider interface {
 // names, structs) rather than raw command output.
 type Bridge struct {
 	workflows WorkflowLister
-	runner    WorkflowRunner
 	history   HistoryProvider
 	stream    *StreamBuffer
 
@@ -92,12 +85,12 @@ type Bridge struct {
 }
 
 // NewBridge creates a Bridge wiring the given service interface implementations.
-// Any of the three dependencies may be nil; calling the corresponding method
-// on a nil dependency returns ErrMsg wrapping a descriptive error.
-func NewBridge(workflows WorkflowLister, runner WorkflowRunner, history HistoryProvider) *Bridge {
+// Any dependency may be nil; calling the corresponding method on a nil dependency
+// returns ErrMsg wrapping a descriptive error. All workflow execution is routed
+// through the facade (SetFacade / RunWorkflowViaFacade) — no legacy runner port.
+func NewBridge(workflows WorkflowLister, history HistoryProvider) *Bridge {
 	return &Bridge{
 		workflows: workflows,
-		runner:    runner,
 		history:   history,
 		stream:    &StreamBuffer{},
 	}
@@ -108,12 +101,6 @@ func NewBridge(workflows WorkflowLister, runner WorkflowRunner, history HistoryP
 // a nil facade is accepted and causes RunWorkflowViaFacade to return ErrMsg.
 func (b *Bridge) SetFacade(f ports.WorkflowFacade) {
 	b.facade = f
-}
-
-// Stream returns the shared output stream buffer.
-// Pass it to WithOutputWriters so execution output is captured for display.
-func (b *Bridge) Stream() *StreamBuffer {
-	return b.stream
 }
 
 // LoadWorkflows returns a tea.Cmd that fetches all available workflows and emits
@@ -169,49 +156,14 @@ func (b *Bridge) LoadHistory(ctx context.Context) tea.Cmd {
 	}
 }
 
-// RunWorkflow returns a tea.Cmd that prepares and starts async workflow execution.
-// It emits ExecutionStartedMsg with a live ExecCtx that can be polled during execution.
-func (b *Bridge) RunWorkflow(ctx context.Context, wf *workflow.Workflow, inputs map[string]any) tea.Cmd {
-	return func() tea.Msg {
-		if b.runner == nil {
-			return ErrMsg{Err: errors.New("workflow execution is not available in this session")}
-		}
-		if err := ctx.Err(); err != nil {
-			return ErrMsg{Err: err}
-		}
-
-		workflowToRun := wf
-		if len(workflowToRun.Steps) == 0 {
-			loadedWf, err := b.workflows.GetWorkflow(ctx, workflowToRun.Name)
-			if err != nil {
-				return ErrMsg{Err: err}
-			}
-			workflowToRun = loadedWf
-		}
-
-		execCtx, done, err := b.runner.RunWorkflowAsync(ctx, workflowToRun, inputs)
-		if err != nil {
-			return ErrMsg{Err: err}
-		}
-
-		return ExecutionStartedMsg{
-			ExecutionID: workflowToRun.Name,
-			Workflow:    workflowToRun,
-			ExecCtx:     execCtx,
-			Done:        done,
-		}
-	}
-}
-
 // RunWorkflowViaFacade returns a tea.Cmd that starts workflow execution through
 // the WorkflowFacade. The resulting ExecutionStartedMsg includes a live RunSession
 // whose Events() channel drives state updates in the monitoring tab (D27, FR-011).
 //
-// Unlike RunWorkflow, this path does not supply an ExecCtx or Done channel:
-// the monitoring tab's StartEventLoop goroutine becomes the sole reader of
+// This is the sole TUI execution path (F108): it does not supply an ExecCtx or Done
+// channel. The monitoring tab's StartEventLoop goroutine becomes the sole reader of
 // Session.Events(), and when it detects a terminal event (EventWorkflowCompleted or
-// EventWorkflowFailed) it sends ExecutionFinishedMsg to stop the tick loop. The
-// caller must nil-guard msg.Done before calling WaitForExecution.
+// EventWorkflowFailed) it sends ExecutionFinishedMsg to stop the event loop.
 func (b *Bridge) RunWorkflowViaFacade(ctx context.Context, name string, inputs map[string]any) tea.Cmd {
 	return func() tea.Msg {
 		if b.facade == nil {
@@ -224,21 +176,31 @@ func (b *Bridge) RunWorkflowViaFacade(ctx context.Context, name string, inputs m
 		if err != nil {
 			return ErrMsg{Err: err}
 		}
+		// Load the workflow definition for the monitoring tab's step tree. Without it
+		// SetWorkflow leaves wf/steps nil, BuildTree returns no nodes, and the tab's
+		// empty-state guard (active==nil && wf==nil) never clears — so the Monitoring
+		// panel shows "No active execution" for the whole run even though Session.Events()
+		// are flowing. The load is best-effort: a failure must NOT abort the already-started
+		// run, so a nil wf is tolerated (degraded tree only).
+		var wf *workflow.Workflow
+		if b.workflows != nil {
+			loaded, loadErr := b.workflows.GetWorkflow(ctx, name)
+			if loadErr == nil {
+				wf = loaded
+			}
+		}
+		if wf != nil {
+			// Normalize to the entry/identifier the run was launched with (pack workflow
+			// YAML names can differ from the dispatch identifier), mirroring ListWorkflows.
+			wf.Name = name
+		}
 		return ExecutionStartedMsg{
 			ExecutionID: name,
+			Workflow:    wf,
 			Session:     sess,
-			// ExecCtx and Done are nil: state is driven entirely by Session.Events().
-			// model.go nil-guards Done before calling WaitForExecution.
+			// State is driven entirely by Session.Events() via MonitoringTab.StartEventLoop;
+			// the event loop emits ExecutionFinishedMsg on the terminal event.
 		}
-	}
-}
-
-// WaitForExecution returns a tea.Cmd that blocks until the execution finishes
-// and then delivers the result as an ExecutionFinishedMsg.
-func WaitForExecution(done <-chan error) tea.Cmd {
-	return func() tea.Msg {
-		err := <-done
-		return ExecutionFinishedMsg{Err: err}
 	}
 }
 

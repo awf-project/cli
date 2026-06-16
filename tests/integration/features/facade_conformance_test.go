@@ -11,16 +11,18 @@ package features_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
 
+	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/interfaces/api"
+	"github.com/awf-project/cli/internal/interfaces/cli"
+	"github.com/awf-project/cli/internal/interfaces/tui"
 	"github.com/awf-project/cli/internal/testutil/facadetest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,49 +75,30 @@ func assertFacadeGolden(t *testing.T, name string, got []byte) {
 }
 
 // projectToCLIStdout projects facade events to CLI stdout text format.
-// TODO: replace with real CLI display renderer after T060 GREEN.
+// Delegates to the real CLI renderer used by runWorkflowViaFacade (T068).
 func projectToCLIStdout(events []ports.Event) []byte {
-	var buf bytes.Buffer
-	for _, ev := range events {
-		fmt.Fprintf(&buf, "[%s] run=%s\n", ev.Kind.String(), ev.RunID)
-	}
-	return buf.Bytes()
+	return cli.RenderFacadeEventsToText(events)
 }
 
 // projectToACPSessionUpdate projects facade events to ACP session/update JSONL format.
-// TODO: replace with real ACP event projector after T063 GREEN.
+// Delegates to the real ACP projector (application.RenderFacadeEventsToACPSessionUpdate),
+// which uses the same facadeEventToUpdate table the live ACP dispatch path emits through.
 func projectToACPSessionUpdate(events []ports.Event) []byte {
-	type updateLine struct {
-		Kind  string `json:"kind"`
-		RunID string `json:"run_id"`
-	}
-	var buf bytes.Buffer
-	for _, ev := range events {
-		b, _ := json.Marshal(updateLine{Kind: ev.Kind.String(), RunID: ev.RunID}) //nolint:errcheck // controlled struct, cannot fail
-		buf.Write(b)
-		buf.WriteByte('\n')
-	}
-	return buf.Bytes()
+	return application.RenderFacadeEventsToACPSessionUpdate(events)
 }
 
 // projectToSSEFrames projects facade events to raw SSE frame bytes.
-// TODO: replace with real SSE projector after T062 GREEN.
 func projectToSSEFrames(events []ports.Event) []byte {
 	var buf bytes.Buffer
 	for _, ev := range events {
-		fmt.Fprintf(&buf, "event: %s\ndata: {\"run_id\":%q}\n\n", ev.Kind.String(), ev.RunID)
+		buf.Write(api.ProjectEventToSSEFrame(ev))
 	}
 	return buf.Bytes()
 }
 
 // projectToTUIMsgs projects facade events to TUI tea.Msg debug representation.
-// TODO: replace with real TUI projector after T061 GREEN.
 func projectToTUIMsgs(events []ports.Event) []byte {
-	var buf bytes.Buffer
-	for _, ev := range events {
-		fmt.Fprintf(&buf, "FacadeEventMsg{Kind:%q RunID:%q}\n", ev.Kind.String(), ev.RunID)
-	}
-	return buf.Bytes()
+	return tui.RenderEventsToTUIMsgs(events)
 }
 
 // TestFacadeConformance_4Interfaces asserts that ONE scripted event sequence projects

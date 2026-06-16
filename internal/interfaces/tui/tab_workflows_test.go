@@ -526,7 +526,7 @@ func TestWorkflowsTab_handleValidate_PackWorkflow_NoPanic(t *testing.T) {
 	tab, _ = tab.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 
 	lister := &trackingWorkflowLister{}
-	bridge := NewBridge(lister, nil, nil)
+	bridge := NewBridge(lister, nil)
 	tab.bridge = bridge
 	tab.ctx = context.Background()
 

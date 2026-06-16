@@ -3,19 +3,18 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/awf-project/cli/internal/application"
-	"github.com/awf-project/cli/internal/domain/workflow"
-	"github.com/awf-project/cli/internal/infrastructure/agents"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/infrastructure/audit"
 	"github.com/awf-project/cli/internal/infrastructure/executor"
-	infraexpression "github.com/awf-project/cli/internal/infrastructure/expression"
+	"github.com/awf-project/cli/internal/infrastructure/roles"
 	"github.com/awf-project/cli/internal/infrastructure/store"
-	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
-	"github.com/awf-project/cli/pkg/interpolation"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -71,51 +70,48 @@ func runResumeList(cmd *cobra.Command, cfg *Config) error {
 	ctx := context.Background()
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
-	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
-
-	// List all state IDs and filter resumable
-	ids, err := stateStore.List(ctx)
-	if err != nil {
-		return writeErrorAndExit(writer, fmt.Errorf("list states: %w", err), ExitSystem)
+	// Route through WorkflowFacade when wired (T069). resume-list has no dedicated
+	// facade method (ports.WorkflowFacade is List/Validate/Status/History/Run/Resume),
+	// so it is served by History + a resumable filter: any record whose status is not
+	// "completed" is resumable.
+	if cfg.Facade != nil {
+		return runResumeListViaFacade(cmd, cfg, writer, ctx)
 	}
 
-	// Preallocate for expected resumable workflows
-	infos := make([]ui.ResumableInfo, 0, len(ids))
-	for _, id := range ids {
-		execCtx, err := stateStore.Load(ctx, id)
-		if err != nil || execCtx == nil {
+	// Facade not wired: return a meaningful error stub. Production always wires
+	// the facade via NewRootCommandAutoFacade, so this branch is never reached in
+	// normal usage.
+	err := fmt.Errorf("resume --list requires facade wiring (use NewRootCommandAutoFacade)")
+	return writeErrorAndExit(writer, err, ExitSystem)
+}
+
+// runResumeListViaFacade serves resume-list through ports.WorkflowFacade.History
+// (T069). The facade exposes no ResumeList method, so resumable runs are derived
+// by filtering History records to any run whose status is not "completed".
+func runResumeListViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWriter, ctx context.Context) error { //nolint:revive // context.Context not first param: writer is a pre-built dependency, not a new chain
+	records, err := cfg.Facade.History(ctx, ports.HistoryFilter{})
+	if err != nil {
+		return writeErrorAndExit(writer, fmt.Errorf("list history: %w", err), ExitSystem)
+	}
+
+	infos := make([]ui.ResumableInfo, 0, len(records))
+	for i := range records {
+		rec := &records[i]
+		if rec.Status == ports.RunStateCompleted {
 			continue
 		}
-		if execCtx.Status == workflow.StatusCompleted {
-			continue
-		}
-
-		// Calculate progress
-		completed := 0
-		allStates := execCtx.GetAllStepStates()
-		for _, state := range allStates { //nolint:gocritic // rangeValCopy: GetAllStepStates returns defensive copy, iteration copy is acceptable for simple status check
-			if state.Status == workflow.StatusCompleted {
-				completed++
-			}
-		}
-		progress := fmt.Sprintf("%d steps completed", completed)
-
 		infos = append(infos, ui.ResumableInfo{
-			WorkflowID:   execCtx.WorkflowID,
-			WorkflowName: execCtx.WorkflowName,
-			Status:       string(execCtx.Status),
-			CurrentStep:  execCtx.CurrentStep,
-			UpdatedAt:    execCtx.UpdatedAt.Format(time.RFC3339),
-			Progress:     progress,
+			WorkflowID:   rec.RunID,
+			WorkflowName: rec.WorkflowName,
+			Status:       string(rec.Status),
+			UpdatedAt:    rec.CompletedAt.Format(time.RFC3339),
 		})
 	}
 
-	// Output based on format
 	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatTable || cfg.OutputFormat == ui.FormatQuiet {
 		return writer.WriteResumableList(infos)
 	}
 
-	// Text format
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		NoColor: cfg.NoColor,
 	})
@@ -139,10 +135,21 @@ func runResumeList(cmd *cobra.Command, cfg *Config) error {
 }
 
 func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []string) error {
-	// Parse input overrides
-	cliInputs, err := parseInputFlags(inputFlags)
+	// Parse input overrides (validated here so a bad key=value fails before any I/O).
+	inputOverrides, err := parseInputFlags(inputFlags)
 	if err != nil {
 		return fmt.Errorf("invalid input: %w", err)
+	}
+
+	// Read --from flag; default is "current" (empty string means "resume from last persisted step").
+	fromStep, err := cmd.Flags().GetString("from")
+	if err != nil {
+		fromStep = ""
+	}
+	// Normalize "current" (the flag default) to an empty string so the facade
+	// receives the canonical "no override" value and can apply its own default.
+	if fromStep == "current" {
+		fromStep = ""
 	}
 
 	// Create output components
@@ -153,26 +160,30 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 		NoColor: cfg.NoColor,
 	})
 
-	// Setup streaming writers if needed
-	var stdoutWriter, stderrWriter *ui.PrefixedWriter
-	if !cfg.Quiet && cfg.OutputMode == OutputStreaming && !writer.IsJSONFormat() {
-		colorizer := ui.NewColorizer(!cfg.NoColor)
-		stdoutWriter = ui.NewPrefixedWriter(cmd.OutOrStdout(), ui.PrefixStdout, "", colorizer)
-		stderrWriter = ui.NewPrefixedWriter(cmd.ErrOrStderr(), ui.PrefixStderr, "", colorizer)
+	// Resume requires a RUN-CAPABLE facade (T069). The read-only AutoFacade in
+	// cfg.Facade carries a zero ExecutionService, so it cannot re-drive a run. Build
+	// the real execution stack here (mirroring the `run` path) and overwrite cfg.Facade
+	// with a run-capable Adapter, then dispatch strictly through cfg.Facade.Resume — no
+	// direct ExecutionService/ResumeService call remains in this file.
+	runFacade, cleanup, err := buildResumeFacade(cmd, cfg, formatter)
+	if err != nil {
+		return writeErrorAndExit(writer, err, categorizeError(err))
 	}
-
-	// Context with signal handling
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	cleanup := setupSignalHandler(ctx, cancel, func() {
-		if cfg.OutputFormat != ui.FormatJSON && cfg.OutputFormat != ui.FormatTable {
-			formatter.Warning("\nReceived interrupt signal, cancelling...")
-		}
-	})
 	defer cleanup()
+	cfg.Facade = runFacade
 
-	// Initialize dependencies
+	return runResumeViaFacade(cmd, cfg, writer, formatter, workflowID, inputOverrides, fromStep)
+}
+
+// buildResumeFacade constructs an execution-capable ports.WorkflowFacade for the
+// `resume` command (T069). It loads project config (so a malformed .awf/config.yaml
+// surfaces as a "config" error before any execution), builds the real ExecutionService
+// via the canonical application.ExecutionSetup builder, and wraps it in the same
+// run-capable Adapter the `run` path uses (buildRunCapableFacade). The returned cleanup
+// releases the execution stack's resources (history store, etc.).
+func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter) (facade ports.WorkflowFacade, cleanup func(), err error) {
+	ctx := context.Background()
+
 	repo := NewWorkflowRepository()
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
 	shellExecutor := executor.NewShellExecutor()
@@ -182,170 +193,149 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 		verbose:   cfg.Verbose && !silentOutput,
 		silent:    silentOutput,
 	}
-	resolver := interpolation.NewTemplateResolver()
 
-	// Purge orphan MCP registrations left by crashed prior runs before any
-	// workflow logic runs. Failures are non-fatal and logged at debug level.
-	if purgeErr := agents.PurgeOrphanMCPRegistrations(ctx, shellExecutor, logger); purgeErr != nil {
-		logger.Debug("orphan MCP purge returned unexpected error", "error", purgeErr)
+	// Load project config from .awf/config.yaml. A malformed config is a USER error
+	// (FR-005): surface it before building the execution stack.
+	if _, cfgErr := loadProjectConfig(logger); cfgErr != nil {
+		return nil, nil, fmt.Errorf("config error: %w", cfgErr)
 	}
 
-	// Load project config from .awf/config.yaml
-	projectCfg, err := loadProjectConfig(logger)
-	if err != nil {
-		return fmt.Errorf("config error: %w", err)
+	// History store: lifecycle is owned by the ExecutionSetup builder via WithHistoryStore,
+	// which closes it during SetupResult.Cleanup.
+	historyStore, hsErr := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
+	if hsErr != nil {
+		return nil, nil, fmt.Errorf("failed to open history store: %w", hsErr)
 	}
 
-	// Merge config inputs with CLI inputs (CLI wins)
-	inputs := application.MergeInputs(projectCfg.Inputs, cliInputs)
-
-	// Create history store and service
-	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
-	if err != nil {
-		return fmt.Errorf("failed to open history store: %w", err)
+	setupOpts := []application.SetupOption{
+		application.WithHistoryStore(historyStore),
+		application.WithAgentRoleRepository(roles.NewFilesystemAgentRoleRepository(logger)),
+		application.WithUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout)),
 	}
-	defer func() {
-		if err := historyStore.Close(); err != nil {
-			logger.Error("failed to close history store", "error", err)
-		}
-	}()
-	historySvc := application.NewHistoryService(historyStore, logger)
 
-	// Create services
-	exprValidator := infraexpression.NewExprValidator()
-	wfSvc := application.NewWorkflowService(repo, stateStore, shellExecutor, logger, exprValidator)
-	parallelExecutor := application.NewParallelExecutor(logger)
-	exprEvaluator := infraexpression.NewExprEvaluator()
-	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, shellExecutor, parallelExecutor, stateStore, logger, resolver, historySvc, exprEvaluator)
-
-	// Setup agent registry for F039 agent step execution
-	agentRegistry := agents.NewAgentRegistry()
-	if err := agentRegistry.RegisterDefaults(shellExecutor); err != nil {
-		return fmt.Errorf("failed to register agent providers: %w", err)
-	}
-	execSvc.SetAgentRegistry(agentRegistry)
-	// TODO(F090): wire EventPublisher when plugin system is available in resume path
-	execSvc.SetAWFPaths(xdg.AWFPaths())
-
-	// Setup audit trail writer (F071)
-	if auditWriter, auditCleanup, auditErr := audit.NewWriterFromEnv(); auditErr != nil {
+	// Setup audit trail writer (F071), best-effort.
+	var auditCleanup func()
+	if auditWriter, ac, auditErr := audit.NewWriterFromEnv(); auditErr != nil {
 		logger.Warn("failed to initialize audit writer, audit trail disabled", "error", auditErr)
+	} else if auditWriter != nil {
+		auditCleanup = ac
+		setupOpts = append(setupOpts, application.WithAuditWriter(auditWriter))
+	}
+
+	// Setup transcript recorder (F106) so resumed-run transcript events stream into the
+	// session, matching the `run` path. Best-effort: a nil recorder falls back to a
+	// NopRecorder inside buildRunCapableFacade.
+	runID := uuid.New().String()
+	var recorder ports.Recorder
+	var transcriptCleanup func() error
+	if rec, rc, recErr := WireTranscript(runID, cfg.StoragePath); recErr != nil {
+		logger.Warn("failed to initialize transcript recorder, transcripts disabled", "error", recErr)
 	} else {
-		defer auditCleanup()
-		if auditWriter != nil {
-			execSvc.SetAuditTrailWriter(auditWriter)
+		recorder = rec
+		transcriptCleanup = rc
+		setupOpts = append(
+			setupOpts,
+			application.WithRecorder(recorder),
+			application.WithRecorderFactory(NewRecorderFactory()),
+			application.WithTranscriptDir(filepath.Join(cfg.StoragePath, "transcripts")),
+		)
+	}
+
+	setupResult, buildErr := application.NewExecutionSetup(repo, stateStore, shellExecutor, logger, setupOpts...).Build(ctx)
+	if buildErr != nil {
+		if auditCleanup != nil {
+			auditCleanup()
+		}
+		if transcriptCleanup != nil {
+			_ = transcriptCleanup() //nolint:errcheck // best-effort transcript flush on cleanup
+		}
+		return nil, nil, fmt.Errorf("failed to initialize execution: %w", buildErr)
+	}
+
+	runFacade := buildRunCapableFacade(setupResult.ExecService, setupResult.WorkflowSvc, historyStore, repo, recorder, logger)
+	if runFacade == nil {
+		setupResult.Cleanup()
+		if auditCleanup != nil {
+			auditCleanup()
+		}
+		if transcriptCleanup != nil {
+			_ = transcriptCleanup() //nolint:errcheck // best-effort transcript flush on cleanup
+		}
+		return nil, nil, fmt.Errorf("resume: failed to construct run-capable facade")
+	}
+
+	cleanup = func() {
+		setupResult.Cleanup()
+		if auditCleanup != nil {
+			auditCleanup()
+		}
+		if transcriptCleanup != nil {
+			_ = transcriptCleanup() //nolint:errcheck // best-effort transcript flush on cleanup
 		}
 	}
+	return runFacade, cleanup, nil
+}
 
-	if stdoutWriter != nil {
-		execSvc.SetOutputWriters(stdoutWriter, stderrWriter)
-	}
+// runResumeViaFacade resumes a run through ports.WorkflowFacade.Resume (T069).
+// The facade owns the resume lifecycle and returns a RunSession; this consumes the
+// session's event stream to completion, then maps the terminal outcome to an exit
+// code via categorizeError, mirroring the legacy path's result handling.
+//
+// inputOverrides and fromStep come from the --input and --from CLI flags respectively.
+// A nil inputOverrides map means "no overrides; use the values stored with the original run".
+// An empty fromStep means "resume from the current/last persisted step" (the facade default).
+func runResumeViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWriter, formatter *ui.Formatter, workflowID string, inputOverrides map[string]any, fromStep string) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	// Show start message
+	silentOutput := cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatTable
 	if !silentOutput && cfg.OutputFormat != ui.FormatQuiet {
 		formatter.Info(fmt.Sprintf("Resuming workflow: %s", workflowID))
 	}
 	startTime := time.Now()
 
-	fromStep, _ := cmd.Flags().GetString("from") //nolint:errcheck // flag registered on this command; GetString cannot fail
-
-	// Resume execution
-	execCtx, execErr := execSvc.Resume(ctx, workflowID, inputs, fromStep)
-
-	// Flush streaming writers
-	if stdoutWriter != nil {
-		stdoutWriter.Flush()
+	session, err := cfg.Facade.Resume(ctx, ports.ResumeRequest{
+		RunID:          workflowID,
+		InputOverrides: inputOverrides,
+		FromStep:       fromStep,
+	})
+	if err != nil {
+		return writeErrorAndExit(writer, err, categorizeError(err))
 	}
-	if stderrWriter != nil {
-		stderrWriter.Flush()
-	}
+	defer func() { _ = session.Close() }()
 
-	// Calculate duration
+	// Drain the session's event stream until the terminal event seals the channel and
+	// return session.Err(). application.Drain is the single shared consumer helper
+	// (FR-015); this interface layer MUST NOT reimplement the loop directly.
+	execErr := application.Drain(session)
 	durationMs := time.Since(startTime).Milliseconds()
 
-	// Load workflow for ordered step display (F095); nil on error falls back to no steps shown
-	var wf *workflow.Workflow
-	if execCtx != nil && execCtx.WorkflowName != "" {
-		wf, _ = repo.Load(ctx, execCtx.WorkflowName) //nolint:errcheck // nil wf skips ordered display gracefully
-	}
-
-	// Output result (same pattern as runWorkflow)
-	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
+	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet || cfg.OutputFormat == ui.FormatTable {
 		result := ui.RunResult{
+			WorkflowID: session.ID(),
 			Status:     "completed",
 			DurationMs: durationMs,
-		}
-		if execCtx != nil {
-			result.WorkflowID = execCtx.WorkflowID
-			result.Status = string(execCtx.Status)
-			if cfg.OutputMode == OutputBuffered {
-				result.Steps = buildStepInfos(wf, execCtx)
-			}
 		}
 		if execErr != nil {
 			result.Status = "failed"
 			result.Error = execErr.Error()
 		}
-		if err := writer.WriteRunResult(&result); err != nil {
-			return err
+		if writeErr := writer.WriteRunResult(&result); writeErr != nil {
+			return writeErr
 		}
 		if execErr != nil {
 			return &exitError{code: categorizeError(execErr), err: execErr}
 		}
 		return nil
 	}
-
-	// Table format
-	if cfg.OutputFormat == ui.FormatTable {
-		result := ui.RunResult{
-			Status:     "completed",
-			DurationMs: durationMs,
-		}
-		if execCtx != nil {
-			result.WorkflowID = execCtx.WorkflowID
-			result.Status = string(execCtx.Status)
-			result.Steps = buildStepInfos(wf, execCtx)
-		}
-		if execErr != nil {
-			result.Status = "failed"
-			result.Error = execErr.Error()
-		}
-		if err := writer.WriteRunResult(&result); err != nil {
-			return err
-		}
-		if execErr != nil {
-			return &exitError{code: categorizeError(execErr), err: execErr}
-		}
-		return nil
-	}
-
-	// Text format
-	duration := time.Since(startTime).Round(time.Millisecond)
 
 	if execErr != nil {
-		if cfg.OutputMode == OutputBuffered && execCtx != nil {
-			showStepOutputs(formatter, wf, execCtx)
-		}
-		if execCtx != nil {
-			formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
-		}
+		formatter.Info(fmt.Sprintf("Workflow ID: %s", session.ID()))
 		return writeErrorAndExit(writer, execErr, categorizeError(execErr))
 	}
 
-	if cfg.OutputMode != OutputBuffered && execCtx != nil {
-		showEmptyStepFeedback(formatter, wf, execCtx)
-	}
-
+	duration := time.Since(startTime).Round(time.Millisecond)
 	formatter.Success(fmt.Sprintf("Workflow resumed and completed in %s", duration))
-	formatter.Info(fmt.Sprintf("Workflow ID: %s", execCtx.WorkflowID))
-
-	if cfg.OutputMode == OutputBuffered && execCtx != nil {
-		showStepOutputs(formatter, wf, execCtx)
-	}
-
-	if cfg.Verbose && execCtx != nil {
-		showExecutionDetails(formatter, wf, execCtx)
-	}
-
+	formatter.Info(fmt.Sprintf("Workflow ID: %s", session.ID()))
 	return nil
 }

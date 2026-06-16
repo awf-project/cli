@@ -157,7 +157,7 @@ func TestTUIModel_InitReturnsCmd(t *testing.T) {
 	assert.True(t, ok, "bridgeless Init() should produce WorkflowsLoadedMsg")
 }
 
-// TestTUIModel_ViewRendersTabBar verifies that Model.View() renders all five tab labels.
+// TestTUIModel_ViewRendersTabBar verifies that Model.View() renders the current tab labels.
 func TestTUIModel_ViewRendersTabBar(t *testing.T) {
 	m := tui.New()
 
@@ -166,9 +166,11 @@ func TestTUIModel_ViewRendersTabBar(t *testing.T) {
 	m = updated.(tui.Model)
 
 	view := m.View().Content
-	for _, label := range []string{"1:Workflows", "2:Monitoring", "3:History", "4:Agent", "5:Logs"} {
+	for _, label := range []string{"1:Workflows", "2:Monitoring", "3:History", "4:Logs"} {
 		assert.Contains(t, view, label, "tab bar should contain label %q", label)
 	}
+	assert.NotContains(t, view, "4:Agent", "agent conversations are rendered in Monitoring, not a separate tab")
+	assert.NotContains(t, view, "5:Logs", "logs are the fourth tab in the current TUI model")
 }
 
 // TestTUIModel_TabSwitching verifies that pressing 1–5 switches the active tab.

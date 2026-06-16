@@ -88,6 +88,10 @@ vendors:
     in:
       - github.com/google/uuid
 
+  uniseg:
+    in:
+      - github.com/rivo/uniseg
+
   testify:
     in:
       - github.com/stretchr/testify/**
@@ -338,6 +342,11 @@ components:
 
 deps:
   # DOMAIN — only stdlib (+ pkg via commonComponents)
+  pkg-stringutil:
+    canUse:
+      - go-stdlib
+      - uniseg
+
   domain-workflow:
     mayDependOn:
       - domain-errors
@@ -738,6 +747,7 @@ deps:
       - infra-plugin
       - infra-repository
       - infra-store
+      - infra-transcript
       - infra-workflowpkg
       - infra-xdg
     canUse:

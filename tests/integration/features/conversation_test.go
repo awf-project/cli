@@ -44,6 +44,16 @@ import (
 
 // Note: skipInCI helper is defined in agent_test.go to avoid duplication
 
+func assertConversationFacadeExecution(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		return
+	}
+
+	assert.NotContains(t, err.Error(), "conversation manager not configured")
+	assert.NotContains(t, err.Error(), "conversation manager is not configured")
+}
+
 func TestConversationModeRecognizedByValidator(t *testing.T) {
 	// CI-enabled: Only validates YAML syntax, no external API calls required
 
@@ -95,7 +105,8 @@ func TestConversationModeRecognizedByValidator(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// When: Workflow is validated
-			cmd := cli.NewRootCommand()
+			cmd, cleanup := cli.NewRootCommandAutoFacade()
+			defer cleanup()
 			buf := new(bytes.Buffer)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
@@ -122,7 +133,8 @@ func TestConversationWorkflowsListedSuccessfully(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
 	// When: List command is executed
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -149,7 +161,8 @@ func TestBasicConversation_SimpleWorkflow(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute conversation workflow
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -162,9 +175,9 @@ func TestBasicConversation_SimpleWorkflow(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail due to missing API credentials, not wiring error
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "conversation manager not configured")
+	// Then: success is acceptable when the provider is available; provider
+	// timeout/auth failures are acceptable locally, but facade wiring failures are not.
+	assertConversationFacadeExecution(t, err)
 }
 
 func TestDryRun_ConversationConfiguration(t *testing.T) {
@@ -177,7 +190,8 @@ func TestDryRun_ConversationConfiguration(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Dry-run conversation workflow
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -218,7 +232,8 @@ func TestMaxTurns_MultiTurnWorkflow(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute multi-turn conversation
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -231,9 +246,9 @@ func TestMaxTurns_MultiTurnWorkflow(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail due to missing API credentials, not wiring error
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "conversation manager not configured")
+	// Then: success is acceptable when the provider is available; provider
+	// timeout/auth failures are acceptable locally, but facade wiring failures are not.
+	assertConversationFacadeExecution(t, err)
 }
 
 func TestContextWindow_TruncationPreservesSystemPrompt(t *testing.T) {
@@ -246,7 +261,8 @@ func TestContextWindow_TruncationPreservesSystemPrompt(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute conversation that exceeds context window
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -259,9 +275,9 @@ func TestContextWindow_TruncationPreservesSystemPrompt(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail due to missing API credentials, not wiring error
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "conversation manager not configured")
+	// Then: success is acceptable when the provider is available; provider
+	// timeout/auth failures are acceptable locally, but facade wiring failures are not.
+	assertConversationFacadeExecution(t, err)
 }
 
 func TestTokenCounting_InputOutputTracking(t *testing.T) {
@@ -274,7 +290,8 @@ func TestTokenCounting_InputOutputTracking(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute conversation
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -287,9 +304,9 @@ func TestTokenCounting_InputOutputTracking(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail due to missing API credentials, not wiring error
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "conversation manager not configured")
+	// Then: success is acceptable when the provider is available; provider
+	// timeout/auth failures are acceptable locally, but facade wiring failures are not.
+	assertConversationFacadeExecution(t, err)
 }
 
 func TestStopCondition_ExpressionEvaluation(t *testing.T) {
@@ -302,7 +319,8 @@ func TestStopCondition_ExpressionEvaluation(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute conversation with stop condition
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -315,9 +333,9 @@ func TestStopCondition_ExpressionEvaluation(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail due to missing API credentials, not wiring error
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "conversation manager not configured")
+	// Then: success is acceptable when the provider is available; provider
+	// timeout/auth failures are acceptable locally, but facade wiring failures are not.
+	assertConversationFacadeExecution(t, err)
 }
 
 func TestMaxTurns_BoundaryEnforcement(t *testing.T) {
@@ -330,7 +348,8 @@ func TestMaxTurns_BoundaryEnforcement(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute conversation that would exceed max_turns
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -343,9 +362,9 @@ func TestMaxTurns_BoundaryEnforcement(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail due to missing API credentials, not wiring error
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "conversation manager not configured")
+	// Then: success is acceptable when the provider is available; provider
+	// timeout/auth failures are acceptable locally, but facade wiring failures are not.
+	assertConversationFacadeExecution(t, err)
 }
 
 func TestInjectContext_ContinueConversation(t *testing.T) {
@@ -358,7 +377,8 @@ func TestInjectContext_ContinueConversation(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute workflow with conversation continuation
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -371,9 +391,9 @@ func TestInjectContext_ContinueConversation(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail due to missing API credentials, not wiring error
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "conversation manager not configured")
+	// Then: success is acceptable when the provider is available; provider
+	// timeout/auth failures are acceptable locally, but facade wiring failures are not.
+	assertConversationFacadeExecution(t, err)
 }
 
 func TestStateInterpolation_ConversationAccess(t *testing.T) {
@@ -386,7 +406,8 @@ func TestStateInterpolation_ConversationAccess(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute workflow with state interpolation
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -399,9 +420,9 @@ func TestStateInterpolation_ConversationAccess(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail due to missing API credentials, not wiring error
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "conversation manager not configured")
+	// Then: success is acceptable when the provider is available; provider
+	// timeout/auth failures are acceptable locally, but facade wiring failures are not.
+	assertConversationFacadeExecution(t, err)
 }
 
 func TestParallelConversations_ConcurrentExecution(t *testing.T) {
@@ -414,7 +435,8 @@ func TestParallelConversations_ConcurrentExecution(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute parallel conversations
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -441,7 +463,8 @@ func TestErrorHandling_ConversationErrors(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute conversation that may encounter errors
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -499,7 +522,8 @@ func TestEdgeCase_EmptyConversationConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute with default conversation settings
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -512,9 +536,9 @@ func TestEdgeCase_EmptyConversationConfig(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail due to missing API credentials, not wiring error
-	require.Error(t, err, "Should fail without API credentials")
-	assert.NotContains(t, err.Error(), "conversation manager not configured")
+	// Then: success is acceptable when the provider is available; provider
+	// timeout/auth failures are acceptable locally, but facade wiring failures are not.
+	assertConversationFacadeExecution(t, err)
 }
 
 func TestDiagramGeneration_ConversationSteps(t *testing.T) {
@@ -524,7 +548,8 @@ func TestDiagramGeneration_ConversationSteps(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
 	// When: Generate diagram
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -552,7 +577,8 @@ func TestHelpCommand_ConversationWorkflows(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Help requested for conversation workflow
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -589,7 +615,8 @@ func TestBackwardsCompatibility_StatelessMode(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute F039 stateless agent workflow
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -605,9 +632,13 @@ func TestBackwardsCompatibility_StatelessMode(t *testing.T) {
 	// The stateless agent workflow requires a registered provider (claude/gemini/etc.)
 	// which is not available in integration tests without live API access.
 	if err != nil {
-		// Expected: agent registry not configured or provider not found
+		// Expected: missing provider is surfaced either directly by the provider
+		// path or as the facade terminal failure returned by run execution.
 		assert.True(t,
-			strings.Contains(err.Error(), "agent") || strings.Contains(err.Error(), "provider") || strings.Contains(err.Error(), "registry"),
+			strings.Contains(err.Error(), "agent") ||
+				strings.Contains(err.Error(), "provider") ||
+				strings.Contains(err.Error(), "registry") ||
+				strings.Contains(err.Error(), "terminal failure state"),
 			"Error should be about missing agent provider, got: %s", err.Error())
 		return
 	}
@@ -643,7 +674,8 @@ func TestMultiTurnConversation_NoEmptyPromptError(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute multi-turn workflow
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -656,9 +688,9 @@ func TestMultiTurnConversation_NoEmptyPromptError(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail due to missing API credentials, not wiring error
-	require.Error(t, err, "Should fail without API credentials")
-	assert.NotContains(t, err.Error(), "conversation manager not configured")
+	// Then: success is acceptable when the provider is available; provider
+	// timeout/auth failures are acceptable locally, but facade wiring failures are not.
+	assertConversationFacadeExecution(t, err)
 }
 
 func TestExecuteConversationStep_DelegatesToConversationManager(t *testing.T) {
@@ -670,7 +702,8 @@ func TestExecuteConversationStep_DelegatesToConversationManager(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// When: Execute conversation via ExecutionService
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -683,9 +716,9 @@ func TestExecuteConversationStep_DelegatesToConversationManager(t *testing.T) {
 
 	err := cmd.Execute()
 
-	// Then: Should fail due to missing API credentials, not wiring error
-	require.Error(t, err, "Should fail without API credentials")
-	assert.NotContains(t, err.Error(), "conversation manager not configured")
+	// Then: success is acceptable when the provider is available; provider
+	// timeout/auth failures are acceptable locally, but facade wiring failures are not.
+	assertConversationFacadeExecution(t, err)
 }
 
 func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
@@ -741,12 +774,11 @@ func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
 			name:         "parallel_conversations",
 			workflow:     "conversation-parallel",
 			input:        map[string]string{"task": "test"},
-			shouldPass:   true,
+			shouldPass:   false,
 			expectedStop: "",
 			stepName:     "parallel_conversations",
-			// Parallel conversation steps fail with provider error,
-			// which triggers on_failure -> error terminal state. The outer error reflects
-			// the terminal state name rather than the underlying step error.
+			// This fixture includes Gemini. Claude/Codex may be configured locally while
+			// Gemini is unavailable, so the expected contract is a facade terminal failure.
 			wantErrContains: "workflow reached terminal failure state",
 		},
 		{
@@ -777,19 +809,26 @@ func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
 			}
 
 			// Execute workflow
-			cmd := cli.NewRootCommand()
+			cmd, cleanup := cli.NewRootCommandAutoFacade()
+			defer cleanup()
 			buf := new(bytes.Buffer)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)
 			cmd.SetArgs(args)
 
 			err := cmd.Execute()
-			_ = buf.String() // output not used — provider API error expected
+			_ = buf.String()
 
-			// All conversation workflows fail because API credentials are not available in test setup
-			require.Error(t, err, "Workflow %s should fail without API credentials", tc.workflow)
-			assert.Contains(t, err.Error(), tc.wantErrContains,
-				"Workflow %s should fail with expected error", tc.workflow)
+			if tc.shouldPass {
+				assertConversationFacadeExecution(t, err)
+				return
+			}
+
+			require.Error(t, err, "Workflow %s should fail", tc.workflow)
+			if tc.wantErrContains != "" {
+				assert.Contains(t, err.Error(), tc.wantErrContains,
+					"Workflow %s should fail with expected error", tc.workflow)
+			}
 		})
 	}
 }

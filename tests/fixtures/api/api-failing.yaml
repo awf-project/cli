@@ -14,3 +14,4 @@ states:
     type: terminal
   failed:
     type: terminal
+    status: failure

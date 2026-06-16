@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/testutil/mocks"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,8 +17,14 @@ import (
 // Component: agent_providers
 // Feature: 39
 
+func newMockClaudeProvider() *ClaudeProvider {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(`{"type":"result","result":"{\"colors\":[\"red\",\"green\",\"blue\"]}","session_id":"mock-session"}`), nil)
+	return NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
+}
+
 func TestClaudeProvider_Execute_HappyPath_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	provider := newMockClaudeProvider()
 
 	tests := []struct {
 		name    string
@@ -49,7 +56,7 @@ func TestClaudeProvider_Execute_HappyPath_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.Execute(ctx, tt.prompt, tt.options)
+			result, err := provider.Execute(ctx, tt.prompt, tt.options, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -63,7 +70,7 @@ func TestClaudeProvider_Execute_HappyPath_Integration(t *testing.T) {
 }
 
 func TestClaudeProvider_Execute_JSONResponse_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	provider := newMockClaudeProvider()
 
 	ctx := context.Background()
 
@@ -71,7 +78,7 @@ func TestClaudeProvider_Execute_JSONResponse_Integration(t *testing.T) {
 		"output_format": "json",
 	}
 
-	result, err := provider.Execute(ctx, "List 3 colors", options)
+	result, err := provider.Execute(ctx, "List 3 colors", options, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -80,11 +87,11 @@ func TestClaudeProvider_Execute_JSONResponse_Integration(t *testing.T) {
 }
 
 func TestClaudeProvider_Execute_TokenUsage_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	provider := newMockClaudeProvider()
 
 	ctx := context.Background()
 
-	result, err := provider.Execute(ctx, "Hello", nil)
+	result, err := provider.Execute(ctx, "Hello", nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -95,7 +102,7 @@ func TestClaudeProvider_Execute_EmptyPrompt_Integration(t *testing.T) {
 	provider := NewClaudeProvider()
 	ctx := context.Background()
 
-	result, err := provider.Execute(ctx, "", nil)
+	result, err := provider.Execute(ctx, "", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -110,7 +117,7 @@ func TestClaudeProvider_Execute_Timeout_Integration(t *testing.T) {
 
 	time.Sleep(5 * time.Millisecond) // Ensure timeout
 
-	result, err := provider.Execute(ctx, "This should timeout", nil)
+	result, err := provider.Execute(ctx, "This should timeout", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -123,7 +130,7 @@ func TestClaudeProvider_Execute_ContextCancellation_Integration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	result, err := provider.Execute(ctx, "This should be cancelled", nil)
+	result, err := provider.Execute(ctx, "This should be cancelled", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -150,7 +157,7 @@ func TestClaudeProvider_Execute_InvalidOptions_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.Execute(ctx, "Test prompt", tt.options)
+			result, err := provider.Execute(ctx, "Test prompt", tt.options, nil, nil)
 
 			assert.Error(t, err)
 			assert.Nil(t, result)
@@ -179,7 +186,7 @@ func TestClaudeProvider_Validate_CLIInstalled_Integration(t *testing.T) {
 }
 
 func TestClaudeProvider_Execute_LargePrompt_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	provider := newMockClaudeProvider()
 
 	ctx := context.Background()
 
@@ -189,7 +196,7 @@ func TestClaudeProvider_Execute_LargePrompt_Integration(t *testing.T) {
 		largePrompt += "This is a test sentence. "
 	}
 
-	result, err := provider.Execute(ctx, largePrompt, nil)
+	result, err := provider.Execute(ctx, largePrompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -197,7 +204,7 @@ func TestClaudeProvider_Execute_LargePrompt_Integration(t *testing.T) {
 }
 
 func TestClaudeProvider_Execute_SpecialCharactersInPrompt_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	provider := newMockClaudeProvider()
 
 	tests := []struct {
 		name   string
@@ -229,7 +236,7 @@ func TestClaudeProvider_Execute_SpecialCharactersInPrompt_Integration(t *testing
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := provider.Execute(ctx, tt.prompt, nil)
+			result, err := provider.Execute(ctx, tt.prompt, nil, nil, nil)
 
 			require.NoError(t, err)
 			require.NotNil(t, result)
@@ -242,7 +249,7 @@ func TestClaudeProvider_Execute_SpecialCharactersInPrompt_Integration(t *testing
 // Feature: F033
 
 func TestClaudeProvider_ExecuteConversation_HappyPath_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	provider := newMockClaudeProvider()
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful assistant.")
@@ -251,7 +258,7 @@ func TestClaudeProvider_ExecuteConversation_HappyPath_Integration(t *testing.T) 
 		"model": "sonnet",
 	}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -264,13 +271,13 @@ func TestClaudeProvider_ExecuteConversation_HappyPath_Integration(t *testing.T) 
 }
 
 func TestClaudeProvider_ExecuteConversation_EmptyState_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	provider := newMockClaudeProvider()
 
 	ctx := context.Background()
 	state := &workflow.ConversationState{}
 	prompt := "Hello"
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -283,7 +290,7 @@ func TestClaudeProvider_ExecuteConversation_NilState_Integration(t *testing.T) {
 	ctx := context.Background()
 	prompt := "Hello"
 
-	result, err := provider.ExecuteConversation(ctx, nil, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, nil, prompt, nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -296,7 +303,7 @@ func TestClaudeProvider_ExecuteConversation_EmptyPrompt_Integration(t *testing.T
 	ctx := context.Background()
 	state := workflow.NewConversationState("System prompt")
 
-	result, err := provider.ExecuteConversation(ctx, state, "", nil)
+	result, err := provider.ExecuteConversation(ctx, state, "", nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -304,7 +311,7 @@ func TestClaudeProvider_ExecuteConversation_EmptyPrompt_Integration(t *testing.T
 }
 
 func TestClaudeProvider_ExecuteConversation_WithHistory_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	provider := newMockClaudeProvider()
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful assistant.")
@@ -320,7 +327,7 @@ func TestClaudeProvider_ExecuteConversation_WithHistory_Integration(t *testing.T
 
 	prompt := "What about 3+3?"
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -330,7 +337,7 @@ func TestClaudeProvider_ExecuteConversation_WithHistory_Integration(t *testing.T
 }
 
 func TestClaudeProvider_ExecuteConversation_JSONResponse_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	provider := newMockClaudeProvider()
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful assistant.")
@@ -339,7 +346,7 @@ func TestClaudeProvider_ExecuteConversation_JSONResponse_Integration(t *testing.
 		"output_format": "json",
 	}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -356,7 +363,7 @@ func TestClaudeProvider_ExecuteConversation_ContextCancellation_Integration(t *t
 	state := workflow.NewConversationState("System prompt")
 	prompt := "What is 2+2?"
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
@@ -373,20 +380,22 @@ func TestClaudeProvider_ExecuteConversation_ContextTimeout_Integration(t *testin
 	state := workflow.NewConversationState("System prompt")
 	prompt := "What is 2+2?"
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
 }
 
 func TestClaudeProvider_ExecuteConversation_TokenCounting_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte("I am doing well, thank you."), nil)
+	provider := NewClaudeProviderWithOptions(WithClaudeExecutor(mockExec))
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful assistant.")
 	prompt := "Hello, how are you?"
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -396,7 +405,7 @@ func TestClaudeProvider_ExecuteConversation_TokenCounting_Integration(t *testing
 }
 
 func TestClaudeProvider_ExecuteConversation_LargeHistory_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	provider := newMockClaudeProvider()
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful assistant.")
@@ -414,7 +423,7 @@ func TestClaudeProvider_ExecuteConversation_LargeHistory_Integration(t *testing.
 
 	prompt := "Final question?"
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -422,7 +431,7 @@ func TestClaudeProvider_ExecuteConversation_LargeHistory_Integration(t *testing.
 }
 
 func TestClaudeProvider_ExecuteConversation_MultilinePrompt_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	provider := newMockClaudeProvider()
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a code reviewer.")
@@ -431,7 +440,7 @@ func add(a, b int) int {
     return a + b
 }`
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -439,7 +448,7 @@ func add(a, b int) int {
 }
 
 func TestClaudeProvider_ExecuteConversation_WithAllowedTools_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	provider := newMockClaudeProvider()
 
 	ctx := context.Background()
 	state := workflow.NewConversationState("You are a helpful assistant.")
@@ -448,7 +457,7 @@ func TestClaudeProvider_ExecuteConversation_WithAllowedTools_Integration(t *test
 		"allowed_tools": "bash,read,write",
 	}
 
-	result, err := provider.ExecuteConversation(ctx, state, prompt, options)
+	result, err := provider.ExecuteConversation(ctx, state, prompt, options, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -456,7 +465,7 @@ func TestClaudeProvider_ExecuteConversation_WithAllowedTools_Integration(t *test
 }
 
 func TestClaudeProvider_ExecuteConversation_StatePreservation_Integration(t *testing.T) {
-	provider := NewClaudeProvider()
+	provider := newMockClaudeProvider()
 
 	ctx := context.Background()
 	initialState := workflow.NewConversationState("You are a helpful assistant.")
@@ -468,7 +477,7 @@ func TestClaudeProvider_ExecuteConversation_StatePreservation_Integration(t *tes
 
 	prompt := "Hello"
 
-	result, err := provider.ExecuteConversation(ctx, initialState, prompt, nil)
+	result, err := provider.ExecuteConversation(ctx, initialState, prompt, nil, nil, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)

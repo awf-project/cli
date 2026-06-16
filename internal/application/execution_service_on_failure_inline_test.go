@@ -37,7 +37,7 @@ func TestExecutionService_InlineOnFailure_MessageInError(t *testing.T) {
 		WithCommandResult("make build", &ports.CommandResult{Stdout: "", Stderr: "error", ExitCode: 1}).
 		Build()
 
-	_, err := execSvc.Run(context.Background(), "test", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "Build failed: deployment aborted"),
@@ -70,7 +70,7 @@ func TestExecutionService_InlineOnFailure_InputsInterpolated(t *testing.T) {
 		Build()
 
 	inputs := map[string]any{"environment": "production"}
-	_, err := execSvc.Run(context.Background(), "test", inputs)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, inputs, "test-run")
 
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "production"),
@@ -118,7 +118,7 @@ func TestExecutionService_InlineOnFailure_StatesInterpolated(t *testing.T) {
 		WithCommandResult("go test ./...", &ports.CommandResult{Stdout: "", Stderr: "test error", ExitCode: 1}).
 		Build()
 
-	_, err := execSvc.Run(context.Background(), "test", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "Tests failed after:"),
@@ -150,7 +150,7 @@ func TestExecutionService_InlineOnFailure_EmptyMessageNoChange(t *testing.T) {
 		WithCommandResult("false", &ports.CommandResult{Stdout: "", Stderr: "", ExitCode: 1}).
 		Build()
 
-	_, err := execSvc.Run(context.Background(), "test", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.Error(t, err)
 	// Spec: step with empty message falls back to generic error format
@@ -184,7 +184,7 @@ func TestExecutionService_InlineOnFailure_DefaultExitCode1(t *testing.T) {
 		WithCommandResult("false", &ports.CommandResult{Stdout: "", Stderr: "", ExitCode: 1}).
 		Build()
 
-	execCtx, err := execSvc.Run(context.Background(), "test", nil)
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.Error(t, err)
 	assert.Equal(t, workflow.StatusFailed, execCtx.Status)
@@ -245,7 +245,7 @@ func TestExecutionService_InlineOnFailure_ExitCodePropagates(t *testing.T) {
 				WithCommandResult("false", &ports.CommandResult{Stdout: "", Stderr: "", ExitCode: 1}).
 				Build()
 
-			execCtx, err := execSvc.Run(context.Background(), "test", nil)
+			execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 			require.Error(t, err)
 			assert.Equal(t, workflow.StatusFailed, execCtx.Status)
@@ -280,7 +280,7 @@ func TestExecutionService_InlineOnFailure_SuccessTerminalNoError(t *testing.T) {
 		WithCommandResult("echo ok", &ports.CommandResult{Stdout: "ok\n", ExitCode: 0}).
 		Build()
 
-	execCtx, err := execSvc.Run(context.Background(), "test", nil)
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
@@ -357,7 +357,7 @@ func TestExecutionService_InlineOnFailure_BadTemplateFallsBackToRaw(t *testing.T
 		WithCommandResult("false", &ports.CommandResult{Stdout: "", Stderr: "", ExitCode: 1}).
 		Build()
 
-	_, err := execSvc.Run(context.Background(), "test", nil)
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.Error(t, err)
 	// Spec ADR-003: fallback to raw template on interpolation error

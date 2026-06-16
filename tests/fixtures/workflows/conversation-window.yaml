@@ -19,7 +19,7 @@ states:
     system_prompt: "You are a helpful assistant. Engage in detailed conversation."
     prompt: "Let's discuss: {{inputs.task}}"
     options:
-      model: claude-haiku-4-5
+      model: haiku
     conversation: {}
     timeout: 120
     on_success: summarize_test

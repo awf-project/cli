@@ -18,7 +18,8 @@ func TestCLI_List_Integration(t *testing.T) {
 	// Use fixtures directory
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -35,7 +36,8 @@ func TestCLI_List_Integration(t *testing.T) {
 func TestCLI_Validate_Valid_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -51,7 +53,8 @@ func TestCLI_Validate_Valid_Integration(t *testing.T) {
 func TestCLI_Validate_Invalid_Integration(t *testing.T) {
 	t.Setenv("AWF_WORKFLOWS_PATH", "../../fixtures/workflows")
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -315,7 +318,8 @@ states:
 
 	t.Setenv("AWF_WORKFLOWS_PATH", wfDir)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)

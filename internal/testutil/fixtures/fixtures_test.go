@@ -350,7 +350,7 @@ func TestConversationWorkflow_WithCustomProvider(t *testing.T) {
 		provider string
 		model    string
 	}{
-		{name: "anthropic claude", provider: "anthropic", model: "claude-3-opus"},
+		{name: "anthropic claude", provider: "anthropic", model: "haiku"},
 		{name: "openai gpt", provider: "openai", model: "gpt-4"},
 		{name: "google gemini", provider: "google", model: "gemini-pro"},
 	}
@@ -380,7 +380,7 @@ func TestConversationWorkflow_WithCustomProvider(t *testing.T) {
 
 // TestConversationWorkflow_WithMultiTurn tests ConversationWorkflow with multiple conversation steps
 func TestConversationWorkflow_WithMultiTurn(t *testing.T) {
-	wf := fixtures.ConversationWorkflow("anthropic", "claude-3-opus", 3) // 3 turns
+	wf := fixtures.ConversationWorkflow("anthropic", "haiku", 3) // 3 turns
 
 	// Count agent steps
 	agentStepCount := 0

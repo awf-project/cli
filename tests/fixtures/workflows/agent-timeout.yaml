@@ -18,7 +18,7 @@ states:
       Quick task (should complete within timeout):
       {{inputs.task}}
     options:
-      model: claude-haiku-4-5
+      model: haiku
     timeout: 5  # Short timeout for testing
     on_success: done
     on_failure: error

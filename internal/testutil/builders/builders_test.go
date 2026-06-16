@@ -295,15 +295,14 @@ func TestExecutionServiceBuilder_EdgeCases(t *testing.T) {
 // TestExecutionServiceBuilder_Integration tests builder with actual service execution
 func TestExecutionServiceBuilder_Integration(t *testing.T) {
 	tests := []struct {
-		name         string
-		setupFunc    func() (*application.ExecutionService, *mocks.MockLogger, *mocks.MockCommandExecutor)
-		workflowName string
-		inputs       map[string]any
-		verifyFunc   func(t *testing.T, logger *mocks.MockLogger, executor *mocks.MockCommandExecutor, result *workflow.ExecutionContext, err error)
+		name       string
+		setupFunc  func() (*application.ExecutionService, *workflow.Workflow, map[string]any, *mocks.MockLogger, *mocks.MockCommandExecutor)
+		runID      string
+		verifyFunc func(t *testing.T, logger *mocks.MockLogger, executor *mocks.MockCommandExecutor, result *workflow.ExecutionContext, err error)
 	}{
 		{
 			name: "service built with mocks executes workflow successfully",
-			setupFunc: func() (*application.ExecutionService, *mocks.MockLogger, *mocks.MockCommandExecutor) {
+			setupFunc: func() (*application.ExecutionService, *workflow.Workflow, map[string]any, *mocks.MockLogger, *mocks.MockCommandExecutor) {
 				logger := mocks.NewMockLogger()
 				executor := mocks.NewMockCommandExecutor()
 				repo := mocks.NewMockWorkflowRepository()
@@ -325,10 +324,9 @@ func TestExecutionServiceBuilder_Integration(t *testing.T) {
 					WithStateStore(store).
 					Build()
 
-				return svc, logger, executor
+				return svc, wf, map[string]any{}, logger, executor
 			},
-			workflowName: "test-workflow",
-			inputs:       map[string]any{},
+			runID: "test-workflow-run",
 			verifyFunc: func(t *testing.T, logger *mocks.MockLogger, executor *mocks.MockCommandExecutor, result *workflow.ExecutionContext, err error) {
 				// Verify logger was used
 				messages := logger.GetMessages()
@@ -342,11 +340,11 @@ func TestExecutionServiceBuilder_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc, logger, executor := tt.setupFunc()
+			svc, wf, inputs, logger, executor := tt.setupFunc()
 			require.NotNil(t, svc)
 
 			ctx := context.Background()
-			result, err := svc.Run(ctx, tt.workflowName, tt.inputs)
+			result, err := svc.RunWithWorkflowAndRunID(ctx, wf, inputs, tt.runID)
 
 			if tt.verifyFunc != nil {
 				tt.verifyFunc(t, logger, executor, result, err)

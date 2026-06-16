@@ -101,7 +101,8 @@ func TestExecutionService_PluginOperation_NoProviderConfigured(t *testing.T) {
 	)
 	// Note: SetOperationProvider is NOT called - provider is nil
 
-	ctx, err := execSvc.Run(context.Background(), "op-test", nil)
+	wf := repo.workflows["op-test"]
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "op-test-run")
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, application.ErrNoOperationProvider)
@@ -145,7 +146,8 @@ func TestExecutionService_PluginOperation_OperationNotFound(t *testing.T) {
 	)
 	execSvc.SetOperationProvider(provider)
 
-	ctx, err := execSvc.Run(context.Background(), "op-test", nil)
+	wf := repo.workflows["op-test"]
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "op-test-run")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
@@ -197,7 +199,8 @@ func TestExecutionService_PluginOperation_BasicExecution(t *testing.T) {
 	)
 	execSvc.SetOperationProvider(provider)
 
-	ctx, err := execSvc.Run(context.Background(), "op-test", nil)
+	wf := repo.workflows["op-test"]
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "op-test-run")
 
 	// Operation should succeed
 	require.NoError(t, err)
@@ -250,7 +253,8 @@ func TestExecutionService_PluginOperation_WithOnFailure(t *testing.T) {
 	)
 	execSvc.SetOperationProvider(provider)
 
-	ctx, err := execSvc.Run(context.Background(), "op-test", nil)
+	wf := repo.workflows["op-test"]
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "op-test-run")
 
 	// Operation fails, but workflow should complete via OnFailure path
 	require.NoError(t, err)
@@ -310,7 +314,8 @@ func TestExecutionService_PluginOperation_InMixedWorkflow(t *testing.T) {
 	)
 	execSvc.SetOperationProvider(provider)
 
-	ctx, err := execSvc.Run(context.Background(), "mixed", nil)
+	wf := repo.workflows["mixed"]
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "mixed-run")
 
 	// Both steps should succeed
 	require.NoError(t, err)
@@ -442,7 +447,8 @@ func TestExecutionService_SetOperationProvider(t *testing.T) {
 	)
 	execSvc2.SetOperationProvider(provider)
 
-	ctx, err := execSvc2.Run(context.Background(), "test", nil)
+	wf2 := repo.workflows["test"]
+	ctx, err := execSvc2.RunWithWorkflowAndRunID(context.Background(), wf2, nil, "test-run")
 	// Should succeed (not ErrNoOperationProvider)
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -520,7 +526,8 @@ func TestExecutionService_PluginOperation_MultipleOperationTypes(t *testing.T) {
 			)
 			execSvc.SetOperationProvider(provider)
 
-			ctx, err := execSvc.Run(context.Background(), "test", nil)
+			wf := repo.workflows["test"]
+			ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 			if tt.expectSuccess {
 				require.NoError(t, err)
@@ -631,7 +638,8 @@ func TestExecutionService_PluginOperation_SuccessfulExecution(t *testing.T) {
 	)
 	execSvc.SetOperationProvider(provider)
 
-	ctx, err := execSvc.Run(context.Background(), "op-success", nil)
+	wf := repo.workflows["op-success"]
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "op-success-run")
 
 	// GREEN PHASE: This should pass when implementation is complete
 	require.NoError(t, err, "operation step should succeed")
@@ -689,7 +697,8 @@ func TestExecutionService_PluginOperation_OperationFailure(t *testing.T) {
 	)
 	execSvc.SetOperationProvider(provider)
 
-	ctx, err := execSvc.Run(context.Background(), "op-fail", nil)
+	wf := repo.workflows["op-fail"]
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "op-fail-run")
 
 	// GREEN PHASE: This should pass when implementation is complete
 	require.NoError(t, err, "workflow should complete via error path")
@@ -744,9 +753,10 @@ func TestExecutionService_PluginOperation_InputInterpolation(t *testing.T) {
 	)
 	execSvc.SetOperationProvider(provider)
 
-	ctx, err := execSvc.Run(context.Background(), "op-interpolate", map[string]any{
+	wf := repo.workflows["op-interpolate"]
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, map[string]any{
 		"channel": "#builds",
-	})
+	}, "op-interpolate-run")
 
 	// GREEN PHASE: This should pass when implementation is complete
 	require.NoError(t, err)
@@ -796,7 +806,8 @@ func TestExecutionService_PluginOperation_OutputCapture(t *testing.T) {
 	)
 	execSvc.SetOperationProvider(provider)
 
-	ctx, err := execSvc.Run(context.Background(), "op-output", nil)
+	wf := repo.workflows["op-output"]
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "op-output-run")
 
 	// GREEN PHASE: This should pass when implementation is complete
 	require.NoError(t, err)
@@ -854,7 +865,8 @@ func TestExecutionService_PluginOperation_Timeout(t *testing.T) {
 
 	// This test verifies timeout handling is implemented
 	// For now with stub implementation, behavior is limited
-	_, err := execSvc.Run(context.Background(), "op-timeout", nil)
+	wf := repo.workflows["op-timeout"]
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "op-timeout-run")
 
 	// GREEN PHASE: When implemented, should either succeed or timeout gracefully
 	// For now, we just verify the test runs without panic
@@ -929,7 +941,8 @@ func TestExecutionService_PluginOperation_ErrorMessages(t *testing.T) {
 				execSvc.SetOperationProvider(provider)
 			}
 
-			_, err := execSvc.Run(context.Background(), "test", nil)
+			wf := repo.workflows["test"]
+			_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 			require.Error(t, err)
 			errMsg := err.Error()

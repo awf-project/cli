@@ -181,7 +181,7 @@ description: Plugin for JSON testing
 awf_version: ">=0.1.0"
 capabilities:
   - operations
-  - commands
+  - step_types
 `
 	require.NoError(t, os.WriteFile(
 		filepath.Join(testPluginDir, "plugin.yaml"),
@@ -443,7 +443,7 @@ capabilities:
 	err = json.Unmarshal([]byte(output), &result)
 	require.NoError(t, err, "output should be valid JSON")
 
-	assert.Equal(t, "json-enable-plugin", result["plugin"])
+	assert.Equal(t, "json-enable-plugin", result["name"])
 	assert.True(t, result["enabled"].(bool))
 }
 

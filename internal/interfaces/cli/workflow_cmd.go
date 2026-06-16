@@ -758,10 +758,14 @@ func runWorkflowSearch(cmd *cobra.Command, cfg *Config, query string) error {
 
 	searchQuery := "topic:awf-workflow"
 	if query != "" {
-		searchQuery += "+" + url.QueryEscape(query)
+		searchQuery += " " + query
 	}
 
-	apiURL := fmt.Sprintf("%s/search/repositories?q=%s&sort=stars&order=desc", baseURL, searchQuery)
+	values := url.Values{}
+	values.Set("q", searchQuery)
+	values.Set("sort", "stars")
+	values.Set("order", "desc")
+	apiURL := fmt.Sprintf("%s/search/repositories?%s", strings.TrimRight(baseURL, "/"), values.Encode())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, http.NoBody) //nolint:gosec // G107: URL from validated env var or hardcoded base
 	if err != nil {
@@ -774,11 +778,11 @@ func runWorkflowSearch(cmd *cobra.Command, cfg *Config, query string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-Ratelimit-Remaining") == "0" {
-		return fmt.Errorf("GitHub API rate limit exceeded. Set GITHUB_TOKEN for higher limits")
+		return workflowSearchError(cmd, "GitHub API rate limit exceeded. Set GITHUB_TOKEN for higher limits")
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("GitHub search API returned status %d", resp.StatusCode)
+		return workflowSearchError(cmd, "GitHub search API returned status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
@@ -794,7 +798,7 @@ func runWorkflowSearch(cmd *cobra.Command, cfg *Config, query string) error {
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(body, &searchResult); err != nil {
-		return fmt.Errorf("failed to parse search results: %w", err)
+		return workflowSearchError(cmd, "failed to parse search results: %v", err)
 	}
 
 	if cfg.OutputFormat == ui.FormatJSON {
@@ -816,6 +820,12 @@ func runWorkflowSearch(cmd *cobra.Command, cfg *Config, query string) error {
 	}
 
 	return nil
+}
+
+func workflowSearchError(cmd *cobra.Command, format string, args ...any) error {
+	err := fmt.Errorf(format, args...)
+	fmt.Fprintln(cmd.ErrOrStderr(), err.Error())
+	return err
 }
 
 func runWorkflowRemove(cmd *cobra.Command, _ *Config, name string) error {

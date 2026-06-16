@@ -13,12 +13,12 @@ import (
 
 func TestSessionRegistry_DuplicateAddReturnsErrSessionExists(t *testing.T) {
 	reg := NewSessionRegistry()
-	s1 := newRunSession("session-1", context.Background(), 256)
+	s1 := newRunSession(context.Background(), "session-1", 256)
 
 	err1 := reg.Add(s1)
 	require.NoError(t, err1)
 
-	s2 := newRunSession("session-1", context.Background(), 256)
+	s2 := newRunSession(context.Background(), "session-1", 256)
 	err2 := reg.Add(s2)
 
 	assert.ErrorIs(t, err2, ports.ErrSessionExists)
@@ -44,7 +44,7 @@ func TestSessionRegistry_ConcurrentAddRemove(t *testing.T) {
 			defer wg.Done()
 
 			id := "session-" + string(rune(idx%10))
-			s := newRunSession(id, context.Background(), 256)
+			s := newRunSession(context.Background(), id, 256)
 
 			err := reg.Add(s)
 			if err != nil && err != ports.ErrSessionExists {
@@ -72,7 +72,7 @@ func TestSessionRegistry_ConcurrentAddRemove(t *testing.T) {
 
 func TestSessionRegistry_Add(t *testing.T) {
 	reg := NewSessionRegistry()
-	s := newRunSession("test-session", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-session", 256)
 
 	err := reg.Add(s)
 
@@ -84,7 +84,7 @@ func TestSessionRegistry_Add(t *testing.T) {
 
 func TestSessionRegistry_Remove(t *testing.T) {
 	reg := NewSessionRegistry()
-	s := newRunSession("test-session", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-session", 256)
 
 	err := reg.Add(s)
 	require.NoError(t, err)
@@ -108,11 +108,11 @@ func TestSessionRegistry_Len(t *testing.T) {
 
 	assert.Equal(t, 0, reg.Len())
 
-	s1 := newRunSession("session-1", context.Background(), 256)
+	s1 := newRunSession(context.Background(), "session-1", 256)
 	reg.Add(s1)
 	assert.Equal(t, 1, reg.Len())
 
-	s2 := newRunSession("session-2", context.Background(), 256)
+	s2 := newRunSession(context.Background(), "session-2", 256)
 	reg.Add(s2)
 	assert.Equal(t, 2, reg.Len())
 
@@ -125,7 +125,7 @@ func TestSessionRegistry_AddMultipleSessions(t *testing.T) {
 
 	sessions := make([]*RunSession, 5)
 	for i := 0; i < 5; i++ {
-		s := newRunSession("session-"+string(rune(i)), context.Background(), 256)
+		s := newRunSession(context.Background(), "session-"+string(rune(i)), 256)
 		sessions[i] = s
 		err := reg.Add(s)
 		require.NoError(t, err)
@@ -142,7 +142,7 @@ func TestSessionRegistry_AddMultipleSessions(t *testing.T) {
 
 func TestSessionRegistry_GetAfterRemove(t *testing.T) {
 	reg := NewSessionRegistry()
-	s := newRunSession("test-session", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-session", 256)
 
 	reg.Add(s)
 	reg.Remove("test-session")
@@ -153,7 +153,7 @@ func TestSessionRegistry_GetAfterRemove(t *testing.T) {
 
 func TestSessionRegistry_ConcurrentGet(t *testing.T) {
 	reg := NewSessionRegistry()
-	s := newRunSession("test-session", context.Background(), 256)
+	s := newRunSession(context.Background(), "test-session", 256)
 	reg.Add(s)
 
 	var wg sync.WaitGroup

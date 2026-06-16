@@ -23,7 +23,8 @@ func TestValidateCommand_NoArgs(t *testing.T) {
 }
 
 func TestValidateCommand_NotFound(t *testing.T) {
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)

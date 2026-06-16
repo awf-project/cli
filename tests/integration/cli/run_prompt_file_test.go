@@ -255,11 +255,12 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "missing-file.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"validate", "missing-file"})
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "validate", "missing-file"})
 
 	err := cmd.Execute()
 	require.Error(t, err, "validation should fail for missing prompt_file")
@@ -289,11 +290,12 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "valid-file.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"validate", "valid-file"})
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "validate", "valid-file"})
 
 	err := cmd.Execute()
 	require.NoError(t, err, "validation should pass for existing prompt_file")
@@ -323,11 +325,12 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "mutual-exclusive.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"validate", "mutual-exclusive"})
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "validate", "mutual-exclusive"})
 
 	err := cmd.Execute()
 	require.Error(t, err, "validation should fail when both prompt and prompt_file are set")
@@ -352,11 +355,12 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "no-prompt.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"validate", "no-prompt"})
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "validate", "no-prompt"})
 
 	err := cmd.Execute()
 	require.Error(t, err, "validation should fail when neither prompt nor prompt_file is set")
@@ -385,11 +389,12 @@ states:
 `
 	createTestWorkflow(t, tmpDir, "directory-instead-of-file.yaml", workflowContent)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"validate", "directory-instead-of-file"})
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "validate", "directory-instead-of-file"})
 
 	err := cmd.Execute()
 	require.Error(t, err, "validation should fail when prompt_file points to directory")

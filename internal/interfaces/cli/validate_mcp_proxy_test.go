@@ -19,7 +19,8 @@ func TestValidateMCPProxy_UnknownKey(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("AWF_WORKFLOWS_PATH", absPath)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
 	cmd.SetOut(buf)
@@ -44,7 +45,8 @@ func TestValidateMCPProxy_UnknownPlugin(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("AWF_WORKFLOWS_PATH", absPath)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
 	cmd.SetOut(buf)
@@ -70,7 +72,8 @@ func TestValidateMCPProxy_UnknownOperation(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("AWF_WORKFLOWS_PATH", absPath)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
 	cmd.SetOut(buf)
@@ -101,7 +104,8 @@ func TestValidateMCPProxy_EmptyProxy(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("AWF_WORKFLOWS_PATH", absPath)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
 	cmd.SetOut(buf)
@@ -123,7 +127,8 @@ func TestValidateMCPProxy_NameCollision(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("AWF_WORKFLOWS_PATH", absPath)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
 	cmd.SetOut(buf)
@@ -154,7 +159,8 @@ func TestValidateMCPProxy_ValidEnabled(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("AWF_WORKFLOWS_PATH", absPath)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
 	cmd.SetOut(buf)
@@ -183,7 +189,8 @@ func TestValidateMCPProxy_CodexWarning(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("AWF_WORKFLOWS_PATH", absPath)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
 	cmd.SetOut(buf)
@@ -211,7 +218,8 @@ func TestValidateMCPProxy_ExitCodeOnError(t *testing.T) {
 	require.NoError(t, err)
 	t.Setenv("AWF_WORKFLOWS_PATH", absPath)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	errBuf := new(bytes.Buffer)
 	cmd.SetOut(buf)

@@ -73,7 +73,7 @@ func TestCloneAndInjectOutputFormat_OriginalMapNotMutated(t *testing.T) {
 
 	// Act: execute the workflow
 	ctx := context.Background()
-	_, err := svc.Run(ctx, "test", nil)
+	_, err := svc.RunWithWorkflowAndRunID(ctx, wf, nil, "test-run")
 
 	// Assert: execution succeeds
 	require.NoError(t, err)
@@ -124,8 +124,9 @@ func TestExecuteAgentStep_CopiesDisplayOutputToState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange: setup execution service with agent step
+			wf := buildTestWorkflow()
 			svc, _ := NewTestHarness(t).
-				WithWorkflow("test", buildTestWorkflow()).
+				WithWorkflow("test", wf).
 				Build()
 
 			// Mock provider that returns both raw and display output
@@ -151,7 +152,7 @@ func TestExecuteAgentStep_CopiesDisplayOutputToState(t *testing.T) {
 
 			// Act: execute the workflow
 			ctx := context.Background()
-			execCtx, err := svc.Run(ctx, "test", nil)
+			execCtx, err := svc.RunWithWorkflowAndRunID(ctx, wf, nil, "test-run")
 
 			// Assert: execution succeeds
 			require.NoError(t, err)
@@ -254,7 +255,7 @@ func TestExecuteAgentStep_OutputFormatInjectedIntoOptions(t *testing.T) {
 			svc.SetAgentRegistry(registry)
 
 			ctx := context.Background()
-			_, err := svc.Run(ctx, "test", nil)
+			_, err := svc.RunWithWorkflowAndRunID(ctx, wf, nil, "test-run")
 
 			require.NoError(t, err)
 			require.NotNil(t, capturedOptions)
@@ -312,7 +313,7 @@ func TestExecuteAgentStep_WithNilOptions(t *testing.T) {
 	svc.SetAgentRegistry(registry)
 
 	ctx := context.Background()
-	_, err := svc.Run(ctx, "test", nil)
+	_, err := svc.RunWithWorkflowAndRunID(ctx, wf, nil, "test-run")
 
 	require.NoError(t, err)
 	require.NotNil(t, capturedOptions)
@@ -379,7 +380,7 @@ func TestExecuteAgentStep_PreservesMultipleOptionsWithFormat(t *testing.T) {
 	originalOptionCount := len(originalOptions)
 
 	ctx := context.Background()
-	_, err := svc.Run(ctx, "test", nil)
+	_, err := svc.RunWithWorkflowAndRunID(ctx, wf, nil, "test-run")
 
 	require.NoError(t, err)
 

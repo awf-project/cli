@@ -69,7 +69,8 @@ func TestFullIDDisplay_MultipleRecords(t *testing.T) {
 	}
 	require.NoError(t, historyStore.Close())
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -122,7 +123,8 @@ func TestFullIDDisplay_TabwriterAlignment(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, historyStore.Close())
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -170,7 +172,8 @@ func TestFullIDDisplay_JSONPreservesFullValues(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, historyStore.Close())
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)

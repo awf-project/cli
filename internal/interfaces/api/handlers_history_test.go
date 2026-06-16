@@ -36,8 +36,8 @@ func TestHistoryHandler_List_FiltersByWorkflowAndStatus(t *testing.T) {
 		},
 	}
 
-	bridge := NewBridge(newMockWorkflowLister(), nil, mock)
-	handler := NewHistoryHandlers(bridge)
+	rf := &readFacade{lister: newMockWorkflowLister(), history: mock}
+	handler := NewHistoryHandlers(rf, rf)
 	_, api := humatest.New(t)
 	RegisterHistoryRoutes(api, handler)
 
@@ -75,8 +75,8 @@ func TestHistoryHandler_Stats_ReturnsAggregates(t *testing.T) {
 		},
 	}
 
-	bridge := NewBridge(newMockWorkflowLister(), nil, mock)
-	handler := NewHistoryHandlers(bridge)
+	rf := &readFacade{lister: newMockWorkflowLister(), history: mock}
+	handler := NewHistoryHandlers(rf, rf)
 	_, api := humatest.New(t)
 	RegisterHistoryRoutes(api, handler)
 
@@ -107,8 +107,8 @@ func TestHistoryHandler_Stats_FiltersByWorkflowAndStatus(t *testing.T) {
 		},
 	}
 
-	bridge := NewBridge(newMockWorkflowLister(), nil, mock)
-	handler := NewHistoryHandlers(bridge)
+	rf := &readFacade{lister: newMockWorkflowLister(), history: mock}
+	handler := NewHistoryHandlers(rf, rf)
 	_, api := humatest.New(t)
 	RegisterHistoryRoutes(api, handler)
 

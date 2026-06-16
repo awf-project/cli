@@ -21,7 +21,7 @@ states:
       Code:
       {{inputs.code}}
     options:
-      model: claude-haiku-4-5
+      model: haiku
       output_format: json
     timeout: 30
     on_success: verify

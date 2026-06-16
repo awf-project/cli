@@ -60,18 +60,57 @@ func TestResolver_ResolveEmptyIdentifier(t *testing.T) {
 	assert.Equal(t, domainerrors.ErrorCodeUserFacadeIdentifierEmpty, se.Code)
 }
 
-func TestResolver_ResolveMissingPackSegment(t *testing.T) {
+func TestResolver_ResolveBareNameViaRepository(t *testing.T) {
+	// A bare workflow name (no pack separator) resolves by name against the
+	// repository — the single-core convention shared by CLI, TUI, HTTP and ACP.
+	repo := mocks.NewMockWorkflowRepository()
+	packDiscoverer := newMockPackDiscoverer()
+
+	expectedWf := &workflow.Workflow{Name: "get-current-time"}
+	repo.AddWorkflow("get-current-time", expectedWf)
+
+	resolver := NewResolver(packDiscoverer, repo)
+
+	ctx := context.Background()
+	wf, err := resolver.Resolve(ctx, "get-current-time")
+
+	require.NoError(t, err)
+	require.NotNil(t, wf)
+	assert.Equal(t, "get-current-time", wf.Name)
+}
+
+func TestResolver_ResolveBareNameNotFound(t *testing.T) {
+	// A bare name with no matching repository workflow is "workflow not found",
+	// the same outcome as the explicit "*/name" wildcard miss.
 	repo := mocks.NewMockWorkflowRepository()
 	packDiscoverer := newMockPackDiscoverer()
 	resolver := NewResolver(packDiscoverer, repo)
 
 	ctx := context.Background()
-	_, err := resolver.Resolve(ctx, "workflow-without-slash")
+	_, err := resolver.Resolve(ctx, "no-such-workflow")
 
 	require.Error(t, err)
 	se, ok := err.(*domainerrors.StructuredError)
 	require.True(t, ok, "error should be StructuredError")
-	assert.Equal(t, domainerrors.ErrorCodeUserFacadeIdentifierMalformed, se.Code)
+	assert.Equal(t, domainerrors.ErrorCodeUserFacadeWorkflowNotFound, se.Code)
+}
+
+func TestResolver_EmptySegmentIsMalformed(t *testing.T) {
+	// A separator with an empty pack ("/wf") or empty workflow ("pack/") segment
+	// is genuinely malformed — distinct from a bare local name.
+	repo := mocks.NewMockWorkflowRepository()
+	packDiscoverer := newMockPackDiscoverer()
+	resolver := NewResolver(packDiscoverer, repo)
+
+	for _, id := range []string{"pack/", "/wf"} {
+		t.Run(id, func(t *testing.T) {
+			_, err := resolver.Resolve(context.Background(), id)
+			require.Error(t, err)
+			se, ok := err.(*domainerrors.StructuredError)
+			require.True(t, ok, "error should be StructuredError")
+			assert.Equal(t, domainerrors.ErrorCodeUserFacadeIdentifierMalformed, se.Code)
+		})
+	}
 }
 
 func TestResolver_ResolveFromPackDiscoverer(t *testing.T) {
@@ -174,8 +213,8 @@ func TestResolver_MultipleErrorsReturnStructured(t *testing.T) {
 			expectedErrCode: domainerrors.ErrorCodeUserFacadeIdentifierEmpty,
 		},
 		{
-			name:            "missing slash",
-			identifier:      "nopack",
+			name:            "empty workflow segment",
+			identifier:      "pack/",
 			expectedErrCode: domainerrors.ErrorCodeUserFacadeIdentifierMalformed,
 		},
 	}
@@ -197,44 +236,37 @@ func TestResolver_MultipleErrorsReturnStructured(t *testing.T) {
 	}
 }
 
-func TestResolver_MalformedIdentifierUniformErrorCode(t *testing.T) {
-	// Each wire convention sends a malformed identifier (no separator in canonical form).
-	// After wire-to-canonical transformation, the resolver MUST return the same ErrorCode
-	// regardless of which convention originated the input.
+func TestResolver_BareNameResolvesUniformlyAcrossWires(t *testing.T) {
+	// A bare local workflow name carries no separator, so every wire convention
+	// passes it through unchanged and the resolver routes it to the repository.
+	// This is the single-core guarantee: the same bare name behaves identically
+	// regardless of which interface (CLI, HTTP, ACP, MCP) originated it.
+	// CLI and HTTP carry identifiers in canonical form natively (no encoding),
+	// so they are expressed as plain identity lambdas here.
 	tests := []struct {
 		name          string
-		wireInput     string
 		wireTransform func(string) string
 	}{
-		{name: "CLI", wireInput: "nopack", wireTransform: WireFromCLI},
-		{name: "HTTP", wireInput: "nopack", wireTransform: WireFromHTTP},
-		{name: "ACP", wireInput: "nopack", wireTransform: WireFromACP},
-		{name: "MCP", wireInput: "nopack", wireTransform: WireFromMCP},
+		{name: "CLI", wireTransform: func(s string) string { return s }},
+		{name: "HTTP", wireTransform: func(s string) string { return s }},
+		{name: "ACP", wireTransform: EncodeForACP},
+		{name: "MCP", wireTransform: EncodeForMCP},
 	}
-
-	codes := make([]domainerrors.ErrorCode, 0, len(tests))
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := mocks.NewMockWorkflowRepository()
 			packDiscoverer := newMockPackDiscoverer()
+			repo.AddWorkflow("get-current-time", &workflow.Workflow{Name: "get-current-time"})
 			resolver := NewResolver(packDiscoverer, repo)
 
-			canonical := tt.wireTransform(tt.wireInput)
-			_, err := resolver.Resolve(context.Background(), canonical)
+			canonical := tt.wireTransform("get-current-time")
+			wf, err := resolver.Resolve(context.Background(), canonical)
 
-			require.Error(t, err)
-			se, ok := err.(*domainerrors.StructuredError)
-			require.True(t, ok, "error must be a StructuredError")
-			assert.Equal(t, domainerrors.ErrorCodeUserFacadeIdentifierMalformed, se.Code)
-			codes = append(codes, se.Code)
+			require.NoError(t, err)
+			require.NotNil(t, wf)
+			assert.Equal(t, "get-current-time", wf.Name)
 		})
-	}
-
-	// All 4 wire conventions must produce identical ErrorCode.
-	for i := 1; i < len(codes); i++ {
-		assert.Equal(t, codes[0], codes[i],
-			"wire convention at index %d produced different ErrorCode than index 0", i)
 	}
 }
 

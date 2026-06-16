@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -18,7 +17,6 @@ import (
 	"github.com/awf-project/cli/internal/domain/transcript"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
-	"github.com/awf-project/cli/pkg/display"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -124,61 +122,6 @@ func TestFacadeAdapter_NilBridgesAreNoOps(t *testing.T) {
 	}
 }
 
-// TestFacadeAdapter_SetEventPublisher stores publisher
-func TestFacadeAdapter_SetEventPublisher(t *testing.T) {
-	adapter := NewAdapter(
-		&WorkflowService{},
-		&ExecutionService{},
-		&HistoryService{},
-		nil,
-		&mockRecorder{},
-		NewSessionRegistry(),
-	)
-
-	publisher := &mockEventPublisher{}
-	adapter.SetEventPublisher(publisher)
-
-	assert.Equal(t, publisher, adapter.eventPublisher)
-}
-
-// TestFacadeAdapter_SetOutputWriters stores writers
-func TestFacadeAdapter_SetOutputWriters(t *testing.T) {
-	adapter := NewAdapter(
-		&WorkflowService{},
-		&ExecutionService{},
-		&HistoryService{},
-		nil,
-		&mockRecorder{},
-		NewSessionRegistry(),
-	)
-
-	stdout := io.Discard
-	stderr := io.Discard
-
-	adapter.SetOutputWriters(stdout, stderr)
-
-	require.NotNil(t, adapter.outputWriters)
-	assert.Equal(t, stdout, adapter.outputWriters.Stdout)
-	assert.Equal(t, stderr, adapter.outputWriters.Stderr)
-}
-
-// TestFacadeAdapter_SetDisplayRenderer stores renderer
-func TestFacadeAdapter_SetDisplayRenderer(t *testing.T) {
-	adapter := NewAdapter(
-		&WorkflowService{},
-		&ExecutionService{},
-		&HistoryService{},
-		nil,
-		&mockRecorder{},
-		NewSessionRegistry(),
-	)
-
-	renderer := func(_ []display.DisplayEvent) {}
-	adapter.SetDisplayRenderer(renderer)
-
-	assert.NotNil(t, adapter.displayRenderer)
-}
-
 // TestFacadeAdapter_SetUserInputReader stores reader
 func TestFacadeAdapter_SetUserInputReader(t *testing.T) {
 	adapter := NewAdapter(
@@ -265,7 +208,7 @@ func TestFacadeAdapter_HistoryDelegatesToHistoryService(t *testing.T) {
 	require.Len(t, records, 1)
 	assert.Equal(t, "run-1", records[0].RunID)
 	assert.Equal(t, "demo", records[0].WorkflowName)
-	assert.Equal(t, "success", records[0].Status)
+	assert.Equal(t, ports.RunState("success"), records[0].Status)
 	assert.Equal(t, int64(42), records[0].DurationMs)
 }
 
@@ -286,24 +229,6 @@ func TestFacadeAdapter_ValidateReturnsValidationReport(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, report)
-}
-
-// TestFacadeAdapter_StatusReturnsRunStatus verifies Status delegates
-func TestFacadeAdapter_StatusReturnsRunStatus(t *testing.T) {
-	adapter := NewAdapter(
-		&WorkflowService{},
-		&ExecutionService{},
-		&HistoryService{},
-		nil,
-		&mockRecorder{},
-		NewSessionRegistry(),
-	)
-
-	ctx := context.Background()
-	status, err := adapter.Status(ctx, "test-run-id")
-
-	assert.NoError(t, err)
-	assert.NotNil(t, status)
 }
 
 // TestFacadeAdapter_HistoryReturnsRecords verifies History delegates
@@ -341,7 +266,7 @@ func TestFacadeAdapter_ResumeReturnsRunSession(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	session, err := adapter.Resume(ctx, "test-run-id")
+	session, err := adapter.Resume(ctx, ports.ResumeRequest{RunID: "test-run-id"})
 
 	assert.NoError(t, err)
 	assert.NotNil(t, session)
@@ -754,64 +679,13 @@ correlate:
 		"ProjectEvent must preserve ParentRunID for sub-workflow correlation")
 }
 
-// spyHistoryStore records whether it was accessed directly, acting as a stand-in for JSONStore.
-// If Status() bypassed historySvc and called the store directly, callCount would be > 0 (FR-014).
-type spyHistoryStore struct {
-	callCount atomic.Int32
-}
-
-func (s *spyHistoryStore) Record(_ context.Context, _ *workflow.ExecutionRecord) error {
-	s.callCount.Add(1)
-	return nil
-}
-
-func (s *spyHistoryStore) List(_ context.Context, _ *workflow.HistoryFilter) ([]*workflow.ExecutionRecord, error) {
-	s.callCount.Add(1)
-	return nil, nil
-}
-
-func (s *spyHistoryStore) GetStats(_ context.Context, _ *workflow.HistoryFilter) (*workflow.HistoryStats, error) {
-	s.callCount.Add(1)
-	return nil, nil
-}
-
-func (s *spyHistoryStore) Cleanup(_ context.Context, _ time.Duration) (int, error) {
-	s.callCount.Add(1)
-	return 0, nil
-}
-
-func (s *spyHistoryStore) Close() error {
-	s.callCount.Add(1)
-	return nil
-}
-
-// TestFacadeAdapter_StatusDoesNotTouchJSONStore verifies that calling Status() through the facade
-// does not reach the backing store directly — it must route through historySvc (FR-014, SC-005).
-// The spy wraps the store layer; if the facade ever bypassed historySvc, callCount would increase.
-func TestFacadeAdapter_StatusDoesNotTouchJSONStore(t *testing.T) {
-	spy := &spyHistoryStore{}
-	historySvc := NewHistoryService(spy, nil)
-
-	adapter := NewAdapter(
-		&WorkflowService{},
-		&ExecutionService{},
-		historySvc,
-		nil,
-		&mockRecorder{},
-		NewSessionRegistry(),
-	)
-
-	ctx := context.Background()
-	_, err := adapter.Status(ctx, "test-run-id")
-	require.NoError(t, err)
-
-	assert.Zero(t, spy.callCount.Load(),
-		"Status() must not access the backing store directly; facade must route through historySvc (FR-014, SC-005)")
-}
-
-// TestFacadeAdapter_RegistryRemovesSessionOnClose asserts registry.Len() decreases after Close()
-// so the registry does not leak session entries after execution completes (Acceptance line 61).
-func TestFacadeAdapter_RegistryRemovesSessionOnClose(t *testing.T) {
+// TestFacadeAdapter_RegistryRetainsSessionAfterClose asserts that a session remains in the
+// registry even after Close() so that status polling (GET /executions/{id}) and SSE replay
+// can still report the terminal status from StatusSnapshot() after execution completes.
+// Sessions are bounded by server lifetime and reclaimed on restart — the trade-off is
+// intentional: late-arriving GET/SSE callers must not receive "not found" for a run that
+// has just completed.
+func TestFacadeAdapter_RegistryRetainsSessionAfterClose(t *testing.T) {
 	registry := NewSessionRegistry()
 
 	adapter := NewAdapter(
@@ -835,8 +709,8 @@ func TestFacadeAdapter_RegistryRemovesSessionOnClose(t *testing.T) {
 	err = session.Close()
 	require.NoError(t, err)
 
-	assert.Equal(t, 0, registry.Len(),
-		"registry must remove the session after Close() to prevent session leaks (Acceptance line 61)")
+	assert.Equal(t, 1, registry.Len(),
+		"registry must retain the session after Close() so status polling still resolves the terminal state")
 }
 
 // closableRecorder exposes a CloseSubscription method so the test can close the
@@ -878,10 +752,12 @@ func (r *closableRecorder) CloseSubscription() {
 	}
 }
 
-// TestFacadeAdapter_RemovesSessionWhenRecorderStops asserts that when the recorder's
-// subscription channel closes (recorder stops), the session is removed from the registry
-// and the session's Events() channel is closed (BUG #7 session leak fix).
-func TestFacadeAdapter_RemovesSessionWhenRecorderStops(t *testing.T) {
+// TestFacadeAdapter_ClosesSessionWhenRecorderStops asserts that when the recorder's
+// subscription channel closes (recorder stops), the session's Events() channel is closed
+// so SSE/CLI consumers can detect the end of the stream without blocking forever.
+// The session remains in the registry after close so that late status polls still
+// resolve the terminal state from StatusSnapshot().
+func TestFacadeAdapter_ClosesSessionWhenRecorderStops(t *testing.T) {
 	recorder := newClosableRecorder()
 	registry := NewSessionRegistry()
 
@@ -907,15 +783,6 @@ func TestFacadeAdapter_RemovesSessionWhenRecorderStops(t *testing.T) {
 	// The goroutine in newSession() should react to the range loop ending.
 	recorder.CloseSubscription()
 
-	// Wait for the goroutine to process the channel close and perform cleanup.
-	// We verify two invariants:
-	//   1. registry.Len()==0 — session evicted from registry
-	//   2. session.Events() is closed — range terminates (channel yields ok=false)
-	require.Eventually(t, func() bool {
-		return registry.Len() == 0
-	}, 2*time.Second, 10*time.Millisecond,
-		"registry must evict the session when the recorder subscription channel closes (BUG #7)")
-
 	// Drain the events channel: after Close() the channel must be closed (range terminates).
 	eventsClosedCh := make(chan struct{})
 	go func() {
@@ -928,8 +795,12 @@ func TestFacadeAdapter_RemovesSessionWhenRecorderStops(t *testing.T) {
 	case <-eventsClosedCh:
 		// session.Events() channel closed — correct behavior
 	case <-time.After(2 * time.Second):
-		t.Fatal("session.Events() channel must be closed when recorder subscription ends (BUG #7)")
+		t.Fatal("session.Events() channel must be closed when recorder subscription ends")
 	}
+
+	// Session must remain in registry after close so status polling still resolves.
+	assert.Equal(t, 1, registry.Len(),
+		"registry must retain the session after close so late status polls resolve the terminal state")
 }
 
 // mockEventPublisher is a test double
@@ -948,4 +819,32 @@ type mockUserInputReader struct{}
 
 func (m *mockUserInputReader) ReadInput(_ context.Context) (string, error) {
 	return "", nil
+}
+
+// TestFacadeAdapter_NilRecorder_NoPanic guards the ACP path: ACP builds the Adapter with a
+// nil recorder (it surfaces live events through an EventPublisher, not the facade recorder).
+// Run must not panic on Subscribe and must still drive the run to a terminal event.
+func TestFacadeAdapter_NilRecorder_NoPanic(t *testing.T) {
+	adapter := NewAdapter(
+		&WorkflowService{},
+		&ExecutionService{},
+		&HistoryService{},
+		nil, // resolver nil → wf nil → no-op execution
+		nil, // recorder nil → no subscription, must not panic
+		NewSessionRegistry(),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	sess, err := adapter.Run(ctx, ports.RunRequest{Identifier: "x/y"})
+	require.NoError(t, err)
+	defer sess.Close()
+
+	var last ports.Event
+	for ev := range sess.Events() {
+		last = ev
+	}
+	assert.Equal(t, ports.EventWorkflowCompleted, last.Kind,
+		"nil-recorder run must still emit the terminal event")
 }

@@ -23,7 +23,7 @@ import (
 //	wf := testutil.LinearWorkflow(5)                   // 5 command steps + terminal
 //	wf := testutil.ParallelWorkflow(3, "all_succeed")  // 3 branches with strategy
 //	wf := testutil.LoopWorkflow("for_each", items)     // ForEach loop
-//	wf := testutil.ConversationWorkflow("anthropic", "claude-3-opus")
+//	wf := testutil.ConversationWorkflow("anthropic", "haiku")
 
 // SimpleWorkflow creates a minimal valid workflow with a single command step and terminal.
 //
@@ -322,7 +322,7 @@ func LoopWorkflow(args ...any) *workflow.Workflow {
 // Parameters:
 //   - args[0] (string): AI provider (default: "anthropic")
 //     Valid values: "anthropic", "openai", "google", "custom"
-//   - args[1] (string): Model name (default: "claude-3-sonnet")
+//   - args[1] (string): Model name (default: "haiku")
 //   - args[2] (int): Number of conversation turns (default: 1, multi-turn if > 1)
 //
 // Returns a workflow with:
@@ -332,13 +332,13 @@ func LoopWorkflow(args ...any) *workflow.Workflow {
 //
 // Example:
 //
-//	wf := ConversationWorkflow()                              // anthropic claude-3-sonnet, single turn
+//	wf := ConversationWorkflow()                              // anthropic haiku, single turn
 //	wf := ConversationWorkflow("openai", "gpt-4")             // openai gpt-4
-//	wf := ConversationWorkflow("anthropic", "claude-3-opus", 3) // 3-turn conversation
+//	wf := ConversationWorkflow("anthropic", "haiku", 3) // 3-turn conversation
 func ConversationWorkflow(args ...any) *workflow.Workflow {
 	// Parse parameters with defaults
 	provider := "anthropic"
-	model := "claude-3-sonnet"
+	model := "haiku"
 	turns := 1
 
 	if len(args) > 0 {

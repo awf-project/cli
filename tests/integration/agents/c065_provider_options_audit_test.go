@@ -21,8 +21,6 @@ import (
 // TestC065_Claude_SilentlyIgnoresDeadOptions validates that Claude provider
 // silently ignores temperature and max_tokens options (no validation errors).
 func TestC065_Claude_SilentlyIgnoresDeadOptions(t *testing.T) {
-	provider := agents.NewClaudeProvider()
-
 	tests := []struct {
 		name    string
 		options map[string]any
@@ -49,9 +47,9 @@ func TestC065_Claude_SilentlyIgnoresDeadOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := provider.Validate(); err != nil {
-				t.Skip("Claude CLI not installed, skipping")
-			}
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput([]byte("response"), nil)
+			provider := agents.NewClaudeProviderWithOptions(agents.WithClaudeExecutor(mockExec))
 
 			_, err := provider.Execute(ctx, "test prompt", tt.options, nil, nil)
 
@@ -174,8 +172,6 @@ func TestC065_CodexConversation_RemovesDeadFlags(t *testing.T) {
 // TestC065_Gemini_SilentlyIgnoresTemperature validates that Gemini provider
 // silently ignores temperature option (no validation).
 func TestC065_Gemini_SilentlyIgnoresTemperature(t *testing.T) {
-	provider := agents.NewGeminiProvider()
-
 	tests := []struct {
 		name    string
 		options map[string]any
@@ -198,9 +194,9 @@ func TestC065_Gemini_SilentlyIgnoresTemperature(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := provider.Validate(); err != nil {
-				t.Skip("Gemini CLI not installed, skipping")
-			}
+			mockExec := mocks.NewMockCLIExecutor()
+			mockExec.SetOutput([]byte("response"), nil)
+			provider := agents.NewGeminiProviderWithOptions(agents.WithGeminiExecutor(mockExec))
 
 			_, err := provider.Execute(ctx, "test prompt", tt.options, nil, nil)
 
@@ -292,10 +288,9 @@ func TestC065_OpenAICompatible_NegativeMaxCompletionTokensRejected(t *testing.T)
 // removed/ignored options never trigger validation errors (no false positives).
 func TestC065_AllProviders_IgnoredOptionsNeverValidate(t *testing.T) {
 	t.Run("Claude silently ignores dead temperature/max_tokens options", func(t *testing.T) {
-		claude := agents.NewClaudeProvider()
-		if err := claude.Validate(); err != nil {
-			t.Skip("Claude not installed")
-		}
+		mockExec := mocks.NewMockCLIExecutor()
+		mockExec.SetOutput([]byte("response"), nil)
+		claude := agents.NewClaudeProviderWithOptions(agents.WithClaudeExecutor(mockExec))
 
 		deadOptions := map[string]any{
 			"temperature": 0.7,
@@ -307,10 +302,9 @@ func TestC065_AllProviders_IgnoredOptionsNeverValidate(t *testing.T) {
 	})
 
 	t.Run("Gemini silently ignores temperature", func(t *testing.T) {
-		gemini := agents.NewGeminiProvider()
-		if err := gemini.Validate(); err != nil {
-			t.Skip("Gemini not installed")
-		}
+		mockExec := mocks.NewMockCLIExecutor()
+		mockExec.SetOutput([]byte("response"), nil)
+		gemini := agents.NewGeminiProviderWithOptions(agents.WithGeminiExecutor(mockExec))
 
 		_, err := gemini.Execute(context.Background(), "test", map[string]any{"temperature": 0.5}, nil, nil)
 		require.NoError(t, err, "Gemini should not validate temperature")

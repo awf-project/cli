@@ -53,7 +53,7 @@ func TestResolveNextStep_LegacyOnSuccess(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -87,7 +87,7 @@ func TestResolveNextStep_LegacyOnFailure(t *testing.T) {
 		WithCommandResult("exit 1", &ports.CommandResult{Stderr: "", ExitCode: 1}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "failure_step", ctx.CurrentStep, "should follow OnFailure when no transitions and success=false")
@@ -122,7 +122,7 @@ func TestResolveNextStep_TransitionMatches(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -158,7 +158,7 @@ func TestResolveNextStep_TransitionNoMatch_FallbackToLegacy(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -199,7 +199,7 @@ func TestResolveNextStep_MultipleTransitions_FirstMatchWins(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -240,7 +240,7 @@ func TestResolveNextStep_DefaultTransition_AlwaysMatches(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -276,7 +276,7 @@ func TestResolveNextStep_TransitionWithBooleanExpression(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -313,7 +313,7 @@ func TestResolveNextStep_NoEvaluator_FallbackToLegacy(t *testing.T) {
 						WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 						Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -343,7 +343,7 @@ func TestResolveNextStep_EmptyOnSuccessReturnsEmptyString(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -379,7 +379,7 @@ func TestResolveNextStep_TransitionEvaluationError(t *testing.T) {
 		WithCommandResult("echo hello", &ports.CommandResult{Stdout: "hello\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.Error(t, err, "should return error when transition evaluation fails")
 	assert.Contains(t, err.Error(), "evaluate transitions", "error should indicate transition evaluation failure")
@@ -418,7 +418,7 @@ func TestResolveNextStep_NonZeroExit_TransitionMatches(t *testing.T) {
 		WithCommandResult("exit 1", &ports.CommandResult{Stderr: "", ExitCode: 1}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -454,7 +454,7 @@ func TestResolveNextStep_NonZeroExit_NoMatchFallsBackToOnFailure(t *testing.T) {
 		WithCommandResult("exit 1", &ports.CommandResult{Stderr: "", ExitCode: 1}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -495,7 +495,7 @@ func TestResolveNextStep_ExitCode42_RoutingViaTransition(t *testing.T) {
 		WithCommandResult("exit 42", &ports.CommandResult{Stderr: "", ExitCode: 42}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
@@ -534,7 +534,7 @@ func TestHandleNonZeroExit_NumericComparison_GreaterThan(t *testing.T) {
 		WithCommandResult("exit 3", &ports.CommandResult{Stderr: "", ExitCode: 3}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "high_error", ctx.CurrentStep, "exit code 3 > 1 should route to high_error")
@@ -569,7 +569,7 @@ func TestHandleNonZeroExit_NumericComparison_LessThan(t *testing.T) {
 		WithCommandResult("exit 2", &ports.CommandResult{Stderr: "", ExitCode: 2}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "low_error", ctx.CurrentStep, "exit code 2 < 5 should route to low_error")
@@ -604,7 +604,7 @@ func TestHandleNonZeroExit_NumericComparison_NotEqual(t *testing.T) {
 		WithCommandResult("exit 1", &ports.CommandResult{Stderr: "", ExitCode: 1}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "any_error", ctx.CurrentStep, "exit code 1 != 0 should route to any_error")
@@ -640,7 +640,7 @@ func TestHandleNonZeroExit_ContinueOnError_TransitionTakesPriority(t *testing.T)
 		WithCommandResult("exit 1", &ports.CommandResult{Stderr: "", ExitCode: 1}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "transition_target", ctx.CurrentStep, "transition should take priority even with ContinueOnError=true")
@@ -676,7 +676,7 @@ func TestHandleNonZeroExit_ContinueOnError_WithoutTransition_FollowsOnSuccess(t 
 		WithCommandResult("exit 1", &ports.CommandResult{Stderr: "", ExitCode: 1}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "continued", ctx.CurrentStep, "with ContinueOnError=true and no matching transition, should follow OnSuccess")
@@ -711,7 +711,7 @@ func TestHandleNonZeroExit_ExitCodeZeroButTransitionOnNonZero(t *testing.T) {
 		WithCommandResult("echo success", &ports.CommandResult{Stdout: "success\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "normal_success", ctx.CurrentStep, "exit code 0 should not match ExitCode != 0 transition, should follow OnSuccess")
@@ -751,7 +751,7 @@ func TestHandleNonZeroExit_MixedExitCodeAndOutputTransitions(t *testing.T) {
 		WithCommandResult("exit 1", &ports.CommandResult{Stdout: "", Stderr: "", ExitCode: 1}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "exit_error", ctx.CurrentStep, "first matching transition (ExitCode == 1) should win over later Output condition")
@@ -791,7 +791,7 @@ func TestHandleNonZeroExit_DefaultTransitionOnNonZeroExit(t *testing.T) {
 		WithCommandResult("exit 99", &ports.CommandResult{Stderr: "", ExitCode: 99}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "default_handler", ctx.CurrentStep, "default transition (empty When) should catch unmatched exit codes")
@@ -832,7 +832,7 @@ func TestHandleNonZeroExit_ExitCodeInInterpolation(t *testing.T) {
 		WithCommandResult("echo Exit code was: 5", &ports.CommandResult{Stdout: "Exit code was: 5\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "done", ctx.CurrentStep, "should complete workflow after log_step via ExitCode == 5 transition")
@@ -869,7 +869,7 @@ func TestHandleNonZeroExit_RangeOperators_GreaterOrEqual(t *testing.T) {
 		WithCommandResult("exit 5", &ports.CommandResult{Stderr: "", ExitCode: 5}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "critical", ctx.CurrentStep, "exit code 5 >= 5 should route to critical")
@@ -904,7 +904,7 @@ func TestHandleNonZeroExit_RangeOperators_LessOrEqual(t *testing.T) {
 		WithCommandResult("exit 2", &ports.CommandResult{Stderr: "", ExitCode: 2}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "minor", ctx.CurrentStep, "exit code 2 <= 2 should route to minor")
@@ -945,7 +945,7 @@ func TestHandleNonZeroExit_MultipleSteps_SecondStepExitCodeRouting(t *testing.T)
 		WithCommandResult("exit 7", &ports.CommandResult{Stderr: "", ExitCode: 7}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "caught_step2_error", ctx.CurrentStep, "second step should route by ExitCode == 7 transition")
@@ -973,7 +973,7 @@ func TestHandleNonZeroExit_WithoutTransitions_FallsBackToOnFailure(t *testing.T)
 		WithCommandResult("exit 1", &ports.CommandResult{Stderr: "", ExitCode: 1}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "failure_handler", ctx.CurrentStep, "without transitions, should follow OnFailure for non-zero exit")
@@ -1013,7 +1013,7 @@ func TestHandleNonZeroExit_ExitCode0IsSuccess_NotCaughtByFailurePath(t *testing.
 		WithCommandResult("echo success", &ports.CommandResult{Stdout: "success\n", ExitCode: 0}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "success_via_transition", ctx.CurrentStep, "exit code 0 should follow success path (handleSuccess, not handleNonZeroExit)")
@@ -1049,7 +1049,7 @@ func TestHandleExecutionError_ContinueOnError_TransitionTakesPriority(t *testing
 		WithExecutor(&errorMockExecutor{err: fmt.Errorf("command not found")}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "transition_target", ctx.CurrentStep,
@@ -1086,7 +1086,7 @@ func TestHandleExecutionError_ContinueOnError_WithoutTransition_FollowsOnSuccess
 		WithExecutor(&errorMockExecutor{err: fmt.Errorf("command not found")}).
 		Build()
 
-	ctx, err := execSvc.Run(context.Background(), "test", nil)
+	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 
 	require.NoError(t, err)
 	assert.Equal(t, "continued", ctx.CurrentStep,

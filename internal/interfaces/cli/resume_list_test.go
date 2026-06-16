@@ -81,6 +81,10 @@ func (m *mockFacadeForResumeList) Run(ctx context.Context, req ports.RunRequest)
 	return nil, nil
 }
 
-func (m *mockFacadeForResumeList) Resume(ctx context.Context, runID string) (ports.RunSession, error) {
+func (m *mockFacadeForResumeList) Resume(_ context.Context, _ ports.ResumeRequest) (ports.RunSession, error) {
 	return nil, nil
+}
+
+func (m *mockFacadeForResumeList) RunStep(_ context.Context, _ ports.RunStepRequest) (ports.StepResult, error) {
+	return ports.StepResult{}, nil
 }

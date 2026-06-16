@@ -29,7 +29,7 @@ states:
     system_prompt: "You are a research assistant specializing in technical analysis."
     prompt: "Research: {{inputs.task}}"
     options:
-      model: claude-haiku-4-5
+      model: haiku
     conversation: {}
     timeout: 90
     on_success: done
@@ -70,7 +70,7 @@ states:
 
       Codex findings: {{states.codex_convo.output}}
     options:
-      model: claude-haiku-4-5
+      model: haiku
     conversation: {}
     timeout: 60
     on_success: done

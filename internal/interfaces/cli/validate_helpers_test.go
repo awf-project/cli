@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,17 +90,4 @@ func TestRoleContentWarnings(t *testing.T) {
 		require.Len(t, got, 1)
 		assert.Contains(t, got[0], "exceeds 10KB")
 	})
-}
-
-func TestCollectDisabledPluginWarnings_NoOperationSteps(t *testing.T) {
-	cfg := &Config{StoragePath: t.TempDir(), PluginsDir: t.TempDir()}
-	wf := &workflow.Workflow{
-		Steps: map[string]*workflow.Step{
-			"done": {Name: "done", Type: workflow.StepTypeTerminal},
-		},
-	}
-
-	got := collectDisabledPluginWarnings(context.Background(), cfg, wf)
-
-	assert.Empty(t, got)
 }

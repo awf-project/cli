@@ -4,9 +4,6 @@
 //
 //	AC1:  Renders two-panel layout (tree left, viewport right)
 //	       → TestMonitoringTab_View_WithExecCtx_RendersTwoPanels
-//	AC2:  tea.Tick at 200ms triggers poll when ticking
-//	       → TestMonitoringTab_TickMsg_WithExecCtx_EmitsPollMsg
-//	       → TestMonitoringTab_TickMsg_WithoutExecCtx_EmitsNextTick
 //	AC3:  Up/down arrow changes selectedIdx
 //	       → TestMonitoringTab_Update_ArrowKeys_ChangesSelection
 //	AC4:  Selected node highlighted in rendered tree
@@ -21,15 +18,23 @@
 //	       → TestMonitoringTab_FKey_ReenablesAutoScroll
 //	AC9:  Step failure auto-selects failed node
 //	       → TestMonitoringTab_AutoSelectFailed_SelectsFailedNode
-//	AC10: PollMsg updates states and rebuilds tree
-//	       → TestMonitoringTab_ExecutionPollMsg_UpdatesStates
 //	AC11: ExecutionFinishedMsg stops ticking
 //	       → TestMonitoringTab_ExecutionFinishedMsg_StopsTicking
 //	AC12: ExecutionStartedMsg starts tick loop
 //	       → TestMonitoringTab_ExecutionStartedMsg_StartsTicking
+//
+// T078 cleanup criteria covered:
+//
+//	tickMsg type declaration removed from tab_monitoring.go
+//	       → TestT078_TickMsg_TypeRemovedFromTabMonitoring
+//	executionPollMsg type declaration removed from tab_monitoring.go
+//	       → TestT078_ExecutionPollMsg_TypeRemovedFromTabMonitoring
+//	scheduleTick function removed from tab_monitoring.go
+//	       → TestT078_ScheduleTick_FunctionRemovedFromTabMonitoring
 package tui
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -40,7 +45,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/awf-project/cli/internal/domain/ports"
-	"github.com/awf-project/cli/internal/domain/transcript"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
@@ -77,10 +81,6 @@ func monitoringTabWithSize(w, h int) MonitoringTab {
 	tab.height = h
 	tab.resizeViewport()
 	return tab
-}
-
-func makeExecCtx(id string) *workflow.ExecutionContext {
-	return workflow.NewExecutionContext(id, id)
 }
 
 // --- newMonitoringTab ---
@@ -159,16 +159,6 @@ func TestMonitoringTab_Update_WithNegativeDimensions_StoresRawValues(t *testing.
 
 // --- ExecutionStartedMsg ---
 
-func TestMonitoringTab_ExecutionStartedMsg_StartsTicking(t *testing.T) {
-	tab := newMonitoringTab()
-	assert.False(t, tab.ticking, "must not be ticking initially")
-
-	tab, cmd := tab.Update(ExecutionStartedMsg{ExecutionID: "exec-1"})
-
-	assert.True(t, tab.ticking, "must be ticking after ExecutionStartedMsg")
-	require.NotNil(t, cmd, "must emit a tick command")
-}
-
 func TestMonitoringTab_ExecutionStartedMsg_ResetsState(t *testing.T) {
 	tab := newMonitoringTab()
 	tab.selectedIdx = 5
@@ -181,24 +171,10 @@ func TestMonitoringTab_ExecutionStartedMsg_ResetsState(t *testing.T) {
 	assert.True(t, tab.autoScroll, "auto-scroll must be re-enabled")
 }
 
-func TestMonitoringTab_ExecutionStartedMsg_WhenAlreadyTicking_DoesNotDoubleSchedule(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.ticking = true
-
-	tab, cmd := tab.Update(ExecutionStartedMsg{ExecutionID: "exec-2"})
-
-	assert.True(t, tab.ticking)
-	assert.Nil(t, cmd, "must not emit extra tick when already ticking")
-	assert.False(t, tab.showSpinner)
-}
-
 // --- ExecutionFinishedMsg ---
 
 func TestMonitoringTab_ExecutionFinishedMsg_StopsTicking(t *testing.T) {
 	tab := newMonitoringTab()
-	tab.ticking = true
-	execCtx := workflow.NewExecutionContext("exec-1", "test-workflow")
-	execCtx.SetStepState("s1", workflow.StepState{Name: "s1", Status: workflow.StatusCompleted})
 	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "s1",
@@ -206,89 +182,15 @@ func TestMonitoringTab_ExecutionFinishedMsg_StopsTicking(t *testing.T) {
 			"s1": {Name: "s1", Type: workflow.StepTypeTerminal},
 		},
 	}
-	tab.SetExecCtx(execCtx, wf)
+	// Start a run (facade path) so the step tree is built from the workflow.
+	tab.SetWorkflow(wf)
+	tab, _ = tab.Update(ExecutionStartedMsg{ExecutionID: "exec-1", Workflow: wf})
+	tab.ticking = true
 
 	tab, _ = tab.Update(ExecutionFinishedMsg{Err: nil})
 
 	assert.False(t, tab.ticking, "ticking must stop on ExecutionFinishedMsg")
-	assert.NotEmpty(t, tab.flatNodes, "tree must be rebuilt on finish")
-}
-
-// --- tickMsg ---
-
-func TestMonitoringTab_TickMsg_WhenNotTicking_ReturnsNilCmd(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.ticking = false
-
-	_, cmd := tab.Update(tickMsg{})
-
-	assert.Nil(t, cmd)
-}
-
-func TestMonitoringTab_TickMsg_WithExecCtx_EmitsPollMsg(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.ticking = true
-	ctx := makeExecCtx("exec-1")
-	ctx.SetStepState("step-a", workflow.StepState{Name: "step-a", Status: workflow.StatusRunning})
-	tab.execCtx = ctx
-
-	_, cmd := tab.Update(tickMsg{})
-
-	require.NotNil(t, cmd, "tick with execCtx must emit a cmd")
-	msg := cmd()
-	pollMsg, ok := msg.(executionPollMsg)
-	require.True(t, ok, "expected executionPollMsg, got %T", msg)
-	assert.Contains(t, pollMsg.States, "step-a")
-}
-
-func TestMonitoringTab_TickMsg_WithoutExecCtx_EmitsNextTick(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.ticking = true
-	tab.execCtx = nil
-
-	_, cmd := tab.Update(tickMsg{})
-
-	require.NotNil(t, cmd, "tick without execCtx must emit next tick cmd to keep loop alive")
-	// Verify the cmd produces another tickMsg.
-	msg := cmd()
-	_, ok := msg.(tickMsg)
-	assert.True(t, ok, "expected tickMsg continuation, got %T", msg)
-}
-
-// --- executionPollMsg ---
-
-func TestMonitoringTab_ExecutionPollMsg_UpdatesStates(t *testing.T) {
-	tab := newMonitoringTab()
-	states := map[string]workflow.StepState{
-		"build": {Name: "build", Status: workflow.StatusCompleted},
-		"test":  {Name: "test", Status: workflow.StatusRunning},
-	}
-
-	tab, _ = tab.Update(executionPollMsg{States: states})
-
-	assert.Equal(t, workflow.StatusCompleted, tab.states["build"].Status)
-	assert.Equal(t, workflow.StatusRunning, tab.states["test"].Status)
-}
-
-func TestMonitoringTab_ExecutionPollMsg_WhenTicking_EmitsNextTick(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.ticking = true
-
-	_, cmd := tab.Update(executionPollMsg{States: map[string]workflow.StepState{}})
-
-	require.NotNil(t, cmd, "poll result while ticking must emit next tick cmd")
-	msg := cmd()
-	_, ok := msg.(tickMsg)
-	assert.True(t, ok, "expected tickMsg continuation, got %T", msg)
-}
-
-func TestMonitoringTab_ExecutionPollMsg_WhenNotTicking_NoCmd(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.ticking = false
-
-	_, cmd := tab.Update(executionPollMsg{States: map[string]workflow.StepState{}})
-
-	assert.Nil(t, cmd)
+	assert.NotEmpty(t, tab.flatNodes, "tree built from the workflow must persist after finish")
 }
 
 // --- Arrow-key navigation ---
@@ -528,10 +430,9 @@ func TestMonitoringTab_View_WithActiveButNilExecCtx_StillRendersEmptyState(t *te
 	assert.NotContains(t, view, "No active execution")
 }
 
-func TestMonitoringTab_View_WithExecCtx_RendersTwoPanels(t *testing.T) {
+func TestMonitoringTab_View_WithWorkflow_RendersTwoPanels(t *testing.T) {
 	tab := monitoringTabWithSize(120, 40)
-	ctx := makeExecCtx("exec-1")
-	tab.execCtx = ctx
+	tab.SetWorkflow(&workflow.Workflow{Name: "wf-1", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}})
 
 	view := tab.View()
 
@@ -544,7 +445,7 @@ func TestMonitoringTab_View_WithExecCtx_RendersTwoPanels(t *testing.T) {
 
 func TestMonitoringTab_View_WithZeroDimensions_DoesNotPanic(t *testing.T) {
 	tab := newMonitoringTab()
-	tab.execCtx = makeExecCtx("exec-1")
+	tab.SetWorkflow(&workflow.Workflow{Name: "wf-1"})
 	tab.width = 0
 	tab.height = 0
 
@@ -603,30 +504,27 @@ func TestMonitoringTab_View_WithActiveExecution_RendersActiveState(t *testing.T)
 	assert.NotContains(t, view, "No active execution")
 }
 
-// --- SetExecCtx ---
+// --- SetWorkflow ---
 
-func TestMonitoringTab_SetExecCtx_WiresContext(t *testing.T) {
+func TestMonitoringTab_SetWorkflow_WiresWorkflow(t *testing.T) {
 	tab := newMonitoringTab()
-	ctx := makeExecCtx("wf-1")
 	wf := &workflow.Workflow{
 		Name:  "wf-1",
 		Steps: map[string]*workflow.Step{},
 	}
 
-	tab.SetExecCtx(ctx, wf)
+	tab.SetWorkflow(wf)
 
-	assert.Equal(t, ctx, tab.execCtx)
 	assert.Equal(t, wf, tab.wf)
 }
 
-func TestMonitoringTab_SetExecCtx_WithNilWorkflow_DoesNotPanic(t *testing.T) {
+func TestMonitoringTab_SetWorkflow_WithNilWorkflow_DoesNotPanic(t *testing.T) {
 	tab := newMonitoringTab()
-	ctx := makeExecCtx("wf-1")
 
 	require.NotPanics(t, func() {
-		tab.SetExecCtx(ctx, nil)
+		tab.SetWorkflow(nil)
 	})
-	assert.Equal(t, ctx, tab.execCtx)
+	assert.Nil(t, tab.wf)
 }
 
 // --- flattenTree ---
@@ -715,44 +613,18 @@ func TestMonitoringTab_RebuildTree_ClampsSelectedIdx(t *testing.T) {
 	assert.Equal(t, 0, tab.selectedIdx, "selectedIdx must be clamped to valid range")
 }
 
-// --- scheduleTick ---
-
-func TestScheduleTick_EmitsTickMsg(t *testing.T) {
-	cmd := scheduleTick()
-	require.NotNil(t, cmd)
-
-	// The command executes after the tick interval; calling cmd() blocks
-	// in tests so we just verify it returns a tickMsg type.
-	// We use a goroutine with a short timeout to avoid hanging.
-	done := make(chan tea.Msg, 1)
-	go func() { done <- cmd() }()
-
-	msg := <-done
-	_, ok := msg.(tickMsg)
-	assert.True(t, ok, "scheduleTick must produce tickMsg, got %T", msg)
-}
-
 // --- Spinner ---
 
-func TestMonitoringTab_WithExecCtx_RendersTwoPanels(t *testing.T) {
+func TestMonitoringTab_WithWorkflow_RendersTwoPanels(t *testing.T) {
 	tab := newMonitoringTab()
-	execCtx := workflow.NewExecutionContext("exec-1", "test-wf")
 	wf := &workflow.Workflow{Name: "test-wf", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	tab.SetExecCtx(execCtx, wf)
+	tab.SetWorkflow(wf)
 	tab.width = 80
 	tab.height = 24
 	tab.rebuildTree()
 
 	view := tab.View()
 	assert.NotContains(t, view, "No active execution")
-}
-
-func TestMonitoringTab_Spinner_HiddenAfterPollData(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.showSpinner = true
-
-	tab, _ = tab.Update(executionPollMsg{States: map[string]workflow.StepState{}})
-	assert.False(t, tab.showSpinner)
 }
 
 // --- T061: Event loop migration tests ---
@@ -800,7 +672,7 @@ func TestTUI_TabMonitoringConsumesEventsLoop(t *testing.T) {
 	eventChan <- testEvent3
 
 	// Start the event loop goroutine.
-	tab.StartEventLoop(mockSession)
+	tab.StartEventLoop(context.Background(), mockSession)
 
 	// Collect sent messages with timeout.
 	var sentMessages []tea.Msg
@@ -848,7 +720,7 @@ func TestTUI_TabMonitoringEventLoopWithNilSender(t *testing.T) {
 
 	// Should not panic with nil sender.
 	require.NotPanics(t, func() {
-		tab.StartEventLoop(mockSession)
+		tab.StartEventLoop(context.Background(), mockSession)
 		time.Sleep(50 * time.Millisecond)
 	})
 }
@@ -865,7 +737,7 @@ func TestTUI_StartEventLoop_TerminalCompleted_SendsExecutionFinishedMsg(t *testi
 	sentChan := make(chan tea.Msg, 4)
 	tab.SetSender(func(msg tea.Msg) { sentChan <- msg })
 
-	tab.StartEventLoop(mockSession)
+	tab.StartEventLoop(context.Background(), mockSession)
 
 	eventChan <- ports.Event{Seq: 1, Kind: ports.EventStepStarted, RunID: "r1"}
 	eventChan <- ports.Event{Seq: 2, Kind: ports.EventWorkflowCompleted, RunID: "r1"}
@@ -909,7 +781,7 @@ func TestTUI_StartEventLoop_TerminalFailed_SendsExecutionFinishedMsg(t *testing.
 	sentChan := make(chan tea.Msg, 4)
 	tab.SetSender(func(msg tea.Msg) { sentChan <- msg })
 
-	tab.StartEventLoop(mockSession)
+	tab.StartEventLoop(context.Background(), mockSession)
 
 	eventChan <- ports.Event{Seq: 1, Kind: ports.EventWorkflowFailed, RunID: "r1"}
 	close(eventChan)
@@ -994,7 +866,7 @@ func TestMonitoringTab_FacadeEventMsg_StepStarted_SetsRunningState(t *testing.T)
 		{Name: "build", Type: workflow.StepTypeCommand},
 	}
 
-	payload := &transcript.StepPayload{Name: "build", Kind: "command"}
+	payload := &ports.EnrichedStepPayload{StepName: "build"}
 	event := ports.Event{
 		Seq:     1,
 		Kind:    ports.EventStepStarted,
@@ -1019,7 +891,7 @@ func TestMonitoringTab_FacadeEventMsg_StepCompleted_SetsCompletedState(t *testin
 	// Pre-seed running state.
 	tab.states["test"] = workflow.StepState{Name: "test", Status: workflow.StatusRunning}
 
-	payload := &transcript.StepPayload{Name: "test", Kind: "command"}
+	payload := &ports.EnrichedStepPayload{StepName: "test"}
 	event := ports.Event{
 		Seq:     2,
 		Kind:    ports.EventStepCompleted,
@@ -1034,6 +906,32 @@ func TestMonitoringTab_FacadeEventMsg_StepCompleted_SetsCompletedState(t *testin
 	assert.Equal(t, workflow.StatusCompleted, state.Status)
 }
 
+// TestMonitoringTab_FacadeEventMsg_StepCompleted_StoresOutput verifies that the captured
+// stdout/stderr carried on the completed event are stored on the step state so the detail
+// panel can render per-step output for any selected completed step (regression: facade
+// step events dropped output, leaving the panel showing only the command and no result).
+func TestMonitoringTab_FacadeEventMsg_StepCompleted_StoresOutput(t *testing.T) {
+	tab := newMonitoringTab()
+	tab.steps = []workflow.Step{
+		{Name: "greet", Type: workflow.StepTypeCommand},
+	}
+	tab.states["greet"] = workflow.StepState{Name: "greet", Status: workflow.StatusRunning}
+
+	payload := &ports.EnrichedStepPayload{
+		StepName: "greet",
+		Output:   "Hello, World!",
+		Stderr:   "a warning",
+	}
+	event := ports.Event{Seq: 2, Kind: ports.EventStepCompleted, RunID: "run-1", Payload: payload}
+
+	tab, _ = tab.Update(facadeEventMsg{Event: event})
+
+	state := tab.states["greet"]
+	assert.Equal(t, workflow.StatusCompleted, state.Status)
+	assert.Equal(t, "Hello, World!", state.Output, "captured stdout must be stored on the step state")
+	assert.Equal(t, "a warning", state.Stderr, "captured stderr must be stored on the step state")
+}
+
 // TestMonitoringTab_FacadeEventMsg_StepCompleted_WithError_SetsFailedState verifies
 // that EventStepCompleted with a non-empty Error sets status to Failed.
 func TestMonitoringTab_FacadeEventMsg_StepCompleted_WithError_SetsFailedState(t *testing.T) {
@@ -1043,7 +941,7 @@ func TestMonitoringTab_FacadeEventMsg_StepCompleted_WithError_SetsFailedState(t 
 	}
 	tab.states["deploy"] = workflow.StepState{Name: "deploy", Status: workflow.StatusRunning}
 
-	payload := &transcript.StepPayload{Name: "deploy", Kind: "command", Error: "exit status 1"}
+	payload := &ports.EnrichedStepPayload{StepName: "deploy", Error: "exit status 1"}
 	event := ports.Event{
 		Seq:     3,
 		Kind:    ports.EventStepCompleted,
@@ -1104,7 +1002,7 @@ func TestMonitoringTab_FacadeEventMsg_RebuildsTree(t *testing.T) {
 		{Name: "lint", Type: workflow.StepTypeCommand},
 	}
 
-	payload := &transcript.StepPayload{Name: "lint", Kind: "command"}
+	payload := &ports.EnrichedStepPayload{StepName: "lint"}
 	event := ports.Event{
 		Seq:     1,
 		Kind:    ports.EventStepStarted,
@@ -1119,6 +1017,189 @@ func TestMonitoringTab_FacadeEventMsg_RebuildsTree(t *testing.T) {
 	assert.Equal(t, workflow.StatusRunning, tab.flatNodes[0].Status)
 }
 
+// --- T072: No polling after facade dispatch ---
+
+// TestTabMonitoring_NoPollingAfterFacadeDispatch verifies that when ExecutionStartedMsg
+// carries a non-nil Session, no tickMsg or executionPollMsg is ever produced (FR-002, D27).
+func TestTabMonitoring_NoPollingAfterFacadeDispatch(t *testing.T) {
+	tab := newMonitoringTab()
+
+	// Facade-driven path: Session != nil signals push-event mode.
+	eventChan := make(chan ports.Event)
+	defer close(eventChan)
+	sess := &mockRunSession{eventsChan: eventChan}
+
+	tab, cmd := tab.Update(ExecutionStartedMsg{
+		ExecutionID: "exec-facade",
+		Session:     sess,
+	})
+
+	assert.False(t, tab.ticking, "ticking must NOT start when Session is non-nil")
+	assert.Nil(t, cmd, "no tick cmd must be emitted when Session is non-nil")
+
+	// facadeEventMsg must not produce tickMsg or executionPollMsg.
+	event := ports.Event{Seq: 1, Kind: ports.EventStepStarted, RunID: "exec-facade"}
+	tab, cmd = tab.Update(facadeEventMsg{Event: event})
+
+	assert.Nil(t, cmd, "facadeEventMsg must not emit cmd (no tickMsg or executionPollMsg)")
+}
+
+// TestTabMonitoring_FacadePathRendersPanel is a regression guard for the bug where the
+// Monitoring tab showed "No active execution" for an entire run because the facade dispatch
+// path (Bridge.RunWorkflowViaFacade) emitted ExecutionStartedMsg with a nil Workflow. With
+// wf, execCtx and active all nil, the View empty-state guard never cleared and BuildTree
+// returned no nodes — so the panel stayed blank even while Session.Events() were flowing to
+// the Logs tab. The fix supplies the workflow definition; this test pins the rendered panel.
+func TestTabMonitoring_FacadePathRendersPanel(t *testing.T) {
+	tab := newMonitoringTab()
+	tab, _ = tab.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+
+	wf := &workflow.Workflow{
+		Name:    "echo",
+		Initial: "greet",
+		Steps: map[string]*workflow.Step{
+			"greet": {Name: "greet", Type: workflow.StepTypeCommand, Command: "echo hi"},
+		},
+	}
+	// Mirror the production facade path: model calls SetWorkflow(Workflow) then forwards
+	// ExecutionStartedMsg to the tab. State is event-driven via facadeEventMsg.
+	tab.SetWorkflow(wf)
+	tab, _ = tab.Update(ExecutionStartedMsg{ExecutionID: "echo", Workflow: wf})
+
+	view := tab.View()
+	assert.NotContains(t, view, "No active execution",
+		"a facade-driven run with a supplied Workflow must render the monitoring panel, not the empty state")
+	assert.Contains(t, view, "greet", "the step tree must list the workflow's steps")
+
+	// Drive the step to completion carrying captured stdout, then assert the detail panel
+	// renders that output — the user's reported symptom was a completed step showing only
+	// its command and no output (facade step events dropped the captured stdout/stderr).
+	tab, _ = tab.Update(facadeEventMsg{Event: ports.Event{
+		Seq:     1,
+		Kind:    ports.EventStepStarted,
+		RunID:   "echo",
+		Payload: &ports.EnrichedStepPayload{StepName: "greet"},
+	}})
+	tab, _ = tab.Update(facadeEventMsg{Event: ports.Event{
+		Seq:     2,
+		Kind:    ports.EventStepCompleted,
+		RunID:   "echo",
+		Payload: &ports.EnrichedStepPayload{StepName: "greet", Output: "Hello, World!"},
+	}})
+
+	view = tab.View()
+	assert.Contains(t, view, "Hello, World!",
+		"the detail panel must render the completed step's captured output")
+}
+
+// TestTabMonitoring_TerminalStepCompletesOnWorkflowDone is a regression guard: a terminal
+// step (e.g. "done") emits no step event of its own, so on the facade event-driven path
+// (execCtx == nil) it stayed ⏳ pending even after the workflow finished. EventWorkflowCompleted
+// must mark the reached terminal step completed.
+func TestTabMonitoring_TerminalStepCompletesOnWorkflowDone(t *testing.T) {
+	tab := newMonitoringTab()
+	tab.steps = []workflow.Step{
+		{Name: "greet", Type: workflow.StepTypeCommand},
+		{Name: "done", Type: workflow.StepTypeTerminal},
+	}
+	// greet ran and completed; the terminal "done" has no step event and no state.
+	tab.states["greet"] = workflow.StepState{Name: "greet", Status: workflow.StatusCompleted}
+	tab.rebuildTree()
+
+	// Before the workflow ends, the terminal node is still pending.
+	require.Equal(t, workflow.StatusPending, terminalNodeStatus(t, tab, "done"))
+
+	tab, _ = tab.Update(facadeEventMsg{Event: ports.Event{
+		Seq:     9,
+		Kind:    ports.EventWorkflowCompleted,
+		RunID:   "echo",
+		Payload: &ports.EnrichedTerminal{},
+	}})
+
+	assert.Equal(t, workflow.StatusCompleted, terminalNodeStatus(t, tab, "done"),
+		"terminal step must be marked completed once the workflow finishes successfully")
+}
+
+// TestTabMonitoring_TerminalStatusResetOnNewRun guards against a stale terminal outcome
+// leaking across runs in the same TUI session: after one run completes (marking the terminal
+// step ✓ via finalStatus), starting a NEW run must reset finalStatus so its terminal step
+// shows ⏳ pending until that run actually finishes — not ✓ by default.
+func TestTabMonitoring_TerminalStatusResetOnNewRun(t *testing.T) {
+	tab := newMonitoringTab()
+	tab.steps = []workflow.Step{
+		{Name: "work", Type: workflow.StepTypeCommand},
+		{Name: "done", Type: workflow.StepTypeTerminal},
+	}
+	tab.states["work"] = workflow.StepState{Name: "work", Status: workflow.StatusCompleted}
+	// First run finishes → terminal marked completed.
+	tab, _ = tab.Update(facadeEventMsg{Event: ports.Event{Kind: ports.EventWorkflowCompleted, Payload: &ports.EnrichedTerminal{}}})
+	require.Equal(t, workflow.StatusCompleted, terminalNodeStatus(t, tab, "done"))
+
+	// A new run starts: the terminal step must go back to pending, not stay ✓.
+	tab, _ = tab.Update(ExecutionStartedMsg{ExecutionID: "run-2"})
+	tab.steps = []workflow.Step{
+		{Name: "work", Type: workflow.StepTypeCommand},
+		{Name: "done", Type: workflow.StepTypeTerminal},
+	}
+	tab.rebuildTree()
+	assert.Equal(t, workflow.StatusPending, terminalNodeStatus(t, tab, "done"),
+		"a new run must not inherit the previous run's terminal completion")
+}
+
+// terminalNodeStatus returns the tree-node status for the named step.
+func terminalNodeStatus(t *testing.T, tab MonitoringTab, name string) workflow.ExecutionStatus {
+	t.Helper()
+	for _, n := range tab.flatNodes {
+		if n.Name == name {
+			return n.Status
+		}
+	}
+	t.Fatalf("node %q not found in flatNodes", name)
+	return ""
+}
+
+// TestTabMonitoring_ConversationTurnsFromFacadeEvents is a regression guard: during a parked
+// conversation the agent's question and the user's answer must appear in the detail panel.
+// On the facade path the tab has no ExecutionContext, so it must build the conversation from
+// EventMessageAssistant/User events attributed to the running agent step.
+func TestTabMonitoring_ConversationTurnsFromFacadeEvents(t *testing.T) {
+	tab := newMonitoringTab()
+	tab, _ = tab.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	wf := &workflow.Workflow{
+		Name:    "clarifier",
+		Initial: "clarify",
+		Steps: map[string]*workflow.Step{
+			"clarify": {Name: "clarify", Type: workflow.StepTypeAgent, Agent: &workflow.AgentConfig{}},
+		},
+	}
+	tab.SetWorkflow(wf)
+	tab, _ = tab.Update(ExecutionStartedMsg{ExecutionID: "clarifier", Workflow: wf})
+
+	// Agent step starts → becomes the conversation target.
+	tab, _ = tab.Update(facadeEventMsg{Event: ports.Event{
+		Kind: ports.EventStepStarted, RunID: "clarifier",
+		Payload: &ports.EnrichedStepPayload{StepName: "clarify"},
+	}})
+	// Agent asks a question (the user is about to answer it).
+	tab, _ = tab.Update(facadeEventMsg{Event: ports.Event{
+		Kind: ports.EventMessageAssistant, RunID: "clarifier",
+		Payload: &ports.EnrichedMessagePayload{Content: "Which environment should I target?"},
+	}})
+
+	view := tab.View()
+	assert.Contains(t, view, "Which environment should I target?",
+		"the agent's question must be visible so the user knows what they are answering")
+
+	// User answers → the answer turn appears too.
+	tab, _ = tab.Update(facadeEventMsg{Event: ports.Event{
+		Kind: ports.EventMessageUser, RunID: "clarifier",
+		Payload: &ports.EnrichedMessagePayload{Content: "production"},
+	}})
+
+	view = tab.View()
+	assert.Contains(t, view, "production", "the user's answer must appear in the conversation")
+}
+
 // --- End-to-end: AC gate TestMonitoringTab ---
 
 // TestMonitoringTab is the acceptance-criteria gate named in the task spec.
@@ -1129,11 +1210,12 @@ func TestMonitoringTab(t *testing.T) {
 		assert.Contains(t, view, "No active execution")
 	})
 
-	t.Run("execution started triggers tick", func(t *testing.T) {
+	t.Run("execution started does not start polling (facade-driven)", func(t *testing.T) {
 		tab := newMonitoringTab()
 		tab, cmd := tab.Update(ExecutionStartedMsg{ExecutionID: "exec-1"})
-		assert.True(t, tab.ticking)
-		assert.NotNil(t, cmd)
+		// F108: no polling tick is scheduled; state updates arrive via facadeEventMsg.
+		assert.False(t, tab.ticking)
+		assert.Nil(t, cmd)
 	})
 
 	t.Run("execution finished stops tick", func(t *testing.T) {
@@ -1141,18 +1223,6 @@ func TestMonitoringTab(t *testing.T) {
 		tab.ticking = true
 		tab, _ = tab.Update(ExecutionFinishedMsg{Err: nil})
 		assert.False(t, tab.ticking)
-	})
-
-	t.Run("poll msg updates states", func(t *testing.T) {
-		tab := newMonitoringTab()
-		tab.steps = []workflow.Step{
-			{Name: "build", Type: workflow.StepTypeCommand},
-		}
-		states := map[string]workflow.StepState{
-			"build": {Name: "build", Status: workflow.StatusCompleted, Output: "ok"},
-		}
-		tab, _ = tab.Update(executionPollMsg{States: states})
-		assert.Equal(t, workflow.StatusCompleted, tab.states["build"].Status)
 	})
 
 	t.Run("arrow navigation changes selection", func(t *testing.T) {
@@ -1187,7 +1257,7 @@ func TestMonitoringTab(t *testing.T) {
 
 	t.Run("two-panel view renders without panic", func(t *testing.T) {
 		tab := monitoringTabWithSize(120, 40)
-		tab.execCtx = makeExecCtx("exec-1")
+		tab.SetWorkflow(&workflow.Workflow{Name: "exec-1"})
 		require.NotPanics(t, func() {
 			view := tab.View()
 			assert.NotEmpty(t, view)
@@ -1209,7 +1279,7 @@ func TestMonitoringTab(t *testing.T) {
 
 	t.Run("view contains both panel borders", func(t *testing.T) {
 		tab := monitoringTabWithSize(120, 40)
-		tab.execCtx = makeExecCtx("exec-1")
+		tab.SetWorkflow(&workflow.Workflow{Name: "exec-1"})
 		tab.flatNodes = []*TreeNode{
 			{Name: "step-1", Status: workflow.StatusRunning, Children: []*TreeNode{}},
 		}
@@ -1220,4 +1290,135 @@ func TestMonitoringTab(t *testing.T) {
 		lines := strings.Split(view, "\n")
 		assert.Greater(t, len(lines), 1, "two-panel view must span multiple lines")
 	})
+}
+
+// --- T072: Facade-driven path removes polling ---
+
+// TestTabMonitoring_FacadeModeNoTickScheduled verifies that ExecutionStartedMsg with a
+// non-nil Session never emits a tick command (FR-002: push-event pattern obsoletes polling).
+func TestTabMonitoring_FacadeModeNoTickScheduled(t *testing.T) {
+	eventChan := make(chan ports.Event)
+	defer close(eventChan)
+	sess := &mockRunSession{eventsChan: eventChan}
+	tab := newMonitoringTab()
+
+	tab, cmd := tab.Update(ExecutionStartedMsg{ExecutionID: "facade-exec", Session: sess})
+
+	assert.Nil(t, cmd, "facade mode must not emit tick cmd")
+	assert.False(t, tab.ticking, "facade mode must not enable ticking")
+}
+
+// TestTabMonitoring_FacadeEventLoopNoTickLoop verifies the complete sequence:
+// ExecutionStartedMsg(Session) → facadeEventMsg → no tickMsg/executionPollMsg ever produced.
+func TestTabMonitoring_FacadeEventLoopNoTickLoop(t *testing.T) {
+	tab := newMonitoringTab()
+	tab.steps = []workflow.Step{{Name: "step-1", Type: workflow.StepTypeCommand}}
+
+	eventChan := make(chan ports.Event)
+	defer close(eventChan)
+	sess := &mockRunSession{eventsChan: eventChan}
+
+	// Start facade-driven execution
+	tab, cmd := tab.Update(ExecutionStartedMsg{
+		ExecutionID: "facade-exec",
+		Session:     sess,
+	})
+	assert.Nil(t, cmd, "facade dispatch must not schedule tick")
+	assert.False(t, tab.ticking, "facade dispatch must not enable ticking")
+
+	// Multiple facadeEventMsg should never trigger tickMsg or executionPollMsg
+	for seq := 1; seq <= 3; seq++ {
+		event := ports.Event{
+			Seq:     uint64(seq),
+			Kind:    ports.EventStepStarted,
+			RunID:   "facade-exec",
+			Payload: &ports.EnrichedStepPayload{StepName: "step-1"},
+		}
+		tab, cmd = tab.Update(facadeEventMsg{Event: event})
+
+		// Each facadeEventMsg should return nil cmd (no tick scheduling)
+		assert.Nil(t, cmd, "facadeEventMsg seq %d must not emit cmd", seq)
+		assert.False(t, tab.ticking, "facadeEventMsg seq %d must not enable ticking", seq)
+	}
+}
+
+// TestTabMonitoring_NoScheduleTickCallsInFacadePath verifies that throughout
+// the facade event loop lifecycle, scheduleTick is never called by examining
+// the returned Cmd values (they should all be nil).
+func TestTabMonitoring_NoScheduleTickCallsInFacadePath(t *testing.T) {
+	tab := newMonitoringTab()
+	tab.steps = []workflow.Step{
+		{Name: "build", Type: workflow.StepTypeCommand},
+		{Name: "test", Type: workflow.StepTypeCommand},
+	}
+
+	eventChan := make(chan ports.Event)
+	defer close(eventChan)
+	sess := &mockRunSession{eventsChan: eventChan}
+
+	// Track all returned Cmds
+	var cmds []tea.Cmd //nolint:prealloc // appended conditionally across branches; capacity not known up front
+
+	// Start facade-driven
+	tab, cmd := tab.Update(ExecutionStartedMsg{
+		ExecutionID: "facade-exec",
+		Session:     sess,
+	})
+	cmds = append(cmds, cmd)
+
+	// Send facade events
+	events := []ports.Event{
+		{Seq: 1, Kind: ports.EventStepStarted, RunID: "facade-exec", Payload: &ports.EnrichedStepPayload{StepName: "build"}},
+		{Seq: 2, Kind: ports.EventStepCompleted, RunID: "facade-exec", Payload: &ports.EnrichedStepPayload{StepName: "build"}},
+		{Seq: 3, Kind: ports.EventStepStarted, RunID: "facade-exec", Payload: &ports.EnrichedStepPayload{StepName: "test"}},
+		{Seq: 4, Kind: ports.EventStepCompleted, RunID: "facade-exec", Payload: &ports.EnrichedStepPayload{StepName: "test"}},
+		{Seq: 5, Kind: ports.EventWorkflowCompleted, RunID: "facade-exec"},
+	}
+
+	for _, ev := range events {
+		tab, cmd = tab.Update(facadeEventMsg{Event: ev})
+		cmds = append(cmds, cmd)
+	}
+
+	// All returned Cmds must be nil (no tick scheduling)
+	for i, cmd := range cmds {
+		assert.Nil(t, cmd, "Cmd %d must be nil in facade path (no scheduleTick)", i)
+	}
+}
+
+// --- T078: Legacy polling types removed from tab_monitoring.go ---
+
+func readTabMonitoringSource(t *testing.T) string {
+	t.Helper()
+	source, err := os.ReadFile("tab_monitoring.go")
+	if err != nil {
+		wd, _ := os.Getwd()
+		source, err = os.ReadFile(wd + "/internal/interfaces/tui/tab_monitoring.go")
+		require.NoError(t, err, "must be able to read tab_monitoring.go")
+	}
+	return string(source)
+}
+
+// TestT078_TickMsg_TypeRemovedFromTabMonitoring verifies that the tickMsg type declaration
+// has been deleted as part of T078 cleanup (replaced by event-driven path D27).
+func TestT078_TickMsg_TypeRemovedFromTabMonitoring(t *testing.T) {
+	source := readTabMonitoringSource(t)
+	assert.False(t, strings.Contains(source, "type tickMsg struct"),
+		"tickMsg type declaration should be removed (T078: legacy polling type)")
+}
+
+// TestT078_ExecutionPollMsg_TypeRemovedFromTabMonitoring verifies that the executionPollMsg
+// type declaration has been deleted as part of T078 cleanup.
+func TestT078_ExecutionPollMsg_TypeRemovedFromTabMonitoring(t *testing.T) {
+	source := readTabMonitoringSource(t)
+	assert.False(t, strings.Contains(source, "type executionPollMsg struct"),
+		"executionPollMsg type declaration should be removed (T078: legacy polling type)")
+}
+
+// TestT078_ScheduleTick_FunctionRemovedFromTabMonitoring verifies that the scheduleTick
+// function has been deleted as part of T078 cleanup.
+func TestT078_ScheduleTick_FunctionRemovedFromTabMonitoring(t *testing.T) {
+	source := readTabMonitoringSource(t)
+	assert.False(t, strings.Contains(source, "func scheduleTick()"),
+		"scheduleTick function should be removed (T078: legacy polling helper)")
 }

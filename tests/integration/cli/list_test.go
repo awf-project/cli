@@ -19,12 +19,13 @@ func TestListCommand_NoWorkflows(t *testing.T) {
 	tmpDir := setupInitTestDir(t)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"list"})
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "list"})
 
 	err := cmd.Execute()
 	if err != nil {

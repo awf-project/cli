@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -61,7 +62,7 @@ func TestRunTUI_FailsWithDumbTerminal(t *testing.T) {
 }
 
 func TestBuildBridge_ReturnsNonNilBridge(t *testing.T) {
-	bridge, _, cleanup, err := buildBridge()
+	bridge, _, cleanup, err := buildBridge(context.Background())
 	defer cleanup()
 
 	require.NoError(t, err)

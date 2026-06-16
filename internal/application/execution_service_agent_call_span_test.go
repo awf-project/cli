@@ -63,7 +63,7 @@ func TestAgentCallSpan_EmitsProviderAttribute(t *testing.T) {
 	svc.SetTracer(mockTracer)
 	svc.SetAgentRegistry(mockRegistry)
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 	require.NoError(t, err)
 
 	mockAgentSpan.AssertCalled(t, "SetAttribute", "provider", "claude")
@@ -122,7 +122,7 @@ func TestAgentCallSpan_EmitsModelAttribute(t *testing.T) {
 	svc.SetTracer(mockTracer)
 	svc.SetAgentRegistry(mockRegistry)
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 	require.NoError(t, err)
 
 	mockAgentSpan.AssertCalled(t, "SetAttribute", "model", "claude-3-sonnet-20240229")
@@ -179,7 +179,7 @@ func TestAgentCallSpan_EmitsTokensUsedAttribute(t *testing.T) {
 	svc.SetTracer(mockTracer)
 	svc.SetAgentRegistry(mockRegistry)
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 	require.NoError(t, err)
 
 	mockAgentSpan.AssertCalled(t, "SetAttribute", "tokens_used", 350)
@@ -238,7 +238,7 @@ func TestAgentCallSpan_EmitsAllAttributesTogether(t *testing.T) {
 	svc.SetTracer(mockTracer)
 	svc.SetAgentRegistry(mockRegistry)
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 	require.NoError(t, err)
 
 	mockAgentSpan.AssertCalled(t, "SetAttribute", "provider", "gemini")
@@ -297,7 +297,7 @@ func TestAgentCallSpan_HandlesZeroTokens(t *testing.T) {
 	svc.SetTracer(mockTracer)
 	svc.SetAgentRegistry(mockRegistry)
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 	require.NoError(t, err)
 
 	mockAgentSpan.AssertCalled(t, "SetAttribute", "tokens_used", 0)
@@ -354,7 +354,7 @@ func TestAgentCallSpan_EmitsWhenNoModelOption(t *testing.T) {
 	svc.SetTracer(mockTracer)
 	svc.SetAgentRegistry(mockRegistry)
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 	require.NoError(t, err)
 
 	mockAgentSpan.AssertCalled(t, "SetAttribute", "provider", "claude")

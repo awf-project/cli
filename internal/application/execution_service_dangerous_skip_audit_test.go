@@ -82,7 +82,7 @@ func TestExecutionService_AgentStep_DangerouslySkipPermissions_AuditLog(t *testi
 				Build()
 			svc.SetAgentRegistry(registry)
 
-			_, err := svc.Run(context.Background(), "audit-test", nil)
+			_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "audit-test-run")
 			require.NoError(t, err)
 
 			warnMessages := mocks.Logger.GetMessagesByLevel("WARN")

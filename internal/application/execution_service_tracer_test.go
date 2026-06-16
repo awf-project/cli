@@ -95,7 +95,7 @@ func TestWorkflowRunEmitsRootSpanBeforeExecution(t *testing.T) {
 		Build()
 	svc.SetTracer(mockTracer)
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "root-span-test-run")
 	require.NoError(t, err)
 
 	// Verify workflow.run span was created
@@ -138,7 +138,7 @@ func TestStartSpanCreatesChildSpan(t *testing.T) {
 
 	svc.SetTracer(mockTracer)
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "child-span-test-run")
 	require.NoError(t, err)
 
 	// Verify step.verify span was created
@@ -179,7 +179,7 @@ func TestStepEmitsChildSpan(t *testing.T) {
 		Build()
 	svc.SetTracer(mockTracer)
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "step-child-span-test-run")
 	require.NoError(t, err)
 
 	// Verify step.verify span was created
@@ -211,7 +211,7 @@ func TestStartSpanWithNilTracer(t *testing.T) {
 		Build()
 
 	// Don't set a tracer - should use NopTracer
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "nil-tracer-test-run")
 
 	// Workflow should complete successfully even without a tracer
 	assert.NoError(t, err)

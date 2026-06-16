@@ -2,23 +2,50 @@ package ports
 
 import "time"
 
-// EventKind classifies a facade Event. It covers the 10 F106 transcript.EventType
-// values, the bridge-synthesized EventInputRequired, and the two terminal kinds.
-// EventKindUnknown is the fail-closed fallback for unrecognized event types.
+// EventKind classifies a facade Event.
+//
+// The taxonomy covers three groups:
+//
+//  1. Run lifecycle (EventRunStarted, EventRunCompleted) — emitted once per
+//     top-level run at start and end of the execution loop.
+//
+//  2. Step lifecycle (EventStepStarted, EventStepCompleted,
+//     EventStepCallWorkflowStarted, EventStepCallWorkflowCompleted) — emitted
+//     around each step, including nested sub-workflow dispatch.
+//
+//  3. Exchange content (EventMessageUser, EventMessageAssistant, EventToolCall,
+//     EventToolResult) — emitted for each message or tool invocation produced by
+//     an agent during a step's exchange.
+//
+// Two additional kinds are synthesized by the facade bridge rather than sourced
+// from the underlying transcript:
+//
+//   - EventInputRequired — the workflow is paused awaiting user input via Respond.
+//   - EventWorkflowCompleted / EventWorkflowFailed — terminal sentinels that signal
+//     the end of the Events() stream; the channel is closed immediately after.
+//
+// EventKindUnknown is the zero value and the fail-closed fallback for any unrecognized
+// or uninitialized event type (NFR-007).
 type EventKind uint8
 
 const (
+	// EventKindUnknown is the zero value and the fail-closed fallback for any
+	// unrecognized or uninitialized event type (NFR-007). Because it is iota (= 0),
+	// an accidental zero-init of an Event struct will always produce this kind rather
+	// than a valid observable event — callers must treat it as "unknown/drop" rather
+	// than as a real event. Consumers that switch on EventKind should always include
+	// a default case that handles EventKindUnknown.
 	EventKindUnknown               EventKind = iota
-	EventRunStarted                          // maps to transcript.EventTypeRunStarted
-	EventRunCompleted                        // maps to transcript.EventTypeRunCompleted
-	EventStepStarted                         // maps to transcript.EventTypeStepStarted
-	EventStepCompleted                       // maps to transcript.EventTypeStepCompleted
-	EventStepCallWorkflowStarted             // maps to transcript.EventTypeStepCallWorkflowStarted
-	EventStepCallWorkflowCompleted           // maps to transcript.EventTypeStepCallWorkflowCompleted
-	EventMessageUser                         // maps to transcript.EventTypeMessageUser
-	EventMessageAssistant                    // maps to transcript.EventTypeMessageAssistant
-	EventToolCall                            // maps to transcript.EventTypeToolCall
-	EventToolResult                          // maps to transcript.EventTypeToolResult
+	EventRunStarted                          // run lifecycle: execution loop started
+	EventRunCompleted                        // run lifecycle: execution loop finished
+	EventStepStarted                         // step lifecycle: step entered
+	EventStepCompleted                       // step lifecycle: step exited
+	EventStepCallWorkflowStarted             // step lifecycle: sub-workflow dispatch started
+	EventStepCallWorkflowCompleted           // step lifecycle: sub-workflow dispatch finished
+	EventMessageUser                         // exchange content: user message produced
+	EventMessageAssistant                    // exchange content: assistant message produced
+	EventToolCall                            // exchange content: tool invocation issued
+	EventToolResult                          // exchange content: tool invocation result received
 	EventInputRequired                       // bridge-synthesized: workflow awaits user input
 	EventWorkflowCompleted                   // terminal: workflow finished successfully
 	EventWorkflowFailed                      // terminal: workflow finished with error
@@ -57,11 +84,32 @@ func (k EventKind) String() string {
 	}
 }
 
-// Event is a projection wrapper over transcript.ExchangeEvent.
-// Seq, RunID, ParentRunID, and Payload are reused verbatim from the source event —
+// Event is a projection wrapper emitted on RunSession.Events().
+// Seq, RunID, ParentRunID are reused verbatim from the source event —
 // no independent sequence numbering is introduced (A2, FR-006, D3).
-// Payload carries *transcript.MessagePayload, *transcript.ToolPayload,
-// *transcript.StepPayload, or []transcript.ContentBlock depending on Kind.
+//
+// Payload type by Kind:
+//
+//	Kind                          Payload type           Notes
+//	──────────────────────────── ────────────────────── ───────────────────────────────
+//	EventStepStarted              *EnrichedStepPayload
+//	EventStepCompleted            *EnrichedStepPayload   HadOutput/Output/Stderr valid
+//	EventStepCallWorkflowStarted  *EnrichedStepPayload
+//	EventStepCallWorkflowCompleted *EnrichedStepPayload
+//	EventRunStarted               nil
+//	EventRunCompleted             nil
+//	EventMessageUser              *EnrichedMessagePayload
+//	EventMessageAssistant         *EnrichedMessagePayload
+//	EventToolCall                 nil  (raw transcript payload; may be non-nil in future)
+//	EventToolResult               nil  (raw transcript payload; may be non-nil in future)
+//	EventInputRequired            *EnrichedInputRequest
+//	EventWorkflowCompleted        nil  (success: no error payload needed)
+//	EventWorkflowFailed           *EnrichedTerminal      Error field carries the reason
+//	EventKindUnknown              nil  (drop: unrecognized or zero-init)
+//
+// Zero-value safety: a zero-value Event has Kind == EventKindUnknown (iota = 0), which is the
+// fail-closed sentinel. Accidental zero-init therefore produces an "unknown" event rather than
+// a valid observable event. Consumers must always handle the EventKindUnknown case.
 type Event struct {
 	Seq         uint64
 	Kind        EventKind
@@ -69,4 +117,48 @@ type Event struct {
 	ParentRunID string
 	Payload     any
 	Timestamp   time.Time
+}
+
+// EnrichedStepPayload carries step metadata for EventStepStarted, EventStepCompleted,
+// EventStepCallWorkflowStarted, and EventStepCallWorkflowCompleted.
+type EnrichedStepPayload struct {
+	StepName   string
+	Error      string
+	DurationMs int64
+	// HadOutput reports whether the step produced any human-visible stdout/stderr.
+	// It is meaningful only on EventStepCompleted (false on EventStepStarted). The CLI
+	// renderer uses it to reproduce the legacy F037 success-feedback behavior: a step
+	// that completed with no output gets an explicit "<step>: completed successfully"
+	// line, whereas a step that already printed output does not (its output is the
+	// feedback). It is derived from the step state at emit time, not from the event
+	// stream, because shell-step stdout is streamed out-of-band via the output writers
+	// and never appears as a facade event.
+	HadOutput bool
+	// Output and Stderr carry the step's captured stdout/stderr at completion time.
+	// Like HadOutput they are derived from the step state at emit time (shell-step
+	// stdout is streamed out-of-band via the output writers and is not otherwise
+	// recoverable from the event stream). They are meaningful only on
+	// EventStepCompleted and let event-only consumers (TUI monitoring, SSE) display
+	// per-step output without polling an ExecutionContext. The CLI renderer ignores
+	// them (it streams stdout directly through the output writers).
+	Output string
+	Stderr string
+}
+
+// EnrichedMessagePayload carries message content for both EventMessageUser and
+// EventMessageAssistant. The Kind field on the enclosing Event distinguishes which
+// participant produced the message.
+type EnrichedMessagePayload struct {
+	Content string
+}
+
+// EnrichedInputRequest carries the prompt for the bridge-synthesized EventInputRequired.
+type EnrichedInputRequest struct {
+	Prompt string
+}
+
+// EnrichedTerminal carries the terminal error for EventWorkflowFailed.
+// It is nil/unused for EventWorkflowCompleted (success requires no error payload).
+type EnrichedTerminal struct {
+	Error string
 }

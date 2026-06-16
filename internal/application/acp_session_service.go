@@ -1,6 +1,7 @@
 package application
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -89,9 +90,8 @@ type WorkflowProvider interface {
 }
 
 // ACPSessionService owns the per-session state map and routes ACP method calls
-// to the workflow runner and ConversationManager. Mirrors ConversationManager placement.
+// to the workflow facade and ConversationManager. Mirrors ConversationManager placement.
 type ACPSessionService struct {
-	runner       WorkflowRunner
 	convMgr      *ConversationManager
 	workflowRepo ports.WorkflowRepository
 	// workflows is the pack-aware lister/loader. When set (via SetWorkflowProvider) it is the
@@ -100,9 +100,10 @@ type ACPSessionService struct {
 	// and runnerFactory below; read-only once Serve is running.
 	workflows WorkflowProvider
 	// facade is the pack-aware WorkflowFacade used for Run/Respond delegation (T063, D36).
-	// When set (via SetFacade), HandleSessionPrompt routes through facade.Run and
-	// session.Respond instead of the legacy in-place runner. Optional; read-only once Serve
-	// is running (same Set*-before-Serve contract as emitter and runnerFactory).
+	// It is the facade-mode gate: when nil, HandleSessionPrompt refuses to dispatch. When set
+	// (via SetFacade), dispatch routes through facade.Run and RunSession.Respond — preferring the
+	// per-session facade when one was built. Optional; read-only once Serve is running (same
+	// Set*-before-Serve contract as emitter and runnerFactory).
 	facade   ports.WorkflowFacade
 	sessions sync.Map // string → *ACPSession
 	logger   ports.Logger
@@ -110,7 +111,7 @@ type ACPSessionService struct {
 	// serverCtx is the server-lifetime context used as the parent for every
 	// session-lifetime context (ACPSession.sessionCtx). It must be set via
 	// SetServerContext before HandleSessionNew is called. When not set (unit tests that
-	// use the shared runner path), HandleSessionNew falls back to context.Background().
+	// dispatch via the service-level facade), HandleSessionNew falls back to context.Background().
 	// Read-only once Serve is running (same Set*-before-Serve contract as emitter).
 	serverCtx context.Context //nolint:containedctx // server-lifetime ctx; sessions derive their own children from it
 
@@ -146,9 +147,10 @@ func (s *ACPSessionService) SetWorkflowProvider(p WorkflowProvider) {
 	s.workflows = p
 }
 
-// SetRunnerFactory installs a per-session runner factory. When set, each session builds
-// its own ExecutionService (with session-scoped wiring) on first prompt. Optional: when
-// unset, the shared runner passed to NewACPSessionService is used.
+// SetRunnerFactory installs a per-session wiring factory. When set, each session builds its
+// own session-scoped wiring (input reader, output writers, renderer, and per-session facade)
+// on first prompt. Optional: when unset, dispatch falls back to the service-level facade
+// installed via SetFacade (the unit-test path).
 func (s *ACPSessionService) SetRunnerFactory(f ACPRunnerFactory) {
 	s.runnerFactory = f
 }
@@ -171,10 +173,9 @@ func (s *ACPSessionService) SetFacade(f ports.WorkflowFacade) {
 }
 
 // NewACPSessionService constructs an ACPSessionService. A nil logger is replaced with a
-// no-op so the handlers never panic on a missing logger. A nil execSvc leaves the runner
-// unset; HandleSessionPrompt then returns a structured ErrInternal rather than panicking.
+// no-op so the handlers never panic on a missing logger. Workflow execution is wired
+// separately via SetFacade (service-level) and/or SetRunnerFactory (per-session).
 func NewACPSessionService(
-	execSvc *ExecutionService,
 	convMgr *ConversationManager,
 	workflowRepo ports.WorkflowRepository,
 	logger ports.Logger,
@@ -182,17 +183,11 @@ func NewACPSessionService(
 	if logger == nil {
 		logger = ports.NopLogger{}
 	}
-	s := &ACPSessionService{
+	return &ACPSessionService{
 		convMgr:      convMgr,
 		workflowRepo: workflowRepo,
 		logger:       logger,
 	}
-	// Guard against a typed-nil interface: assigning a nil *ExecutionService directly to
-	// the interface field would make s.runner != nil yet panic on call.
-	if execSvc != nil {
-		s.runner = execSvc
-	}
-	return s
 }
 
 // discoverSlashCommands enumerates the workflow catalog and projects it into ACP slash commands.
@@ -394,32 +389,30 @@ func (s *ACPSessionService) emitAvailableCommands(ctx context.Context, sessionID
 	}
 }
 
-// ensureRunner returns the session's WorkflowRunner. With a factory configured, it builds
-// the runner once per session (caching it on the session) and records the session's input
-// reader; otherwise it falls back to the shared s.runner.
+// ensureSessionWiring builds the per-session wiring (input reader, streamed flag, facade,
+// cleanup) once per session, caching it on the session. With no factory configured, there is
+// nothing to build and dispatch falls back to the service-level facade (SetFacade); the unit-
+// test path relies on this.
 //
 // Construction is guarded by session.runnerMu (not sync.Once): a factory call that fails is
 // not memoized, so the next prompt retries the build rather than leaving the session
 // permanently bricked.
-func (s *ACPSessionService) ensureRunner(session *ACPSession) (WorkflowRunner, *ACPHandlerError) {
+func (s *ACPSessionService) ensureSessionWiring(session *ACPSession) *ACPHandlerError {
 	if s.runnerFactory == nil {
-		if s.runner == nil {
-			return nil, acpInternal("workflow runner not configured")
-		}
-		return s.runner, nil
+		// No per-session factory: dispatch uses the service-level facade (s.facade).
+		return nil
 	}
 	session.runnerMu.Lock()
 	defer session.runnerMu.Unlock()
 	if session.runnerBuilt {
-		return session.runner, nil
+		return nil
 	}
-	runner, reader, streamed, cleanup, err := s.runnerFactory(session.ID)
+	reader, streamed, cleanup, facade, err := s.runnerFactory(session.ID)
 	if err != nil {
 		// Not memoized: a later prompt retries the factory.
-		s.logger.Warn("ensureRunner: runner factory failed", "sessionId", session.ID, "error", err)
-		return nil, acpInternal("failed to initialize session runner")
+		s.logger.Warn("ensureSessionWiring: session factory failed", "sessionId", session.ID, "error", err)
+		return acpInternal("failed to initialize session runner")
 	}
-	session.runner = runner
 	// Store via atomic.Pointer[inputReaderHolder] so reads in HandleSessionPrompt are
 	// race-free (M7 fix). The holder wrapper avoids the pointer-on-interface anti-pattern:
 	// storing &reader (pointer-to-interface) is unsafe because the interface slot is not
@@ -431,6 +424,11 @@ func (s *ACPSessionService) ensureRunner(session *ACPSession) (WorkflowRunner, *
 		session.streamed.Store(streamed)
 	}
 	session.runnerCleanup = cleanup
+	// T075: cache the per-session facade so dispatchViaFacade can route through it
+	// without consulting the service-level s.facade (which is nil for per-session mode).
+	if facade != nil {
+		session.setFacade(facade)
+	}
 	session.runnerBuilt = true
 
 	// CRITIQUE-3: wire the reader's park hooks to this session's parked-turn counter so a
@@ -447,7 +445,7 @@ func (s *ACPSessionService) ensureRunner(session *ACPSession) (WorkflowRunner, *
 				// user turn, so HandleSessionPrompt returns end_turn (the editor re-enables
 				// input). The send is non-blocking (parkedCh is buffered cap 1) so the
 				// workflow goroutine is never blocked, and reads session.run dynamically so
-				// the same hook serves every run of this session (ensureRunner runs once).
+				// the same hook serves every run of this session (the wiring is built once).
 				if run := session.run.Load(); run != nil {
 					select {
 					case run.parkedCh <- struct{}{}:
@@ -458,13 +456,22 @@ func (s *ACPSessionService) ensureRunner(session *ACPSession) (WorkflowRunner, *
 			func() { session.ParkedTurnCount.Add(-1) },
 		)
 	}
-	return session.runner, nil
+	return nil
 }
 
 // HandleSessionPrompt handles a session/prompt request.
 // The transport-neutral *ACPHandlerError is mapped to the SDK request-error variant
 // by the infrastructure acp.Agent adapter (via toACPError).
 func (s *ACPSessionService) HandleSessionPrompt(ctx context.Context, params json.RawMessage) (any, *ACPHandlerError) {
+	// Mirror HandleSessionNew's shutdown guard: reject prompts that arrive after
+	// Shutdown begins. Without this check, a prompt arriving after Shutdown sets
+	// shutdownStarted but before it calls runWG.Wait() can call session.runWG.Add(1)
+	// after Shutdown's runWG.Wait() observed zero, causing a WaitGroup panic or
+	// leaving an in-flight workflow goroutine orphaned past resource cleanup.
+	if s.shutdownStarted.Load() {
+		return nil, acpInternal("server is shutting down")
+	}
+
 	var p sessionPromptParams
 	if err := json.Unmarshal(params, &p); err != nil {
 		return nil, acpInvalidParams(err.Error())
@@ -507,10 +514,10 @@ func (s *ACPSessionService) HandleSessionPrompt(ctx context.Context, params json
 
 	// Continuation turn: a workflow goroutine is already parked on the InputReader, so route
 	// the editor's text to it rather than starting a new workflow (US2 conversation parking).
-	// inputReader is read via atomic.Pointer so this is race-free with ensureRunner (M7 fix).
+	// inputReader is read via atomic.Pointer so this is race-free with ensureSessionWiring (M7 fix).
 	//
 	// INVARIANT: if ParkedTurnCount > 0, inputReader MUST be non-nil. Both fields are written
-	// together in ensureRunner (inputReader is stored first, then the park hooks that bump
+	// together in ensureSessionWiring (inputReader is stored first, then the park hooks that bump
 	// ParkedTurnCount are wired). A non-nil ParkedTurnCount with a nil inputReader signals a
 	// broken wiring in the factory — guard explicitly rather than falling through into
 	// parseSlashCommand which would treat a continuation text as a new slash command.
@@ -559,83 +566,31 @@ func (s *ACPSessionService) HandleSessionPrompt(ctx context.Context, params json
 		return promptStop("end_turn"), nil
 	}
 
-	// Facade path (D36, T063): when SetFacade is wired, delegate to facade.Run instead of
-	// the legacy runner. The sessionCtx/runCtx split and event projection are completed in
-	// the GREEN phase; this stub routes through the interface boundary to unblock test RED.
-	if s.facade != nil {
-		return s.dispatchViaFacade(ctx, session, workflowName, inputs), nil
+	// Facade dispatch (D36, T063, T075, T077): every first-dispatch routes through the
+	// per-session WorkflowFacade. SetFacade installs a non-nil sentinel facade as the
+	// Set*-before-Serve "facade mode enabled" flag; the authoritative facade for dispatch is the
+	// per-session ports.WorkflowFacade built by buildACPSessionWiring and stored on the session
+	// (T075, SC-003). ensureSessionWiring populates session.getFacade() on first prompt, so build
+	// it here before consulting the per-session facade. The runWG.Add(1)/Done() pair brackets the
+	// build so a concurrent Shutdown's runWG.Wait() covers it (C1 fix); dispatchViaFacade re-adds
+	// its own runWG entry for the projection goroutine.
+	//
+	// The legacy in-place runner.Run branch (and the infrastructure ACPInputReader it parked on)
+	// was deleted in T077: facadeInputBridge + projectFacadeEvents now own the conversation-
+	// parking protocol, and the proven sessionCtx/runCtx split (R2) lives in dispatchViaFacade.
+	if s.facade == nil {
+		// Facade was never wired (Set*-before-Serve contract violated). There is no longer a
+		// legacy fallback, so report an internal error rather than silently dropping the turn.
+		s.logger.Warn("session/prompt: facade not configured", "sessionId", p.SessionID)
+		return nil, acpInternal("workflow facade not configured")
 	}
-
-	// US2 conversation parking — run the workflow on its OWN goroutine so this handler can
-	// return a stopReason while the workflow is still parked, letting the editor re-enable its
-	// input field. The synchronous alternative blocked the turn until the whole workflow
-	// finished, which deadlocked any workflow that waits for user input: the turn never ended,
-	// the editor stayed disabled, and the awaited input could never be sent. This mirrors the
-	// TUI, which runs the workflow async (RunWorkflowAsync) and signals InputRequestedMsg when
-	// the ConversationManager parks.
-	//
-	// Context parenting: runCtx is derived from session.sessionCtx (session-lifetime), NOT
-	// from the request ctx (per-turn SDK context). The SDK cancels the per-request context
-	// when the Prompt handler returns end_turn (via defer cancel(nil) in connection.go).
-	// If runCtx were a child of the request ctx, that cancellation would propagate into the
-	// parked ReadInput goroutine and kill the run before the user's next turn arrives — the
-	// exact root cause of the "Invalid prompt: must begin with a /<workflow>" bug.
-	//
-	// Ordering contract (issue #1): create the cancel func and register it via setCancel
-	// BEFORE runWG.Add(1), so a concurrent Shutdown that observes a positive runWG always has
-	// a non-nil cancelFn to interrupt. Unlike the old synchronous handler, cancel() is owned by
-	// the run goroutine (which outlives this call) and is therefore NOT deferred here.
-	runCtx, cancel := context.WithCancel(session.getSessionCtx())
-	session.setCancel(cancel)
-
-	// runWG.Add(1) BEFORE ensureRunner so Shutdown's runWG.Wait() covers the runner build
-	// (C1 fix): without this, Shutdown could observe runWG==0 and read session.runnerCleanup
-	// while ensureRunner is concurrently writing it. Done() is balanced explicitly on the
-	// ensureRunner error path and deferred inside the run goroutine on the success path.
 	session.runWG.Add(1)
-	runner, runnerErr := s.ensureRunner(session)
-	if runnerErr != nil {
-		session.runWG.Done() // balance Add(1): no run goroutine was started.
-		cancel()
-		return nil, runnerErr
+	if wiringErr := s.ensureSessionWiring(session); wiringErr != nil {
+		session.runWG.Done()
+		return nil, wiringErr
 	}
-
-	// Reset the per-run streamed flag so suppression logic reflects this run only.
-	// Read via atomic.Pointer so the reset is race-free with ensureRunner (M7 fix).
-	if sp := session.streamed.Load(); sp != nil {
-		sp.Store(false)
-	}
-
-	s.logger.Debug("session/prompt: dispatching", "sessionId", p.SessionID, "workflow", workflowName, "inputs", len(inputs))
-
-	// Publish the run's coordination state BEFORE launching the goroutine so the park hook
-	// (which reads session.run) can deliver a park signal as soon as the workflow blocks on
-	// ReadInput. A completed run is left in session.run (doneCh closed) until the next dispatch.
-	run := &acpRun{
-		parkedCh:     make(chan struct{}, 1),
-		doneCh:       make(chan struct{}),
-		workflowName: workflowName,
-	}
-	session.run.Store(run)
-
-	// NOTE: this is intentionally a manual Add(1)/go/Done() rather than runWG.Go — the Add(1)
-	// is hoisted above ensureRunner (C1 fix) so Shutdown's runWG.Wait() covers the runner
-	// build. runWG.Go would Add only at goroutine launch (after the build), reopening the
-	// Shutdown-vs-build race. Done() is deferred inside the goroutine below.
-	go func() {
-		defer session.runWG.Done()
-		defer cancel()
-		execCtx, runErr := runner.Run(runCtx, workflowName, inputs)
-		// Record the outcome BEFORE closing doneCh; waitTurn reads it only after <-doneCh,
-		// so the close establishes the happens-before relationship (no extra locking).
-		run.execCtx = execCtx
-		run.runErr = runErr
-		run.cancelled = runCtx.Err() != nil
-		session.execCtx.Store(execCtx)
-		close(run.doneCh)
-	}()
-
-	return s.waitTurn(ctx, session, run), nil
+	session.runWG.Done()
+	return s.dispatchViaFacade(ctx, session, workflowName, inputs), nil
 }
 
 // waitTurn blocks until the in-flight run resolves the current ACP turn: the workflow parks
@@ -673,7 +628,7 @@ func (s *ACPSessionService) finishedTurn(ctx context.Context, session *ACPSessio
 		return promptStop("end_turn")
 	default:
 		out := workflowOutputText(run.execCtx)
-		// streamed is read via atomic.Pointer so this is race-free with ensureRunner (M7 fix).
+		// streamed is read via atomic.Pointer so this is race-free with ensureSessionWiring (M7 fix).
 		streamedFlag := session.streamed.Load()
 		switch {
 		case streamedFlag != nil && streamedFlag.Load():
@@ -765,16 +720,26 @@ func workflowOutputText(execCtx *workflow.ExecutionContext) string {
 //     routing code (which calls h.r.Respond(text)) works unmodified for the facade path.
 func (s *ACPSessionService) dispatchViaFacade(requestCtx context.Context, session *ACPSession, workflowName string, inputs map[string]any) any {
 	// runCtx is derived from the session-lifetime context, NOT the per-turn request ctx.
-	// This mirrors the legacy runner path (lines 588-589) and preserves the proven
-	// sessionCtx/runCtx split (F105 research Q4).
+	// This preserves the proven sessionCtx/runCtx split (F105 research Q4): the SDK cancels
+	// the per-turn ctx at end_turn, which would otherwise kill a parked run before its
+	// continuation arrives.
 	runCtx, cancel := context.WithCancel(session.getSessionCtx())
 	session.setCancel(cancel)
 
 	// runWG covers the projection goroutine so Shutdown.runWG.Wait() drains it before
-	// releasing per-session resources (mirrors the C1 fix in the legacy runner path).
+	// releasing per-session resources (C1 fix).
 	session.runWG.Add(1)
 
-	facadeSess, err := s.facade.Run(runCtx, ports.RunRequest{
+	// Prefer the per-session facade (T075, SC-003): each ACP session owns a distinct Adapter
+	// rooted at its acpSessionStateDir, so concurrent sessions on the same workflow write to
+	// separate state paths. Fall back to the service-level facade for the unit-test path that
+	// sets SetFacade directly without a per-session runner factory.
+	facade := session.getFacade()
+	if facade == nil {
+		facade = s.facade
+	}
+
+	facadeSess, err := facade.Run(runCtx, ports.RunRequest{
 		Identifier: workflowName,
 		Inputs:     inputs,
 	})
@@ -789,7 +754,13 @@ func (s *ACPSessionService) dispatchViaFacade(requestCtx context.Context, sessio
 	// Wire the facadeInputBridge so that continuation turns (parkedTurnCount > 0)
 	// route through h.r.Respond(text) → RunSession.Respond(InputResponse{Value: text}).
 	// This keeps the existing HandleSessionPrompt parking branch unmodified.
-	bridge := &facadeInputBridge{session: facadeSess}
+	// The logger is injected so Respond can surface ErrDuplicateResponse / ErrSessionClosed
+	// at Warn level instead of silently discarding user input (finding I-HIGH).
+	bridge := &facadeInputBridge{
+		session:   facadeSess,
+		logger:    s.logger,
+		sessionID: session.ID,
+	}
 	session.inputReader.Store(&inputReaderHolder{r: bridge})
 
 	// Publish the run coordination state before launching the goroutine so the park
@@ -802,8 +773,46 @@ func (s *ACPSessionService) dispatchViaFacade(requestCtx context.Context, sessio
 	session.run.Store(run)
 
 	go func() {
+		// Top-level recover guarantees doneCh is always closed even if projectFacadeEvents
+		// panics (e.g. in emitFacadeEvent), and that ParkedTurnCount is not left elevated.
+		// Without this, a panic leaves doneCh open: waitTurn blocks forever, and any
+		// continuation prompt that arrived after an EventInputRequired park finds
+		// ParkedTurnCount == 1 permanently, misrouting every future prompt into the
+		// continuation branch and silently bricking the ACP session (B4 fix).
+		//
+		// LIFO ordering of defers in this goroutine:
+		//   1. facadeSess.Close()      — declared last, runs first: closes Events() channel
+		//   2. recover defer           — declared third, runs second: catches panic, closes doneCh
+		//   3. cancel()                — declared second, runs third: cancels runCtx
+		//   4. session.runWG.Done()    — declared first, runs last: signals Shutdown
+		//
+		// facadeSess.Close() running before the recover means the Events() channel is always
+		// closed before the goroutine exits — guaranteeing projectFacadeEvents' for-range
+		// loop terminates and its inline parking closure's defer can run its decrement.
 		defer session.runWG.Done()
 		defer cancel()
+
+		// doneCh is closed exactly once: either by the normal completion path below, or by
+		// this recover block on panic. The recover defer is declared after cancel() and
+		// runWG.Done(), so in LIFO order it fires before them — the goroutine's context is
+		// still live when doneCh is closed, which is fine: waitTurn only reads run.cancelled
+		// after <-doneCh, and run.cancelled is set by the recover block before close(doneCh).
+		doneClosed := false
+		defer func() {
+			if r := recover(); r != nil {
+				s.logger.Warn(
+					"dispatchViaFacade: run goroutine panicked",
+					"sessionId", session.ID,
+					"workflow", workflowName,
+					"panic", r,
+				)
+				run.cancelled = true
+				if !doneClosed {
+					close(run.doneCh)
+				}
+			}
+		}()
+
 		defer facadeSess.Close() //nolint:errcheck // Close is idempotent and returns nil
 
 		s.projectFacadeEvents(runCtx, session, run, facadeSess)
@@ -811,6 +820,7 @@ func (s *ACPSessionService) dispatchViaFacade(requestCtx context.Context, sessio
 		run.runErr = facadeSess.Err()
 		run.cancelled = runCtx.Err() != nil
 		close(run.doneCh)
+		doneClosed = true
 	}()
 
 	return s.waitTurn(requestCtx, session, run)
@@ -824,8 +834,14 @@ func (s *ACPSessionService) dispatchViaFacade(requestCtx context.Context, sessio
 // on the RunSession event channel, not via a blocking poll on the workflow goroutine.
 // Respond is called by HandleSessionPrompt when a continuation turn arrives: it forwards
 // the user's text to RunSession.Respond so the parked workflow can resume.
+//
+// logger is used to surface ErrDuplicateResponse and ErrSessionClosed at Warn level so
+// operators can distinguish lost-input events from normal operation. It must not be nil;
+// callers must pass at minimum ports.NopLogger{}.
 type facadeInputBridge struct {
-	session ports.RunSession
+	session   ports.RunSession
+	logger    ports.Logger
+	sessionID string // included in log messages for correlation
 }
 
 func (b *facadeInputBridge) ReadInput(_ context.Context) (string, error) {
@@ -833,8 +849,23 @@ func (b *facadeInputBridge) ReadInput(_ context.Context) (string, error) {
 	return "", nil
 }
 
+// Respond forwards the user's text to the parked RunSession. ACPInputResponder.Respond
+// has no error return, so errors are logged at Warn rather than returned. Both known
+// error values are logged with their sentinel name for operator correlation:
+//
+//   - ErrDuplicateResponse: a continuation text arrived while the respondCh buffer was
+//     already full, meaning a previous Respond was not yet consumed. The workflow stays
+//     parked; the user's input is lost for this turn.
+//   - ErrSessionClosed: the session was closed between the parking check and this Respond
+//     call. The run goroutine is cleaning up; the log entry is informational.
 func (b *facadeInputBridge) Respond(text string) {
-	_ = b.session.Respond(ports.InputResponse{Value: text}) //nolint:errcheck // ACPInputResponder.Respond has no error return; log-free drop is the established contract for all ACPInputResponder implementations
+	if err := b.session.Respond(ports.InputResponse{Value: text}); err != nil {
+		b.logger.Warn(
+			"facadeInputBridge: Respond failed — user input lost",
+			"sessionId", b.sessionID,
+			"error", err,
+		)
+	}
 }
 
 func (b *facadeInputBridge) SetParkHooks(_, _ func()) {
@@ -858,22 +889,84 @@ func (b *facadeInputBridge) SetParkHooks(_, _ func()) {
 func (s *ACPSessionService) projectFacadeEvents(ctx context.Context, session *ACPSession, run *acpRun, facadeSess ports.RunSession) {
 	for ev := range facadeSess.Events() {
 		if ev.Kind == ports.EventInputRequired {
-			session.ParkedTurnCount.Add(1)
-			select {
-			case run.parkedCh <- struct{}{}:
-			default:
+			// Surface the input prompt to the editor as an agent_message_chunk so the user
+			// sees what the parked workflow is asking for (A6). The prompt is carried by the
+			// bridge-synthesized *EnrichedInputRequest payload.
+			if p, ok := ev.Payload.(*ports.EnrichedInputRequest); ok && p.Prompt != "" {
+				s.sendAgentText(ctx, session.ID, p.Prompt)
 			}
-			// Decrement on the next event (which arrives after Respond unparks the workflow)
-			// or when the channel is closed. We defer the decrement until after the next event
-			// to keep the count accurate across the turn boundary.
-			// Block until a non-InputRequired event or channel close signals the workflow resumed.
-			nextEv, ok := <-facadeSess.Events()
-			session.ParkedTurnCount.Add(-1)
-			if !ok {
-				return
-			}
-			// Project the next event normally.
-			s.emitFacadeEvent(ctx, session.ID, nextEv)
+
+			// B4 fix: use a defer-based decrement scoped to the parking interval so that
+			// ParkedTurnCount is always reset — even if the goroutine is unwound by a panic
+			// while blocked on <-facadeSess.Events() below. Without this guarantee, any panic
+			// leaves the count at 1 permanently, causing every future prompt to be misrouted
+			// to the continuation branch and silently bricking the ACP session.
+			//
+			// We use an inline closure (not defer inside the outer for-loop) because defer in
+			// a loop body is evaluated at the enclosing function return, not per-iteration.
+			// The closure tracks whether the decrement has already been applied so that the
+			// normal (non-panic) path and the panic path are both correct.
+			func() {
+				decremented := false
+				defer func() {
+					if !decremented {
+						// Drain parkedCh so a pending waitTurn select does not consume a stale
+						// signal from a previous park attempt on this session. Without this drain,
+						// ParkedTurnCount goes to 0 while parkedCh still holds a struct{}, and the
+						// next waitTurn call immediately returns end_turn spuriously.
+						select {
+						case <-run.parkedCh:
+						default:
+						}
+						session.ParkedTurnCount.Add(-1)
+					}
+				}()
+
+				session.ParkedTurnCount.Add(1)
+				// Signal waitTurn that the workflow is parked. The send to parkedCh is
+				// non-blocking (cap-1 buffer): if the slot is already occupied (a prior park
+				// signal that waitTurn has not yet consumed), we must not increment
+				// ParkedTurnCount and then silently drop the signal — that leaves waitTurn
+				// blocked forever while the counter is 1. Instead, a failed send is treated as
+				// a duplicate signal (waitTurn will unblock on the existing entry); the
+				// ParkedTurnCount increment already happened, so the continuation-routing
+				// invariant is satisfied regardless.
+				select {
+				case run.parkedCh <- struct{}{}:
+				default:
+					// parkedCh is already full: waitTurn will unblock on the existing signal.
+					// ParkedTurnCount is already 1 (incremented above); the defer will decrement
+					// it and drain parkedCh when this parking interval ends.
+				}
+				// Block until a non-InputRequired event or channel close signals the workflow
+				// resumed, OR until the run context is cancelled (session/cancel or Shutdown).
+				// Without the runCtx.Done() arm, a cancelled session leaves this goroutine
+				// blocked here forever: Close() closes the events channel eventually, but only
+				// after the top-level recover defers run — the context cancellation is the
+				// earlier, cheaper signal. ParkedTurnCount is decremented by the defer above
+				// on this path too, resetting the continuation-routing invariant correctly.
+				var (
+					nextEv ports.Event
+					ok     bool
+				)
+				select {
+				case nextEv, ok = <-facadeSess.Events():
+				case <-ctx.Done():
+					// Run context cancelled; the run goroutine will close the events channel
+					// and close(doneCh) shortly. Decrement via the defer and return so the
+					// outer for-range terminates naturally when the channel is closed.
+					return
+				}
+				// Mark decremented before the actual Add so that the defer above does not
+				// double-decrement if emitFacadeEvent panics.
+				decremented = true
+				session.ParkedTurnCount.Add(-1)
+				if !ok {
+					return
+				}
+				// Project the next event normally.
+				s.emitFacadeEvent(ctx, session.ID, nextEv)
+			}()
 			continue
 		}
 		s.emitFacadeEvent(ctx, session.ID, ev)
@@ -906,20 +999,68 @@ func facadeEventToUpdate(ev ports.Event) (kind string, fields map[string]any) { 
 	case ports.EventRunCompleted, ports.EventWorkflowCompleted:
 		return "workflow_completed", map[string]any{"run_id": ev.RunID}
 	case ports.EventStepStarted:
-		return "step_started", map[string]any{"run_id": ev.RunID}
+		return "step_started", enrichedStepFields(ev.RunID, ev.Payload)
 	case ports.EventStepCompleted:
-		return "step_completed", map[string]any{"run_id": ev.RunID}
+		return "step_completed", enrichedStepFields(ev.RunID, ev.Payload)
 	case ports.EventMessageAssistant:
+		text := ""
+		if p, ok := ev.Payload.(*ports.EnrichedMessagePayload); ok {
+			text = p.Content
+		}
 		return "agent_message_chunk", map[string]any{
-			"content": map[string]any{"type": "text", "text": ev.RunID},
+			"content": map[string]any{"type": "text", "text": text},
 		}
 	case ports.EventWorkflowFailed:
-		return "workflow_failed", map[string]any{"run_id": ev.RunID}
+		m := map[string]any{"run_id": ev.RunID}
+		if p, ok := ev.Payload.(*ports.EnrichedTerminal); ok {
+			m["error"] = p.Error
+		}
+		return "workflow_failed", m
 	default:
 		// EventKindUnknown, EventInputRequired (handled by caller), EventMessageUser,
 		// EventToolCall, EventToolResult, EventStepCallWorkflow* — not projected.
 		return "", nil
 	}
+}
+
+// enrichedStepFields builds the common field map for step events (started and completed).
+func enrichedStepFields(runID string, payload any) map[string]any {
+	m := map[string]any{"run_id": runID}
+	if p, ok := payload.(*ports.EnrichedStepPayload); ok {
+		m["step_name"] = p.StepName
+		m["error"] = p.Error
+		m["duration_ms"] = p.DurationMs
+	}
+	return m
+}
+
+// RenderFacadeEventsToACPSessionUpdate projects a slice of facade events to the ACP
+// session/update JSONL wire format using the SAME projection table that the live ACP
+// dispatch path (projectFacadeEvents → emitFacadeEvent) emits through (facadeEventToUpdate).
+//
+// It is the ACP analog of cli.RenderFacadeEventsToText, api.ProjectEventToSSEFrame, and
+// tui.RenderEventsToTUIMsgs: the conformance suite (F108 T079 golden) calls it so the golden
+// reflects the real projector rather than a test-only stub. Each projected event becomes one
+// JSON object line carrying its session/update "kind" merged with the projected fields; events
+// that do not project to an ACP notification (kind == "") are skipped, exactly as the live
+// emitter skips them.
+func RenderFacadeEventsToACPSessionUpdate(events []ports.Event) []byte {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	for i := range events {
+		kind, fields := facadeEventToUpdate(events[i])
+		if kind == "" {
+			continue
+		}
+		line := make(map[string]any, len(fields)+1)
+		for k, v := range fields {
+			line[k] = v
+		}
+		line["kind"] = kind
+		// json.Encoder writes a trailing newline after each value, yielding JSONL.
+		_ = enc.Encode(line) //nolint:errcheck // bytes.Buffer write cannot fail and the value is a controlled map
+	}
+	return buf.Bytes()
 }
 
 // HandleSessionCancel handles a session/cancel request.

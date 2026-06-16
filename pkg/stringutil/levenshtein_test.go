@@ -463,3 +463,64 @@ func TestClosestMatch_CaseSensitive(t *testing.T) {
 	assert.Equal(t, "hello", match, "should find closest case-insensitive match")
 	assert.Equal(t, 1, distance)
 }
+
+func TestReverse(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "single character",
+			input:    "a",
+			expected: "a",
+		},
+		{
+			name:     "ascii string",
+			input:    "hello",
+			expected: "olleh",
+		},
+		{
+			name:     "preserves whitespace positions after reversal",
+			input:    "hello world",
+			expected: "dlrow olleh",
+		},
+		{
+			name:     "unicode string",
+			input:    "日本語",
+			expected: "語本日",
+		},
+		{
+			name:     "mixed unicode and ascii",
+			input:    "café",
+			expected: "éfac",
+		},
+		{
+			name:     "combining mark",
+			input:    "he\u0301llo",
+			expected: "olle\u0301h",
+		},
+		{
+			name:     "regional indicator flag",
+			input:    "a🇫🇷b",
+			expected: "b🇫🇷a",
+		},
+		{
+			name:     "zero width joiner sequence",
+			input:    "a👨‍👩‍👧‍👦b",
+			expected: "b👨‍👩‍👧‍👦a",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := stringutil.Reverse(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

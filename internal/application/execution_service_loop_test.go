@@ -56,7 +56,7 @@ func TestExecuteLoopStep_ForEach_HappyPath(t *testing.T) {
 		Build()
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-foreach", nil)
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-foreach-run")
 
 	// Then: Should execute successfully
 	require.NoError(t, err, "for_each loop should execute successfully")
@@ -110,7 +110,8 @@ func TestExecuteLoopStep_While_HappyPath(t *testing.T) {
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil, evaluator)
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-while", nil)
+	wf := repo.workflows["test-while"]
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-while-run")
 
 	// Then: Should execute successfully
 	require.NoError(t, err, "while loop should execute successfully")
@@ -167,7 +168,8 @@ func TestExecuteLoopStep_NestedForEach(t *testing.T) {
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-nested", nil)
+	wf := repo.workflows["test-nested"]
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-nested-run")
 
 	// Then: Should execute successfully
 	require.NoError(t, err, "nested for_each loops should execute successfully")
@@ -230,7 +232,8 @@ func TestExecuteLoopStep_WhileContainingForEach(t *testing.T) {
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil, evaluator)
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-while-foreach", nil)
+	wf := repo.workflows["test-while-foreach"]
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-while-foreach-run")
 
 	// Then: Should execute successfully
 	require.NoError(t, err, "while loop containing for_each should execute successfully")
@@ -275,7 +278,8 @@ func TestExecuteLoopStep_ForEach_BodyStepError(t *testing.T) {
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-foreach-error", nil)
+	wf := repo.workflows["test-foreach-error"]
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-foreach-error-run")
 
 	// Then: Should fail
 	require.Error(t, err, "for_each loop with failing body step should error")
@@ -325,7 +329,8 @@ func TestExecuteLoopStep_While_BodyStepError(t *testing.T) {
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil, evaluator)
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-while-error", nil)
+	wf := repo.workflows["test-while-error"]
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-while-error-run")
 
 	// Then: Should fail
 	require.Error(t, err, "while loop with failing body step should error")
@@ -363,7 +368,8 @@ func TestExecuteLoopStep_ForEach_BodyStepNotFound(t *testing.T) {
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-foreach-notfound", nil)
+	wf := repo.workflows["test-foreach-notfound"]
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-foreach-notfound-run")
 
 	// Then: Should fail with step not found error
 	require.Error(t, err, "for_each loop with nonexistent body step should error")
@@ -408,7 +414,8 @@ func TestExecuteLoopStep_ForEach_EmptyItems(t *testing.T) {
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-foreach-empty", nil)
+	wf := repo.workflows["test-foreach-empty"]
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-foreach-empty-run")
 
 	// Then: Should complete successfully without executing body
 	require.NoError(t, err, "for_each loop with empty items should succeed")
@@ -456,7 +463,8 @@ func TestExecuteLoopStep_While_ConditionFalseInitially(t *testing.T) {
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil, evaluator)
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-while-false", nil)
+	wf := repo.workflows["test-while-false"]
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-while-false-run")
 
 	// Then: Should complete successfully without executing body
 	require.NoError(t, err, "while loop with false condition should succeed")
@@ -502,7 +510,8 @@ func TestExecuteLoopStep_ForEach_MaxIterationsLimit(t *testing.T) {
 	execSvc := application.NewExecutionService(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil)
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-foreach-maxiter", nil)
+	wf := repo.workflows["test-foreach-maxiter"]
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-foreach-maxiter-run")
 
 	// Then: Should complete successfully (only processes first 2 items)
 	require.NoError(t, err, "for_each loop with max iterations should complete successfully")
@@ -553,7 +562,8 @@ func TestExecuteLoopStep_While_MaxIterationsReached(t *testing.T) {
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil, evaluator)
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-while-maxiter", nil)
+	wf := repo.workflows["test-while-maxiter"]
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-while-maxiter-run")
 
 	// Then: Should complete successfully after reaching max iterations
 	require.NoError(t, err, "while loop reaching max iterations should complete successfully")
@@ -599,7 +609,8 @@ func TestExecuteLoopStep_ContextCancellation(t *testing.T) {
 	// When: Executing with a cancelled context
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
-	execCtx, err := execSvc.Run(ctx, "test-cancel", nil)
+	wf := repo.workflows["test-cancel"]
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(ctx, wf, nil, "test-cancel-run")
 
 	// Then: Should fail with context cancellation error
 	require.Error(t, err, "loop execution with cancelled context should error")
@@ -650,7 +661,8 @@ func TestExecuteLoopStep_ForEach_BreakCondition(t *testing.T) {
 	execSvc := application.NewExecutionServiceWithEvaluator(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil, evaluator)
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-foreach-break", nil)
+	wf := repo.workflows["test-foreach-break"]
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-foreach-break-run")
 
 	// Then: Should complete successfully after breaking
 	require.NoError(t, err, "for_each loop with break condition should succeed")
@@ -1161,7 +1173,7 @@ func TestExecuteLoopStep_BreakTransitionToExternalStep(t *testing.T) {
 		Build()
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-break-transition", nil)
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-break-transition-run")
 
 	// Then: Should complete successfully via early exit
 	require.NoError(t, err, "loop with break transition should succeed")
@@ -1233,7 +1245,7 @@ func TestExecuteLoopStep_ContinueTransitionToLoopStart(t *testing.T) {
 		Build()
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-continue-pattern", nil)
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-continue-pattern-run")
 
 	// Then: Should complete successfully after iterating through all items
 	require.NoError(t, err, "loop with retry pattern should succeed")
@@ -1310,7 +1322,7 @@ func TestExecuteLoopStep_BreakWithContinueOnError(t *testing.T) {
 		Build()
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-continue-on-error-break", nil)
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-continue-on-error-break-run")
 
 	// Then: Should complete successfully (error not propagated due to ContinueOnError)
 	require.NoError(t, err, "loop with ContinueOnError break should not propagate error")
@@ -1394,7 +1406,7 @@ func TestExecuteLoopStep_MaxIterationBoundaryWithEarlyExit(t *testing.T) {
 		Build()
 
 	// When: Executing the workflow
-	execCtx, err := execSvc.Run(context.Background(), "test-max-iter-boundary", nil)
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-max-iter-boundary-run")
 
 	// Then: Should complete successfully (no max iterations error)
 	require.NoError(t, err, "loop should exit early without max iterations error")

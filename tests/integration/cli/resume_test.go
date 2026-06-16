@@ -4,6 +4,7 @@ package cli_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,10 +12,31 @@ import (
 	"testing"
 	"time"
 
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func recordResumeHistory(t *testing.T, storageDir, id, workflowName, status string) {
+	t.Helper()
+
+	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(storageDir, "history.db"))
+	require.NoError(t, err)
+	defer func() { _ = historyStore.Close() }()
+
+	now := time.Date(2025, 1, 1, 10, 5, 0, 0, time.UTC)
+	err = historyStore.Record(context.Background(), &workflow.ExecutionRecord{
+		ID:           id,
+		WorkflowID:   id,
+		WorkflowName: workflowName,
+		Status:       status,
+		StartedAt:    now.Add(-5 * time.Minute),
+		CompletedAt:  now,
+	})
+	require.NoError(t, err)
+}
 
 func TestResumeCommand_Exists(t *testing.T) {
 	cmd := cli.NewRootCommand()
@@ -113,7 +135,8 @@ func TestResumeCommand_ListFlag_NoResumableWorkflows(t *testing.T) {
 	statesDir := filepath.Join(tmpDir, "states")
 	require.NoError(t, os.MkdirAll(statesDir, 0o755))
 
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -128,32 +151,10 @@ func TestResumeCommand_ListFlag_NoResumableWorkflows(t *testing.T) {
 
 func TestResumeCommand_ListFlag_ShowsResumableWorkflows(t *testing.T) {
 	tmpDir := t.TempDir()
+	recordResumeHistory(t, tmpDir, "test-id-123", "my-workflow", "running")
 
-	// Create states directory with a resumable state file
-	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0o755))
-
-	// Create a state file for a running workflow
-	// Note: JSON uses Go field names (PascalCase) since no json tags are defined
-	stateContent := `{
-		"WorkflowID": "test-id-123",
-		"WorkflowName": "my-workflow",
-		"Status": "running",
-		"CurrentStep": "step2",
-		"Inputs": {},
-		"States": {
-			"step1": {"Name": "step1", "Status": "completed"}
-		},
-		"StartedAt": "2025-01-01T10:00:00Z",
-		"UpdatedAt": "2025-01-01T10:05:00Z"
-	}`
-	require.NoError(t, os.WriteFile(
-		filepath.Join(statesDir, "test-id-123.json"),
-		[]byte(stateContent),
-		0o644,
-	))
-
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -166,50 +167,15 @@ func TestResumeCommand_ListFlag_ShowsResumableWorkflows(t *testing.T) {
 	assert.Contains(t, output, "test-id-123")
 	assert.Contains(t, output, "my-workflow")
 	assert.Contains(t, output, "running")
-	assert.Contains(t, output, "step2")
 }
 
 func TestResumeCommand_ListFlag_FiltersCompletedWorkflows(t *testing.T) {
 	tmpDir := t.TempDir()
+	recordResumeHistory(t, tmpDir, "completed-id", "completed-workflow", "completed")
+	recordResumeHistory(t, tmpDir, "running-id", "running-workflow", "running")
 
-	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0o755))
-
-	// Create a completed workflow state (should be filtered out)
-	completedState := `{
-		"WorkflowID": "completed-id",
-		"WorkflowName": "completed-workflow",
-		"Status": "completed",
-		"CurrentStep": "done",
-		"Inputs": {},
-		"States": {},
-		"StartedAt": "2025-01-01T10:00:00Z",
-		"UpdatedAt": "2025-01-01T10:05:00Z"
-	}`
-	require.NoError(t, os.WriteFile(
-		filepath.Join(statesDir, "completed-id.json"),
-		[]byte(completedState),
-		0o644,
-	))
-
-	// Create a running workflow state (should be shown)
-	runningState := `{
-		"WorkflowID": "running-id",
-		"WorkflowName": "running-workflow",
-		"Status": "running",
-		"CurrentStep": "step1",
-		"Inputs": {},
-		"States": {},
-		"StartedAt": "2025-01-01T10:00:00Z",
-		"UpdatedAt": "2025-01-01T10:05:00Z"
-	}`
-	require.NoError(t, os.WriteFile(
-		filepath.Join(statesDir, "running-id.json"),
-		[]byte(runningState),
-		0o644,
-	))
-
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -225,28 +191,10 @@ func TestResumeCommand_ListFlag_FiltersCompletedWorkflows(t *testing.T) {
 
 func TestResumeCommand_ListFlag_JSONFormat(t *testing.T) {
 	tmpDir := t.TempDir()
+	recordResumeHistory(t, tmpDir, "json-test-id", "json-workflow", "running")
 
-	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0o755))
-
-	// Create a running workflow state
-	runningState := `{
-		"WorkflowID": "json-test-id",
-		"WorkflowName": "json-workflow",
-		"Status": "running",
-		"CurrentStep": "step1",
-		"Inputs": {},
-		"States": {"step0": {"Name": "step0", "Status": "completed"}},
-		"StartedAt": "2025-01-01T10:00:00Z",
-		"UpdatedAt": "2025-01-01T10:05:00Z"
-	}`
-	require.NoError(t, os.WriteFile(
-		filepath.Join(statesDir, "json-test-id.json"),
-		[]byte(runningState),
-		0o644,
-	))
-
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -498,28 +446,10 @@ states:
 
 func TestResumeCommand_QuietFormat(t *testing.T) {
 	tmpDir := t.TempDir()
+	recordResumeHistory(t, tmpDir, "quiet-id", "quiet-workflow", "running")
 
-	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0o755))
-
-	// Create a running workflow state
-	runningState := `{
-		"WorkflowID": "quiet-id",
-		"WorkflowName": "quiet-workflow",
-		"Status": "running",
-		"CurrentStep": "step1",
-		"Inputs": {},
-		"States": {},
-		"StartedAt": "2025-01-01T10:00:00Z",
-		"UpdatedAt": "2025-01-01T10:05:00Z"
-	}`
-	require.NoError(t, os.WriteFile(
-		filepath.Join(statesDir, "quiet-id.json"),
-		[]byte(runningState),
-		0o644,
-	))
-
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -535,28 +465,10 @@ func TestResumeCommand_QuietFormat(t *testing.T) {
 
 func TestResumeCommand_TableFormat(t *testing.T) {
 	tmpDir := t.TempDir()
+	recordResumeHistory(t, tmpDir, "table-id", "table-workflow", "running")
 
-	statesDir := filepath.Join(tmpDir, "states")
-	require.NoError(t, os.MkdirAll(statesDir, 0o755))
-
-	// Create a running workflow state
-	runningState := `{
-		"WorkflowID": "table-id",
-		"WorkflowName": "table-workflow",
-		"Status": "running",
-		"CurrentStep": "step1",
-		"Inputs": {},
-		"States": {},
-		"StartedAt": "2025-01-01T10:00:00Z",
-		"UpdatedAt": "2025-01-01T10:05:00Z"
-	}`
-	require.NoError(t, os.WriteFile(
-		filepath.Join(statesDir, "table-id.json"),
-		[]byte(runningState),
-		0o644,
-	))
-
-	cmd := cli.NewRootCommand()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
@@ -695,7 +607,8 @@ func TestResumeCommand_ConcurrentAccess(t *testing.T) {
 
 	for i := 0; i < concurrency; i++ {
 		go func() {
-			cmd := cli.NewRootCommand()
+			cmd, cleanup := cli.NewRootCommandAutoFacade()
+			defer cleanup()
 			buf := new(bytes.Buffer)
 			cmd.SetOut(buf)
 			cmd.SetErr(buf)

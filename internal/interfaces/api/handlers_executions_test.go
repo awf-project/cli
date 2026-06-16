@@ -3,86 +3,134 @@ package api
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/awf-project/cli/internal/application"
-	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/testutil/facadetest"
 )
 
-// mockWorkflowResumer implements WorkflowResumer for testing.
-type mockWorkflowResumer struct {
+// ctxCaptureFacade records the context handed to Run/Resume so a test can assert the
+// execution context is detached from the (soon-cancelled) HTTP request context.
+type ctxCaptureFacade struct {
+	*facadetest.Fake
+	mu       sync.Mutex
+	captured context.Context //nolint:containedctx // captured solely for assertion in a regression test
+}
+
+func (c *ctxCaptureFacade) Run(ctx context.Context, req ports.RunRequest) (ports.RunSession, error) {
+	c.mu.Lock()
+	c.captured = ctx
+	c.mu.Unlock()
+	return c.Fake.Run(ctx, req)
+}
+
+func (c *ctxCaptureFacade) capturedCtx() context.Context {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.captured
+}
+
+// TestExecutionHandler_Run_DetachesExecutionFromRequestCtx guards the regression where the
+// handler passed the HTTP request context straight to facade.Run: huma cancels that context
+// the instant the 202 response is written, killing the workflow before it executed (nothing
+// reached history). The execution context must survive request cancellation.
+func TestExecutionHandler_Run_DetachesExecutionFromRequestCtx(t *testing.T) {
+	capFacade := &ctxCaptureFacade{Fake: facadetest.New().WithTerminalCompleted()}
+	bridge := NewBridge()
+	h := NewExecutionHandlers(bridge)
+	h.SetFacade(capFacade)
+	h.SetSessionRegistry(application.NewSessionRegistry())
+
+	reqCtx, cancel := context.WithCancel(context.Background())
+	_, err := h.Run(reqCtx, &RunWorkflowInput{Scope: "local", Name: "echo"})
+	require.NoError(t, err)
+
+	// The request completes: huma cancels the request context.
+	cancel()
+
+	captured := capFacade.capturedCtx()
+	require.NotNil(t, captured, "facade.Run must have been called")
+	assert.NoError(t, captured.Err(),
+		"execution context must survive request cancellation (detached via context.WithoutCancel)")
+}
+
+// errFacade is a minimal ports.WorkflowFacade stub that returns a fixed error
+// from Run and/or Resume. Used for error-path handler tests.
+type errFacade struct {
+	runErr    error
 	resumeErr error
-	execCtx   *workflow.ExecutionContext
 }
 
-func newMockWorkflowResumer() *mockWorkflowResumer {
-	return &mockWorkflowResumer{
-		execCtx: workflow.NewExecutionContext("resumed-exec", "test-workflow"),
-	}
+func (e *errFacade) List(_ context.Context) ([]ports.WorkflowSummary, error) {
+	return nil, nil
 }
 
-func (m *mockWorkflowResumer) Resume(
-	_ context.Context,
-	_ string,
-	_ map[string]any,
-	_ string,
-) (*workflow.ExecutionContext, error) {
-	if m.resumeErr != nil {
-		return nil, m.resumeErr
-	}
-	return m.execCtx, nil
+func (e *errFacade) Validate(_ context.Context, _ ports.RunRequest) (ports.ValidationReport, error) {
+	return ports.ValidationReport{}, nil
 }
 
-// newBlockingExecutionHandlerAPI wires a full execution-handler test stack with a
-// blocking runner. The runner's Done channel stays open until test cleanup, which
-// prevents Bridge's cleanup goroutine in StartExecution from removing tracked
-// executions before assertions run. Returns the api (for HTTP calls), the bridge
-// (for GetExecution/ListExecutions assertions), and the lister (so callers can
-// mutate getErr / entries fields before issuing requests).
-func newBlockingExecutionHandlerAPI(t *testing.T, workflowNames ...string) (humatest.TestAPI, *Bridge, *mockWorkflowLister) {
+func (e *errFacade) Status(_ context.Context, _ string) (ports.RunStatus, error) {
+	return ports.RunStatus{}, nil
+}
+
+func (e *errFacade) History(_ context.Context, _ ports.HistoryFilter) ([]ports.RunRecord, error) { //nolint:gocritic // hugeParam: satisfies ports.WorkflowFacade contract
+	return nil, nil
+}
+
+func (e *errFacade) Run(_ context.Context, _ ports.RunRequest) (ports.RunSession, error) {
+	return nil, e.runErr
+}
+
+func (e *errFacade) Resume(_ context.Context, _ ports.ResumeRequest) (ports.RunSession, error) {
+	return nil, e.resumeErr
+}
+
+func (e *errFacade) RunStep(_ context.Context, _ ports.RunStepRequest) (ports.StepResult, error) {
+	return ports.StepResult{}, nil
+}
+
+// newExecutionHandlerAPI wires a Bridge + ExecutionHandlers + humatest API
+// WITHOUT a facade — for tests that only exercise List/Get/Cancel seeded via seedExecution.
+func newExecutionHandlerAPI(t *testing.T, _ ...string) (humatest.TestAPI, *Bridge) {
 	t.Helper()
-	block := make(chan error)
-	t.Cleanup(func() { close(block) })
-	lister := newMockWorkflowLister(workflowNames...)
-	runner := newMockWorkflowRunnerWithDone(block)
-	bridge := NewBridge(lister, runner, newMockHistoryProvider())
+	bridge := NewBridge()
 	handler := NewExecutionHandlers(bridge)
 	_, api := humatest.New(t)
 	RegisterExecutionRoutes(api, handler)
-	return api, bridge, lister
+	return api, bridge
 }
 
-// --- Tests ---
+// newFacadeExecutionHandlerAPI wires a Bridge + ExecutionHandlers with a facade and
+// SessionRegistry so the facade path (Run/Resume) is exercised end-to-end.
+func newFacadeExecutionHandlerAPI(t *testing.T, facade ports.WorkflowFacade, _ ...string) (humatest.TestAPI, *Bridge, *application.SessionRegistry) {
+	t.Helper()
+	bridge := NewBridge()
+	reg := application.NewSessionRegistry()
+	handler := NewExecutionHandlers(bridge)
+	handler.SetFacade(facade)
+	handler.SetSessionRegistry(reg)
+	_, api := humatest.New(t)
+	RegisterExecutionRoutes(api, handler)
+	return api, bridge, reg
+}
 
-func TestExecutionHandler_Run_Returns202WithExecutionID_WithinDeadline(t *testing.T) {
-	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "deploy-prod")
+// --- Run tests (facade path) ---
 
-	// Verify the response is built and returned BEFORE the async work completes.
-	// FR-006 deadline: 100ms from request receipt.
-	startTime := time.Now()
-	timeout := time.AfterFunc(100*time.Millisecond, func() {
-		t.Fatal("FR-006 deadline exceeded: Run handler did not return within 100ms")
-	})
-	defer timeout.Stop()
+func TestExecutionHandler_Run_Returns202WithExecutionID(t *testing.T) {
+	fake := facadetest.New().WithTerminalCompleted()
+	api, _, _ := newFacadeExecutionHandlerAPI(t, fake, "deploy-prod")
 
 	input := struct {
 		Inputs map[string]any `json:"inputs"`
-	}{
-		Inputs: map[string]any{"env": "prod"},
-	}
+	}{Inputs: map[string]any{"env": "prod"}}
 
 	resp := api.Post("/api/workflows/local/deploy-prod/run", input)
-	elapsed := time.Since(startTime)
-
-	timeout.Stop()
-
 	require.Equal(t, 202, resp.Code, "Run must return 202 Accepted for async execution")
 
 	var result struct {
@@ -91,58 +139,72 @@ func TestExecutionHandler_Run_Returns202WithExecutionID_WithinDeadline(t *testin
 			Status      string `json:"status"`
 		} `json:"body"`
 	}
-	err := json.NewDecoder(resp.Body).Decode(&result)
-	require.NoError(t, err)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 
 	assert.NotEmpty(t, result.Body.ExecutionID, "execution_id must be non-empty")
 	assert.Equal(t, "accepted", result.Body.Status, "status must be 'accepted'")
-	assert.Less(t, elapsed, 100*time.Millisecond, "handler must return within FR-006 deadline")
-
-	stored, ok := bridge.GetExecution(result.Body.ExecutionID)
-	assert.True(t, ok, "execution must be stored in Bridge")
-	require.NotNil(t, stored)
-	assert.Equal(t, "deploy-prod", stored.WorkflowName)
 }
 
-func TestExecutionHandler_Run_UnknownWorkflow_Returns404(t *testing.T) {
-	lister := newMockWorkflowLister()
-	lister.getErr = errors.New("workflow not found")
-	runner := newMockWorkflowRunner()
-	bridge := NewBridge(lister, runner, newMockHistoryProvider())
-	handler := NewExecutionHandlers(bridge)
-	_, api := humatest.New(t)
-	RegisterExecutionRoutes(api, handler)
+func TestExecutionHandler_Run_NoFacade_Returns503(t *testing.T) {
+	// When no facade is wired, Run must return 503 Service Unavailable — not 404 and not panic.
+	// 503 signals that the service is temporarily unable to handle the request (facade not configured),
+	// rather than 422 Unprocessable Entity which would imply a client error.
+	api, _ := newExecutionHandlerAPI(t, "deploy-prod")
 
 	input := struct {
 		Inputs map[string]any `json:"inputs"`
-	}{
-		Inputs: map[string]any{},
-	}
+	}{Inputs: map[string]any{}}
+
+	resp := api.Post("/api/workflows/local/deploy-prod/run", input)
+	assert.Equal(t, 503, resp.Code, "Run without facade must return 503 Service Unavailable")
+}
+
+func TestExecutionHandler_Run_UnknownWorkflow_Returns404(t *testing.T) {
+	// Facade returns ErrRunNotFound for an unknown identifier → handler maps to 404.
+	api, _, _ := newFacadeExecutionHandlerAPI(t, &errFacade{runErr: ports.ErrRunNotFound}, "nonexistent")
+
+	input := struct {
+		Inputs map[string]any `json:"inputs"`
+	}{Inputs: map[string]any{}}
 
 	resp := api.Post("/api/workflows/local/nonexistent/run", input)
-
 	assert.Equal(t, 404, resp.Code, "Run with unknown workflow must return 404 Not Found")
 }
 
+func TestExecutionHandler_Run_FacadePath_BridgeTracksMetadata(t *testing.T) {
+	fake := facadetest.New().WithTerminalCompleted()
+	api, bridge, _ := newFacadeExecutionHandlerAPI(t, fake, "deploy-prod")
+
+	input := struct {
+		Inputs map[string]any `json:"inputs"`
+	}{Inputs: map[string]any{}}
+
+	resp := api.Post("/api/workflows/local/deploy-prod/run", input)
+	require.Equal(t, 202, resp.Code)
+
+	var result struct {
+		Body struct {
+			ExecutionID string `json:"execution_id"`
+		} `json:"body"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	require.NotEmpty(t, result.Body.ExecutionID)
+
+	ae, ok := bridge.GetExecution(result.Body.ExecutionID)
+	assert.True(t, ok, "Bridge.activeExecutions must track facade session for List/Get/Cancel")
+	if assert.NotNil(t, ae) {
+		assert.Equal(t, "deploy-prod", ae.WorkflowName)
+	}
+}
+
+// --- List tests ---
+
 func TestExecutionHandler_List_HappyPath(t *testing.T) {
-	// Blocking channels prevent cleanup goroutine from removing entries.
-	blockA := make(chan error)
-	blockB := make(chan error)
-	t.Cleanup(func() { close(blockA); close(blockB) })
+	bridge := NewBridge()
 
-	runner := &mockWorkflowRunner{}
-	bridge := NewBridge(newMockWorkflowLister("wf-a", "wf-b"), runner, newMockHistoryProvider())
-
-	// Start two executions.
-	wfA := &workflow.Workflow{Name: "wf-a", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	runner.done = blockA
-	_, _, err := bridge.StartExecution(context.Background(), wfA, nil)
-	require.NoError(t, err)
-
-	wfB := &workflow.Workflow{Name: "wf-b", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	runner.done = blockB
-	_, _, err = bridge.StartExecution(context.Background(), wfB, nil)
-	require.NoError(t, err)
+	// Seed two executions directly via the white-box helper.
+	seedExecutionWithID(bridge, "id-exec-a", "wf-a")
+	seedExecutionWithID(bridge, "id-exec-b", "wf-b")
 
 	handler := NewExecutionHandlers(bridge)
 	_, api := humatest.New(t)
@@ -159,7 +221,7 @@ func TestExecutionHandler_List_HappyPath(t *testing.T) {
 			} `json:"executions"`
 		} `json:"body"`
 	}
-	err = json.NewDecoder(resp.Body).Decode(&result)
+	err := json.NewDecoder(resp.Body).Decode(&result)
 	require.NoError(t, err)
 
 	assert.Len(t, result.Body.Executions, 2, "List must return both executions")
@@ -170,13 +232,15 @@ func TestExecutionHandler_List_HappyPath(t *testing.T) {
 	assert.ElementsMatch(t, []string{"wf-a", "wf-b"}, workflowNames)
 }
 
-func TestExecutionHandler_Get_HappyPath(t *testing.T) {
-	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
+// --- Get tests ---
 
-	// Start an execution to get a valid ID.
-	wf := &workflow.Workflow{Name: "test-workflow", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	id, _, err := bridge.StartExecution(context.Background(), wf, nil)
-	require.NoError(t, err)
+func TestExecutionHandler_Get_HappyPath(t *testing.T) {
+	bridge := NewBridge()
+	id, _ := seedExecution(bridge, "test-workflow")
+
+	handler := NewExecutionHandlers(bridge)
+	_, api := humatest.New(t)
+	RegisterExecutionRoutes(api, handler)
 
 	resp := api.Get("/api/executions/" + id)
 	require.Equal(t, 200, resp.Code, "Get with valid execution ID must return 200")
@@ -187,7 +251,7 @@ func TestExecutionHandler_Get_HappyPath(t *testing.T) {
 			WorkflowName string `json:"workflow_name"`
 		} `json:"body"`
 	}
-	err = json.NewDecoder(resp.Body).Decode(&result)
+	err := json.NewDecoder(resp.Body).Decode(&result)
 	require.NoError(t, err)
 
 	assert.Equal(t, id, result.Body.ExecutionID, "execution_id in response must match requested ID")
@@ -195,9 +259,7 @@ func TestExecutionHandler_Get_HappyPath(t *testing.T) {
 }
 
 func TestExecutionHandler_Get_NotFound_Returns404(t *testing.T) {
-	lister := newMockWorkflowLister()
-	runner := newMockWorkflowRunner()
-	bridge := NewBridge(lister, runner, newMockHistoryProvider())
+	bridge := NewBridge()
 	handler := NewExecutionHandlers(bridge)
 	_, api := humatest.New(t)
 	RegisterExecutionRoutes(api, handler)
@@ -207,22 +269,22 @@ func TestExecutionHandler_Get_NotFound_Returns404(t *testing.T) {
 	assert.Equal(t, 404, resp.Code, "Get with unknown execution ID must return 404 Not Found")
 }
 
-func TestExecutionHandler_Cancel_PropagatesContextCancellation(t *testing.T) {
-	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
+// --- Cancel tests ---
 
-	// Start an execution.
-	wf := &workflow.Workflow{Name: "test-workflow", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	id, exec, err := bridge.StartExecution(context.Background(), wf, nil)
-	require.NoError(t, err)
+func TestExecutionHandler_Cancel_PropagatesContextCancellation(t *testing.T) {
+	bridge := NewBridge()
+	id, exec := seedExecution(bridge, "test-workflow")
+
+	handler := NewExecutionHandlers(bridge)
+	_, api := humatest.New(t)
+	RegisterExecutionRoutes(api, handler)
 
 	// Verify context is not yet cancelled.
 	assert.NoError(t, exec.Ctx.Err(), "context must not be cancelled before cancel handler")
 
-	// Call the cancel handler.
-	input := struct {
+	resp := api.Delete("/api/executions/"+id, struct {
 		ID string `path:"id"`
-	}{ID: id}
-	resp := api.Delete("/api/executions/"+id, input)
+	}{ID: id})
 
 	// Assert 204 No Content (idempotent).
 	require.Equal(t, 204, resp.Code, "Cancel must return 204 No Content")
@@ -233,129 +295,60 @@ func TestExecutionHandler_Cancel_PropagatesContextCancellation(t *testing.T) {
 }
 
 func TestExecutionHandler_Cancel_Idempotent_TwoDELETEsBothReturn204(t *testing.T) {
-	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
+	bridge := NewBridge()
+	id, _ := seedExecution(bridge, "test-workflow")
 
-	// Start an execution.
-	wf := &workflow.Workflow{Name: "test-workflow", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	id, _, err := bridge.StartExecution(context.Background(), wf, nil)
-	require.NoError(t, err)
+	handler := NewExecutionHandlers(bridge)
+	_, api := humatest.New(t)
+	RegisterExecutionRoutes(api, handler)
 
-	// First DELETE.
 	input := struct {
 		ID string `path:"id"`
 	}{ID: id}
 	resp1 := api.Delete("/api/executions/"+id, input)
 	require.Equal(t, 204, resp1.Code, "First DELETE must return 204")
 
-	// Second DELETE (idempotent).
 	resp2 := api.Delete("/api/executions/"+id, input)
 	require.Equal(t, 204, resp2.Code, "Second DELETE must also return 204 (idempotent)")
 }
 
 func TestExecutionHandler_Cancel_UnknownID_Returns204(t *testing.T) {
-	// Edge case spec line 108: Cancel is idempotent — unknown IDs also return 204.
-	lister := newMockWorkflowLister()
-	runner := newMockWorkflowRunner()
-	bridge := NewBridge(lister, runner, newMockHistoryProvider())
+	// Cancel is idempotent — unknown IDs also return 204.
+	bridge := NewBridge()
 	handler := NewExecutionHandlers(bridge)
 	_, api := humatest.New(t)
 	RegisterExecutionRoutes(api, handler)
 
-	// Try to cancel a non-existent execution.
 	input := struct {
 		ID string `path:"id"`
 	}{ID: "does-not-exist"}
 	resp := api.Delete("/api/executions/does-not-exist", input)
 
-	// Assert 204 No Content (idempotent DELETE semantics).
 	assert.Equal(t, 204, resp.Code, "Cancel with unknown ID must return 204 (idempotent)")
 }
 
-func TestExecutionHandler_Run_PackScope_Returns202_CanonicalNamePassed(t *testing.T) {
-	api, _, lister := newBlockingExecutionHandlerAPI(t, "speckit/specify")
+// --- Resume tests (facade path) ---
 
-	input := struct {
-		Inputs map[string]any `json:"inputs"`
-	}{
-		Inputs: map[string]any{},
-	}
-
-	resp := api.Post("/api/workflows/speckit/specify/run", input)
-	require.Equal(t, 202, resp.Code)
-
-	var result struct {
-		Body struct {
-			ExecutionID string `json:"execution_id"`
-			Status      string `json:"status"`
-		} `json:"body"`
-	}
-	err := json.NewDecoder(resp.Body).Decode(&result)
-	require.NoError(t, err)
-
-	assert.NotEmpty(t, result.Body.ExecutionID)
-	assert.Equal(t, "accepted", result.Body.Status)
-	assert.Equal(t, "speckit/specify", lister.lastGetName, "mock must receive canonical name for pack scope")
-}
-
-func TestExecutionHandler_Run_LocalScope_Returns202_NameOnlyPassed(t *testing.T) {
-	api, _, lister := newBlockingExecutionHandlerAPI(t, "deploy-prod")
-
-	input := struct {
-		Inputs map[string]any `json:"inputs"`
-	}{
-		Inputs: map[string]any{},
-	}
-
-	resp := api.Post("/api/workflows/local/deploy-prod/run", input)
-	require.Equal(t, 202, resp.Code)
-
-	var result struct {
-		Body struct {
-			ExecutionID string `json:"execution_id"`
-			Status      string `json:"status"`
-		} `json:"body"`
-	}
-	err := json.NewDecoder(resp.Body).Decode(&result)
-	require.NoError(t, err)
-
-	assert.NotEmpty(t, result.Body.ExecutionID)
-	assert.Equal(t, "accepted", result.Body.Status)
-	assert.Equal(t, "deploy-prod", lister.lastGetName, "mock must receive name only for local scope")
-}
-
-func TestExecutionHandler_Run_UnknownScope_Returns404(t *testing.T) {
-	// This test asserts the 404 response when the workflow lookup fails, so no
-	// execution is ever started or tracked. We intentionally bypass
-	// newBlockingExecutionHandlerAPI (which wires a blocking runner to keep
-	// executions observable) and use the plain non-blocking mock runner.
-	lister := newMockWorkflowLister()
-	runner := newMockWorkflowRunner()
-	bridge := NewBridge(lister, runner, newMockHistoryProvider())
+func TestExecutionHandler_Resume_NoFacade_Returns503(t *testing.T) {
+	// When no facade is wired, Resume must return 503 Service Unavailable — not 422.
+	// 503 signals that the service is temporarily unable to handle the request (facade not configured).
+	bridge := NewBridge()
 	handler := NewExecutionHandlers(bridge)
 	_, api := humatest.New(t)
 	RegisterExecutionRoutes(api, handler)
 
 	input := struct {
-		Inputs map[string]any `json:"inputs"`
-	}{
-		Inputs: map[string]any{},
-	}
+		InputOverrides map[string]any `json:"input_overrides,omitempty"`
+		FromStep       string         `json:"from_step,omitempty"`
+	}{}
 
-	resp := api.Post("/api/workflows/unknown/foo/run", input)
-
-	assert.Equal(t, 404, resp.Code, "Run with unknown scope must return 404 Not Found")
+	resp := api.Post("/api/executions/some-id/resume", input)
+	assert.Equal(t, 503, resp.Code, "Resume without facade must return 503 Service Unavailable")
 }
 
 func TestExecutionHandler_Resume_NotFound_Returns404(t *testing.T) {
-	// M5b: Resume must return 404 when the execution record does not exist.
-	// The handler must use errors.Is(err, application.ErrExecutionNotFound) —
-	// NOT a string-match — so that future message rewording stays correct.
-	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
-
-	resumer := newMockWorkflowResumer()
-	// Wrap the sentinel the same way ExecutionService.Resume does.
-	resumer.resumeErr = fmt.Errorf("workflow execution not found: missing-id: %w", application.ErrExecutionNotFound)
-	bridge.SetResumer(resumer)
+	// Facade returns ErrRunNotFound → handler maps to 404.
+	api, _, _ := newFacadeExecutionHandlerAPI(t, &errFacade{resumeErr: ports.ErrRunNotFound}, "test-workflow")
 
 	input := struct {
 		InputOverrides map[string]any `json:"input_overrides,omitempty"`
@@ -366,15 +359,9 @@ func TestExecutionHandler_Resume_NotFound_Returns404(t *testing.T) {
 	assert.Equal(t, 404, resp.Code, "Resume with not-found execution must return 404")
 }
 
-func TestExecutionHandler_Resume_InternalError_Returns422NotExposingDetails(t *testing.T) {
-	// M5b: Resume errors that are not "not found" (e.g. already completed,
-	// workflow load failure) must return 422 Unprocessable Entity, not 404.
-	// The raw internal error string must not be forwarded verbatim.
-	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
-
-	resumer := newMockWorkflowResumer()
-	resumer.resumeErr = errors.New("workflow already completed, cannot resume")
-	bridge.SetResumer(resumer)
+func TestExecutionHandler_Resume_InternalError_Returns422(t *testing.T) {
+	// Facade returns a non-not-found error → handler maps to 422.
+	api, _, _ := newFacadeExecutionHandlerAPI(t, &errFacade{resumeErr: ports.ErrSessionClosed}, "test-workflow")
 
 	input := struct {
 		InputOverrides map[string]any `json:"input_overrides,omitempty"`
@@ -385,30 +372,30 @@ func TestExecutionHandler_Resume_InternalError_Returns422NotExposingDetails(t *t
 	assert.Equal(t, 422, resp.Code, "Resume with completed/invalid state must return 422, not 404")
 }
 
-func TestExecutionHandler_Resume_FailedExecution_RestartsFromFailedStep(t *testing.T) {
-	// Setup: execution stored in Bridge, resumer mocked.
-	api, bridge, _ := newBlockingExecutionHandlerAPI(t, "test-workflow")
+// --- T073: facade run path + SessionRegistry wiring ---
 
-	// Wire the resumer.
-	resumer := newMockWorkflowResumer()
-	bridge.SetResumer(resumer)
+// TestExecutionHandlersRun_RegistersSessionForSSE verifies FR-003: when
+// ExecutionHandlers has a facade and registry wired, POST /run must call
+// facade.Run, register the returned RunSession in the SessionRegistry
+// synchronously (before returning the HTTP response), and return an execution_id
+// that resolves via SessionRegistry.Get.
+func TestExecutionHandlersRun_RegistersSessionForSSE(t *testing.T) {
+	fake := facadetest.New().WithTerminalCompleted()
+	reg := application.NewSessionRegistry()
+	bridge := NewBridge()
+	handler := NewExecutionHandlers(bridge)
+	handler.SetFacade(fake)
+	handler.SetSessionRegistry(reg)
 
-	// Start an execution (represents the failed run).
-	wf := &workflow.Workflow{Name: "test-workflow", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-	failedID, _, err := bridge.StartExecution(context.Background(), wf, nil)
-	require.NoError(t, err)
+	_, api := humatest.New(t)
+	RegisterExecutionRoutes(api, handler)
 
-	// Call the resume handler.
 	input := struct {
-		InputOverrides map[string]any `json:"input_overrides,omitempty"`
-		FromStep       string         `json:"from_step,omitempty"`
-	}{
-		InputOverrides: map[string]any{"retry": true},
-		FromStep:       "build",
-	}
+		Inputs map[string]any `json:"inputs"`
+	}{Inputs: map[string]any{}}
 
-	resp := api.Post("/api/executions/"+failedID+"/resume", input)
-	require.Equal(t, 200, resp.Code, "Resume must return 200 OK with new RunWorkflowOutput")
+	resp := api.Post("/api/workflows/local/deploy-prod/run", input)
+	require.Equal(t, 202, resp.Code)
 
 	var result struct {
 		Body struct {
@@ -416,9 +403,86 @@ func TestExecutionHandler_Resume_FailedExecution_RestartsFromFailedStep(t *testi
 			Status      string `json:"status"`
 		} `json:"body"`
 	}
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	require.NoError(t, err)
-
-	assert.NotEmpty(t, result.Body.ExecutionID, "Resume must return a new execution ID")
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	assert.NotEmpty(t, result.Body.ExecutionID, "execution_id must be non-empty")
 	assert.Equal(t, "accepted", result.Body.Status)
+
+	// Core acceptance criterion: session is findable in the registry by execution ID.
+	session, ok := reg.Get(result.Body.ExecutionID)
+	assert.True(t, ok, "SessionRegistry.Get(execID) must return non-nil after Run (FR-003)")
+	assert.NotNil(t, session)
+}
+
+// TestExecutionHandlersRun_FacadePath_BridgeTracksMetadata verifies that
+// Bridge.activeExecutions still holds a metadata entry for the facade-driven
+// execution so that List/Get/Cancel handlers keep working.
+func TestExecutionHandlersRun_FacadePath_BridgeTracksMetadata(t *testing.T) {
+	fake := facadetest.New().WithTerminalCompleted()
+	reg := application.NewSessionRegistry()
+	bridge := NewBridge()
+	handler := NewExecutionHandlers(bridge)
+	handler.SetFacade(fake)
+	handler.SetSessionRegistry(reg)
+
+	_, api := humatest.New(t)
+	RegisterExecutionRoutes(api, handler)
+
+	input := struct {
+		Inputs map[string]any `json:"inputs"`
+	}{Inputs: map[string]any{}}
+
+	resp := api.Post("/api/workflows/local/deploy-prod/run", input)
+	require.Equal(t, 202, resp.Code)
+
+	var result struct {
+		Body struct {
+			ExecutionID string `json:"execution_id"`
+		} `json:"body"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+	require.NotEmpty(t, result.Body.ExecutionID)
+
+	ae, ok := bridge.GetExecution(result.Body.ExecutionID)
+	assert.True(t, ok, "Bridge.activeExecutions must track facade session for List/Get/Cancel")
+	if assert.NotNil(t, ae) {
+		assert.Equal(t, "deploy-prod", ae.WorkflowName)
+	}
+}
+
+// TestExecutionHandler_Get_FacadeSession_ReflectsStatus guards limitation #1: a facade
+// session carries no ExecutionContext (NopRecorder), so GET used to report an empty status
+// and a zero started_at. The handler now stamps StartedAt at track time and overlays the
+// live status snapshot, so GET reflects the real run state.
+func TestExecutionHandler_Get_FacadeSession_ReflectsStatus(t *testing.T) {
+	fake := facadetest.New().WithTerminalCompleted()
+	api, _, _ := newFacadeExecutionHandlerAPI(t, fake, "echo")
+
+	postResp := api.Post("/api/workflows/local/echo/run", struct {
+		Inputs map[string]any `json:"inputs"`
+	}{Inputs: map[string]any{}})
+	require.Equal(t, 202, postResp.Code)
+
+	var run struct {
+		Body struct {
+			ExecutionID string `json:"execution_id"`
+		} `json:"body"`
+	}
+	require.NoError(t, json.NewDecoder(postResp.Body).Decode(&run))
+	require.NotEmpty(t, run.Body.ExecutionID)
+
+	getResp := api.Get("/api/executions/" + run.Body.ExecutionID)
+	require.Equal(t, 200, getResp.Code)
+
+	var got struct {
+		Body struct {
+			Status    string `json:"status"`
+			StartedAt string `json:"started_at"`
+		} `json:"body"`
+	}
+	require.NoError(t, json.NewDecoder(getResp.Body).Decode(&got))
+
+	assert.Equal(t, "completed", got.Body.Status,
+		"facade session GET must reflect the terminal status, not an empty string")
+	assert.NotEqual(t, "0001-01-01T00:00:00Z", got.Body.StartedAt,
+		"facade session GET must carry a non-zero started_at stamped at track time")
 }

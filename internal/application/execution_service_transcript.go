@@ -52,6 +52,26 @@ func (s *ExecutionService) emitTranscriptStep(ctx context.Context, ec *workflow.
 	if ec.CurrentLoop != nil {
 		iteration = ec.CurrentLoop.Index
 	}
+	payload := &transcript.StepPayload{Name: step.Name, Kind: string(step.Type)}
+	// On completion, record whether the step produced human-visible output so the CLI
+	// renderer can reproduce the legacy F037 success-feedback line for silent steps only.
+	// Shell-step stdout is streamed out-of-band (output writers), so this signal cannot be
+	// recovered from the event stream and must be captured from the step state here.
+	if eventType == transcript.EventTypeStepCompleted {
+		payload.Result = stepHadOutput(ec, step.Name)
+		// Carry the captured stdout/stderr on the in-memory event (json:"-", not
+		// persisted) so event-only consumers (TUI monitoring, SSE) can render per-step
+		// output without an ExecutionContext. Prefer the human-readable DisplayOutput,
+		// mirroring stepHadOutput's display logic.
+		if state, ok := ec.GetStepState(step.Name); ok {
+			payload.Output = state.DisplayOutput
+			if payload.Output == "" {
+				payload.Output = state.Output
+			}
+			payload.Stderr = state.Stderr
+			payload.Error = state.Error
+		}
+	}
 	s.emitTranscriptEvent(ctx, transcript.ExchangeEvent{
 		Type:        eventType,
 		RunID:       ec.WorkflowID,
@@ -59,8 +79,24 @@ func (s *ExecutionService) emitTranscriptStep(ctx context.Context, ec *workflow.
 		Path:        buildTranscriptPath(ec, step),
 		Iteration:   iteration,
 		Timestamp:   time.Now(),
-		Payload:     &transcript.StepPayload{Name: step.Name, Kind: string(step.Type)},
+		Payload:     payload,
 	})
+}
+
+// stepHadOutput reports whether the named step produced any human-visible output. It
+// mirrors the legacy displayValueOf check (DisplayOutput || Output, plus Stderr): a step
+// with an empty display output and empty stderr is "silent" and earns explicit success
+// feedback in the CLI renderer. A missing step state counts as no output.
+func stepHadOutput(ec *workflow.ExecutionContext, stepName string) bool {
+	state, ok := ec.GetStepState(stepName)
+	if !ok {
+		return false
+	}
+	display := state.DisplayOutput
+	if display == "" {
+		display = state.Output
+	}
+	return display != "" || state.Stderr != ""
 }
 
 func (s *ExecutionService) emitTranscriptAgentMessage(ctx context.Context, ec *workflow.ExecutionContext, prompt, systemPrompt string) {

@@ -57,7 +57,7 @@ func TestExecuteParallelStep_EmitsParallelSpan(t *testing.T) {
 		Build()
 	svc.SetTracer(mockTracer)
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 	require.NoError(t, err)
 
 	mockTracer.AssertCalled(t, "Start", mock.Anything, "parallel")
@@ -107,7 +107,7 @@ func TestExecuteLoopStep_ForEach_EmitsLoopForEachSpan(t *testing.T) {
 		Build()
 	svc.SetTracer(mockTracer)
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 	require.NoError(t, err)
 
 	mockTracer.AssertCalled(t, "Start", mock.Anything, "loop.for_each")
@@ -165,7 +165,7 @@ func TestExecuteLoopStep_While_EmitsLoopWhileSpan(t *testing.T) {
 	svc := application.NewExecutionServiceWithEvaluator(wfSvc, executor, newMockParallelExecutor(), newMockStateStore(), &mockLogger{}, newMockResolver(), nil, evaluator)
 	svc.SetTracer(mockTracer)
 
-	_, err := svc.Run(context.Background(), "test-while", nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-while-run")
 	require.NoError(t, err)
 
 	mockTracer.AssertCalled(t, "Start", mock.Anything, "loop.while")
@@ -216,7 +216,7 @@ func TestExecuteLoopStep_EmitsPerIterationChildSpans(t *testing.T) {
 		Build()
 	svc.SetTracer(mockTracer)
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 	require.NoError(t, err)
 
 	mockTracer.AssertCalled(t, "Start", mock.Anything, "loop.iteration.1")
@@ -254,7 +254,7 @@ func TestExecuteParallelStep_WithoutTracer_CompletesSuccessfully(t *testing.T) {
 		WithWorkflow("test", wf).
 		Build()
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 	require.NoError(t, err)
 }
 
@@ -291,6 +291,6 @@ func TestExecuteLoopStep_WithoutTracer_CompletesSuccessfully(t *testing.T) {
 		WithWorkflow("test", wf).
 		Build()
 
-	_, err := svc.RunWithWorkflow(context.Background(), wf, nil)
+	_, err := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "test-run")
 	require.NoError(t, err)
 }

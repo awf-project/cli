@@ -1,6 +1,12 @@
 // Package stringutil provides utility functions for string manipulation and comparison.
 package stringutil
 
+import (
+	"strings"
+
+	"github.com/rivo/uniseg"
+)
+
 // LevenshteinDistance calculates the Levenshtein distance between two strings:
 // the minimum number of single-character edits (insertions, deletions, or substitutions)
 // required to change one string into another. Returns 0 if strings are identical.
@@ -78,4 +84,18 @@ func ClosestMatch(target string, candidates []string, threshold int) (match stri
 	}
 
 	return "", -1
+}
+
+// Reverse returns s with its grapheme clusters in reverse order.
+func Reverse(s string) string {
+	graphemes := uniseg.NewGraphemes(s)
+	clusters := make([]string, 0, len(s))
+	for graphemes.Next() {
+		clusters = append(clusters, graphemes.Str())
+	}
+
+	for i, j := 0, len(clusters)-1; i < j; i, j = i+1, j-1 {
+		clusters[i], clusters[j] = clusters[j], clusters[i]
+	}
+	return strings.Join(clusters, "")
 }

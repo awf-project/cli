@@ -67,9 +67,7 @@ func TestHTTPRespond_IntegrationWithHTTPServer(t *testing.T) {
 	// Acceptance: HTTP server must route POST /api/executions/:id/respond to RespondHandler.
 	// Full integration test using httptest.
 
-	lister := newMockWorkflowLister("test-wf")
-	runner := newMockWorkflowRunner()
-	bridge := NewBridge(lister, runner, newMockHistoryProvider())
+	bridge := NewBridge()
 	srv := NewServer(
 		bridge, ":0",
 		WithFacade(&mockWorkflowFacade{}),
@@ -162,7 +160,7 @@ func TestRespondHandler_Respond_UnknownID_Returns404_NoPanic(t *testing.T) {
 // Returns 422 when huma body schema validation rejects the request.
 // Either outcome proves the nil-session panic (#3) is fixed.
 func TestRespondHTTP_UnknownID_NoPanic_ViaHTTPServer(t *testing.T) {
-	bridge := NewBridge(newMockWorkflowLister("wf"), newMockWorkflowRunner(), newMockHistoryProvider())
+	bridge := NewBridge()
 	srv := NewServer(
 		bridge, ":0",
 		WithFacade(&mockWorkflowFacade{}),
