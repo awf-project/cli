@@ -28,7 +28,7 @@ Learn how to use AWF effectively:
 
 - [Commands](user-guide/commands.md) - All CLI commands and flags
 - [Interactive Input Collection](user-guide/interactive-inputs.md) - Automatic prompting for missing workflow inputs
-- [Agent Steps](user-guide/agent-steps.md) - Invoke AI agents via CLI (Claude, Codex, Gemini, GitHub Copilot) or HTTP APIs (OpenAI, Ollama, vLLM, Groq)
+- [Agent Steps](user-guide/agent-steps.md) - Invoke AI agents via CLI (Claude, Codex, Gemini, GitHub Copilot, Mistral Vibe, OpenCode) or HTTP APIs (OpenAI, Ollama, vLLM, Groq)
   - [Agent Skills](user-guide/agent-steps.md#agent-skills) - Inject deterministic domain knowledge into agent steps via `skills:` declarations with multi-directory discovery
   - [Agent Roles](user-guide/agent-steps.md#agent-roles) - Inject reusable personas into agent steps via `role:` field referencing AGENTS.md files with system prompt composition
   - [Output Formatting](user-guide/agent-steps.md#output-formatting) - Automatic code fence stripping and JSON validation (`output_format: json|text`)
@@ -76,6 +76,7 @@ Technical reference documentation:
 For contributors and developers:
 
 - [Architecture](development/architecture.md) - Hexagonal architecture overview
+- [Creating an Agent Provider](development/creating-agent-provider.md) - Provider implementation guide, including CLI hooks and MCP proxy integration patterns
 - [Plugin Event Architecture](development/plugin-event-architecture.md) - EventBus, gRPC event adapter, and wiring design
 - [Project Structure](development/project-structure.md) - Codebase organization
 - [Code Quality](development/code-quality.md) - Linters, formatters, and quality tooling

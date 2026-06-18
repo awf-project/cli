@@ -294,15 +294,16 @@ OperationSchema{
 
 ## Supported Providers
 
-MCP Proxy works with all six AWF agent providers:
+MCP Proxy works with all AWF agent providers:
 
 | Provider | Mechanism | Interception Mode | Notes |
 |----------|-----------|-------------------|-------|
 | **claude** | `--mcp-config` flag | Full control (intercept_builtins:true enforced) | MCP-only isolation guaranteed |
-| **gemini** | `--mcp-server` flag | Full control | MCP-only isolation guaranteed |
+| **gemini** | `gemini mcp add` temporary registration | Full control | MCP-only isolation guaranteed |
 | **codex** | `-c 'mcp_servers.awf-proxy'` | Coexistence (⚠️ see below) | Native tools remain accessible; startup warning emitted |
-| **opencode** | `opencode mcp add` | Coexistence (⚠️ see below) | Native tools remain accessible; startup warning emitted |
+| **opencode** | Workspace `opencode.json` entry | Coexistence (⚠️ see below) | Native tools remain accessible; startup warning emitted |
 | **github_copilot** | `--additional-mcp-config @<file>` (+ `--disable-builtin-mcps` in intercept mode) | Coexistence (⚠️ see below) | Native tools remain accessible; startup warning emitted |
+| **mistral_vibe** | Temporary `VIBE_HOME/config.toml` with `[[mcp_servers]]` | Provider allowlist | Non-interactive tool workflows require `agent_profile: auto-approve` and `trust: true`; Vibe prefixes MCP tools as `<server>_<tool>` |
 | **openai_compatible** | HTTP `tools[]` field | Full control | MCP tools injected in Chat Completions request |
 
 ### Codex, OpenCode & Copilot Coexistence Warning
@@ -319,6 +320,24 @@ Codex, OpenCode and GitHub Copilot CLIs cannot fully disable their native built-
 3. Adds system prompt mitigation ("Use only MCP tools, never built-in tools")
 
 **If you need strict MCP-only isolation**, use `claude` or `openai_compatible` instead.
+
+### Mistral Vibe Tool Names and Permissions
+
+Mistral Vibe publishes MCP tools with the server alias prefixed to the remote tool name. AWF registers the server as `awf-proxy`, so a plugin tool exposed by AWF as `awf-plugin-time_time` is visible to Vibe as:
+
+```text
+awf-proxy_awf-plugin-time_time
+```
+
+For non-interactive workflows that expect Vibe to call tools, set:
+
+```yaml
+options:
+  agent_profile: auto-approve
+  trust: true
+```
+
+Without those options, Vibe may discover the MCP tool but refuse execution with `Tool execution not permitted`.
 
 ## Validation
 

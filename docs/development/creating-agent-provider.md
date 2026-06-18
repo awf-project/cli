@@ -835,7 +835,7 @@ CLI tools may output NUL bytes (`0x00`) that break `json.Unmarshal`. Sanitize be
 ```go
 func (p *MyProviderProvider) parseMyProviderDisplayEvents(line []byte) []DisplayEvent {
     // Escape NUL bytes to valid JSON unicode sequences
-    sanitized := bytes.ReplaceAll(line, []byte{0x00}, []byte(` `))
+    sanitized := bytes.ReplaceAll(line, []byte{0x00}, []byte(`\u0000`))
 
     var evt struct { /* ... */ }
     if err := json.Unmarshal(sanitized, &evt); err != nil {
@@ -916,9 +916,9 @@ mcpInjector func(
 
 The base layer calls `mcpInjector` only when `cfg != nil && cfg.Enable && hooks.mcpInjector != nil`. Both `execute()` and `executeConversation()` invoke it on the same args — there is no separate hook for conversation.
 
-### Four integration patterns
+### Five integration patterns
 
-Four distinct strategies exist in the codebase, dictated by what each CLI supports. Pick the one matching your CLI's MCP API surface.
+Five distinct strategies exist in the codebase, dictated by what each CLI supports. Pick the one matching your CLI's MCP API surface. Do not infer support from another provider: verify the target CLI's `--help`, config discovery rules, tool naming, and non-interactive approval behavior.
 
 #### Pattern A: Wrapper config file (Claude)
 
@@ -1046,6 +1046,49 @@ func (p *CodexProvider) codexMCPInjector(_ context.Context, args []string, cfg *
 }
 ```
 
+#### Pattern E: Temporary CLI home/config via environment override (Mistral Vibe)
+
+Use when the CLI has no per-run MCP flag and no reliable `mcp add` subcommand, but reads a user-level config file from a home directory controlled by an environment variable. Mistral Vibe is the reference implementation: AWF creates a temporary `VIBE_HOME`, writes `config.toml` containing an `[[mcp_servers]]` stdio entry, copies secrets such as `.env`, launches `vibe` with `VIBE_HOME=<tmp>`, and deletes the temporary home in cleanup.
+
+This pattern needs two pieces:
+
+1. A provider environment overlay. `baseCLIProvider` reads an internal environment option and calls `ExecCLIExecutor.RunWithEnv`. Do not shell-prefix the command with `env`; keep execution direct so argument escaping and process-group cancellation stay consistent.
+2. A sanitized config copy. If the user's existing config is copied, remove any existing `mcp_servers` table or assignment before appending AWF's entry. TOML does not allow mutating a namespace after it has been defined in an incompatible form.
+
+```go
+func (p *MyProviderProvider) myProviderMCPInjector(_ context.Context, args []string, cfg *workflow.MCPProxyConfig,
+    mcpConfigPath string, options map[string]any) (
+    newArgs []string, newOptions map[string]any, cleanup func() error, err error) {
+
+    if cfg == nil {
+        return args, options, noopMCPCleanup, nil
+    }
+
+    cliHome, cleanup, err := writeMyProviderMCPHome(mcpConfigPath)
+    if err != nil {
+        return nil, options, noopMCPCleanup, err
+    }
+
+    newArgs = make([]string, len(args), len(args)+8)
+    copy(newArgs, args)
+    for _, toolName := range myProviderAllowedMCPTools(cfg) {
+        newArgs = append(newArgs, "--enabled-tools", toolName)
+    }
+
+    newOpts := make(map[string]any, len(options)+1)
+    for k, v := range options {
+        newOpts[k] = v
+    }
+    newOpts[cliProviderEnvOptionKey] = map[string]string{"MY_PROVIDER_HOME": cliHome}
+
+    return newArgs, newOpts, cleanup, nil
+}
+```
+
+**Tool names may be provider-specific.** Vibe publishes MCP tools as `<server-alias>_<remote-tool-name>`. AWF's plugin tools are already named `<plugin>_<operation>`, so a Vibe workflow with server alias `awf-proxy` must call `awf-proxy_awf-plugin-time_time`, not `awf-plugin-time_time`. Document and test the provider's published names with a real plugin-tool workflow.
+
+**Non-interactive permission mode matters.** Some CLIs discover MCP tools but still refuse to execute them unless an approval callback or auto-approval profile is active. For Mistral Vibe, real non-interactive MCP workflows require `agent_profile: auto-approve` and `trust: true`; otherwise the model may return `Tool execution not permitted` even though MCP injection is correct. Add a provider-specific workflow fixture covering this path.
+
 ### HTTP providers
 
 `OpenAICompatibleProvider` intentionally **does not** implement `mcpInjector`. MCP tools are delivered in-process via `ports.ToolRouter` and injected as `tools[]` in the Chat Completions request payload. See [Non-CLI Provider (HTTP API)](#non-cli-provider-http-api) for details. The absence of an `mcpInjector` on the HTTP provider is the documented path, not a missing implementation.
@@ -1083,6 +1126,7 @@ Defined in the `agents` package; reuse instead of reinventing:
 | `randShortID(n int) string` | Crypto-random hex (length `2*n`). Use `randShortID(8)` to generate a 16-char suffix unique enough to prevent concurrent-run collisions. |
 | `mcpServeCommand(configPath string) []string` | Returns `[<resolved-awf-bin>, "mcp-serve", "--config=" + configPath]` — the exact argv to invoke the local MCP server. |
 | `resolvedExecutable() string` | Symlink-resolved absolute path to the current AWF binary, cached after first call. Use whenever you must capture a stable path for the MCP server child process. |
+| `cliProviderEnvOptionKey` | Internal options-map key used by provider injectors that need per-run environment overrides (Pattern E). Set it to `map[string]string`; the base layer will call `RunWithEnv`. |
 | `noopMCPCleanup() error { return nil }` | Default cleanup for nil-config or no-side-effect injectors. |
 
 ### Wiring the hook
@@ -1110,7 +1154,7 @@ func (p *MyProviderProvider) newBase() *baseCLIProvider {
 - **Cleanup name consistency** (Pattern B/C). The name passed to "remove" equals the name passed to "add", proving each run owns exactly one registration and never touches another.
 - **Concurrency** (Pattern C). N goroutines each adding a uniquely-named entry → all entries present; N cleanups → file/state restored to pre-test condition.
 
-Reference test files: `claude_provider_mcp_test.go`, `gemini_provider_mcp_test.go`, `codex_provider_mcp_test.go`, `opencode_provider_mcp_test.go`, `opencode_workspace_config_test.go`.
+Reference test files: `claude_provider_mcp_test.go`, `gemini_provider_mcp_test.go`, `codex_provider_mcp_test.go`, `opencode_provider_mcp_test.go`, `opencode_workspace_config_test.go`, `mistral_vibe_provider_unit_test.go`.
 
 ## Existing Providers Reference
 
@@ -1121,6 +1165,7 @@ Reference test files: `claude_provider_mcp_test.go`, `gemini_provider_mcp_test.g
 | Codex | `codex` | `codex` | `thread.started` | `thread_id` | `resume ID` (subcommand) | Inlined in first turn |
 | Copilot | `copilot` | `github_copilot` | `result` | `sessionId` (camelCase) | `--resume=ID` | Inlined in first turn |
 | OpenCode | `opencode` | `opencode` | `step_start` | `sessionID` | `-s ID` / `-c` (fallback) | Inlined in first turn |
+| Mistral Vibe | `vibe` | `mistral_vibe` | unsupported | N/A | unsupported | Inlined in first turn |
 | OpenAI-Compatible | HTTP API | `openai_compatible` | API response | N/A | Messages array | `system` role message |
 
 ### MCP proxy support per provider
@@ -1130,8 +1175,9 @@ Reference test files: `claude_provider_mcp_test.go`, `gemini_provider_mcp_test.g
 | Claude | `claudeMCPInjector` | Wrapper file + `--mcp-config` (Pattern A) | Yes (`--tools "" --strict-mcp-config`) |
 | Gemini | `geminiMCPInjector` | `gemini mcp add` subcommand (Pattern B) | Yes (`--allowed-mcp-server-names` + `--policy`) |
 | Codex | `codexMCPInjector` | Inline `-c mcp_servers.*` (Pattern D) | Coexistence only (`-s read-only` best-effort) |
-| Copilot | _not implemented_ | — | — |
+| Copilot | `copilotMCPInjector` | Wrapper file + `--additional-mcp-config @<file>` (Pattern A variant) | Coexistence only (`--disable-builtin-mcps` best-effort) |
 | OpenCode | `opencodeMCPInjector` | Workspace `./opencode.json` (Pattern C) | Coexistence only |
+| Mistral Vibe | `mistralVibeMCPInjector` | Temporary `VIBE_HOME/config.toml` (Pattern E) | Tool allowlist + auto-approve/trust required for non-interactive runs |
 | OpenAI-Compatible | _intentional no-op_ | In-process `ToolRouter` + HTTP `tools[]` | Yes |
 
 ## Non-CLI Provider (HTTP API)
@@ -1298,6 +1344,10 @@ Use `OpenAICompatibleProvider` as your reference implementation.
 - [ ] Cleanup removes only this run's registration — never touches entries from concurrent AWF processes
 - [ ] When `cfg.InterceptBuiltins == true` and the CLI cannot disable native tools: emit a coexistence `WARN` log AND prefix `system_prompt` with `"Use only MCP tools, never built-in tools. "` (cloned options map)
 - [ ] When `cfg.InterceptBuiltins == true` and the CLI CAN disable natives: append the appropriate strict-mode flag (`--strict-mcp-config`, `--allowed-mcp-server-names`, etc.)
+- [ ] If the CLI discovers MCP from a config file, verify whether config is per-run, workspace-global, or user-global; never mutate user-global config without a cleanup path
+- [ ] If using an environment override (Pattern E), copy secrets/config selectively, sanitize existing MCP entries before appending AWF's server, set `cliProviderEnvOptionKey`, and test cleanup removes the temporary home
+- [ ] Verify the provider's published MCP tool names; if it prefixes tools with the server alias, update workflow fixtures and docs to use the published name
+- [ ] Verify non-interactive permission behavior with a real plugin tool; add required provider options such as auto-approve/trust to fixtures
 - [ ] Provider row added to "Supported Providers" table in `docs/user-guide/mcp-proxy.md`
 - [ ] Provider row added to "MCP proxy support per provider" table in this document
 
@@ -1316,6 +1366,7 @@ Use `OpenAICompatibleProvider` as your reference implementation.
   - [ ] Cleanup idempotency (second call is no-op)
   - [ ] Cleanup name consistency (Pattern B/C: remove uses same name as add)
   - [ ] Concurrent safety with `errgroup` (Pattern C: N parallel adds + N parallel cleanups)
+  - [ ] Config sanitization and environment overlay (Pattern E)
 - [ ] End-to-end workflow: from a clean state (no leftover config / registration), `awf run test-mcp-proxy-<provider>-plugin-tools` must complete with status `success` AND leave no orphan files / registrations behind
 
 ### Final verification

@@ -117,6 +117,26 @@ func WithCopilotTokenizer(tok ports.Tokenizer) CopilotProviderOption {
 	}
 }
 
+type MistralVibeProviderOption func(*MistralVibeProvider)
+
+func WithMistralVibeExecutor(executor ports.CLIExecutor) MistralVibeProviderOption {
+	return func(p *MistralVibeProvider) {
+		p.executor = executor
+	}
+}
+
+func WithMistralVibeLogger(l ports.Logger) MistralVibeProviderOption {
+	return func(p *MistralVibeProvider) {
+		p.logger = l
+	}
+}
+
+func WithMistralVibeTokenizer(tok ports.Tokenizer) MistralVibeProviderOption {
+	return func(p *MistralVibeProvider) {
+		p.tokenizer = tok
+	}
+}
+
 type OpenAICompatibleProviderOption func(*OpenAICompatibleProvider)
 
 func WithHTTPClient(client *httpx.Client) OpenAICompatibleProviderOption {

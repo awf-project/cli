@@ -455,7 +455,7 @@ For **automated cross-step session resume** (no stdin loop), use `mode: single` 
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `provider` | string | Yes | Agent provider: `claude`, `codex`, `gemini`, `opencode`, `openai_compatible` |
+| `provider` | string | Yes | Agent provider: `claude`, `codex`, `gemini`, `github_copilot`, `mistral_vibe`, `opencode`, `openai_compatible` |
 | `mode` | string | No | `single` (default) or `conversation` (interactive user-driven loop) |
 | `prompt` | string | Yes* | Prompt template (supports `{{.inputs.*}}` and `{{.states.*}}` interpolation); in `mode: conversation` this serves as the first user message |
 | `prompt_file` | string | No* | Path to external prompt template file (mutually exclusive with `prompt`; not supported in `mode: conversation`) |
@@ -590,10 +590,12 @@ See [Agent Steps](agent-steps.md#mcp-proxy) for detailed examples and migration 
 | `claude` | `claude` CLI | Multi-turn (session resume via `-r`) | Anthropic Claude CLI |
 | `codex` | `codex` CLI | Multi-turn (session resume via `resume`) | OpenAI Codex CLI |
 | `gemini` | `gemini` CLI | Multi-turn (session resume via `--resume`) | Google Gemini CLI |
+| `github_copilot` | `copilot` CLI | Multi-turn when session metadata is available | GitHub Copilot CLI |
+| `mistral_vibe` | `vibe` CLI | Stateless fallback; no fabricated session IDs | Mistral Vibe CLI |
 | `opencode` | `opencode` CLI | Multi-turn (session resume via `-s`) | OpenCode CLI |
 | `openai_compatible` | HTTP API | Full multi-turn (messages array) | Chat Completions API (OpenAI, Ollama, vLLM, Groq) |
 
-> **Conversation mode and providers:** All providers support multi-turn conversations. CLI-based providers (`claude`, `codex`, `gemini`, `opencode`) use native session resume flags to maintain context across turns — session IDs are extracted from CLI output after the first turn and passed on subsequent turns. If session ID extraction fails, the provider falls back to stateless mode gracefully. `openai_compatible` maintains full conversation history via the Chat Completions API messages array.
+> **Conversation mode and providers:** All providers support multi-turn conversations. CLI-based providers with stable session identifiers (`claude`, `codex`, `gemini`, `github_copilot`, `opencode`) use native session resume flags or metadata to maintain context across turns. If session ID extraction fails, the provider falls back to stateless mode gracefully. `mistral_vibe` currently uses transcript-in-prompt fallback unless Vibe output exposes a stable session ID. `openai_compatible` maintains full conversation history via the Chat Completions API messages array.
 
 ### Agent Output
 
