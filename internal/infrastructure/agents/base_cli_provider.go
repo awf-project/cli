@@ -22,6 +22,12 @@ var (
 	execPath     string
 )
 
+const cliProviderEnvOptionKey = "__awf_cli_provider_env"
+
+type cliEnvExecutor interface {
+	RunWithEnv(ctx context.Context, name string, env map[string]string, stdoutW, stderrW io.Writer, args ...string) (stdout, stderr []byte, err error)
+}
+
 func resolvedExecutable() string {
 	execPathOnce.Do(func() {
 		exe, err := os.Executable()
@@ -41,6 +47,32 @@ func resolvedExecutable() string {
 
 func mcpServeCommand(configPath string) []string {
 	return []string{resolvedExecutable(), "mcp-serve", "--config=" + configPath}
+}
+
+func cliProviderEnv(options map[string]any) (map[string]string, error) {
+	if options == nil {
+		return nil, nil
+	}
+	raw, ok := options[cliProviderEnvOptionKey]
+	if !ok || raw == nil {
+		return nil, nil
+	}
+	env, ok := raw.(map[string]string)
+	if !ok {
+		return nil, fmt.Errorf("invalid provider environment option type %T", raw)
+	}
+	return env, nil
+}
+
+func runCLIWithProviderEnv(ctx context.Context, executor ports.CLIExecutor, binary string, env map[string]string, stdout, stderr io.Writer, args ...string) (stdoutBytes, stderrBytes []byte, err error) {
+	if len(env) == 0 {
+		return executor.Run(ctx, binary, stdout, stderr, args...)
+	}
+	envExec, ok := executor.(cliEnvExecutor)
+	if !ok {
+		return nil, nil, fmt.Errorf("CLI executor does not support provider environment overrides")
+	}
+	return envExec.RunWithEnv(ctx, binary, env, stdout, stderr, args...)
 }
 
 type fallbackTokenizer struct{}
@@ -204,7 +236,11 @@ func (b *baseCLIProvider) execute(ctx context.Context, prompt string, options ma
 
 	rawDisplay := wantsRawDisplay(options)
 	wrappedStdout, filter := b.applyStreamFilter(ctx, stdout, rawDisplay)
-	stdoutBytes, stderrBytes, err := b.executor.Run(ctx, b.binary, wrappedStdout, stderr, args...)
+	env, envErr := cliProviderEnv(options)
+	if envErr != nil {
+		return nil, "", envErr
+	}
+	stdoutBytes, stderrBytes, err := runCLIWithProviderEnv(ctx, b.executor, b.binary, env, wrappedStdout, stderr, args...)
 	completedAt := time.Now()
 	if filter != nil {
 		_ = filter.Flush()
@@ -314,7 +350,11 @@ func (b *baseCLIProvider) executeConversation(ctx context.Context, state *workfl
 
 	rawDisplay := wantsRawDisplay(options)
 	wrappedStdout, filter := b.applyStreamFilter(ctx, stdout, rawDisplay)
-	stdoutBytes, stderrBytes, err := b.executor.Run(ctx, b.binary, wrappedStdout, stderr, args...)
+	env, envErr := cliProviderEnv(options)
+	if envErr != nil {
+		return nil, "", envErr
+	}
+	stdoutBytes, stderrBytes, err := runCLIWithProviderEnv(ctx, b.executor, b.binary, env, wrappedStdout, stderr, args...)
 	completedAt := time.Now()
 	if filter != nil {
 		_ = filter.Flush()

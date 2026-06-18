@@ -2,7 +2,7 @@
 title: "Agent Steps Guide"
 ---
 
-Invoke AI agents (Claude, Codex, Gemini, GitHub Copilot, OpenCode, OpenAI-Compatible) in your workflows with structured prompts and response parsing.
+Invoke AI agents (Claude, Codex, Gemini, GitHub Copilot, Mistral Vibe, OpenCode, OpenAI-Compatible) in your workflows with structured prompts and response parsing.
 
 ## Overview
 
@@ -158,6 +158,55 @@ GitHub Copilot CLI supports authentication via:
 - `GH_TOKEN` environment variable
 - `GITHUB_TOKEN` environment variable (classic PATs not supported)
 
+### Mistral Vibe
+
+Requires the `vibe` CLI tool installed and configured.
+
+```yaml
+plan_changes:
+  type: agent
+  provider: mistral_vibe
+  prompt: "Plan the refactor for {{.inputs.component}}"
+  options:
+    agent_profile: plan
+    output_format: text
+    max_turns: 4
+    enabled_tools:
+      - read
+      - grep
+  timeout: 120
+  on_success: next
+```
+
+**Provider-Specific Options:**
+- `agent_profile`: Vibe agent profile passed via `--agent` (for example `default`, `plan`, `auto-approve`)
+- `output_format`: Output mode — one of `text`, `json`, or `streaming`
+- `max_turns`: Maximum agent turns (positive integer, maps to `--max-turns`)
+- `max_tokens`: Maximum completion tokens (positive integer, maps to `--max-tokens`)
+- `max_price`: Maximum spend cap (non-negative number, maps to `--max-price`)
+- `enabled_tools`: List of tool names; AWF emits one `--enabled-tools` flag per entry without shell concatenation
+- `workdir`: Working directory for the Vibe session (maps to `--workdir`)
+- `add_dirs`: Additional directories Vibe may access; AWF emits one `--add-dir` flag per entry
+- `trust`: Trust the workspace without prompting (boolean, maps to `--trust`)
+- `dangerously_skip_permissions`: Explicitly switch to `--agent auto-approve`. AWF rejects conflicting `agent_profile` values.
+
+**Installation and Authentication:**
+- Install with the official installer: `curl -LsSf https://mistral.ai/vibe/install.sh | bash`
+- Alternative install methods: `uv tool install mistral-vibe` or `pip install mistral-vibe`
+- Run `vibe` once in your project root to launch the setup wizard and create `~/.vibe/config.toml`
+- Provide credentials through the setup wizard, `vibe --setup`, or `MISTRAL_API_KEY`
+
+**Safety Notes:**
+- AWF always passes an explicit Vibe agent profile. If you do not set `agent_profile`, AWF uses `--agent default` rather than relying on the CLI's ambient defaults.
+- `dangerously_skip_permissions: true` is the only AWF path that enables `auto-approve`; use it only in trusted automation or isolated environments.
+- `workdir` and `add_dirs` are path-cleaned before execution and reject traversal segments such as `..`.
+
+**Output Handling:**
+AWF extracts clean assistant text from Vibe text, JSON, and NDJSON/streaming output. If the extracted assistant text is valid JSON, `state.Response` is populated automatically. Malformed provider envelopes are not exposed as normal assistant output.
+
+**Conversation Behavior:**
+Vibe session resume uses transcript-in-prompt fallback unless Vibe output exposes a stable session ID. AWF does not read Vibe's global recent-session state or fabricate session IDs.
+
 ### OpenCode
 
 Requires the `opencode` CLI tool installed.
@@ -276,7 +325,7 @@ step validation error: model must start with "gpt-", "codex-", or match o-series
 
 ### GitHub Copilot, OpenCode & OpenAI-Compatible
 
-No model validation for `github_copilot`, `opencode`, or `openai_compatible` providers — these support arbitrary backend models.
+No model validation for `github_copilot`, `mistral_vibe`, `opencode`, or `openai_compatible` providers — these support arbitrary backend models or provider-managed profiles.
 
 ### When Validation Occurs
 
@@ -1291,10 +1340,10 @@ The `output_format` field controls how agent responses appear on the terminal (F
 | `text` (or omitted) | Human-readable filtered text | Filtered text in summary | Extracted assistant text |
 | `json` | Raw NDJSON (unfiltered) | Raw NDJSON (unfiltered) | Extracted assistant text (markdown code fences stripped) |
 
-**Output Parity Across All Providers (F103):** For CLI-based providers (Claude, Codex, Gemini, OpenCode), the system automatically extracts clean assistant text from NDJSON events and stores it in `state.Output`. Additionally:
+**Output Parity Across All Providers (F103):** For CLI-based providers (Claude, Codex, Gemini, GitHub Copilot, Mistral Vibe, OpenCode), the system automatically extracts clean assistant text from provider text, JSON, or streaming events and stores it in `state.Output`. Additionally:
 - `state.Response` is automatically populated when the output is valid JSON (heuristic, regardless of `output_format`)
 - Both `output_format: json` and omitted formats produce semantically equivalent output shapes across all providers
-- Codex now has feature parity with Claude, Gemini, and OpenCode for output handling
+- Codex, GitHub Copilot, Mistral Vibe, and OpenCode have feature parity with Claude and Gemini for output handling
 
 #### Streaming Mode (`--output streaming`)
 
@@ -1334,7 +1383,7 @@ Tool markers show:
 - **Interleaved order** — markers appear in the same source order as agent output
 - **Graceful degradation** — unknown tool names display as-is with no crash or error
 
-This works consistently across all 6 supported providers (Claude, Codex, Gemini, GitHub Copilot, OpenCode, OpenAI-Compatible). Verbose mode has no effect on `output_format: json` — raw NDJSON is always passed through unchanged.
+This works consistently across all 7 supported providers (Claude, Codex, Gemini, GitHub Copilot, Mistral Vibe, OpenCode, OpenAI-Compatible). Verbose mode has no effect on `output_format: json` — raw NDJSON is always passed through unchanged.
 
 #### Buffered Mode (`--output buffered`)
 
@@ -1524,7 +1573,7 @@ See [Workflow Syntax — Inline Error Shorthand](workflow-syntax.md#inline-error
 | Provider not found | CLI tool not installed | Install required CLI (e.g., `claude install`) |
 | Skill not found | Skill name doesn't match any directory in discovery paths | Check skill name and discovery directories (see [Agent Skills](#agent-skills)) |
 | Timeout | Agent response took too long | Increase timeout or reduce prompt complexity |
-| Invalid provider | Unsupported provider | Use `claude`, `codex`, `gemini`, `opencode`, or `openai_compatible` |
+| Invalid provider | Unsupported provider | Use `claude`, `codex`, `gemini`, `github_copilot`, `mistral_vibe`, `opencode`, or `openai_compatible` |
 | Command failed | Provider CLI returned error | Check provider configuration and logs |
 
 ### Debugging
@@ -1587,7 +1636,7 @@ log_tokens:
 
 **How it works:**
 
-All 6 providers extract **real token counts** from their CLI/API JSON output when available. `TokensEstimated` is `false` in this case. If the provider output does not contain token data, AWF falls back to an approximation (`len(output)/4`) and sets `TokensEstimated` to `true`.
+All 7 providers extract **real token counts** from their CLI/API JSON output when available. `TokensEstimated` is `false` in this case. If the provider output does not contain token data, AWF falls back to an approximation (`len(output)/4`) and sets `TokensEstimated` to `true`.
 
 | Provider | Source of real tokens | Fields available |
 |----------|----------------------|-----------------|
@@ -1595,6 +1644,7 @@ All 6 providers extract **real token counts** from their CLI/API JSON output whe
 | Gemini | `result` event `stats` field | input, output, total |
 | Codex | `turn.completed` event `usage` field | input, output |
 | Copilot | `assistant.message` event | output only |
+| Mistral Vibe | Tokenizer approximation unless provider output includes usable token data | estimated total |
 | OpenCode | `step_finish` event `part.tokens` field | input, output, total, cost |
 | OpenAI-Compatible | API response `usage` field | input, output, total |
 

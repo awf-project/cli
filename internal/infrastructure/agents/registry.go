@@ -83,12 +83,12 @@ func (r *AgentRegistry) RegisterDefaults(cmdExec ports.CommandExecutor) error {
 		NewOpenAICompatibleProvider(),
 		NewOpenCodeProvider(),
 		NewCopilotProvider(),
+		NewMistralVibeProvider(),
 	}
 
 	var errs []error
 	for _, provider := range defaults {
 		if err := r.Register(provider); err != nil {
-			// Continue registering other providers even if one fails
 			errs = append(errs, fmt.Errorf("failed to register %s: %w", provider.Name(), err))
 		}
 	}

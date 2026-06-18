@@ -272,6 +272,52 @@ states:
 	assert.Contains(t, output, "What is the capital of France?", "should resolve {{inputs.question}}")
 }
 
+func TestRunCommand_DryRun_AgentStep_MistralVibe(t *testing.T) {
+	tmpDir := setupInitTestDir(t)
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("MISTRAL_API_KEY", "")
+
+	workflowContent := `name: agent-mistral-vibe
+version: "1.0.0"
+inputs:
+  - name: task
+    type: string
+    required: true
+states:
+  initial: plan
+  plan:
+    type: agent
+    provider: mistral_vibe
+    prompt: "Plan this change: {{inputs.task}}"
+    on_success: done
+  done:
+    type: terminal
+`
+	createTestWorkflow(t, tmpDir, "agent-mistral-vibe.yaml", workflowContent)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{
+		"--storage=" + tmpDir,
+		"run",
+		"agent-mistral-vibe",
+		"--input=task=add default provider wiring",
+		"--dry-run",
+	})
+
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	output := out.String()
+	assert.Contains(t, output, "Dry Run")
+	assert.Contains(t, output, "plan")
+	assert.Contains(t, output, "agent")
+	assert.Contains(t, output, "mistral_vibe")
+	assert.Contains(t, output, "Plan this change: add default provider wiring")
+}
+
 func TestRunCommand_DryRun_AgentStep_CLICommand(t *testing.T) {
 	tmpDir := setupInitTestDir(t)
 

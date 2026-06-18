@@ -27,7 +27,17 @@ func NewExecCLIExecutor() *ExecCLIExecutor {
 }
 
 func (e *ExecCLIExecutor) Run(ctx context.Context, name string, stdoutW, stderrW io.Writer, args ...string) (stdout, stderr []byte, err error) {
+	return e.RunWithEnv(ctx, name, nil, stdoutW, stderrW, args...)
+}
+
+func (e *ExecCLIExecutor) RunWithEnv(ctx context.Context, name string, env map[string]string, stdoutW, stderrW io.Writer, args ...string) (stdout, stderr []byte, err error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	if len(env) > 0 {
+		cmd.Env = os.Environ()
+		for key, value := range env {
+			cmd.Env = append(cmd.Env, key+"="+value)
+		}
+	}
 
 	// Process group management for clean termination
 	// Setpgid: true creates a new process group with the child as leader

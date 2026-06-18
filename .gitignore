@@ -52,6 +52,7 @@ site/node_modules/
 
 # AI assistant local config (per-developer, do not commit)
 .gemini/
+.codex/
 
 # Built plugin binaries (compiled artifacts of examples/plugins/*)
 examples/plugins/*/awf-plugin-*

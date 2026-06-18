@@ -3,14 +3,14 @@
 [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](LICENSE)
 
-A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, GitHub Copilot, OpenAI-Compatible APIs) through YAML-configured workflows with state machine execution.
+A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, GitHub Copilot, Mistral Vibe, OpenCode, OpenAI-Compatible APIs) through YAML-configured workflows with state machine execution.
 
 ## Features
 
 - **State Machine Execution** - Define workflows as state machines with conditional transitions based on exit codes, command output, or custom expressions
 - **Inline Error Handling** - Specify error messages and exit codes directly on steps without creating separate terminal states
-- **Agent Steps** - Invoke AI agents via CLI tools (Claude, Codex, Gemini, GitHub Copilot) or direct HTTP (OpenAI, Ollama, vLLM, Groq) with prompt templates, response parsing, and accurate token tracking
-- **Output Formatting for Agent Steps** - Automatically strip markdown code fences and validate JSON output; human-readable streaming display controlled by `output_format` field (text vs raw NDJSON); unified display-event abstraction across all 6 providers with optional verbose mode showing tool-use markers (`[tool: Name(Arg)]`); automatic `state.Response` population for structured JSON output (heuristic across all providers)
+- **Agent Steps** - Invoke AI agents via CLI tools (Claude, Codex, Gemini, GitHub Copilot, Mistral Vibe, OpenCode) or direct HTTP (OpenAI, Ollama, vLLM, Groq) with prompt templates, response parsing, and accurate token tracking
+- **Output Formatting for Agent Steps** - Automatically strip markdown code fences and validate JSON output; human-readable streaming display controlled by `output_format` field (text vs raw NDJSON); unified display-event abstraction across all 7 providers with optional verbose mode showing tool-use markers (`[tool: Name(Arg)]`); automatic `state.Response` population for structured JSON output (heuristic across all providers)
 - **Agent Skills** - Inject deterministic domain knowledge into agent steps via `skills:` declarations in workflow YAML; filesystem-based multi-directory discovery (project `.awf/skills/`, `.agents/skills/`, `.claude/skills/`, XDG global) with priority ordering; SKILL.md frontmatter stripping and agentskills.io-compliant `<skill_content>` structured wrapping with bundled resource enumeration; validated by `awf validate`
 - **Agent Roles** - Inject reusable personas into agent steps via `role:` field referencing AGENTS.md files; filesystem-based multi-directory discovery in a dedicated `roles/` namespace (project `.awf/roles/`, `.agents/roles/`, `$XDG_CONFIG_HOME/awf/roles/`, `~/.agents/roles/`) with priority ordering and `AWF_ROLES_PATH` exclusive override; AGENTS.md frontmatter stripping and system prompt injection with optional composition via inline `system_prompt` field; validated by `awf validate`
 - **External Prompt Files** - Load agent prompts from `.md` files with full template interpolation, helper functions, and local override support

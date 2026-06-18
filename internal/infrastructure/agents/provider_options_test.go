@@ -325,6 +325,71 @@ func TestCopilotProvider_NewWithOptions_HappyPath(t *testing.T) {
 	}
 }
 
+func TestMistralVibeProviderOptionTypeLeftUnchangedInOptionsGo(t *testing.T) {
+	called := false
+	var option MistralVibeProviderOption = func(*MistralVibeProvider) {
+		called = true
+	}
+
+	provider := NewMistralVibeProviderWithOptions(option)
+
+	require.NotNil(t, provider)
+	assert.True(t, called)
+}
+
+func TestMistralVibeProvider_NewWithOptions(t *testing.T) {
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte("Mistral Vibe response"), []byte(""))
+
+	provider := NewMistralVibeProviderWithOptions(WithMistralVibeExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "Write a release note", nil, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "mistral_vibe", result.Provider)
+	assert.Contains(t, result.Output, "Mistral Vibe response")
+
+	calls := mockExec.GetCalls()
+	require.Len(t, calls, 1)
+	assert.Equal(t, "vibe", calls[0].Name)
+	assert.Contains(t, calls[0].Args, "--prompt")
+	assert.Contains(t, calls[0].Args, "Write a release note")
+}
+
+func TestWithMistralVibeLoggerInjectsLoggerWithoutChangingDefaultLoggerBehaviorWhenNilIsNotSupplied(t *testing.T) {
+	defaultProvider := NewMistralVibeProvider()
+	require.NotNil(t, defaultProvider)
+	assert.NotNil(t, defaultProvider.logger)
+
+	l := mocks.NewMockLogger()
+	provider := NewMistralVibeProviderWithOptions(WithMistralVibeLogger(l))
+
+	require.NotNil(t, provider)
+	assert.Equal(t, ports.Logger(l), provider.logger)
+}
+
+func TestNewMistralVibeProviderWithOptionsAppliesOptionsInOrderAndRefreshesBaseProvider(t *testing.T) {
+	firstExec := mocks.NewMockCLIExecutor()
+	firstExec.SetOutput([]byte("first executor"), []byte(""))
+	lastExec := mocks.NewMockCLIExecutor()
+	lastExec.SetOutput([]byte("last executor"), []byte(""))
+	tok := countingTokenizer{count: 42}
+
+	provider := NewMistralVibeProviderWithOptions(
+		WithMistralVibeExecutor(firstExec),
+		WithMistralVibeExecutor(lastExec),
+		WithMistralVibeTokenizer(tok),
+	)
+
+	result, err := provider.Execute(context.Background(), "prompt", nil, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Contains(t, result.Output, "last executor")
+	assert.Equal(t, 42, result.Tokens)
+	assert.Empty(t, firstExec.GetCalls())
+	require.Len(t, lastExec.GetCalls(), 1)
+}
+
 func TestProviderOptions_EdgeCases(t *testing.T) {
 	t.Run("nil executor option panics are prevented", func(t *testing.T) {
 		// Note: Passing nil executor should work but will cause runtime issues later
@@ -346,6 +411,10 @@ func TestProviderOptions_EdgeCases(t *testing.T) {
 		// OpenCode
 		opencodeProvider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(nil))
 		assert.NotNil(t, opencodeProvider)
+
+		// Mistral Vibe
+		mistralVibeProvider := NewMistralVibeProviderWithOptions(WithMistralVibeExecutor(nil))
+		assert.NotNil(t, mistralVibeProvider)
 	})
 
 	t.Run("empty options slice behaves like no options", func(t *testing.T) {
@@ -397,6 +466,20 @@ func TestProviderOptions_EdgeCases(t *testing.T) {
 		assert.NotNil(t, opencodeProvider)
 		assert.NotNil(t, opencodeProvider.executor)
 	})
+}
+
+func TestWithMistralVibeNilOptionDependenciesFollowExistingProviderOptionSemantics(t *testing.T) {
+	provider := NewMistralVibeProviderWithOptions(
+		WithMistralVibeExecutor(nil),
+		WithMistralVibeLogger(nil),
+		WithMistralVibeTokenizer(nil),
+	)
+
+	require.NotNil(t, provider)
+	assert.Nil(t, provider.executor)
+	assert.Nil(t, provider.logger)
+	assert.Nil(t, provider.tokenizer)
+	assert.NotNil(t, provider.base)
 }
 
 func TestProviderOptions_ErrorHandling(t *testing.T) {
@@ -504,6 +587,23 @@ func TestWithGeminiTokenizer(t *testing.T) {
 	provider := NewGeminiProviderWithOptions(WithGeminiTokenizer(tok))
 	require.NotNil(t, provider)
 	assert.Equal(t, ports.Tokenizer(tok), provider.base.tokenizer)
+}
+
+func TestWithMistralVibeTokenizer(t *testing.T) {
+	const expectedTokens = 88
+	tok := countingTokenizer{count: expectedTokens}
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte("mistral vibe extracted text here"), []byte(""))
+
+	provider := NewMistralVibeProviderWithOptions(
+		WithMistralVibeExecutor(mockExec),
+		WithMistralVibeTokenizer(tok),
+	)
+
+	result, err := provider.Execute(context.Background(), "prompt", nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, ports.Tokenizer(tok), provider.base.tokenizer)
+	assert.Equal(t, expectedTokens, result.Tokens)
 }
 
 // TestWithClaudeLogger verifies that WithClaudeLogger injects the logger into the
@@ -742,5 +842,24 @@ func TestProviderOptions_Integration(t *testing.T) {
 		calls := mockExec.GetCalls()
 		require.Len(t, calls, 1)
 		assert.Equal(t, "copilot", calls[0].Name)
+	})
+
+	t.Run("mistral vibe provider with mock executor executes successfully", func(t *testing.T) {
+		mockExec := mocks.NewMockCLIExecutor()
+		mockExec.SetOutput([]byte("Mistral Vibe integration response"), []byte(""))
+
+		provider := NewMistralVibeProviderWithOptions(WithMistralVibeExecutor(mockExec))
+		ctx := context.Background()
+
+		result, err := provider.Execute(ctx, "Draft a changelog", nil, nil, nil)
+
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		assert.Equal(t, "mistral_vibe", result.Provider)
+		assert.Contains(t, result.Output, "Mistral Vibe integration response")
+
+		calls := mockExec.GetCalls()
+		require.Len(t, calls, 1)
+		assert.Equal(t, "vibe", calls[0].Name)
 	})
 }
