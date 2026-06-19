@@ -53,6 +53,7 @@ import (
 // mockRunSession implements ports.RunSession for testing event loop behavior.
 type mockRunSession struct {
 	eventsChan <-chan ports.Event
+	responses  []ports.InputResponse
 }
 
 func (m *mockRunSession) ID() string {
@@ -64,6 +65,7 @@ func (m *mockRunSession) Events() <-chan ports.Event {
 }
 
 func (m *mockRunSession) Respond(r ports.InputResponse) error {
+	m.responses = append(m.responses, r)
 	return nil
 }
 
@@ -1198,6 +1200,33 @@ func TestTabMonitoring_ConversationTurnsFromFacadeEvents(t *testing.T) {
 
 	view = tab.View()
 	assert.Contains(t, view, "production", "the user's answer must appear in the conversation")
+}
+
+func TestTabMonitoring_InputRequiredFromFacadeShowsInputAndRespondsToSession(t *testing.T) {
+	tab := newMonitoringTab()
+	session := &mockRunSession{}
+	tab, _ = tab.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	tab, _ = tab.Update(ExecutionStartedMsg{ExecutionID: "clarifier", Session: session})
+
+	tab, cmd := tab.Update(facadeEventMsg{Event: ports.Event{
+		Kind:  ports.EventInputRequired,
+		RunID: "clarifier",
+		Payload: &ports.EnrichedInputRequest{
+			Prompt: "> ",
+		},
+	}})
+
+	require.Nil(t, cmd)
+	require.True(t, tab.InputActive(), "facade input request must display the conversation input box")
+	assert.Contains(t, tab.View(), "empty to end conversation", "input box must be rendered while awaiting user input")
+
+	tab.inputField.SetValue("production")
+	tab, cmd = tab.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	require.Nil(t, cmd)
+	require.False(t, tab.InputActive(), "submitting input should hide the input box")
+	require.Len(t, session.responses, 1)
+	assert.Equal(t, "production", session.responses[0].Value)
 }
 
 // --- End-to-end: AC gate TestMonitoringTab ---

@@ -23,6 +23,7 @@ type sseEventData struct {
 	Status string `json:"status,omitempty"`
 	Step   string `json:"step,omitempty"`
 	Error  string `json:"error,omitempty"`
+	Prompt string `json:"prompt,omitempty"`
 }
 
 func eventDataFromEvent(ev ports.Event) sseEventData { //nolint:gocritic // Event is the public facade value type
@@ -55,14 +56,17 @@ func eventDataFromEvent(ev ports.Event) sseEventData { //nolint:gocritic // Even
 				data.Status = "cancelled"
 			}
 		}
+	case ports.EventInputRequired:
+		if payload, ok := ev.Payload.(*ports.EnrichedInputRequest); ok && payload != nil {
+			data.Prompt = payload.Prompt
+		}
 	case ports.EventKindUnknown,
 		ports.EventRunStarted,
 		ports.EventRunCompleted,
 		ports.EventMessageUser,
 		ports.EventMessageAssistant,
 		ports.EventToolCall,
-		ports.EventToolResult,
-		ports.EventInputRequired:
+		ports.EventToolResult:
 	}
 
 	return data
