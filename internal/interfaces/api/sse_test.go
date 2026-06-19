@@ -131,6 +131,22 @@ func TestSSEStream_SentDataTypeIsRegistered(t *testing.T) {
 			"an unregistered type makes huma log 'unknown event type' and dump a stack on every frame", sentType)
 }
 
+func TestSSEEventDataFromEvent_InputRequiredIncludesPrompt(t *testing.T) {
+	data := eventDataFromEvent(ports.Event{
+		Seq:   7,
+		Kind:  ports.EventInputRequired,
+		RunID: "run-x",
+		Payload: &ports.EnrichedInputRequest{
+			Prompt: "> ",
+		},
+	})
+
+	assert.Equal(t, "input.required", data.Kind)
+	assert.Equal(t, "run-x", data.RunID)
+	assert.Equal(t, uint64(7), data.Seq)
+	assert.Equal(t, "> ", data.Prompt)
+}
+
 func TestHTTPSSE_StreamConsumesRunSessionEvents(t *testing.T) {
 	// Acceptance: A seeded execution must be tracked in the bridge so that the SSE
 	// stream endpoint can resolve it. The route must be registered (no 405).

@@ -120,6 +120,7 @@ type MonitoringTab struct {
 
 	// Conversation input and streaming display.
 	inputReader   *TUIInputReader
+	activeSession ports.RunSession
 	inputField    textinput.Model
 	inputActive   bool
 	convBuf       *strings.Builder
@@ -189,6 +190,7 @@ func (t MonitoringTab) Update(msg tea.Msg) (MonitoringTab, tea.Cmd) { //nolint:c
 		t.selectedIdx = 0
 		t.states = make(map[string]workflow.StepState)
 		t.finalStatus = "" // clear any previous run's outcome so terminal steps start pending
+		t.activeSession = msg.Session
 		t.agentStep = ""
 		t.autoScroll = true
 		t.showSpinner = false
@@ -203,10 +205,14 @@ func (t MonitoringTab) Update(msg tea.Msg) (MonitoringTab, tea.Cmd) { //nolint:c
 		// EventWorkflowCompleted/Failed event; this only clears the in-flight indicators.
 		t.ticking = false
 		t.showSpinner = false
+		t.activeSession = nil
 		return t, nil
 
 	case facadeEventMsg:
 		t.applyFacadeEvent(msg.Event)
+		if msg.Event.Kind == ports.EventInputRequired {
+			t.beginInputRequest()
+		}
 		return t, nil
 
 	case spinner.TickMsg:
@@ -218,31 +224,13 @@ func (t MonitoringTab) Update(msg tea.Msg) (MonitoringTab, tea.Cmd) { //nolint:c
 		return t, nil
 
 	case InputRequestedMsg:
-		t.inputActive = true
-		t.resizeInputField()
-		t.resizeViewport()
-		_ = t.inputField.Focus()
-		t.autoSelectRunning()
-		// Only append new turns during an active conversation; never restart
-		// tracking (convStart resets convTurnCount, duplicating user messages
-		// already rendered by convAppendUser).
-		if t.convStep != "" {
-			if state, ok := t.states[t.convStep]; ok && state.Conversation != nil {
-				t.convAppendNewTurns(state.Conversation)
-			}
-		} else if len(t.flatNodes) > 0 && t.selectedIdx >= 0 && t.selectedIdx < len(t.flatNodes) {
-			name := t.flatNodes[t.selectedIdx].Name
-			if state, ok := t.states[name]; ok && state.Conversation != nil {
-				t.convStart(name, state.Conversation)
-			}
-		}
-		t.convApplyToViewport()
+		t.beginInputRequest()
 		return t, nil
 
 	case tea.KeyPressMsg:
 		if t.inputActive {
 			switch {
-			case key.Matches(msg, keySelect) && t.inputReader != nil:
+			case key.Matches(msg, keySelect):
 				text := t.inputField.Value()
 				t.inputField.Reset()
 				t.inputActive = false
@@ -252,7 +240,13 @@ func (t MonitoringTab) Update(msg tea.Msg) (MonitoringTab, tea.Cmd) { //nolint:c
 					t.stream.Reset()
 				}
 				t.convApplyToViewport()
-				t.inputReader.Respond(text)
+				if t.activeSession != nil {
+					if err := t.activeSession.Respond(ports.InputResponse{Value: text}); err != nil {
+						return t, nil
+					}
+				} else if t.inputReader != nil {
+					t.inputReader.Respond(text)
+				}
 				return t, nil
 			case msg.Code == tea.KeyUp:
 				if t.selectedIdx > 0 {
@@ -376,11 +370,33 @@ func (t MonitoringTab) InputActive() bool { //nolint:gocritic // read-only
 	return t.inputActive
 }
 
+func (t *MonitoringTab) beginInputRequest() {
+	t.inputActive = true
+	t.resizeInputField()
+	t.resizeViewport()
+	_ = t.inputField.Focus()
+	t.autoSelectRunning()
+	// Only append new turns during an active conversation; never restart
+	// tracking (convStart resets convTurnCount, duplicating user messages
+	// already rendered by convAppendUser).
+	if t.convStep != "" {
+		if state, ok := t.states[t.convStep]; ok && state.Conversation != nil {
+			t.convAppendNewTurns(state.Conversation)
+		}
+	} else if len(t.flatNodes) > 0 && t.selectedIdx >= 0 && t.selectedIdx < len(t.flatNodes) {
+		name := t.flatNodes[t.selectedIdx].Name
+		if state, ok := t.states[name]; ok && state.Conversation != nil {
+			t.convStart(name, state.Conversation)
+		}
+	}
+	t.convApplyToViewport()
+}
+
 // View renders the monitoring tab.
 //
 //nolint:gocritic // Bubbletea convention: value receivers return a new model on each update
 func (t MonitoringTab) View() string {
-	if t.active == nil && t.wf == nil {
+	if t.active == nil && t.wf == nil && !t.inputActive {
 		return EmptyStateView("📡", "No active execution", "Launch a workflow from the Workflows tab.")
 	}
 

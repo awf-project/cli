@@ -33,7 +33,7 @@ states:
     mode: conversation
     prompt: "Hello"
     options:
-      model: sonnet
+      model: haiku
     on_success: done
   done:
     type: terminal
@@ -53,7 +53,7 @@ states:
     mode: conversation
     prompt: "Hello"
     options:
-      model: sonnet
+      model: haiku
     on_success: done
   done:
     type: terminal
@@ -78,7 +78,7 @@ states:
     system_prompt: "You are a helpful code reviewer"
     prompt: "Task: {{inputs.task}}"
     options:
-      model: sonnet
+      model: haiku
     on_success: done
   done:
     type: terminal
@@ -98,7 +98,7 @@ states:
     mode: conversation
     prompt: "Start conversation"
     options:
-      model: sonnet
+      model: haiku
     on_success: second_chat
   second_chat:
     type: agent
@@ -108,7 +108,7 @@ states:
     conversation:
       continue_from: first_chat
     options:
-      model: sonnet
+      model: haiku
     on_success: done
   done:
     type: terminal
@@ -135,7 +135,7 @@ states:
     mode: conversation
     prompt: "First conversation"
     options:
-      model: sonnet
+      model: haiku
     on_success: done
   chat_2:
     type: agent
@@ -143,7 +143,7 @@ states:
     mode: conversation
     prompt: "Second conversation"
     options:
-      model: sonnet
+      model: haiku
     on_success: done
   done:
     type: terminal
@@ -163,7 +163,7 @@ states:
     mode: conversation
     prompt: "Hello from single step"
     options:
-      model: sonnet
+      model: haiku
     on_success: done
   done:
     type: terminal
