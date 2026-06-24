@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	infrastructurePlugin "github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -388,6 +389,16 @@ func seedPluginSourceData(t *testing.T, storagePath, pluginName, ownerRepo, vers
 	))
 }
 
+func readPluginSourceData(t *testing.T, storagePath, pluginName string) map[string]any {
+	t.Helper()
+
+	store := infrastructurePlugin.NewJSONPluginStateStore(filepath.Join(storagePath, "plugins"))
+	require.NoError(t, store.Load(t.Context()))
+	data := store.GetSourceData(pluginName)
+	require.NotNil(t, data, "source metadata should be persisted for installed plugin")
+	return data
+}
+
 // TestPluginUpdate_SuccessfulUpdate validates complete update workflow.
 // Covers: Fetches newer version, verifies checksum, atomically replaces.
 func TestPluginUpdate_SuccessfulUpdate(t *testing.T) {
@@ -532,25 +543,25 @@ func TestPluginSearch_SuccessfulSearch(t *testing.T) {
 	assert.Contains(t, output, "github", "results should include github plugin")
 }
 
-// TestPluginInstall_VersionConstraints validates --version flag version resolution.
-func TestPluginInstall_VersionConstraints(t *testing.T) {
+// TestPluginInstall_Version validates positional exact version resolution.
+func TestPluginInstall_Version(t *testing.T) {
 	tests := []struct {
-		name       string
-		constraint string
-		releaseTag string
-		shouldPass bool
+		name        string
+		source      string
+		releaseTag  string
+		wantVersion string
 	}{
 		{
-			name:       "exact version match",
-			constraint: "v1.0.0",
-			releaseTag: "v1.0.0",
-			shouldPass: true,
+			name:        "bare exact version suffix",
+			source:      "testorg/awf-plugin-test-plugin@1.0.0",
+			releaseTag:  "v1.0.0",
+			wantVersion: "v1.0.0",
 		},
 		{
-			name:       "semver range",
-			constraint: ">=1.0.0 <2.0.0",
-			releaseTag: "v1.5.0",
-			shouldPass: true,
+			name:        "v-prefixed exact version suffix",
+			source:      "testorg/awf-plugin-test-plugin@v1.5.0",
+			releaseTag:  "v1.5.0",
+			wantVersion: "v1.5.0",
 		},
 	}
 
@@ -558,10 +569,10 @@ func TestPluginInstall_VersionConstraints(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
 			basePluginsDir := filepath.Join(tmpDir, "plugins")
+			storagePath := filepath.Join(tmpDir, "storage")
 			require.NoError(t, os.MkdirAll(basePluginsDir, 0o755))
 			t.Setenv("AWF_PLUGINS_PATH", basePluginsDir)
 
-			// Derive version string (strip leading "v" for asset filename)
 			versionStr := strings.TrimPrefix(tt.releaseTag, "v")
 			assetName := platformAssetName("test-plugin", versionStr)
 			tarball := createTestPluginTarball(t, "test-plugin")
@@ -606,13 +617,8 @@ func TestPluginInstall_VersionConstraints(t *testing.T) {
 
 			t.Setenv("GITHUB_API_URL", server.URL)
 
-			args := []string{"plugin", "install", "testorg/awf-plugin-test-plugin"}
-			if tt.constraint != "" {
-				args = append(args, "--version", tt.constraint)
-			}
-
 			cmd := cli.NewRootCommand()
-			cmd.SetArgs(args)
+			cmd.SetArgs([]string{"--storage", storagePath, "plugin", "install", tt.source})
 
 			var out bytes.Buffer
 			cmd.SetOut(&out)
@@ -620,14 +626,135 @@ func TestPluginInstall_VersionConstraints(t *testing.T) {
 
 			err := cmd.Execute()
 
-			if tt.shouldPass {
-				assert.NoError(t, err, "install with version constraint should succeed")
-				pluginDir := filepath.Join(basePluginsDir, "test-plugin")
-				_, err := os.Stat(pluginDir)
-				assert.NoError(t, err, "plugin directory should exist")
-			}
+			assert.NoError(t, err, "install with exact version suffix should succeed")
+			assert.Contains(t, out.String(), tt.releaseTag, "output should show selected release tag")
+			pluginDir := filepath.Join(basePluginsDir, "test-plugin")
+			_, err = os.Stat(pluginDir)
+			assert.NoError(t, err, "plugin directory should exist")
+
+			sourceData := readPluginSourceData(t, storagePath, "test-plugin")
+			assert.Equal(t, "testorg/awf-plugin-test-plugin", sourceData["repository"])
+			assert.Equal(t, tt.wantVersion, sourceData["version"])
 		})
 	}
+}
+
+func TestPluginInstall_UnversionedInstallPersistsLatestStableWhenPrereleaseExists(t *testing.T) {
+	tmpDir := t.TempDir()
+	basePluginsDir := filepath.Join(tmpDir, "plugins")
+	storagePath := filepath.Join(tmpDir, "storage")
+	require.NoError(t, os.MkdirAll(basePluginsDir, 0o755))
+	t.Setenv("AWF_PLUGINS_PATH", basePluginsDir)
+
+	const stableVersion = "1.9.0"
+	const prereleaseVersion = "2.0.0-beta.1"
+	stableAssetName := platformAssetName("test-plugin", stableVersion)
+	prereleaseAssetName := platformAssetName("test-plugin", prereleaseVersion)
+	tarball := createTestPluginTarball(t, "test-plugin")
+	checksum := createTestSHA256File(t, tarball, prereleaseAssetName) + "\n" +
+		createTestSHA256File(t, tarball, stableAssetName)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/releases") {
+			releases := []map[string]interface{}{
+				{
+					"tag_name":   "v" + prereleaseVersion,
+					"prerelease": true,
+					"assets": []map[string]interface{}{
+						{
+							"name":                 prereleaseAssetName,
+							"browser_download_url": "http://" + r.Host + "/downloads/" + prereleaseAssetName,
+						},
+						{
+							"name":                 "checksums.txt",
+							"browser_download_url": "http://" + r.Host + "/downloads/checksums.txt",
+						},
+					},
+				},
+				{
+					"tag_name": "v" + stableVersion,
+					"assets": []map[string]interface{}{
+						{
+							"name":                 stableAssetName,
+							"browser_download_url": "http://" + r.Host + "/downloads/" + stableAssetName,
+						},
+						{
+							"name":                 "checksums.txt",
+							"browser_download_url": "http://" + r.Host + "/downloads/checksums.txt",
+						},
+					},
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(releases) //nolint:errcheck // test fixture response
+			return
+		}
+
+		if strings.Contains(r.URL.Path, "/downloads/"+stableAssetName) || strings.Contains(r.URL.Path, "/downloads/"+prereleaseAssetName) {
+			w.Header().Set("Content-Type", "application/gzip")
+			w.Write(tarball) //nolint:errcheck // test fixture response
+			return
+		}
+
+		if strings.Contains(r.URL.Path, "/downloads/checksums.txt") {
+			w.Write([]byte(checksum)) //nolint:errcheck // test fixture response
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	t.Setenv("GITHUB_API_URL", server.URL)
+
+	cmd := cli.NewRootCommand()
+	cmd.SetArgs([]string{"--storage", storagePath, "plugin", "install", "testorg/awf-plugin-test-plugin"})
+
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	err := cmd.Execute()
+
+	assert.NoError(t, err, "unversioned install should select latest stable release without --pre-release")
+	assert.Contains(t, out.String(), "v"+stableVersion, "output should show selected stable release")
+	assert.NotContains(t, out.String(), prereleaseVersion, "output should not show skipped prerelease")
+
+	pluginDir := filepath.Join(basePluginsDir, "test-plugin")
+	_, err = os.Stat(pluginDir)
+	assert.NoError(t, err, "plugin directory should exist after stable install")
+
+	sourceData := readPluginSourceData(t, storagePath, "test-plugin")
+	assert.Equal(t, "testorg/awf-plugin-test-plugin", sourceData["repository"])
+	assert.Equal(t, "v"+stableVersion, sourceData["version"])
+}
+
+func TestPluginInstall_VersionFlagRejectedBeforeNetworkResolution(t *testing.T) {
+	tmpDir := t.TempDir()
+	basePluginsDir := filepath.Join(tmpDir, "plugins")
+	require.NoError(t, os.MkdirAll(basePluginsDir, 0o755))
+	t.Setenv("AWF_PLUGINS_PATH", basePluginsDir)
+
+	var releaseHits int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		releaseHits++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+	t.Setenv("GITHUB_API_URL", server.URL)
+
+	cmd := cli.NewRootCommand()
+	cmd.SetArgs([]string{"plugin", "install", "testorg/awf-plugin-test-plugin", "--version", "1.2.3"})
+
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	err := cmd.Execute()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown flag: --version")
+	assert.Zero(t, releaseHits)
 }
 
 // TestPluginInstall_PrereleaseFlag validates --pre-release flag includes alpha/beta/rc versions.

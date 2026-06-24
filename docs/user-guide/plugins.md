@@ -330,16 +330,17 @@ The `SOURCE` column shows the GitHub `owner/repo` for plugins installed via `awf
 Install an external plugin from GitHub Releases:
 
 ```bash
-awf plugin install owner/repo
+awf plugin install owner/repo[@version]
 ```
 
 AWF downloads the latest release, verifies the SHA-256 checksum, extracts the archive, validates the manifest, and installs atomically.
+
+Explicit versions use `owner/repo@version` syntax and must be exact SemVer values. Both `1.2.3` and `v1.2.3` are accepted; ranges such as `>=1.0.0` are rejected.
 
 **Flags:**
 
 | Flag | Description |
 |------|-------------|
-| `--version` | Version constraint (e.g. `">=1.0.0 <2.0.0"`) |
 | `--pre-release` | Include alpha/beta/rc versions in resolution |
 | `--force` | Overwrite an existing installation |
 
@@ -349,8 +350,8 @@ AWF downloads the latest release, verifies the SHA-256 checksum, extracts the ar
 # Install latest stable release
 awf plugin install myorg/awf-plugin-jira
 
-# Install with version constraint
-awf plugin install myorg/awf-plugin-jira --version ">=1.0.0 <2.0.0"
+# Install an exact version
+awf plugin install myorg/awf-plugin-jira@v1.2.3
 
 # Include pre-release versions
 awf plugin install myorg/awf-plugin-jira --pre-release
@@ -359,7 +360,7 @@ awf plugin install myorg/awf-plugin-jira --pre-release
 awf plugin install myorg/awf-plugin-jira --force
 ```
 
-The `owner/repo` argument must be a GitHub repository path (not a URL). The repository must contain GitHub Releases with `.tar.gz` assets matching the AWF naming convention (see [Release Asset Naming](#release-asset-naming)).
+The `owner/repo[@version]` argument must be a GitHub repository path (not a URL). The repository must contain GitHub Releases with `.tar.gz` assets matching the AWF naming convention (see [Release Asset Naming](#release-asset-naming)).
 
 #### Update a Plugin
 

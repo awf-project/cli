@@ -59,10 +59,7 @@ Install packs from GitHub Releases:
 awf workflow install myorg/awf-workflow-speckit
 
 # Install specific version
-awf workflow install myorg/awf-workflow-speckit@1.2.0
-
-# Install with version constraint
-awf workflow install myorg/awf-workflow-speckit --version ">=1.0.0 <2.0.0"
+awf workflow install myorg/awf-workflow-speckit@v1.2.0
 
 # Install globally (available to all projects)
 awf workflow install myorg/awf-workflow-speckit --global
@@ -72,6 +69,8 @@ awf workflow install myorg/awf-workflow-speckit --force
 ```
 
 AWF downloads the release archive, verifies the SHA-256 checksum, validates the manifest (including AWF version compatibility), and installs atomically.
+
+Explicit versions use `owner/repo@version` syntax and must be exact SemVer values. Both `1.2.0` and `v1.2.0` are accepted; ranges such as `>=1.0.0` are rejected.
 
 ### Installation Locations
 

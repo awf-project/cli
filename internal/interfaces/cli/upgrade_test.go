@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync/atomic"
 	"testing"
 
 	"github.com/awf-project/cli/pkg/registry"
@@ -14,48 +15,216 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSelectTargetRelease_NoVersion_ReturnsFirstStable(t *testing.T) {
+// Component: update_upgrade_version
+// Acceptance source: .specify/implementation/F110/tasks/T060.md, "Acceptance".
+// These cases cover the F110 upgrade grammar change from `awf upgrade --version <version>`
+// to `awf upgrade [version]`, including red-state checks for removed flag parsing
+// and exact SemVer validation before any release lookup.
+func TestNewUpgradeCommand_UsesSyntaxEquivalentToAwfUpgradeVersionAndAcceptsZeroOrOnePositionalVersionArgument(t *testing.T) {
+	cmd := newUpgradeCommand(nil)
+
+	assert.Equal(t, "upgrade [version]", cmd.Use)
+	require.NoError(t, cmd.Args(cmd, nil))
+	require.NoError(t, cmd.Args(cmd, []string{"0.5.0"}))
+}
+
+func TestNewUpgradeCommand_RejectsMoreThanOnePositionalArgumentThroughCobraMaximumNArgs(t *testing.T) {
+	cmd := newUpgradeCommand(nil)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"0.5.0", "0.6.0"})
+
+	err := cmd.Execute()
+
+	require.Error(t, err)
+	assert.EqualError(t, err, "accepts at most 1 arg(s), received 2")
+}
+
+func TestNewUpgradeCommand_NoLongerRegistersLocalVersionFlag(t *testing.T) {
+	cmd := newUpgradeCommand(nil)
+
+	assert.Nil(t, cmd.Flags().Lookup("version"))
+}
+
+func TestAwfUpgradeVersionFlagFailsDuringCobraFlagParsingWithoutReleaseResolution(t *testing.T) {
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	t.Setenv("GITHUB_API_URL", srv.URL)
+
+	cmd := newUpgradeCommand(nil)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--version", "0.5.0"})
+
+	err := cmd.Execute()
+
+	require.Error(t, err)
+	assert.EqualError(t, err, "unknown flag: --version")
+	assert.Equal(t, int32(0), requests.Load(), "removed --version flag must fail during Cobra parsing before release lookup")
+}
+
+func TestRunUpgrade_SelectsLatestStableReleaseWhenNoPositionalVersionIsProvided(t *testing.T) {
 	releases := []registry.Release{
 		{TagName: "v1.1.0-beta", Prerelease: true},
 		{TagName: "v1.0.0", Prerelease: false},
 		{TagName: "v0.9.0", Prerelease: false},
 	}
 
-	result, err := selectTargetRelease(releases, "")
+	target, err := parseExactReleaseTarget("", true)
+	require.NoError(t, err)
+
+	result, err := selectExactRelease(releases, target, false)
 
 	require.NoError(t, err)
 	assert.Equal(t, "v1.0.0", result.TagName)
 }
 
-func TestSelectTargetRelease_WithVersion_ReturnsMatchingRelease(t *testing.T) {
-	releases := []registry.Release{
-		{TagName: "v1.0.0", Prerelease: false},
-		{TagName: "v0.9.0", Prerelease: false},
-	}
+func TestRunUpgrade_AcceptsPositional050ValidatesExactSemVerAndSelectsExactlyReleaseV050(t *testing.T) {
+	origVersion := Version
+	Version = "0.4.0"
+	t.Cleanup(func() { Version = origVersion })
 
-	result, err := selectTargetRelease(releases, "v0.9.0")
+	releases := []map[string]any{
+		{"tag_name": "v0.6.0", "prerelease": false, "assets": []any{}},
+		{"tag_name": "v0.5.0", "prerelease": false, "assets": []any{}},
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(releases) //nolint:errcheck // controlled test response
+	}))
+	defer srv.Close()
+	t.Setenv("GITHUB_API_URL", srv.URL)
+
+	cmd := newUpgradeCommand(nil)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(os.Stderr)
+
+	err := runUpgrade(cmd, nil, upgradeOptions{check: true, targetVersion: "0.5.0"})
 
 	require.NoError(t, err)
-	assert.Equal(t, "v0.9.0", result.TagName)
+	assert.Contains(t, out.String(), "v0.5.0")
+	assert.NotContains(t, out.String(), "v0.6.0")
 }
 
-func TestSelectTargetRelease_VersionNotFound_ReturnsError(t *testing.T) {
+func TestRunUpgrade_AcceptsPositionalV050NormalizesItAndSelectsExactlyTheMatchingRelease(t *testing.T) {
+	releases := []registry.Release{
+		{TagName: "v1.0.0", Prerelease: false},
+		{TagName: "v0.5.0", Prerelease: false},
+	}
+
+	target, err := parseExactReleaseTarget("v0.5.0", true)
+	require.NoError(t, err)
+
+	result, err := selectExactRelease(releases, target, false)
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.5.0", result.TagName)
+}
+
+func TestUpgradeCommand_CheckModeAcceptsPositionalV050AndSelectsExactRelease(t *testing.T) {
+	origVersion := Version
+	Version = "0.4.0"
+	t.Cleanup(func() { Version = origVersion })
+
+	releases := []map[string]any{
+		{"tag_name": "v0.6.0", "prerelease": false, "assets": []any{}},
+		{"tag_name": "v0.5.0", "prerelease": false, "assets": []any{}},
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(releases) //nolint:errcheck // controlled test response
+	}))
+	defer srv.Close()
+	t.Setenv("GITHUB_API_URL", srv.URL)
+
+	cmd := newUpgradeCommand(nil)
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&errOut)
+	cmd.SetArgs([]string{"--check", "v0.5.0"})
+
+	err := cmd.Execute()
+
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "v0.5.0")
+	assert.NotContains(t, out.String(), "v0.6.0")
+}
+
+func TestRunUpgrade_RejectsPositionalLatestBeforeReleaseLookup(t *testing.T) {
+	origVersion := Version
+	Version = "0.4.0"
+	t.Cleanup(func() { Version = origVersion })
+
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	t.Setenv("GITHUB_API_URL", srv.URL)
+
+	cmd := newUpgradeCommand(nil)
+
+	err := runUpgrade(cmd, nil, upgradeOptions{targetVersion: "latest"})
+
+	require.Error(t, err)
+	assert.EqualError(t, err, `invalid release version "latest": version: invalid format "latest"`)
+	assert.Equal(t, int32(0), requests.Load(), "invalid explicit version must fail before release lookup")
+}
+
+func TestRunUpgrade_RejectsPositionalRangeBeforeReleaseLookup(t *testing.T) {
+	origVersion := Version
+	Version = "0.4.0"
+	t.Cleanup(func() { Version = origVersion })
+
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	t.Setenv("GITHUB_API_URL", srv.URL)
+
+	cmd := newUpgradeCommand(nil)
+
+	err := runUpgrade(cmd, nil, upgradeOptions{targetVersion: ">=0.5.0"})
+
+	require.Error(t, err)
+	assert.EqualError(t, err, `invalid release version ">=0.5.0": version: invalid format ">=0.5.0"`)
+	assert.Equal(t, int32(0), requests.Load(), "range constraints must fail before release lookup")
+}
+
+func TestRunUpgrade_ReturnsReleaseVersion050NotFoundWhenValidSemVerIsAbsentFromReleaseList(t *testing.T) {
 	releases := []registry.Release{
 		{TagName: "v1.0.0", Prerelease: false},
 	}
 
-	_, err := selectTargetRelease(releases, "v2.0.0")
+	target, err := parseExactReleaseTarget("0.5.0", true)
+	require.NoError(t, err)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	_, err = selectExactRelease(releases, target, false)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "release version 0.5.0 not found")
 }
 
-func TestSelectTargetRelease_NoStableReleases_ReturnsError(t *testing.T) {
+func TestSelectExactRelease_NoStableReleases_ReturnsError(t *testing.T) {
 	releases := []registry.Release{
 		{TagName: "v1.0.0-beta", Prerelease: true},
 	}
 
-	_, err := selectTargetRelease(releases, "")
+	target, err := parseExactReleaseTarget("", true)
+	require.NoError(t, err)
+
+	_, err = selectExactRelease(releases, target, false)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no stable releases")
@@ -182,8 +351,7 @@ func TestRunUpgrade_VersionInstall_DownloadsAndInstalls(t *testing.T) {
 	cmd.SetOut(&out)
 	cmd.SetErr(&errOut)
 
-	// Test with --version flag to select a specific version
-	err := runUpgrade(cmd, nil, upgradeOptions{version: "v0.9.0"})
+	err := runUpgrade(cmd, nil, upgradeOptions{targetVersion: "v0.9.0"})
 
 	// We expect an error due to invalid tar.gz, but it should have attempted the install
 	assert.Error(t, err)
@@ -394,7 +562,7 @@ func TestRunUpgrade_NoCompatibleAsset_ReturnsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "no compatible binary found")
 }
 
-func TestSelectTargetRelease_MultipleStableReleases_ReturnsLatestStable(t *testing.T) {
+func TestSelectExactRelease_MultipleStableReleases_ReturnsLatestStable(t *testing.T) {
 	releases := []registry.Release{
 		{TagName: "v0.5.0", Prerelease: false},
 		{TagName: "v1.0.0", Prerelease: false},
@@ -402,10 +570,13 @@ func TestSelectTargetRelease_MultipleStableReleases_ReturnsLatestStable(t *testi
 		{TagName: "v2.0.0-beta", Prerelease: true},
 	}
 
-	result, err := selectTargetRelease(releases, "")
+	target, err := parseExactReleaseTarget("", true)
+	require.NoError(t, err)
+
+	result, err := selectExactRelease(releases, target, false)
 
 	require.NoError(t, err)
-	assert.Equal(t, "v0.5.0", result.TagName)
+	assert.Equal(t, "v1.0.0", result.TagName)
 }
 
 func TestCheckWritePermission_TempFileCleanup(t *testing.T) {

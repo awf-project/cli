@@ -434,7 +434,7 @@ workflow.run [data-pipeline]
 2. **Check endpoint configuration:**
    ```bash
    export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
-   awf run my-workflow --otel-exporter=otlp -v
+   awf run my-workflow --otel-exporter=otlp --verbose
    ```
 
 3. **Verify service name:**

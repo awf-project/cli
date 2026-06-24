@@ -60,6 +60,7 @@ Examples:
   awf validate my-workflow
   awf list
   awf status abc123`,
+		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
@@ -70,9 +71,12 @@ Examples:
 		},
 	}
 
+	cmd.SetVersionTemplate("awf version {{.Version}}\ncommit: " + Commit + "\nbuilt: " + BuildDate + "\n")
+	cmd.Flags().Bool("version", false, "version for awf")
+
 	// Global flags
 	pf := cmd.PersistentFlags()
-	pf.BoolVarP(&cfg.Verbose, "verbose", "v", false, "Enable verbose output")
+	pf.BoolVar(&cfg.Verbose, "verbose", false, "Enable verbose output")
 	pf.BoolVarP(&cfg.Quiet, "quiet", "q", false, "Suppress non-error output")
 	pf.BoolVar(&cfg.NoColor, "no-color", false, "Disable colored output")
 	pf.BoolVar(&cfg.NoHints, "no-hints", false, "Disable error hint suggestions")
@@ -117,7 +121,6 @@ Examples:
 	}
 
 	// Subcommands
-	cmd.AddCommand(newVersionCommand())
 	cmd.AddCommand(newInitCommand(cfg))
 	cmd.AddCommand(newListCommand(cfg))
 	cmd.AddCommand(newRunCommand(cfg))
@@ -141,18 +144,5 @@ Examples:
 		if facadeCleanup != nil {
 			facadeCleanup()
 		}
-	}
-}
-
-func newVersionCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "version",
-		Short: "Print version information",
-		Long:  "Display the version, commit hash, and build date of awf.",
-		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Printf("awf version %s\n", Version)
-			cmd.Printf("commit: %s\n", Commit)
-			cmd.Printf("built: %s\n", BuildDate)
-		},
 	}
 }

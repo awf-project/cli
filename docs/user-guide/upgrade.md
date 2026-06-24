@@ -23,10 +23,10 @@ Downloads the latest stable release, verifies its SHA256 checksum, and replaces 
 ## Install a Specific Version
 
 ```bash
-awf upgrade --version v0.5.0
+awf upgrade v0.5.0
 ```
 
-Installs the specified version, allowing both upgrades and downgrades.
+Installs the specified exact SemVer release, allowing both upgrades and downgrades. Both `0.5.0` and `v0.5.0` are accepted; ranges such as `>=0.5.0` are rejected.
 
 ## Force Upgrade
 
@@ -35,7 +35,7 @@ awf upgrade --force
 ```
 
 Skips version comparison and package manager detection. Required when:
-- Running a development build (`awf version` shows "dev")
+- Running a development build (`awf --version` shows "dev")
 - Binary is installed via a package manager (homebrew, snap, nix)
 - You want to reinstall the same version
 
@@ -56,7 +56,6 @@ AWF also tries `gh auth token` automatically if the GitHub CLI is installed.
 |------|-------------|
 | `--check` | Check for updates without installing |
 | `--force` | Force upgrade (skip version/package manager checks) |
-| `--version` | Install a specific version (e.g., `v0.5.0`) |
 
 ## Troubleshooting
 

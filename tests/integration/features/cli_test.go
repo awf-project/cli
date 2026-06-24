@@ -107,13 +107,15 @@ func TestCLI_Version_Integration(t *testing.T) {
 	cmd := cli.NewRootCommand()
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
-	cmd.SetArgs([]string{"version"})
+	cmd.SetArgs([]string{"--version"})
 
 	err := cmd.Execute()
 	require.NoError(t, err)
 
 	output := buf.String()
 	assert.Contains(t, output, "awf version")
+	assert.Contains(t, output, "commit:")
+	assert.Contains(t, output, "built:")
 }
 
 func TestCLI_Help_Integration(t *testing.T) {
@@ -138,9 +140,9 @@ func TestCLI_GlobalFlags_Integration(t *testing.T) {
 		name string
 		args []string
 	}{
-		{"verbose", []string{"--verbose", "version"}},
-		{"quiet", []string{"--quiet", "version"}},
-		{"no-color", []string{"--no-color", "version"}},
+		{"verbose", []string{"--verbose", "--version"}},
+		{"quiet", []string{"--quiet", "--version"}},
+		{"no-color", []string{"--no-color", "--version"}},
 	}
 
 	for _, tt := range tests {
@@ -204,7 +206,7 @@ func TestCLI_ExitCodes_Integration(t *testing.T) {
 	}{
 		{
 			name:        "success - version",
-			args:        []string{"version"},
+			args:        []string{"--version"},
 			expectError: false,
 		},
 		{
