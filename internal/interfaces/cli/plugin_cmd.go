@@ -396,16 +396,20 @@ func initPluginSystemReadOnly(ctx context.Context, cfg *Config) (*PluginSystemRe
 }
 
 type installOptions struct {
-	version    string
 	preRelease bool
 	force      bool
+}
+
+type pluginInstallSource struct {
+	Repository string
+	Target     exactReleaseTarget
 }
 
 func newPluginInstallCommand(cfg *Config) *cobra.Command {
 	var opts installOptions
 
 	cmd := &cobra.Command{
-		Use:   "install <owner/repo>",
+		Use:   "install <owner/repo[@version]>",
 		Short: "Install a plugin from GitHub releases",
 		Long: `Install a plugin from a GitHub repository using the owner/repo format.
 
@@ -414,7 +418,7 @@ atomically. The plugin is enabled automatically after installation.
 
 Examples:
   awf plugin install myorg/awf-plugin-jira
-  awf plugin install myorg/awf-plugin-jira --version ">=1.0.0 <2.0.0"
+  awf plugin install myorg/awf-plugin-jira@1.2.3
   awf plugin install myorg/awf-plugin-jira --pre-release
   awf plugin install myorg/awf-plugin-jira --force`,
 		Args: cobra.ExactArgs(1),
@@ -423,18 +427,30 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.version, "version", "", "version constraint (e.g. \">=1.0.0 <2.0.0\")")
 	cmd.Flags().BoolVar(&opts.preRelease, "pre-release", false, "include pre-release versions")
 	cmd.Flags().BoolVar(&opts.force, "force", false, "overwrite existing installation")
 
 	return cmd
 }
 
+func parsePluginInstallSource(source string) (pluginInstallSource, error) {
+	repository, target, err := parseInstallReleaseTarget(source)
+	if err != nil {
+		return pluginInstallSource{}, err
+	}
+
+	return pluginInstallSource{Repository: repository, Target: target}, nil
+}
+
 func runPluginInstall(cmd *cobra.Command, cfg *Config, source string, opts installOptions) error {
-	if err := registry.ValidateOwnerRepo(source); err != nil {
+	parsedSource, parseErr := parsePluginInstallSource(source)
+	if parseErr != nil {
+		return parseErr
+	}
+	if err := registry.ValidateOwnerRepo(parsedSource.Repository); err != nil {
 		return err
 	}
-	owner, repo, _ := strings.Cut(source, "/")
+	owner, repo, _ := strings.Cut(parsedSource.Repository, "/")
 	pluginName := extractPluginName(repo)
 
 	pluginPaths := getPluginSearchPaths(cfg)
@@ -471,7 +487,7 @@ func runPluginInstall(cmd *cobra.Command, cfg *Config, source string, opts insta
 		return fmt.Errorf("no releases found for %s", ownerRepo)
 	}
 
-	release, err := selectRelease(releases, opts.version, opts.preRelease)
+	release, err := selectExactRelease(releases, parsedSource.Target, opts.preRelease)
 	if err != nil {
 		return fmt.Errorf("failed to resolve version for %s: %w", ownerRepo, err)
 	}
@@ -539,42 +555,14 @@ func runPluginInstall(cmd *cobra.Command, cfg *Config, source string, opts insta
 	return nil
 }
 
-// selectRelease picks the best matching release from a list.
-// When versionConstraint is empty, returns the first non-prerelease release (latest stable).
-// When includePrerelease is true, also considers prerelease releases.
-//
-// versionConstraint may be a bare version ("1.0.0"), a v-prefixed version ("v1.0.0"),
-// or a semver range expression (">=1.0.0 <2.0.0").
-func selectRelease(releases []registry.Release, versionConstraint string, includePrerelease bool) (registry.Release, error) {
-	var constraints registry.Constraints
-	if versionConstraint != "" {
-		// Normalize a bare v-prefixed version like "v1.0.0" → "1.0.0" so ParseConstraints
-		// can handle it. Range expressions such as ">=1.0.0" are left as-is.
-		normalized := registry.NormalizeTag(versionConstraint)
-		var err error
-		constraints, err = registry.ParseConstraints(normalized)
-		if err != nil {
-			return registry.Release{}, fmt.Errorf("invalid version constraint: %w", err)
-		}
-	}
-
+func selectRelease(releases []registry.Release, includePrerelease bool) (registry.Release, error) {
 	for _, r := range releases {
 		if r.Prerelease && !includePrerelease {
 			continue
 		}
-		if versionConstraint == "" {
-			return r, nil
-		}
-		versionStr := registry.NormalizeTag(r.TagName)
-		v, err := registry.ParseVersion(versionStr)
-		if err != nil {
-			continue
-		}
-		if constraints.Check(v) {
-			return r, nil
-		}
+		return r, nil
 	}
-	return registry.Release{}, fmt.Errorf("no release matches constraint %q (includePrerelease=%v)", versionConstraint, includePrerelease)
+	return registry.Release{}, fmt.Errorf("no eligible releases found (includePrerelease=%v)", includePrerelease)
 }
 
 // findChecksumURL locates the checksum file URL among release assets.
@@ -697,7 +685,7 @@ func updatePlugin(cmd *cobra.Command, cfg *Config, name string) error {
 	}
 
 	// Select latest stable release (no version constraint, no pre-release).
-	release, err := selectRelease(releases, "", false)
+	release, err := selectRelease(releases, false)
 	if err != nil {
 		return fmt.Errorf("failed to resolve latest version for %s: %w", source.Repository, err)
 	}

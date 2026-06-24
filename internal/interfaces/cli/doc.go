@@ -26,7 +26,7 @@
 //   - App: Dependency injection container with Config and Formatter
 //   - NewApp: Creates application with loaded configuration
 //   - NewRootCommand: Builds cobra command tree with global flags
-//   - newVersionCommand: Displays AWF version, commit, and build date
+//   - --version: Displays AWF version, commit, and build date
 //
 // Global flags:
 //   - --no-color: Disable colorized output

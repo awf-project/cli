@@ -13,8 +13,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,6 +41,20 @@ func createTestWorkflowSHA256File(t *testing.T, tarballContent []byte, assetName
 	return fmt.Sprintf("%s  %s", hexHash, assetName)
 }
 
+func readWorkflowPackSource(t *testing.T, packDir string) *workflowpkg.PackSource {
+	t.Helper()
+
+	stateData, err := os.ReadFile(filepath.Join(packDir, "state.json"))
+	require.NoError(t, err)
+
+	var state workflowpkg.PackState
+	require.NoError(t, json.Unmarshal(stateData, &state))
+
+	source, err := workflowpkg.PackSourceFromSourceData(state.SourceData)
+	require.NoError(t, err)
+	return source
+}
+
 // TestWorkflowSubcommands_Exist verifies install/remove subcommands exist.
 func TestWorkflowSubcommands_Exist(t *testing.T) {
 	subcommands := []string{"install", "remove"}
@@ -59,6 +75,31 @@ func TestWorkflowSubcommands_Exist(t *testing.T) {
 			assert.True(t, found, "workflow command should have %q subcommand", name)
 		})
 	}
+}
+
+func TestWorkflowInstall_CommandSyntaxAndFlags(t *testing.T) {
+	root := cli.NewRootCommand()
+	workflowCmd, _, err := root.Find([]string{"workflow"})
+	require.NoError(t, err)
+
+	var installCmdFound bool
+	for _, sub := range workflowCmd.Commands() {
+		if sub.Name() != "install" {
+			continue
+		}
+
+		installCmdFound = true
+
+		t.Run("newWorkflowInstallCommand keeps syntax equivalent to install owner repo version", func(t *testing.T) {
+			assert.Equal(t, "install <owner/repo[@version]>", sub.Use)
+		})
+
+		t.Run("newWorkflowInstallCommand no longer registers a local version flag", func(t *testing.T) {
+			assert.Nil(t, sub.Flags().Lookup("version"))
+		})
+	}
+
+	require.True(t, installCmdFound, "workflow install command should exist")
 }
 
 // TestWorkflowInstall_SuccessfulLocalInstall validates basic local installation workflow.
@@ -83,7 +124,7 @@ func TestWorkflowInstall_SuccessfulLocalInstall(t *testing.T) {
 
 	require.NoError(t, os.Chdir(projDir))
 
-	const version = "1.0.0"
+	const version = "1.2.0"
 	assetName := workflowAssetName("speckit", version)
 	tarball := createTestWorkflowTarball(t, "speckit")
 	checksumData := createTestWorkflowSHA256File(t, tarball, assetName)
@@ -91,6 +132,15 @@ func TestWorkflowInstall_SuccessfulLocalInstall(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/releases") {
 			releases := []map[string]interface{}{
+				{
+					"tag_name": "v0.9.0",
+					"assets": []map[string]interface{}{
+						{
+							"name":                 workflowAssetName("speckit", "0.9.0"),
+							"browser_download_url": "http://" + r.Host + "/downloads/" + workflowAssetName("speckit", "0.9.0"),
+						},
+					},
+				},
 				{
 					"tag_name": "v" + version,
 					"assets": []map[string]interface{}{
@@ -150,6 +200,10 @@ func TestWorkflowInstall_SuccessfulLocalInstall(t *testing.T) {
 	statePath := filepath.Join(packDir, "state.json")
 	_, err = os.Stat(statePath)
 	assert.NoError(t, err, "state.json should exist in pack directory")
+
+	source := readWorkflowPackSource(t, packDir)
+	assert.Equal(t, "testorg/awf-workflow-speckit", source.Repository)
+	assert.Equal(t, version, source.Version)
 
 	// Verify NFR-002: .awf/workflows and .awf/plugins remain untouched
 	workflowContent, err := os.ReadFile(filepath.Join(workflowsDir, "existing.yaml"))
@@ -235,94 +289,117 @@ func TestWorkflowInstall_SuccessfulGlobalInstall(t *testing.T) {
 
 // TestWorkflowInstall_WithVersionConstraint validates installation with explicit version.
 // Covers: Parses @version suffix, resolves correct release, installs exact version.
-func TestWorkflowInstall_WithVersionConstraint(t *testing.T) {
-	tmpDir := t.TempDir()
-	projDir := filepath.Join(tmpDir, "project")
-	require.NoError(t, os.Mkdir(projDir, 0o755))
-	require.NoError(t, os.Mkdir(filepath.Join(projDir, ".awf"), 0o755))
+func TestWorkflowInstall_WithVersion(t *testing.T) {
+	tests := []struct {
+		name            string
+		source          string
+		expectedVersion string
+	}{
+		{
+			name:            "Workflow install parses owner repo 1.2.3 validates exact SemVer before release lookup and selects exactly version v1.2.3 or equivalent normalized tag",
+			source:          "testorg/awf-workflow-speckit@1.2.3",
+			expectedVersion: "1.2.3",
+		},
+		{
+			name:            "Workflow install parses owner repo v1.2.3 accepts the prefix and persists uses the normalized selected release version consistently with existing pack metadata behavior",
+			source:          "testorg/awf-workflow-speckit@v1.2.3",
+			expectedVersion: "1.2.3",
+		},
+	}
 
-	origWd, err := os.Getwd()
-	require.NoError(t, err)
-	t.Cleanup(func() { os.Chdir(origWd) }) //nolint:errcheck // restore working directory in cleanup
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			projDir := filepath.Join(tmpDir, "project")
+			require.NoError(t, os.Mkdir(projDir, 0o755))
+			require.NoError(t, os.Mkdir(filepath.Join(projDir, ".awf"), 0o755))
 
-	require.NoError(t, os.Chdir(projDir))
+			origWd, err := os.Getwd()
+			require.NoError(t, err)
+			t.Cleanup(func() { os.Chdir(origWd) }) //nolint:errcheck // restore working directory in cleanup
 
-	const requestedVersion = "2.0.0"
-	assetName := workflowAssetName("speckit", requestedVersion)
-	tarball := createTestWorkflowTarball(t, "speckit")
-	checksumData := createTestWorkflowSHA256File(t, tarball, assetName)
+			require.NoError(t, os.Chdir(projDir))
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "/releases") {
-			// API returns multiple versions
-			releases := []map[string]interface{}{
-				{
-					"tag_name": "v3.0.0",
-					"assets": []map[string]interface{}{
+			assetName := workflowAssetName("speckit", tt.expectedVersion)
+			tarball := createTestWorkflowTarball(t, "speckit")
+			checksumData := createTestWorkflowSHA256File(t, tarball, assetName)
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.Contains(r.URL.Path, "/releases") {
+					releases := []map[string]interface{}{
 						{
-							"name":                 workflowAssetName("speckit", "3.0.0"),
-							"browser_download_url": "http://" + r.Host + "/downloads/" + workflowAssetName("speckit", "3.0.0"),
-						},
-					},
-				},
-				{
-					"tag_name": "v" + requestedVersion,
-					"assets": []map[string]interface{}{
-						{
-							"name":                 assetName,
-							"browser_download_url": "http://" + r.Host + "/downloads/" + assetName,
+							"tag_name": "v3.0.0",
+							"assets": []map[string]interface{}{
+								{
+									"name":                 workflowAssetName("speckit", "3.0.0"),
+									"browser_download_url": "http://" + r.Host + "/downloads/" + workflowAssetName("speckit", "3.0.0"),
+								},
+							},
 						},
 						{
-							"name":                 "checksums.txt",
-							"browser_download_url": "http://" + r.Host + "/downloads/checksums.txt",
+							"tag_name": "v" + tt.expectedVersion,
+							"assets": []map[string]interface{}{
+								{
+									"name":                 assetName,
+									"browser_download_url": "http://" + r.Host + "/downloads/" + assetName,
+								},
+								{
+									"name":                 "checksums.txt",
+									"browser_download_url": "http://" + r.Host + "/downloads/checksums.txt",
+								},
+							},
 						},
-					},
-				},
-				{
-					"tag_name": "v1.0.0",
-					"assets": []map[string]interface{}{
 						{
-							"name":                 workflowAssetName("speckit", "1.0.0"),
-							"browser_download_url": "http://" + r.Host + "/downloads/" + workflowAssetName("speckit", "1.0.0"),
+							"tag_name": "v1.0.0",
+							"assets": []map[string]interface{}{
+								{
+									"name":                 workflowAssetName("speckit", "1.0.0"),
+									"browser_download_url": "http://" + r.Host + "/downloads/" + workflowAssetName("speckit", "1.0.0"),
+								},
+							},
 						},
-					},
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(releases) //nolint:errcheck // test fixture response
-			return
-		}
+					}
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(releases) //nolint:errcheck // test fixture response
+					return
+				}
 
-		if strings.Contains(r.URL.Path, "/downloads/"+assetName) {
-			w.Header().Set("Content-Type", "application/gzip")
-			w.Write(tarball) //nolint:errcheck // test fixture response
-			return
-		}
+				if strings.Contains(r.URL.Path, "/downloads/"+assetName) {
+					w.Header().Set("Content-Type", "application/gzip")
+					w.Write(tarball) //nolint:errcheck // test fixture response
+					return
+				}
 
-		if strings.Contains(r.URL.Path, "/downloads/checksums.txt") {
-			w.Write([]byte(checksumData)) //nolint:errcheck // test fixture response
-			return
-		}
+				if strings.Contains(r.URL.Path, "/downloads/checksums.txt") {
+					w.Write([]byte(checksumData)) //nolint:errcheck // test fixture response
+					return
+				}
 
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer server.Close()
+				w.WriteHeader(http.StatusNotFound)
+			}))
+			defer server.Close()
 
-	t.Setenv("GITHUB_API_URL", server.URL)
+			t.Setenv("GITHUB_API_URL", server.URL)
 
-	cmd := cli.NewRootCommand()
-	cmd.SetArgs([]string{"workflow", "install", "testorg/awf-workflow-speckit@" + requestedVersion})
+			cmd := cli.NewRootCommand()
+			cmd.SetArgs([]string{"workflow", "install", tt.source})
 
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
 
-	err = cmd.Execute()
-	assert.NoError(t, err, "install with version constraint should succeed")
+			err = cmd.Execute()
+			require.NoError(t, err, "install with exact version should succeed")
 
-	packDir := filepath.Join(projDir, ".awf", "workflow-packs", "speckit")
-	_, err = os.Stat(packDir)
-	assert.NoError(t, err, "pack directory should exist after versioned install")
+			packDir := filepath.Join(projDir, ".awf", "workflow-packs", "speckit")
+			_, err = os.Stat(packDir)
+			require.NoError(t, err, "pack directory should exist after versioned install")
+
+			source := readWorkflowPackSource(t, packDir)
+			assert.Equal(t, "testorg/awf-workflow-speckit", source.Repository)
+			assert.Equal(t, tt.expectedVersion, source.Version)
+		})
+	}
 }
 
 // TestWorkflowInstall_ForceReinstall validates --force flag replaces existing pack.
@@ -408,6 +485,83 @@ func TestWorkflowInstall_ForceReinstall(t *testing.T) {
 	assert.NoError(t, err, "state.json should be updated after force reinstall")
 }
 
+func TestWorkflowInstall_RemovedVersionFlag(t *testing.T) {
+	var hits atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	t.Setenv("GITHUB_API_URL", server.URL)
+
+	cmd := cli.NewRootCommand()
+	cmd.SetArgs([]string{"workflow", "install", "testorg/awf-workflow-speckit", "--version", "1.2.3"})
+
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown flag: --version")
+	assert.Zero(t, hits.Load())
+}
+
+func TestWorkflowInstall_InvalidVersionSuffix(t *testing.T) {
+	tests := []struct {
+		name         string
+		source       string
+		wantContains string
+	}{
+		{
+			name:         `Workflow install rejects owner repo latest before release lookup with invalid release version latest`,
+			source:       "testorg/awf-workflow-speckit@latest",
+			wantContains: `invalid release version "latest": version: invalid format "latest"`,
+		},
+		{
+			name:         `Workflow install rejects owner repo greater than or equal range before release lookup with invalid release version range`,
+			source:       "testorg/awf-workflow-speckit@>=1.0.0",
+			wantContains: `invalid release version ">=1.0.0": version: invalid format ">=1.0.0"`,
+		},
+		{
+			name:         `Workflow install rejects owner repo empty suffix before release lookup with invalid release version empty string`,
+			source:       "testorg/awf-workflow-speckit@",
+			wantContains: `invalid release version "": version: empty string`,
+		},
+		{
+			name:         `Workflow install rejects owner repo colon version before release lookup as unsupported syntax`,
+			source:       "testorg/awf-workflow-speckit:1.2.3",
+			wantContains: `owner/repo:version syntax is not supported; use owner/repo@version`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var hits atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				hits.Add(1)
+				w.WriteHeader(http.StatusInternalServerError)
+			}))
+			defer server.Close()
+
+			t.Setenv("GITHUB_API_URL", server.URL)
+
+			cmd := cli.NewRootCommand()
+			cmd.SetArgs([]string{"workflow", "install", tt.source})
+
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+
+			err := cmd.Execute()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantContains)
+			assert.Zero(t, hits.Load())
+		})
+	}
+}
+
 // TestWorkflowRemove_SuccessfulRemoval validates complete remove workflow.
 // Covers: Removes pack directory from local workflow-packs.
 func TestWorkflowRemove_SuccessfulRemoval(t *testing.T) {
@@ -481,26 +635,63 @@ func TestWorkflowRemove_SearchesGlobalFallback(t *testing.T) {
 // TestWorkflowInstall_InvalidRepoFormat validates error on malformed owner/repo.
 // Covers: Rejects input without slash, returns user error (exit 1).
 func TestWorkflowInstall_InvalidRepoFormat(t *testing.T) {
-	tmpDir := t.TempDir()
-	projDir := filepath.Join(tmpDir, "project")
-	require.NoError(t, os.Mkdir(projDir, 0o755))
-	require.NoError(t, os.Mkdir(filepath.Join(projDir, ".awf"), 0o755))
+	tests := []struct {
+		name         string
+		source       string
+		wantContains string
+	}{
+		{
+			name:         "Existing invalid repository format behavior remains unchanged and continues to use registry ValidateOwnerRepo errors missing slash separator",
+			source:       "invalid-format",
+			wantContains: "invalid owner/repo format: missing slash separator",
+		},
+		{
+			name:         "Existing invalid repository format behavior remains unchanged and continues to use registry ValidateOwnerRepo errors empty owner segment",
+			source:       "/awf-workflow-speckit",
+			wantContains: "invalid owner/repo format: empty owner segment",
+		},
+		{
+			name:         "Existing invalid repository format behavior remains unchanged and continues to use registry ValidateOwnerRepo errors multiple slashes not allowed",
+			source:       "testorg/team/awf-workflow-speckit",
+			wantContains: "invalid owner/repo format: multiple slashes not allowed",
+		},
+	}
 
-	origWd, err := os.Getwd()
-	require.NoError(t, err)
-	t.Cleanup(func() { os.Chdir(origWd) }) //nolint:errcheck // restore working directory in cleanup
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			projDir := filepath.Join(tmpDir, "project")
+			require.NoError(t, os.Mkdir(projDir, 0o755))
+			require.NoError(t, os.Mkdir(filepath.Join(projDir, ".awf"), 0o755))
 
-	require.NoError(t, os.Chdir(projDir))
+			origWd, err := os.Getwd()
+			require.NoError(t, err)
+			t.Cleanup(func() { os.Chdir(origWd) }) //nolint:errcheck // restore working directory in cleanup
 
-	cmd := cli.NewRootCommand()
-	cmd.SetArgs([]string{"workflow", "install", "invalid-format"})
+			require.NoError(t, os.Chdir(projDir))
 
-	var out bytes.Buffer
-	cmd.SetOut(&out)
-	cmd.SetErr(&out)
+			var hits atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				hits.Add(1)
+				w.WriteHeader(http.StatusInternalServerError)
+			}))
+			defer server.Close()
 
-	err = cmd.Execute()
-	assert.Error(t, err, "install with invalid repo format should fail")
+			t.Setenv("GITHUB_API_URL", server.URL)
+
+			cmd := cli.NewRootCommand()
+			cmd.SetArgs([]string{"workflow", "install", tt.source})
+
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+
+			err = cmd.Execute()
+			require.Error(t, err, "install with invalid repo format should fail")
+			assert.Contains(t, err.Error(), tt.wantContains)
+			assert.Zero(t, hits.Load())
+		})
+	}
 }
 
 // TestWorkflowInstall_VersionNotFound validates error when requested version doesn't exist.
@@ -552,14 +743,15 @@ func TestWorkflowInstall_VersionNotFound(t *testing.T) {
 	t.Setenv("GITHUB_API_URL", server.URL)
 
 	cmd := cli.NewRootCommand()
-	cmd.SetArgs([]string{"workflow", "install", "testorg/awf-workflow-speckit@99.99.99"})
+	cmd.SetArgs([]string{"workflow", "install", "testorg/awf-workflow-speckit@1.2.3"})
 
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
 
 	err = cmd.Execute()
-	assert.Error(t, err, "install with nonexistent version should fail")
+	require.Error(t, err, "install with nonexistent version should fail")
+	assert.Contains(t, err.Error(), "release version 1.2.3 not found")
 }
 
 // TestWorkflowInstall_ChecksumMismatchAborts validates checksum verification prevents installation.

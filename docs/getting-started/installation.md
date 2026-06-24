@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/awf-project/cli/main/scripts/instal
 To install a specific version:
 
 ```bash
-AWF_VERSION=v1.0.0 curl -fsSL https://raw.githubusercontent.com/awf-project/cli/main/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/awf-project/cli/main/scripts/install.sh | AWF_VERSION=v1.0.0 sh
 ```
 
 The script detects your OS and architecture, downloads the appropriate binary, verifies its SHA256 checksum, and installs it to `/usr/local/bin`.
@@ -71,12 +71,14 @@ The binary will be available at `./bin/awf` after building.
 ## Verify Installation
 
 ```bash
-awf version
+awf --version
 ```
 
 Expected output:
 ```
 awf version X.Y.Z
+commit: <commit>
+built: <build-date>
 ```
 
 ## Shell Completion

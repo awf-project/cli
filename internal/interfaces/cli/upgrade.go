@@ -16,16 +16,16 @@ import (
 const upgradeOwnerRepo = "awf-project/cli"
 
 type upgradeOptions struct {
-	check   bool
-	force   bool
-	version string
+	check         bool
+	force         bool
+	targetVersion string
 }
 
 func newUpgradeCommand(cfg *Config) *cobra.Command {
 	var opts upgradeOptions
 
 	cmd := &cobra.Command{
-		Use:   "upgrade",
+		Use:   "upgrade [version]",
 		Short: "Upgrade AWF to the latest version",
 		Long: `Check for and install AWF updates from GitHub releases.
 
@@ -35,17 +35,19 @@ checksum, and replaces the current binary atomically.
 Examples:
   awf upgrade                     # Upgrade to latest version
   awf upgrade --check             # Check without installing
-  awf upgrade --version v0.5.0    # Install specific version
+  awf upgrade v0.5.0              # Install specific version
   awf upgrade --force             # Force upgrade (skip version check)`,
-		Args: cobra.NoArgs,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 1 {
+				opts.targetVersion = args[0]
+			}
 			return runUpgrade(cmd, cfg, opts)
 		},
 	}
 
 	cmd.Flags().BoolVar(&opts.check, "check", false, "check for updates without installing")
 	cmd.Flags().BoolVar(&opts.force, "force", false, "force upgrade even if already on latest")
-	cmd.Flags().StringVar(&opts.version, "version", "", "install a specific version (e.g. v0.5.0)")
 
 	return cmd
 }
@@ -55,6 +57,11 @@ func runUpgrade(cmd *cobra.Command, _ *Config, opts upgradeOptions) error {
 
 	if isDevBuild && !opts.force {
 		return fmt.Errorf("cannot determine current version (dev build); use --force to upgrade anyway")
+	}
+
+	target, err := parseExactReleaseTarget(opts.targetVersion, true)
+	if err != nil {
+		return err
 	}
 
 	ctx := context.Background()
@@ -70,7 +77,7 @@ func runUpgrade(cmd *cobra.Command, _ *Config, opts upgradeOptions) error {
 		return fmt.Errorf("no releases found for %s", upgradeOwnerRepo)
 	}
 
-	release, err := selectTargetRelease(releases, opts.version)
+	release, err := selectExactRelease(releases, target, false)
 	if err != nil {
 		return err
 	}
@@ -92,7 +99,7 @@ func runUpgrade(cmd *cobra.Command, _ *Config, opts upgradeOptions) error {
 // isAlreadyUpToDate checks if the current version matches or exceeds the target.
 // Returns true with a message if no upgrade is needed, false otherwise.
 func isAlreadyUpToDate(cmd *cobra.Command, targetVersion, tagName string, opts upgradeOptions, isDevBuild bool) (upToDate bool, message string) {
-	if opts.force || opts.version != "" || isDevBuild {
+	if opts.force || opts.targetVersion != "" || isDevBuild {
 		return false, ""
 	}
 
@@ -145,7 +152,7 @@ func downloadAndInstall(ctx context.Context, cmd *cobra.Command, release registr
 		return fmt.Errorf("checksum for %q not found in checksum file", asset.Name)
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Downloading %s...\n", asset.Name)
+	fmt.Fprintf(cmd.OutOrStdout(), "Downloading %s\n", asset.Name)
 	archiveData, err := registry.Download(ctx, http.DefaultClient, asset.DownloadURL)
 	if err != nil {
 		return fmt.Errorf("failed to download release: %w", err)
@@ -214,25 +221,6 @@ func replaceBinaryAtExecPath(cmd *cobra.Command, newBinary []byte, tagName strin
 		fmt.Fprintf(cmd.OutOrStdout(), "Upgraded from v%s to %s\n", registry.NormalizeTag(Version), tagName)
 	}
 	return nil
-}
-
-func selectTargetRelease(releases []registry.Release, targetVersion string) (registry.Release, error) {
-	if targetVersion != "" {
-		normalized := registry.NormalizeTag(targetVersion)
-		for _, r := range releases {
-			if registry.NormalizeTag(r.TagName) == normalized {
-				return r, nil
-			}
-		}
-		return registry.Release{}, fmt.Errorf("version %s not found", targetVersion)
-	}
-
-	for _, r := range releases {
-		if !r.Prerelease {
-			return r, nil
-		}
-	}
-	return registry.Release{}, fmt.Errorf("no stable releases found")
 }
 
 func checkWritePermission(dir string) error {

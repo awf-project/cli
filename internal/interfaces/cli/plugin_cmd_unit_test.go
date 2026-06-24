@@ -1,7 +1,12 @@
 package cli
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -10,6 +15,222 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestPluginInstallCommand_UsesSyntaxEquivalentToInstallOwnerRepoAtVersion(t *testing.T) {
+	cmd := newPluginInstallCommand(&Config{})
+
+	assert.Equal(t, "install <owner/repo[@version]>", cmd.Use)
+	assert.Nil(t, cmd.Flags().Lookup("version"))
+	assert.NotNil(t, cmd.Flags().Lookup("pre-release"))
+	assert.NotNil(t, cmd.Flags().Lookup("force"))
+}
+
+func TestParsePluginInstallSource(t *testing.T) {
+	tests := []struct {
+		name        string
+		source      string
+		wantRepo    string
+		wantVersion bool
+		wantTag     string
+		wantErr     string
+	}{
+		{
+			name:     "unversioned",
+			source:   "owner/repo",
+			wantRepo: "owner/repo",
+		},
+		{
+			name:        "bare semver",
+			source:      "owner/repo@1.2.3",
+			wantRepo:    "owner/repo",
+			wantVersion: true,
+			wantTag:     "1.2.3",
+		},
+		{
+			name:        "v-prefixed semver",
+			source:      "owner/repo@v1.2.3",
+			wantRepo:    "owner/repo",
+			wantVersion: true,
+			wantTag:     "1.2.3",
+		},
+		{
+			name:    "colon version syntax",
+			source:  "owner/repo:1.2.3",
+			wantErr: "owner/repo:version syntax is not supported; use owner/repo@version",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parsePluginInstallSource(tt.source)
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantRepo, got.Repository)
+			assert.Equal(t, tt.wantVersion, got.Target.HasVersion)
+			assert.Equal(t, tt.wantTag, got.Target.Tag)
+		})
+	}
+}
+
+func TestPluginInstallCommand_VersionFlagFailsDuringCobraFlagParsing(t *testing.T) {
+	var releaseHits int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		releaseHits++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+	t.Setenv("GITHUB_API_URL", server.URL)
+
+	cmd := newPluginInstallCommand(&Config{StoragePath: t.TempDir()})
+	cmd.SetArgs([]string{"owner/repo", "--version", "1.2.3"})
+
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	err := cmd.Execute()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown flag: --version")
+	assert.Zero(t, releaseHits)
+}
+
+func TestPluginInstallCommand_RejectsInvalidVersionTargetsBeforeReleaseLookup(t *testing.T) {
+	tests := []struct {
+		name    string
+		source  string
+		wantErr string
+	}{
+		{
+			name:    "latest",
+			source:  "owner/repo@latest",
+			wantErr: `invalid release version "latest": version: invalid format "latest"`,
+		},
+		{
+			name:    "range",
+			source:  "owner/repo@>=1.0.0",
+			wantErr: `invalid release version ">=1.0.0": version: invalid format ">=1.0.0"`,
+		},
+		{
+			name:    "empty",
+			source:  "owner/repo@",
+			wantErr: `invalid release version "": version: empty string`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var releaseHits int
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				releaseHits++
+				w.WriteHeader(http.StatusInternalServerError)
+			}))
+			defer server.Close()
+			t.Setenv("GITHUB_API_URL", server.URL)
+
+			cfg := &Config{StoragePath: t.TempDir()}
+			cmd := newPluginInstallCommand(cfg)
+			cmd.SetArgs([]string{tt.source})
+
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+
+			err := cmd.Execute()
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+			assert.Zero(t, releaseHits)
+		})
+	}
+}
+
+func TestPluginInstallCommand_ExistingOwnerRepoValidationRemainsInForce(t *testing.T) {
+	tests := []struct {
+		name    string
+		source  string
+		wantErr string
+	}{
+		{
+			name:    "missing slash separator",
+			source:  "owneronly",
+			wantErr: "invalid owner/repo format: missing slash separator",
+		},
+		{
+			name:    "empty owner segment",
+			source:  "/repo",
+			wantErr: "invalid owner/repo format: empty owner segment",
+		},
+		{
+			name:    "multiple slashes",
+			source:  "owner/repo/extra",
+			wantErr: "invalid owner/repo format: multiple slashes not allowed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var releaseHits int
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				releaseHits++
+				w.WriteHeader(http.StatusInternalServerError)
+			}))
+			defer server.Close()
+			t.Setenv("GITHUB_API_URL", server.URL)
+
+			cmd := newPluginInstallCommand(&Config{StoragePath: t.TempDir()})
+			cmd.SetArgs([]string{tt.source})
+
+			var out bytes.Buffer
+			cmd.SetOut(&out)
+			cmd.SetErr(&out)
+
+			err := cmd.Execute()
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+			assert.Zero(t, releaseHits)
+		})
+	}
+}
+
+func TestPluginInstallCommand_ValidSemverAbsentFromReleaseListReturnsNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	pluginsDir := filepath.Join(tmpDir, "plugins")
+	require.NoError(t, os.MkdirAll(pluginsDir, 0o755))
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+
+	var releaseHits int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		releaseHits++
+		releases := []map[string]any{
+			{"tag_name": "v2.0.0"},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(releases) //nolint:errcheck // test fixture response
+	}))
+	defer server.Close()
+	t.Setenv("GITHUB_API_URL", server.URL)
+
+	cmd := newPluginInstallCommand(&Config{StoragePath: tmpDir})
+	cmd.SetArgs([]string{"owner/repo@1.2.3"})
+
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+
+	err := cmd.Execute()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to resolve version for owner/repo: release version 1.2.3 not found")
+	assert.Equal(t, 1, releaseHits)
+}
+
 func TestSelectRelease_NoConstraint_ReturnsFirstNonPrerelease(t *testing.T) {
 	releases := []registry.Release{
 		{TagName: "v1.0.0-alpha", Prerelease: true},
@@ -17,20 +238,7 @@ func TestSelectRelease_NoConstraint_ReturnsFirstNonPrerelease(t *testing.T) {
 		{TagName: "v1.1.0", Prerelease: false},
 	}
 
-	result, err := selectRelease(releases, "", false)
-
-	require.NoError(t, err)
-	assert.Equal(t, "v1.0.0", result.TagName)
-}
-
-func TestSelectRelease_WithConstraint_MatchesVersion(t *testing.T) {
-	releases := []registry.Release{
-		{TagName: "v0.9.0", Prerelease: false},
-		{TagName: "v1.0.0", Prerelease: false},
-		{TagName: "v1.1.0", Prerelease: false},
-	}
-
-	result, err := selectRelease(releases, ">=1.0.0", false)
+	result, err := selectRelease(releases, false)
 
 	require.NoError(t, err)
 	assert.Equal(t, "v1.0.0", result.TagName)
@@ -42,32 +250,21 @@ func TestSelectRelease_IncludePrerelease_MatchesPrerelease(t *testing.T) {
 		{TagName: "v1.1.0", Prerelease: false},
 	}
 
-	result, err := selectRelease(releases, "", true)
+	result, err := selectRelease(releases, true)
 
 	require.NoError(t, err)
 	assert.Equal(t, "v1.0.0-alpha", result.TagName)
 }
 
-func TestSelectRelease_InvalidConstraint_ReturnsError(t *testing.T) {
+func TestSelectRelease_NoEligibleRelease_ReturnsError(t *testing.T) {
 	releases := []registry.Release{
-		{TagName: "v1.0.0", Prerelease: false},
+		{TagName: "v1.0.0-alpha", Prerelease: true},
 	}
 
-	_, err := selectRelease(releases, "invalid constraint", false)
+	_, err := selectRelease(releases, false)
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid version constraint")
-}
-
-func TestSelectRelease_NoMatch_ReturnsError(t *testing.T) {
-	releases := []registry.Release{
-		{TagName: "v0.5.0", Prerelease: false},
-	}
-
-	_, err := selectRelease(releases, ">=1.0.0", false)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no release matches constraint")
+	assert.Contains(t, err.Error(), "no eligible releases found")
 }
 
 func TestFindChecksumURL_ChecksumsFileExists(t *testing.T) {

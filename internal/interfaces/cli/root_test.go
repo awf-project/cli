@@ -2,6 +2,8 @@ package cli_test
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -43,13 +45,22 @@ func TestRootCommandHelp(t *testing.T) {
 	}
 }
 
-func TestVersionCommand(t *testing.T) {
+func TestVersion_NewRootCommandExposesRootVersionOutputUsingVersionCommitAndBuildDate(t *testing.T) {
+	t.Cleanup(func() {
+		cli.Version = "dev"
+		cli.Commit = "unknown"
+		cli.BuildDate = "unknown"
+	})
+	cli.Version = "1.2.3"
+	cli.Commit = "abc123"
+	cli.BuildDate = "2026-06-24"
+
 	cmd := cli.NewRootCommand()
 
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"version"})
+	cmd.SetArgs([]string{"--version"})
 
 	err := cmd.Execute()
 	if err != nil {
@@ -57,13 +68,19 @@ func TestVersionCommand(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "awf version") {
-		t.Errorf("expected version output, got: %s", output)
+	for _, expected := range []string{"awf version 1.2.3", "commit: abc123", "built: 2026-06-24"} {
+		if !strings.Contains(output, expected) {
+			t.Errorf("expected version output to contain %q, got: %s", expected, output)
+		}
 	}
 }
 
-func TestVersionCommandFlags(t *testing.T) {
-	// Set version info
+func TestVersion_PrintsExactlyThreeMetadataLinesInRequiredStructure(t *testing.T) {
+	t.Cleanup(func() {
+		cli.Version = "dev"
+		cli.Commit = "unknown"
+		cli.BuildDate = "unknown"
+	})
 	cli.Version = "1.0.0"
 	cli.Commit = "abc123"
 	cli.BuildDate = "2024-01-01"
@@ -72,32 +89,109 @@ func TestVersionCommandFlags(t *testing.T) {
 
 	buf := new(bytes.Buffer)
 	cmd.SetOut(buf)
-	cmd.SetArgs([]string{"version"})
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"--version"})
 
-	_ = cmd.Execute()
-	output := buf.String()
-
-	if !strings.Contains(output, "1.0.0") {
-		t.Errorf("expected version '1.0.0' in output: %s", output)
+	err := cmd.Execute()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
-	if !strings.Contains(output, "abc123") {
-		t.Errorf("expected commit 'abc123' in output: %s", output)
+
+	got := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
+	want := []string{
+		"awf version 1.0.0",
+		"commit: abc123",
+		"built: 2024-01-01",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("expected exact version lines %q, got %q", want, got)
 	}
 }
 
-func TestRootCommandHasVersionSubcommand(t *testing.T) {
+func TestVersion_WorksWithPlaceholderDevelopmentMetadataAndKeepsThreeLineStructure(t *testing.T) {
+	t.Cleanup(func() {
+		cli.Version = "dev"
+		cli.Commit = "unknown"
+		cli.BuildDate = "unknown"
+	})
+	cli.Version = "dev"
+	cli.Commit = "unknown"
+	cli.BuildDate = "unknown"
+
 	cmd := cli.NewRootCommand()
 
-	found := false
-	for _, sub := range cmd.Commands() {
-		if sub.Name() == "version" {
-			found = true
-			break
-		}
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"--version"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
 
-	if !found {
-		t.Error("expected root command to have 'version' subcommand")
+	got := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
+	want := []string{
+		"awf version dev",
+		"commit: unknown",
+		"built: unknown",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("expected placeholder version lines %q, got %q", want, got)
+	}
+}
+
+func TestVersion_DoesNotExecuteNormalPersistentPreRunBehaviorInitializeProjectStateOrPrintUnrelatedOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", filepath.Join(tmpDir, "home"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(tmpDir, "data"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "config"))
+
+	historyDB := filepath.Join(tmpDir, "data", "awf", "history.db")
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
+
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"--version"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if _, statErr := os.Stat(historyDB); !os.IsNotExist(statErr) {
+		t.Fatalf("expected --version to skip facade-backed project state initialization, history db stat error: %v", statErr)
+	}
+	if strings.Contains(buf.String(), "NOTICE:") || strings.Contains(buf.String(), "Error:") {
+		t.Errorf("expected --version to avoid unrelated output, got: %s", buf.String())
+	}
+}
+
+func TestVersion_NewVersionCommandIsRemovedAndNoLongerRegistered(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "version" {
+			t.Fatal("expected root command not to register a 'version' subcommand")
+		}
+	}
+}
+
+func TestVersion_AWFVersionIsNoLongerARegisteredSubcommand(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"version"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatalf("expected 'awf version' to be rejected, got output: %s", buf.String())
+	}
+	if !strings.Contains(err.Error(), `unknown command "version"`) {
+		t.Fatalf("expected 'awf version' to fail as an unknown command, got error: %v", err)
 	}
 }
 
@@ -126,7 +220,7 @@ func TestRootRegistersACPServeCommand(t *testing.T) {
 func TestRootCommand_HasAllSubcommands(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
-	expectedCommands := []string{"version", "list", "run", "status", "validate", "diagram", "error"}
+	expectedCommands := []string{"list", "run", "status", "validate", "diagram", "error"}
 
 	for _, expected := range expectedCommands {
 		found := false
@@ -211,7 +305,7 @@ func TestRootCommand_DiagramHelpAccessible(t *testing.T) {
 func TestRootCommand_GlobalFlags(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
-	flags := []string{"verbose", "quiet", "no-color", "log-level", "config", "storage"}
+	flags := []string{"verbose", "quiet", "no-color", "no-hints", "log-level", "config", "storage", "format"}
 
 	for _, flag := range flags {
 		if cmd.PersistentFlags().Lookup(flag) == nil {
@@ -220,12 +314,84 @@ func TestRootCommand_GlobalFlags(t *testing.T) {
 	}
 }
 
-func TestRootCommand_VerboseShortFlag(t *testing.T) {
+func TestRootCommand_VerboseFlagRemainsAvailableAsLongForm(t *testing.T) {
 	cmd := cli.NewRootCommand()
 
-	flag := cmd.PersistentFlags().ShorthandLookup("v")
+	flag := cmd.PersistentFlags().Lookup("verbose")
 	if flag == nil {
-		t.Error("expected -v shorthand for --verbose")
+		t.Error("expected --verbose flag to exist")
+	}
+}
+
+func TestRootCommand_VerboseFlagNoLongerHasShorthandV(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	if flag := cmd.PersistentFlags().ShorthandLookup("v"); flag != nil {
+		t.Errorf("expected -v shorthand to be unassigned, got --%s", flag.Name)
+	}
+}
+
+func TestRootCommand_VerboseHelpOutputNoLongerAdvertisesVerboseShorthand(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"--help"})
+
+	err := cmd.Execute()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if strings.Contains(buf.String(), "-v, --verbose") {
+		t.Errorf("expected help output not to advertise '-v, --verbose', got:\n%s", buf.String())
+	}
+}
+
+func TestRootCommand_VerboseRunningWithVDoesNotEnableVerboseModeAndIsRejectedOrReservedByCobra(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"-v", "--version"})
+
+	err := cmd.Execute()
+	output := buf.String()
+	if err == nil && !strings.Contains(output, "awf version") {
+		t.Fatalf("expected -v to be rejected or reserved by Cobra, got output: %s", output)
+	}
+	if strings.Contains(output, "Enable verbose output") {
+		t.Fatalf("expected -v not to enable or describe verbose mode, got output: %s", output)
+	}
+}
+
+func TestRootCommand_GlobalFlagsOtherThanVerboseShorthandContinueToBeRegisteredAsBefore(t *testing.T) {
+	cmd := cli.NewRootCommand()
+
+	tests := []struct {
+		name      string
+		shorthand string
+	}{
+		{name: "quiet", shorthand: "q"},
+		{name: "format", shorthand: "f"},
+		{name: "no-color"},
+		{name: "no-hints"},
+		{name: "log-level"},
+		{name: "config"},
+		{name: "storage"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flag := cmd.PersistentFlags().Lookup(tt.name)
+			if flag == nil {
+				t.Fatalf("expected global flag --%s to exist", tt.name)
+			}
+			if flag.Shorthand != tt.shorthand {
+				t.Errorf("expected --%s shorthand %q, got %q", tt.name, tt.shorthand, flag.Shorthand)
+			}
+		})
 	}
 }
 
@@ -237,8 +403,6 @@ func TestRootCommand_QuietShortFlag(t *testing.T) {
 		t.Error("expected -q shorthand for --quiet")
 	}
 }
-
-// RED Phase: Test stubs for NewApp entry point
 
 func TestNewApp_ReturnsNonNil(t *testing.T) {
 	cfg := cli.DefaultConfig()

@@ -75,9 +75,9 @@ func TestWorkflowInstall_ValidRepoWithVersion(t *testing.T) {
 	t.Setenv("GITHUB_API_URL", server.URL)
 
 	cfg := &Config{}
-	flags := workflowInstallFlags{version: "1.2.0", global: false, force: false}
+	flags := workflowInstallFlags{global: false, force: false}
 
-	err = runWorkflowInstall(&cobra.Command{}, cfg, "org/awf-workflow-speckit", flags)
+	err = runWorkflowInstall(&cobra.Command{}, cfg, "org/awf-workflow-speckit@1.2.0", flags)
 
 	require.NoError(t, err, "should install workflow pack successfully")
 }
@@ -92,9 +92,9 @@ func TestWorkflowInstall_GlobalFlag(t *testing.T) {
 	})
 
 	cfg := &Config{}
-	flags := workflowInstallFlags{version: "1.0.0", global: true, force: false}
+	flags := workflowInstallFlags{global: true, force: false}
 
-	err := runWorkflowInstall(&cobra.Command{}, cfg, "org/awf-workflow-speckit", flags)
+	err := runWorkflowInstall(&cobra.Command{}, cfg, "org/awf-workflow-speckit@1.0.0", flags)
 
 	// Global flag prevents .awf/ project check — error comes from GitHub client, not project validation.
 	require.Error(t, err)
@@ -112,9 +112,9 @@ func TestWorkflowInstall_MissingProjectDir(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpDir))
 
 	cfg := &Config{}
-	flags := workflowInstallFlags{version: "1.0.0", global: false, force: false}
+	flags := workflowInstallFlags{global: false, force: false}
 
-	err = runWorkflowInstall(&cobra.Command{}, cfg, "org/awf-workflow-speckit", flags)
+	err = runWorkflowInstall(&cobra.Command{}, cfg, "org/awf-workflow-speckit@1.0.0", flags)
 
 	require.Error(t, err, "should error when .awf/ missing and not global")
 }
@@ -133,7 +133,7 @@ func TestWorkflowInstall_InvalidRepoFormat(t *testing.T) {
 	require.NoError(t, os.Chdir(projDir))
 
 	cfg := &Config{}
-	flags := workflowInstallFlags{version: "", global: false, force: false}
+	flags := workflowInstallFlags{global: false, force: false}
 
 	err = runWorkflowInstall(&cobra.Command{}, cfg, "invalid-format", flags)
 
@@ -158,9 +158,9 @@ func TestWorkflowInstall_ForceReplaces(t *testing.T) {
 	require.NoError(t, os.Chdir(projDir))
 
 	cfg := &Config{}
-	flags := workflowInstallFlags{version: "1.0.0", global: false, force: true}
+	flags := workflowInstallFlags{global: false, force: true}
 
-	err = runWorkflowInstall(&cobra.Command{}, cfg, "org/awf-workflow-speckit", flags)
+	err = runWorkflowInstall(&cobra.Command{}, cfg, "org/awf-workflow-speckit@1.0.0", flags)
 
 	// With --force, the pack directory check is bypassed and the error comes from
 	// the GitHub client (no mock server), not from the existing pack directory.
@@ -768,7 +768,7 @@ func TestFindPackDir_ShortAndLongName(t *testing.T) {
 }
 
 // TestEffectiveCLIVersion_DevPrefix verifies effectiveCLIVersion returns "999.0.0"
-// for any version string starting with "dev" and the verbatim version otherwise.
+// for dev/dirty builds and the verbatim version otherwise.
 func TestEffectiveCLIVersion_DevPrefix(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -781,7 +781,7 @@ func TestEffectiveCLIVersion_DevPrefix(t *testing.T) {
 		{"real version", "1.2.3", "1.2.3"},
 		{"pre-release", "1.0.0-rc1", "1.0.0-rc1"},
 		{"v-prefixed version", "v0.8.1", "v0.8.1"},
-		{"v-prefixed dirty", "v0.8.1-dirty", "v0.8.1-dirty"},
+		{"v-prefixed dirty", "v0.8.1-dirty", "999.0.0"},
 		{"git describe with commits", "v0.8.1-3-gabcdef", "999.0.0"},
 		{"git describe dirty with commits", "v0.8.1-3-gabcdef-dirty", "999.0.0"},
 	}
@@ -956,9 +956,9 @@ func TestRunWorkflowInstall_ProgressMessages(t *testing.T) {
 	cmd.SetErr(&bytes.Buffer{})
 
 	cfg := &Config{}
-	flags := workflowInstallFlags{version: "1.0.0", global: false, force: false}
+	flags := workflowInstallFlags{global: false, force: false}
 
-	err = runWorkflowInstall(cmd, cfg, "org/awf-workflow-msgpack", flags)
+	err = runWorkflowInstall(cmd, cfg, "org/awf-workflow-msgpack@1.0.0", flags)
 
 	require.NoError(t, err)
 	output := outBuf.String()

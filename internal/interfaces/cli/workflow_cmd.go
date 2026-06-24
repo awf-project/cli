@@ -286,16 +286,14 @@ func runWorkflowInfo(cmd *cobra.Command, _ *Config, packName string) error {
 		}
 	}
 
-	// Emit plugin dependency warnings (non-blocking)
 	emitPluginWarnings(cmd, packDir, nil)
 
 	return nil
 }
 
 type workflowInstallFlags struct {
-	version string
-	global  bool
-	force   bool
+	global bool
+	force  bool
 }
 
 func newWorkflowInstallCommand(cfg *Config) *cobra.Command {
@@ -320,24 +318,10 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVar(&flags.version, "version", "", "version constraint (e.g. \">=1.0.0 <2.0.0\")")
 	cmd.Flags().BoolVar(&flags.global, "global", false, "install to global XDG data directory")
 	cmd.Flags().BoolVar(&flags.force, "force", false, "overwrite existing installation")
 
 	return cmd
-}
-
-// parseOwnerRepoAndVersion parses owner/repo[@ version] format.
-func parseOwnerRepoAndVersion(source, versionFlag string) (ownerRepo, version string) {
-	ownerRepo = source
-	version = versionFlag
-
-	if at := strings.LastIndex(source, "@"); at >= 0 {
-		ownerRepo = source[:at]
-		version = source[at+1:]
-	}
-
-	return ownerRepo, version
 }
 
 // extractPackName extracts pack name from repository name (removes awf-workflow- prefix).
@@ -349,11 +333,11 @@ func extractPackName(ownerRepo string) string {
 	return strings.TrimPrefix(packName, "awf-workflow-")
 }
 
-// effectiveCLIVersion returns Version, substituting a valid semver for "dev" builds
+// effectiveCLIVersion returns Version, substituting a valid semver for "dev" and dirty builds
 // so version constraint checks (packs, plugins) work correctly outside production releases.
 // Also handles non-parseable git describe output (e.g., "v0.8.1-3-gabcdef-dirty").
 func effectiveCLIVersion() string {
-	if strings.HasPrefix(Version, "dev") {
+	if strings.HasPrefix(Version, "dev") || strings.Contains(Version, "dirty") {
 		return "999.0.0"
 	}
 	if _, err := registry.ParseVersion(Version); err != nil {
@@ -401,15 +385,17 @@ func findChecksumInRelease(ctx context.Context, assets []registry.Asset, assetNa
 }
 
 func runWorkflowInstall(cmd *cobra.Command, _ *Config, source string, flags workflowInstallFlags) error {
-	// Parse owner/repo and optional @version
-	ownerRepo, versionConstraint := parseOwnerRepoAndVersion(source, flags.version)
-
-	if err := registry.ValidateOwnerRepo(ownerRepo); err != nil {
+	ownerRepo, target, err := parseInstallReleaseTarget(source)
+	if err != nil {
 		return err
 	}
 
+	if validateErr := registry.ValidateOwnerRepo(ownerRepo); validateErr != nil {
+		return validateErr
+	}
+
 	if !flags.global {
-		if _, err := os.Stat(".awf"); os.IsNotExist(err) {
+		if _, statErr := os.Stat(".awf"); os.IsNotExist(statErr) {
 			return fmt.Errorf("not in an awf project (run awf init first)")
 		}
 	}
@@ -418,48 +404,31 @@ func runWorkflowInstall(cmd *cobra.Command, _ *Config, source string, flags work
 	ctx := context.Background()
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Fetching releases for %s...\n", ownerRepo)
-	resolvedVersion, err := githubClient.ResolveVersion(ctx, ownerRepo, versionConstraint, false)
-	if err != nil {
-		return fmt.Errorf("resolve version: %w", err)
-	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Resolved version: %s\n", resolvedVersion.String())
-
-	// List releases to find the matching one
 	releases, err := githubClient.ListReleases(ctx, ownerRepo)
 	if err != nil {
 		return fmt.Errorf("list releases: %w", err)
 	}
 
-	var matchingRelease *registry.Release
-	for _, rel := range releases {
-		tagVersion := registry.NormalizeTag(rel.TagName)
-		v, parseErr := registry.ParseVersion(tagVersion)
-		if parseErr != nil {
-			continue
-		}
-		if v.Compare(resolvedVersion) == 0 {
-			matchingRelease = &rel
-			break
-		}
+	matchingRelease, err := selectExactRelease(releases, target, false)
+	if err != nil {
+		return fmt.Errorf("resolve version: %w", err)
 	}
-
-	if matchingRelease == nil {
-		return fmt.Errorf("release for version %s not found", resolvedVersion.String())
+	resolvedVersion, err := registry.ParseVersion(registry.NormalizeTag(matchingRelease.TagName))
+	if err != nil {
+		return fmt.Errorf("parse resolved version: %w", err)
 	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Resolved version: %s\n", resolvedVersion.String())
 
-	// Find the pack archive asset (workflow packs are platform-independent — single .tar.gz)
 	asset, err := findPackAsset(matchingRelease.Assets)
 	if err != nil {
 		return err
 	}
 
-	// Get checksum for the asset
 	checksum, err := findChecksumInRelease(ctx, matchingRelease.Assets, asset.Name)
 	if err != nil {
 		return err
 	}
 
-	// Determine target pack name and directory
 	packName := extractPackName(ownerRepo)
 	var targetDir string
 	if flags.global {
@@ -470,7 +439,6 @@ func runWorkflowInstall(cmd *cobra.Command, _ *Config, source string, flags work
 
 	installer := workflowpkg.NewPackInstaller(effectiveCLIVersion())
 
-	// Install the pack
 	packSource := workflowpkg.PackSource{
 		Repository: ownerRepo,
 		Version:    resolvedVersion.String(),
@@ -481,7 +449,6 @@ func runWorkflowInstall(cmd *cobra.Command, _ *Config, source string, flags work
 		return fmt.Errorf("install workflow pack: %w", err)
 	}
 
-	// Emit plugin dependency warnings (non-blocking)
 	emitPluginWarnings(cmd, targetDir, nil)
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Installed workflow pack %q v%s to %s\n", packName, resolvedVersion.String(), targetDir)
@@ -666,7 +633,6 @@ func updateSinglePack(ctx context.Context, cmd *cobra.Command, githubClient *reg
 		return err
 	}
 
-	// Get checksum for the asset
 	checksum, err := findChecksumInRelease(ctx, newerRelease.Assets, asset.Name)
 	if err != nil {
 		return err
@@ -687,7 +653,6 @@ func updateSinglePack(ctx context.Context, cmd *cobra.Command, githubClient *reg
 		return fmt.Errorf("update workflow pack: %w", err)
 	}
 
-	// Emit plugin dependency warnings (non-blocking)
 	emitPluginWarnings(cmd, packDir, nil)
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Updated %s from %s to %s\n", packName, source.Version, newerVersion.String())

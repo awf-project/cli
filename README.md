@@ -128,7 +128,7 @@ AWF is a powerful orchestration tool that grants AI agents and workflows direct 
 | `awf status <id>` | Check workflow status |
 | `awf config show` | Display project configuration |
 | `awf plugin list` | List installed plugins |
-| `awf plugin install <owner/repo>` | Install a plugin from GitHub Releases |
+| `awf plugin install <owner/repo[@version]>` | Install a plugin from GitHub Releases |
 | `awf plugin update [name]` | Update an installed plugin |
 | `awf plugin verify [name]` | Verify plugin binary integrity (check/update SHA-256 checksums) |
 | `awf plugin remove <name>` | Remove an installed plugin |
@@ -137,17 +137,19 @@ AWF is a powerful orchestration tool that grants AI agents and workflows direct 
 | `awf plugin disable <name>` | Disable a plugin |
 | `awf workflow list` | List installed workflow packs |
 | `awf workflow info <name>` | Display detailed pack information |
-| `awf workflow install <owner/repo>` | Install a workflow pack from GitHub Releases |
+| `awf workflow install <owner/repo[@version]>` | Install a workflow pack from GitHub Releases |
 | `awf workflow update [name]` | Update an installed workflow pack |
 | `awf workflow remove <pack>` | Remove an installed workflow pack |
 | `awf workflow search [query]` | Search for workflow packs on GitHub |
 | `awf serve` | Start HTTP API server for remote workflow execution and monitoring |
 | `awf tui` | Launch the interactive terminal UI |
-| `awf upgrade` | Upgrade AWF to the latest version |
-| `awf version` | Show version information |
+| `awf upgrade [version]` | Upgrade AWF to the latest version or an exact SemVer release |
+| `awf --version` | Show binary version information |
 | `awf completion <shell>` | Generate shell autocompletion |
 
 See [Command Reference](docs/user-guide/commands.md) for all options.
+
+**BREAKING:** Use `--verbose` instead of `-v`. Version selection now follows standard CLI conventions: `awf --version`, `awf upgrade [version]`, `awf plugin install owner/repo[@version]`, and `awf workflow install owner/repo[@version]`.
 
 ## Example Workflow
 

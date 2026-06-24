@@ -159,7 +159,7 @@ This will store state files in `/custom/path/states/` and history in `/custom/pa
 |------|-------------|
 | `--input, -i` | Pass input values (key=value) |
 | `--output, -o` | Output mode: silent, streaming, buffered |
-| `--verbose, -v` | Enable verbose output |
+| `--verbose` | Enable verbose output |
 | `--quiet, -q` | Suppress non-error output |
 | `--dry-run` | Show execution plan without running |
 | `--interactive` | Step-by-step execution with prompts |

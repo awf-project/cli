@@ -20,7 +20,7 @@ title: "CLI Commands"
 | `awf error [code]` | Look up error code documentation |
 | `awf history` | Show workflow execution history |
 | `awf plugin list` | List installed plugins |
-| `awf plugin install <owner/repo>` | Install a plugin from GitHub releases |
+| `awf plugin install <owner/repo[@version]>` | Install a plugin from GitHub releases |
 | `awf plugin update [name]` | Update an installed plugin |
 | `awf plugin verify [name]` | Verify plugin binary integrity (check/update SHA-256 checksums) |
 | `awf plugin remove <name>` | Remove an installed plugin |
@@ -29,16 +29,15 @@ title: "CLI Commands"
 | `awf plugin disable <name>` | Disable a plugin |
 | `awf workflow list` | List installed workflow packs |
 | `awf workflow info <name>` | Display detailed pack information |
-| `awf workflow install <owner/repo>` | Install a workflow pack from GitHub Releases |
+| `awf workflow install <owner/repo[@version]>` | Install a workflow pack from GitHub Releases |
 | `awf workflow update [name]` | Update an installed workflow pack |
 | `awf workflow remove <name>` | Remove an installed workflow pack |
 | `awf workflow search [query]` | Search for workflow packs on GitHub |
 | `awf config show` | Display project configuration |
 | `awf serve` | Start HTTP API server for remote execution and monitoring |
-| `awf upgrade` | Upgrade AWF to the latest version |
+| `awf upgrade [version]` | Upgrade AWF to the latest version or an exact SemVer release |
 | `awf upgrade --check` | Check for available updates without installing |
-| `awf upgrade --version <tag>` | Install a specific version |
-| `awf version` | Show version info |
+| `awf --version` | Show binary version info |
 | `awf completion <shell>` | Generate shell autocompletion |
 
 ## Global Flags
@@ -47,7 +46,7 @@ These flags work with all commands:
 
 | Flag | Description |
 |------|-------------|
-| `--verbose, -v` | Enable verbose output (displays tool-use markers during agent execution) |
+| `--verbose` | Enable verbose output (displays tool-use markers during agent execution) |
 | `--quiet, -q` | Suppress non-error output |
 | `--no-color` | Disable colored output |
 | `--no-hints` | Disable error hint suggestions |
@@ -171,7 +170,7 @@ awf run <workflow> [flags]
 | `streaming` | Real-time output with [OUT]/[ERR] prefixes; for agent steps, displays human-readable text (or raw NDJSON if `output_format: json`) |
 | `buffered` | Show output after each step completes; for agent steps, displays filtered text in post-execution summary (or raw NDJSON if `output_format: json`) |
 
-**Note:** For agent steps, the `output_format` field controls display filtering: `text` or omitted (default) shows human-readable output; `json` shows raw NDJSON. See [Output Formatting](agent-steps.md#streaming-output-display) for details.
+**Note:** For agent steps, the `output_format` field controls display filtering: `text` or omitted (default) shows human-readable output; `json` shows raw NDJSON. See [Output Formatting](agent-steps.md#output-formatting) for details.
 
 ### Execution Summary
 
@@ -810,7 +809,7 @@ awf validate <workflow> [flags]
 awf validate deploy
 
 # Validate with verbose output
-awf validate deploy -v
+awf validate deploy --verbose
 
 # Skip plugin validators
 awf validate deploy --skip-plugins
@@ -1096,26 +1095,27 @@ awf plugin list --details
 Install a plugin from a GitHub repository.
 
 ```bash
-awf plugin install <owner/repo> [flags]
+awf plugin install <owner/repo[@version]> [flags]
 ```
 
 ### Arguments
 
 | Argument | Description |
 |----------|-------------|
-| `owner/repo` | GitHub repository in `owner/repo` format (not a URL) |
+| `owner/repo[@version]` | GitHub repository in `owner/repo` format with optional exact SemVer version suffix |
 
 ### Flags
 
 | Flag | Description |
 |------|-------------|
-| `--version` | Version constraint (e.g. `">=1.0.0 <2.0.0"`) |
 | `--pre-release` | Include pre-release versions (alpha, beta, rc) |
 | `--force` | Overwrite existing installation |
 
 ### Description
 
 Downloads the latest compatible release from the GitHub repository, verifies the SHA-256 checksum, extracts the `.tar.gz` archive, validates the plugin manifest, and installs atomically. The plugin is enabled automatically after installation.
+
+Explicit versions use `owner/repo@version` syntax and must be exact SemVer values. Both `1.2.3` and `v1.2.3` are accepted; ranges such as `>=1.0.0` are rejected.
 
 Release assets must follow the naming convention: `awf-plugin-<name>_<os>_<arch>.tar.gz` with a corresponding `checksums.txt` file.
 
@@ -1125,8 +1125,8 @@ Release assets must follow the naming convention: `awf-plugin-<name>_<os>_<arch>
 # Install a plugin
 awf plugin install myorg/awf-plugin-jira
 
-# Install with version constraint
-awf plugin install myorg/awf-plugin-jira --version ">=1.0.0 <2.0.0"
+# Install an exact version
+awf plugin install myorg/awf-plugin-jira@v1.2.3
 
 # Include pre-release versions
 awf plugin install myorg/awf-plugin-jira --pre-release
@@ -1573,26 +1573,27 @@ No installed workflow packs to update.
 Install a workflow pack from a GitHub repository.
 
 ```bash
-awf workflow install <owner/repo> [flags]
+awf workflow install <owner/repo[@version]> [flags]
 ```
 
 ### Arguments
 
 | Argument | Description |
 |----------|-------------|
-| `owner/repo` | GitHub repository in `owner/repo` format (not a URL) |
+| `owner/repo[@version]` | GitHub repository in `owner/repo` format with optional exact SemVer version suffix |
 
 ### Flags
 
 | Flag | Description |
 |------|-------------|
-| `--version` | Version constraint (e.g., `">=1.0.0 <2.0.0"` or `"1.2.0"` for exact version) |
 | `--global` | Install to global user-level directory (`~/.local/share/awf/workflow-packs/`) instead of local project |
 | `--force` | Overwrite existing installation |
 
 ### Description
 
 Downloads the latest compatible release from the GitHub repository, verifies the SHA-256 checksum, extracts the `.tar.gz` archive, validates the `manifest.yaml`, checks AWF version compatibility, and installs atomically. The pack directory structure is created with source metadata.
+
+Explicit versions use `owner/repo@version` syntax and must be exact SemVer values. Both `1.2.3` and `v1.2.3` are accepted; ranges such as `>=1.0.0` are rejected.
 
 Release assets must include a single `.tar.gz` archive (e.g., `awf-workflow-<name>_<version>.tar.gz`) with a corresponding `checksums.txt` file. Workflow packs are platform-independent — no OS/architecture suffix is needed.
 
@@ -1615,11 +1616,8 @@ If the manifest declares required plugins via the `plugins:` field, warnings are
 # Install a workflow pack (latest version)
 awf workflow install myorg/awf-workflow-speckit
 
-# Install with specific version
-awf workflow install myorg/awf-workflow-speckit --version "1.2.0"
-
-# Install with version constraint
-awf workflow install myorg/awf-workflow-speckit --version ">=1.0.0 <2.0.0"
+# Install an exact version
+awf workflow install myorg/awf-workflow-speckit@v1.2.0
 
 # Install globally (available to all projects)
 awf workflow install myorg/awf-workflow-speckit --global
@@ -1794,12 +1792,12 @@ Project Configuration (.awf/config.yaml)
 
 ---
 
-## awf version
+## awf --version
 
-Show version information.
+Show binary version information.
 
 ```bash
-awf version
+awf --version
 ```
 
 ---
