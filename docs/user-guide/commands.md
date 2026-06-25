@@ -19,14 +19,15 @@ title: "CLI Commands"
 | `awf diagram <workflow>` | Generate workflow diagram (DOT format) |
 | `awf error [code]` | Look up error code documentation |
 | `awf history` | Show workflow execution history |
-| `awf plugin list` | List installed plugins |
+| `awf plugin disable <name>` | Disable an enabled plugin |
+| `awf plugin enable <name>` | Enable a disabled plugin |
+| `awf plugin init <name>` | Scaffold a new external plugin repository |
 | `awf plugin install <owner/repo[@version]>` | Install a plugin from GitHub releases |
-| `awf plugin update [name]` | Update an installed plugin |
-| `awf plugin verify [name]` | Verify plugin binary integrity (check/update SHA-256 checksums) |
+| `awf plugin list` | List installed plugins |
 | `awf plugin remove <name>` | Remove an installed plugin |
 | `awf plugin search [query]` | Search for plugins on GitHub |
-| `awf plugin enable <name>` | Enable a plugin |
-| `awf plugin disable <name>` | Disable a plugin |
+| `awf plugin update [name]` | Update an installed plugin |
+| `awf plugin verify [name]` | Verify plugin binary integrity (check/update SHA-256 checksums) |
 | `awf workflow list` | List installed workflow packs |
 | `awf workflow info <name>` | Display detailed pack information |
 | `awf workflow install <owner/repo[@version]>` | Install a workflow pack from GitHub Releases |
@@ -1023,14 +1024,85 @@ awf plugin <subcommand> [flags]
 
 | Subcommand | Description |
 |------------|-------------|
-| `list` | List all plugins (use `--operations` to show provided operations) |
+| `disable <name>` | Disable an enabled plugin |
+| `enable <name>` | Enable a disabled plugin |
+| `init <name>` | Scaffold a new external plugin repository |
 | `install <owner/repo>` | Install a plugin from GitHub releases |
-| `update [name]` | Update an installed plugin to the latest version |
-| `verify [name]` | Verify plugin binary integrity (check/update SHA-256 checksums) |
+| `list` | List all plugins (use `--operations` to show provided operations) |
 | `remove <name>` | Remove an installed plugin |
 | `search [query]` | Search for available plugins on GitHub |
-| `enable <name>` | Enable a disabled plugin |
-| `disable <name>` | Disable an enabled plugin |
+| `update [name]` | Update an installed plugin to the latest version |
+| `verify [name]` | Verify plugin binary integrity (check/update SHA-256 checksums) |
+
+---
+
+## awf plugin init
+
+Scaffold an AWF plugin repository.
+
+```bash
+awf plugin init <name> [flags]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `name` | Plugin distribution name. It must start with `awf-plugin-`, for example `awf-plugin-example` |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--kind` | Plugin scaffold kind. The MVP supports `operation` only; omitted means `operation` |
+| `--output` | Output directory. Defaults to `<name>` |
+| `--force` | Overwrite generated files that already exist |
+
+### Description
+
+Generates a Go operation plugin repository with `go.mod`, `main.go`, tests, `plugin.yaml`, `README.md`, `Makefile`, `examples/demo.yaml`, and a GitHub Actions release workflow.
+
+The command treats `<name>` as the distribution name used for the repository, binary, directory, and release assets. The runtime plugin id is derived by stripping the `awf-plugin-` prefix, so `awf-plugin-example` creates a manifest named `example` and workflow operations use `example.echo`.
+
+`kind` selects the scaffold shape. Runtime `capabilities` stay in `plugin.yaml`; the generated operation scaffold advertises `operations`. Future scaffold kinds such as `canonical-port`, `adapter`, `direct-integration`, `hybrid`, `validator`, `step-type`, `event-listener`, and `full` are listed in help output but return unsupported-kind errors until implemented.
+
+### Examples
+
+```bash
+# Create an operation plugin in ./awf-plugin-example
+awf plugin init awf-plugin-example --kind operation
+
+# Use the default operation kind
+awf plugin init awf-plugin-example
+
+# Write to a custom directory
+awf plugin init awf-plugin-example --output /tmp/awf-plugin-example
+
+# Overwrite existing generated files
+awf plugin init awf-plugin-example --force
+```
+
+### First Run
+
+```bash
+awf plugin init awf-plugin-example --kind operation
+cd awf-plugin-example
+make test
+make build
+make install-local
+awf plugin enable awf-plugin-example
+awf plugin list --operations
+awf run examples/demo.yaml
+```
+
+### Errors
+
+| Error | Cause |
+|-------|-------|
+| `required-prefix` | Name does not start with `awf-plugin-` |
+| `unsupported-kind` | `--kind` is not `operation` |
+| `single-kind` | Multiple or comma-separated `--kind` values were provided |
+| `already exists` | A generated file exists and `--force` was not provided |
 
 ---
 
@@ -1117,7 +1189,7 @@ Downloads the latest compatible release from the GitHub repository, verifies the
 
 Explicit versions use `owner/repo@version` syntax and must be exact SemVer values. Both `1.2.3` and `v1.2.3` are accepted; ranges such as `>=1.0.0` are rejected.
 
-Release assets must follow the naming convention: `awf-plugin-<name>_<os>_<arch>.tar.gz` with a corresponding `checksums.txt` file.
+Release assets must follow the naming convention: `awf-plugin-<name>_<version>_<os>_<arch>.tar.gz` with a corresponding `checksums.txt` file.
 
 ### Examples
 

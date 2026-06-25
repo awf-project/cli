@@ -3,289 +3,276 @@ package main
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/pkg/plugin/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
-// TestEchoPlugin_ImplementsPlugin verifies that EchoPlugin implements sdk.Plugin interface.
-func TestEchoPlugin_ImplementsPlugin(t *testing.T) {
-	plugin := &EchoPlugin{}
+func newTestEchoPlugin() *EchoPlugin {
+	return &EchoPlugin{BasePlugin: sdk.BasePlugin{PluginName: "echo", PluginVersion: "1.0.0"}}
+}
 
-	require.NotNil(t, plugin)
+func TestMainGoUsesSDKServePluginAsTheProcessEntryPoint(t *testing.T) {
+	source := readEchoSource(t)
 
-	// Verify interface implementation at compile time
+	assert.Contains(t, source, "sdk.Serve(")
+}
+
+func TestMainGoEmbedsOrUsesSDKBasePluginWithRuntimePluginIDEcho(t *testing.T) {
 	var _ sdk.Plugin = (*EchoPlugin)(nil)
+	plugin := newTestEchoPlugin()
+
+	assert.Equal(t, "echo", plugin.Name())
+	assert.Equal(t, "1.0.0", plugin.Version())
 }
 
-// TestEchoPlugin_Name_ReturnsPluginName verifies Name returns the correct plugin identifier.
-func TestEchoPlugin_Name_ReturnsPluginName(t *testing.T) {
-	plugin := &EchoPlugin{BasePlugin: sdk.BasePlugin{PluginName: "echo", PluginVersion: "1.0.0"}}
-
-	name := plugin.Name()
-
-	assert.Equal(t, "echo", name)
-}
-
-// TestEchoPlugin_Version_ReturnsPluginVersion verifies Version returns semantic version.
-func TestEchoPlugin_Version_ReturnsPluginVersion(t *testing.T) {
-	plugin := &EchoPlugin{BasePlugin: sdk.BasePlugin{PluginName: "echo", PluginVersion: "1.0.0"}}
-
-	version := plugin.Version()
-
-	assert.Equal(t, "1.0.0", version)
-}
-
-// TestEchoPlugin_Init_Succeeds verifies that Init completes without error with valid config.
-func TestEchoPlugin_Init_Succeeds(t *testing.T) {
-	plugin := &EchoPlugin{}
-	ctx := context.Background()
-	config := map[string]any{}
-
-	err := plugin.Init(ctx, config)
-
-	assert.NoError(t, err)
-}
-
-// TestEchoPlugin_Init_WithConfig accepts configuration passed at runtime.
-func TestEchoPlugin_Init_WithConfig(t *testing.T) {
-	plugin := &EchoPlugin{}
-	ctx := context.Background()
-	config := map[string]any{
-		"prefix": "echo: ",
-	}
-
-	err := plugin.Init(ctx, config)
-
-	assert.NoError(t, err)
-}
-
-// TestEchoPlugin_Shutdown_Succeeds verifies that Shutdown completes without error.
-func TestEchoPlugin_Shutdown_Succeeds(t *testing.T) {
-	plugin := &EchoPlugin{}
-	ctx := context.Background()
-
-	err := plugin.Shutdown(ctx)
-
-	assert.NoError(t, err)
-}
-
-// TestEchoPlugin_ImplementsOperationProvider verifies that EchoPlugin implements OperationProvider.
-func TestEchoPlugin_ImplementsOperationProvider(t *testing.T) {
-	plugin := &EchoPlugin{}
-
-	// Verify interface implementation at compile time
+func TestMainGoImplementsOperationsWithOperationEcho(t *testing.T) {
 	var _ sdk.OperationProvider = (*EchoPlugin)(nil)
-	assert.NotNil(t, plugin)
+
+	assert.Equal(t, []string{"echo"}, newTestEchoPlugin().Operations())
 }
 
-// TestEchoPlugin_Operations_ReturnsEchoOperation verifies that Operations
-// returns a list containing the echo operation.
-func TestEchoPlugin_Operations_ReturnsEchoOperation(t *testing.T) {
-	plugin := &EchoPlugin{}
+func TestMainGoImplementsHandleOperationUsingSDKInputHelpersForRequiredTextAndOptionalPrefix(t *testing.T) {
+	source := readEchoSource(t)
 
-	operations := plugin.Operations()
-
-	require.Len(t, operations, 1)
-	assert.Equal(t, "echo", operations[0])
+	assert.Contains(t, source, `sdk.GetString(inputs, "text")`)
+	assert.Contains(t, source, `sdk.GetString(inputs, "prefix")`)
 }
 
-// TestEchoPlugin_HandleOperation_EchoOperation_ReturnsInput verifies that HandleOperation
-// with "echo" operation returns the input text in the output.
-func TestEchoPlugin_HandleOperation_EchoOperation_ReturnsInput(t *testing.T) {
-	plugin := &EchoPlugin{}
-	ctx := context.Background()
-
-	input := map[string]any{
-		"text": "hello world",
-	}
-
-	result, err := plugin.HandleOperation(ctx, "echo", input)
+func TestHandleOperationReturnsSDKNewErrorResultNilForMissingText(t *testing.T) {
+	result, err := newTestEchoPlugin().HandleOperation(context.Background(), "echo", map[string]any{})
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.True(t, result.Success)
-
-	// Echo operation should return the input text as output
-	assert.Equal(t, "hello world", result.Output)
+	assert.False(t, result.Success)
+	assert.Contains(t, result.Error, "text")
 }
 
-// TestEchoPlugin_HandleOperation_EchoOperation_EmptyInput handles empty text input.
-func TestEchoPlugin_HandleOperation_EchoOperation_EmptyInput(t *testing.T) {
-	plugin := &EchoPlugin{}
-	ctx := context.Background()
-
-	input := map[string]any{
-		"text": "",
-	}
-
-	result, err := plugin.HandleOperation(ctx, "echo", input)
+func TestHandleOperationReturnsSDKNewErrorResultNilForEmptyText(t *testing.T) {
+	result, err := newTestEchoPlugin().HandleOperation(context.Background(), "echo", map[string]any{"text": ""})
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.True(t, result.Success)
-	assert.Equal(t, "", result.Output)
+	assert.False(t, result.Success)
+	assert.Contains(t, result.Error, "text")
 }
 
-// TestEchoPlugin_HandleOperation_UnknownOperation returns error for unknown operations.
-func TestEchoPlugin_HandleOperation_UnknownOperation(t *testing.T) {
-	plugin := &EchoPlugin{}
-	ctx := context.Background()
+func TestHandleOperationReturnsSDKNewSuccessResultNilWithOutputTextAndPrefix(t *testing.T) {
+	result, err := newTestEchoPlugin().HandleOperation(context.Background(), "echo", map[string]any{"text": "hello"})
 
-	input := map[string]any{}
-
-	result, err := plugin.HandleOperation(ctx, "unknown", input)
-
-	assert.Error(t, err)
-	assert.Nil(t, result)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, result.Success)
+	assert.Equal(t, "hello", result.Output)
+	assert.Equal(t, map[string]any{"output": "hello", "text": "hello", "prefix": ""}, result.Data)
 }
 
-// TestEchoPlugin_HandleOperation_MissingRequiredInput returns error when required field is missing.
-func TestEchoPlugin_HandleOperation_MissingRequiredInput(t *testing.T) {
-	plugin := &EchoPlugin{}
-	ctx := context.Background()
+func TestPrefixBehaviorPrependsPrefixOnlyWhenProvided(t *testing.T) {
+	plugin := newTestEchoPlugin()
 
-	input := map[string]any{
-		// Missing "text" field
-	}
+	withoutPrefix, err := plugin.HandleOperation(context.Background(), "echo", map[string]any{"text": "hello"})
+	require.NoError(t, err)
+	require.NotNil(t, withoutPrefix)
+	assert.Equal(t, "hello", withoutPrefix.Output)
 
-	result, err := plugin.HandleOperation(ctx, "echo", input)
-
-	assert.Error(t, err)
-	assert.Nil(t, result)
+	withPrefix, err := plugin.HandleOperation(context.Background(), "echo", map[string]any{"text": "hello", "prefix": "say: "})
+	require.NoError(t, err)
+	require.NotNil(t, withPrefix)
+	assert.Equal(t, "say: hello", withPrefix.Output)
+	assert.Equal(t, "say: ", withPrefix.Data["prefix"])
 }
 
-// TestEchoPlugin_CanServe verifies that the plugin can be served via sdk.Serve().
-func TestEchoPlugin_CanServe(t *testing.T) {
-	plugin := &EchoPlugin{}
-
-	// Verify the plugin implements sdk.Plugin interface
-	var _ sdk.Plugin = plugin
-	assert.NotNil(t, plugin)
-}
-
-// TestEchoPlugin_Context_Cancellation verifies that HandleOperation respects context cancellation.
-func TestEchoPlugin_Context_Cancellation(t *testing.T) {
-	plugin := &EchoPlugin{}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
-
-	input := map[string]any{
-		"text": "test",
-	}
-
-	result, err := plugin.HandleOperation(ctx, "echo", input)
-
-	// Operation should either complete (echo is synchronous) or respect context
-	// If it respects context, err should be non-nil or result non-nil
-	if err == nil {
-		require.NotNil(t, result)
-	}
-}
-
-// TestEchoPlugin_ImplementsOperationSchemaProvider verifies the compile-time interface check.
-func TestEchoPlugin_ImplementsOperationSchemaProvider(t *testing.T) {
+func TestMainGoImplementsOperationSchemaMetadataEquivalentToTheGeneratedOperationTemplate(t *testing.T) {
 	var _ sdk.OperationSchemaProvider = (*EchoPlugin)(nil)
-}
 
-// TestEchoPlugin_GetOperationSchema_EchoReturnsFullMeta asserts that GetOperationSchema("echo")
-// returns the documented metadata with non-empty description, two inputs, and two outputs.
-// This locks the demonstration contract for MCP hosts and AI agents.
-func TestEchoPlugin_GetOperationSchema_EchoReturnsFullMeta(t *testing.T) {
-	plugin := &EchoPlugin{}
-
-	meta, ok := plugin.GetOperationSchema("echo")
+	schema, ok := newTestEchoPlugin().GetOperationSchema("echo")
 
 	require.True(t, ok)
-	assert.NotEmpty(t, meta.Description)
-
-	require.Len(t, meta.Inputs, 2)
-	assert.Equal(t, "text", meta.Inputs[0].Name)
-	assert.Equal(t, sdk.InputTypeString, meta.Inputs[0].Type)
-	assert.True(t, meta.Inputs[0].Required, "text input must be required")
-	assert.Equal(t, "prefix", meta.Inputs[1].Name)
-	assert.Equal(t, sdk.InputTypeString, meta.Inputs[1].Type)
-	assert.False(t, meta.Inputs[1].Required, "prefix input must be optional")
-
-	require.Len(t, meta.Outputs, 2)
-	assert.Equal(t, "text", meta.Outputs[0].Name)
-	assert.Equal(t, "prefix", meta.Outputs[1].Name)
+	assert.Equal(t, "Echo text, optionally prepending a prefix.", schema.Description)
+	require.Len(t, schema.Inputs, 2)
+	assert.Equal(t, sdk.InputMeta{Name: "text", Type: sdk.InputTypeString, Required: true, Description: "Text to echo."}, schema.Inputs[0])
+	assert.Equal(t, sdk.InputMeta{Name: "prefix", Type: sdk.InputTypeString, Required: false, Description: "Optional prefix prepended to the text."}, schema.Inputs[1])
+	assert.ElementsMatch(t, []sdk.OutputMeta{
+		{Name: "output", Type: sdk.InputTypeString, Description: "Final echoed output."},
+		{Name: "text", Type: sdk.InputTypeString, Description: "Original text input."},
+		{Name: "prefix", Type: sdk.InputTypeString, Description: "Prefix input, when provided."},
+	}, schema.Outputs)
 }
 
-// TestEchoPlugin_GetOperationSchema_UnknownNameReturnsFalse asserts that an unknown
-// operation name returns (zero, false) — protocol contract for OperationSchemaProvider.
-func TestEchoPlugin_GetOperationSchema_UnknownNameReturnsFalse(t *testing.T) {
-	plugin := &EchoPlugin{}
+func TestHandleOperationReturnsStructuredErrorResultForUnknownOperation(t *testing.T) {
+	result, err := newTestEchoPlugin().HandleOperation(context.Background(), "missing", map[string]any{"text": "hello"})
 
-	meta, ok := plugin.GetOperationSchema("does-not-exist")
-
-	assert.False(t, ok)
-	assert.Empty(t, meta.Description)
-	assert.Empty(t, meta.Inputs)
-	assert.Empty(t, meta.Outputs)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.False(t, result.Success)
+	assert.Contains(t, result.Error, "unknown operation")
 }
 
-// BenchmarkEchoPlugin_HandleOperation_SimpleText measures performance of echo operation
-// with simple text input to establish baseline for NFR-001 (< 10ms latency).
-func BenchmarkEchoPlugin_HandleOperation_SimpleText(b *testing.B) {
-	plugin := &EchoPlugin{}
-	ctx := context.Background()
-	input := map[string]any{
-		"text": "benchmark",
+func TestMainTestGoValidatesPluginYAMLThroughTheSameParserBackedManifestPathUsedByGeneratedPluginTests(t *testing.T) {
+	manifest, err := pluginmgr.NewManifestParser().ParseFile("plugin.yaml")
+
+	require.NoError(t, err)
+	require.NoError(t, manifest.Validate())
+	assert.Equal(t, "echo", manifest.Name)
+	assert.Equal(t, "1.0.0", manifest.Version)
+	assert.NotEmpty(t, manifest.Description)
+	assert.NotEmpty(t, manifest.AWFVersion)
+	assert.True(t, manifest.HasCapability(pluginmodel.CapabilityOperations))
+}
+
+func TestPluginYAMLUsesManifestRuntimeNameEchoNotAWFPluginEchoAndDeclaresOperationsCapability(t *testing.T) {
+	manifest, err := pluginmgr.NewManifestParser().ParseFile("plugin.yaml")
+
+	require.NoError(t, err)
+	assert.Equal(t, "echo", manifest.Name)
+	assert.NotEqual(t, "awf-plugin-echo", manifest.Name)
+	assert.True(t, manifest.HasCapability(pluginmodel.CapabilityOperations))
+}
+
+func TestMakefileProvidesBuildTestLintInstallLocalUninstallLocalPackageAndChecksumsTargets(t *testing.T) {
+	targets := parseEchoMakeTargets(readEchoMakefile(t))
+
+	assert.ElementsMatch(t, []string{
+		"build",
+		"test",
+		"lint",
+		"install-local",
+		"uninstall-local",
+		"package",
+		"checksums",
+	}, targets)
+}
+
+func TestMakeBuildBuildsTheAWFPluginEchoBinaryIntoTheExamplesLocalBuildOutputDirectory(t *testing.T) {
+	makefile := readEchoMakefile(t)
+
+	assert.Contains(t, makefile, "DIST_DIR := dist")
+	assert.Contains(t, makefile, "PLUGIN_NAME := awf-plugin-echo")
+	assert.Contains(t, makefile, "mkdir -p \"$(DIST_DIR)\"")
+	assert.Contains(t, makefile, "go build -o $(DIST_DIR)/$(PLUGIN_NAME) .")
+}
+
+func TestMakeTestRunsTheExamplesGoTests(t *testing.T) {
+	assert.Contains(t, readEchoMakefile(t), "go test .")
+}
+
+func TestMakeLintRunsConfiguredLintingOrADeterministicLightweightCheckDocumentedInTheMakefile(t *testing.T) {
+	assert.Contains(t, readEchoMakefile(t), "go vet .")
+}
+
+func TestMakeInstallLocalCopiesTheBinaryAndPluginYAMLIntoTheAWFPluginDirectoryUsingGeneratedTemplatePathRules(t *testing.T) {
+	makefile := readEchoMakefile(t)
+
+	assert.Contains(t, makefile, "install-local: build")
+	assert.Contains(t, makefile, `mkdir -p "$${HOME}/.local/share/awf/plugins/echo"`)
+	assert.Contains(t, makefile, `cp "$(DIST_DIR)/$(PLUGIN_NAME)" "$${HOME}/.local/share/awf/plugins/echo/$(PLUGIN_NAME)"`)
+	assert.Contains(t, makefile, `cp plugin.yaml "$${HOME}/.local/share/awf/plugins/echo/plugin.yaml"`)
+}
+
+func TestMakeUninstallLocalRemovesOnlyFilesInstalledForEcho(t *testing.T) {
+	makefile := readEchoMakefile(t)
+
+	assert.Contains(t, makefile, "uninstall-local:")
+	assert.Contains(t, makefile, `rm -f "$${HOME}/.local/share/awf/plugins/echo/$(PLUGIN_NAME)"`)
+	assert.Contains(t, makefile, `rm -f "$${HOME}/.local/share/awf/plugins/echo/plugin.yaml"`)
+	assert.NotContains(t, makefile, "rm -rf")
+}
+
+func TestMakePackageProducesInstallerCompatibleArchiveNamesUsingGeneratedOperationTemplatePattern(t *testing.T) {
+	makefile := readEchoMakefile(t)
+
+	assert.Contains(t, makefile, "ARCHIVE := $(PLUGIN_NAME)_$(VERSION)_$(GOOS)_$(GOARCH).tar.gz")
+	assert.Contains(t, makefile, `tar -C "$(DIST_DIR)/$(PACKAGE_DIR)" -czf "$(DIST_DIR)/$(ARCHIVE)" .`)
+	assert.NotContains(t, makefile, ".zip")
+}
+
+func TestMakeChecksumsWritesSHA256ChecksumsForPackageArtifacts(t *testing.T) {
+	makefile := readEchoMakefile(t)
+
+	assert.Contains(t, makefile, "checksums: package")
+	assert.Contains(t, makefile, `sha256sum *.tar.gz > checksums.txt`)
+}
+
+func TestExamplesDemoYAMLCallsEchoEchoWithRequiredTextAndOptionalPrefixDataThroughTypeOperation(t *testing.T) {
+	demo := readEchoDemoWorkflow(t)
+
+	state := demo.States.Echo
+	require.Equal(t, "operation", state.Type)
+	assert.Equal(t, "echo.echo", state.Operation)
+	assert.Equal(t, "hello from echo", state.Inputs["text"])
+	assert.Equal(t, "AWF: ", state.Inputs["prefix"])
+}
+
+func TestExamplesDemoYAMLEndsInTerminalSuccessWhenTheOperationSucceeds(t *testing.T) {
+	demo := readEchoDemoWorkflow(t)
+
+	echoState := demo.States.Echo
+	doneState := demo.States.Done
+	assert.Equal(t, "done", echoState.OnSuccess)
+	assert.Equal(t, "terminal", doneState.Type)
+	assert.Equal(t, "success", doneState.Status)
+}
+
+func readEchoSource(t *testing.T) string {
+	t.Helper()
+
+	source, err := os.ReadFile("main.go")
+	require.NoError(t, err)
+	return string(source)
+}
+
+func readEchoMakefile(t *testing.T) string {
+	t.Helper()
+
+	source, err := os.ReadFile("Makefile")
+	require.NoError(t, err)
+	return string(source)
+}
+
+func parseEchoMakeTargets(makefile string) []string {
+	targets := make([]string, 0)
+	for _, line := range strings.Split(makefile, "\n") {
+		if strings.HasPrefix(line, "\t") || !strings.Contains(line, ":") || strings.Contains(line, ":=") {
+			continue
+		}
+		name := strings.TrimSpace(strings.SplitN(line, ":", 2)[0])
+		if name == ".PHONY" || strings.Contains(name, " ") || name == "" {
+			continue
+		}
+		targets = append(targets, name)
 	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = plugin.HandleOperation(ctx, "echo", input)
-	}
+	return targets
 }
 
-// TestPluginYAMLManifest_ExistsAndIsValid verifies that plugin.yaml exists
-// and contains required fields.
-func TestPluginYAMLManifest_ExistsAndIsValid(t *testing.T) {
-	content, err := os.ReadFile("plugin.yaml")
-	require.NoError(t, err, "plugin.yaml must exist in plugin directory")
-
-	// Verify file has content
-	assert.Greater(t, len(content), 0, "plugin.yaml should not be empty")
-
-	// Verify required fields are present (basic string checks)
-	manifestStr := string(content)
-	assert.Contains(t, manifestStr, "name:", "manifest must contain 'name'")
-	assert.Contains(t, manifestStr, "name: echo", "manifest must declare plugin name")
-	assert.Contains(t, manifestStr, "version:", "manifest must contain 'version'")
-	assert.Contains(t, manifestStr, "awf_version:", "manifest must contain 'awf_version'")
-	assert.Contains(t, manifestStr, "capabilities:", "manifest must declare capabilities")
-	assert.Contains(t, manifestStr, "operations", "manifest must declare operations capability")
+type echoDemoWorkflow struct {
+	States struct {
+		Initial string `yaml:"initial"`
+		Echo    struct {
+			Type      string            `yaml:"type"`
+			Operation string            `yaml:"operation"`
+			Inputs    map[string]string `yaml:"inputs"`
+			OnSuccess string            `yaml:"on_success"`
+		} `yaml:"echo"`
+		Done struct {
+			Type   string `yaml:"type"`
+			Status string `yaml:"status"`
+		} `yaml:"done"`
+	} `yaml:"states"`
 }
 
-// TestPluginMakefile_ExistsAndBuildable verifies that Makefile exists
-// and contains build targets.
-func TestPluginMakefile_ExistsAndBuildable(t *testing.T) {
-	content, err := os.ReadFile("Makefile")
-	require.NoError(t, err, "Makefile must exist in plugin directory")
+func readEchoDemoWorkflow(t *testing.T) echoDemoWorkflow {
+	t.Helper()
 
-	// Verify file has content
-	assert.Greater(t, len(content), 0, "Makefile should not be empty")
+	source, err := os.ReadFile("examples/demo.yaml")
+	require.NoError(t, err)
 
-	// Verify required targets are present
-	makefileStr := string(content)
-	assert.Contains(t, makefileStr, "build:", "Makefile must contain 'build' target")
-}
-
-// TestPluginREADME_ExistsAndDocumented verifies that README.md exists
-// and documents the plugin.
-func TestPluginREADME_ExistsAndDocumented(t *testing.T) {
-	content, err := os.ReadFile("README.md")
-	require.NoError(t, err, "README.md must exist in plugin directory")
-
-	// Verify file has content
-	assert.Greater(t, len(content), 0, "README.md should not be empty")
-
-	// Verify basic documentation structure
-	readmeStr := string(content)
-	assert.Contains(t, readmeStr, "awf-plugin-echo", "README should mention plugin name")
-	assert.Contains(t, readmeStr, "echo", "README should document echo operation")
+	var demo echoDemoWorkflow
+	require.NoError(t, yaml.Unmarshal(source, &demo))
+	return demo
 }

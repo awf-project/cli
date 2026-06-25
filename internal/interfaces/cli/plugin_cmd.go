@@ -43,6 +43,7 @@ Examples:
 	cmd.AddCommand(newPluginEnableCommand(cfg))
 	cmd.AddCommand(newPluginDisableCommand(cfg))
 	cmd.AddCommand(newPluginInstallCommand(cfg))
+	cmd.AddCommand(newPluginInitCommand())
 	cmd.AddCommand(newPluginUpdateCommand(cfg))
 	cmd.AddCommand(newPluginRemoveCommand(cfg))
 	cmd.AddCommand(newPluginSearchCommand(cfg))
@@ -274,12 +275,20 @@ func runPluginEnable(cmd *cobra.Command, cfg *Config, name string) error {
 		return fmt.Errorf("failed to initialize plugin system: %w", err)
 	}
 
-	// Enable the plugin
-	if err := result.Service.EnablePlugin(ctx, name); err != nil {
+	resolvedName := name
+	if _, found := result.Service.GetPlugin(name); !found {
+		if short := extractPluginName(name); short != name {
+			if _, found := result.Service.GetPlugin(short); found {
+				resolvedName = short
+			}
+		}
+	}
+
+	if err := result.Service.EnablePlugin(ctx, resolvedName); err != nil {
 		if writer.IsJSONFormat() {
 			return writer.WriteError(err, ExitUser)
 		}
-		return fmt.Errorf("failed to enable plugin %q: %w", name, err)
+		return fmt.Errorf("failed to enable plugin %q: %w", resolvedName, err)
 	}
 
 	// Save state
@@ -292,12 +301,12 @@ func runPluginEnable(cmd *cobra.Command, cfg *Config, name string) error {
 
 	if writer.IsJSONFormat() {
 		return writer.WriteJSON(map[string]any{
-			"name":    name,
+			"name":    resolvedName,
 			"enabled": true,
 		})
 	}
 
-	formatter.Success(fmt.Sprintf("Plugin %q enabled", name))
+	formatter.Success(fmt.Sprintf("Plugin %q enabled", resolvedName))
 	return nil
 }
 

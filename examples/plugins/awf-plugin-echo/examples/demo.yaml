@@ -1,0 +1,22 @@
+name: echo demo
+version: "1.0"
+
+states:
+  initial: echo
+
+  echo:
+    type: operation
+    operation: echo.echo
+    inputs:
+      text: "hello from echo"
+      prefix: "AWF: "
+    on_success: done
+    on_failure: failed
+
+  done:
+    type: terminal
+    status: success
+
+  failed:
+    type: terminal
+    status: failure

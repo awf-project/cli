@@ -124,6 +124,17 @@ func NewWorkflowRepository() *repository.CompositeRepository {
 	return repository.NewCompositeRepository(BuildWorkflowPaths())
 }
 
+func newWorkflowRepositoryForIdentifier(identifier string) (repo *repository.CompositeRepository, workflowName string) {
+	if !isExistingWorkflowFile(identifier) {
+		return NewWorkflowRepository(), identifier
+	}
+
+	cleaned := filepath.Clean(identifier)
+	return repository.NewCompositeRepository([]repository.SourcedPath{
+		{Path: filepath.Dir(cleaned), Source: repository.SourceLocal},
+	}), filepath.Base(cleaned)
+}
+
 // buildFacade constructs a CLI-wide ports.WorkflowFacade for the read/validate operations
 // (list, history, status, validate). Execution paths build their own run-capable facade
 // (buildRunCapableFacade), so this read-only facade carries a no-op recorder and a zero

@@ -119,6 +119,17 @@ func TestParseWorkflowNamespace_NamespacePresence(t *testing.T) {
 	}
 }
 
+func TestParseWorkflowNamespace_ExistingFilePathIsLocalWorkflow(t *testing.T) {
+	workflowPath := filepath.Join(t.TempDir(), "examples", "demo.yaml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(workflowPath), 0o755))
+	require.NoError(t, os.WriteFile(workflowPath, []byte("name: demo\n"), 0o644))
+
+	packName, workflowName := parseWorkflowNamespace(workflowPath)
+
+	assert.Empty(t, packName)
+	assert.Equal(t, workflowPath, workflowName)
+}
+
 func TestValidatePackWorkflow(t *testing.T) {
 	tests := []struct {
 		name         string
