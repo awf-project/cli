@@ -18,15 +18,25 @@ import (
 // parseWorkflowNamespace splits a workflow name into pack and workflow components.
 // For "speckit/specify", returns ("speckit", "specify").
 // For "my-workflow" (no slash), returns ("", "my-workflow").
+// Existing filesystem paths are local workflows even when they contain slashes.
 // Splits on first "/" only per FR-001.
 // Note: duplicated as splitCallWorkflowName in internal/application/subworkflow_executor.go
 // — cross-layer import (application→interfaces) is forbidden by go-arch-lint.
 func parseWorkflowNamespace(name string) (packName, workflowName string) {
+	if isExistingWorkflowFile(name) {
+		return "", name
+	}
+
 	parts := strings.SplitN(name, "/", 2)
 	if len(parts) == 2 {
 		return parts[0], parts[1]
 	}
 	return "", name
+}
+
+func isExistingWorkflowFile(name string) bool {
+	info, err := os.Stat(filepath.Clean(name))
+	return err == nil && !info.IsDir()
 }
 
 // validatePackWorkflow checks that workflowName is listed as a public workflow in the pack manifest.

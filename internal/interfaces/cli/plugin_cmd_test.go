@@ -5,17 +5,21 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/interfaces/cli"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Acceptance: {"component":"integrate_plugin_init_command","criteria":["newPluginInitCommand() returns a Cobra command for awf plugin init <name>","newPluginCommand(cfg *Config) registers init without removing or changing existing plugin subcommands","awf plugin init awf-plugin-example --kind operation creates the full MVP file structure and prints next steps","omitted --kind behaves as operation","--output writes to the requested destination","--force is passed through to repository generation","unsupported --kind validator returns an explicit unsupported-kind error naming operation","repeated --kind and comma-separated --kind fail with single-kind guidance","invalid plugin names return user-facing validation errors before file writes","awf plugin init --help lists only the implemented operation kind as supported","existing plugin command tests still pass for list, install, remove, enable, disable, verify, update, and operations paths","awf plugin enable awf-plugin-example normalizes to runtime id example when the installed plugin manifest is known","awf plugin enable example continues to work"]}
 
 func TestPluginCommand_Exists(t *testing.T) {
 	cmd := cli.NewRootCommand()
@@ -53,9 +57,202 @@ func TestPluginCommand_HasSubcommands(t *testing.T) {
 		subcommands[sub.Name()] = true
 	}
 
-	for _, name := range []string{"list", "enable", "disable", "search", "verify"} {
+	for _, name := range []string{"list", "enable", "disable", "install", "init", "remove", "search", "update", "verify"} {
 		assert.True(t, subcommands[name], "plugin command should have '%s' subcommand", name)
 	}
+}
+
+func TestPluginInitCommand_ReturnsACobraCommandForAwfPluginInitName(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	initCmd, _, err := cmd.Find([]string{"plugin", "init"})
+	require.NoError(t, err)
+	require.NotNil(t, initCmd)
+
+	assert.Equal(t, "init", initCmd.Name())
+	assert.Contains(t, initCmd.Use, "<name>")
+	assert.NotNil(t, initCmd.RunE)
+	assert.NotNil(t, initCmd.Flags().Lookup("kind"))
+	assert.NotNil(t, initCmd.Flags().Lookup("output"))
+	assert.NotNil(t, initCmd.Flags().Lookup("force"))
+}
+
+func TestPluginInitCommand_AwfPluginInitAwfPluginExampleKindOperationCreatesTheFullMVPFileStructureAndPrintsNextSteps(t *testing.T) {
+	outputDir := filepath.Join(t.TempDir(), "awf-plugin-example")
+
+	out, err := executePluginInitCommand(
+		t,
+		"plugin", "init", "awf-plugin-example",
+		"--kind", "operation",
+		"--output", outputDir,
+	)
+
+	require.NoError(t, err, "plugin init output:\n%s", out)
+	assertPluginInitGeneratedFileSet(t, outputDir)
+	assert.Equal(t, []string{
+		"cd " + outputDir,
+		"make test",
+		"make build",
+		"make install-local",
+		"awf plugin enable awf-plugin-example",
+		"awf plugin list --operations",
+		"awf run examples/demo.yaml",
+	}, nonEmptyPluginInitOutputLines(out))
+}
+
+func TestPluginInitCommand_OmittedKindBehavesAsOperation(t *testing.T) {
+	outputDir := filepath.Join(t.TempDir(), "awf-plugin-example")
+
+	out, err := executePluginInitCommand(
+		t,
+		"plugin", "init", "awf-plugin-example",
+		"--output", outputDir,
+	)
+
+	require.NoError(t, err, "plugin init output:\n%s", out)
+	assertPluginInitGeneratedFileSet(t, outputDir)
+	assert.Contains(t, string(readPluginInitTestFile(t, filepath.Join(outputDir, "plugin.yaml"))), "operations")
+	assert.Contains(t, string(readPluginInitTestFile(t, filepath.Join(outputDir, "main.go"))), "echo")
+}
+
+func TestPluginInitCommand_OutputWritesToTheRequestedDestination(t *testing.T) {
+	requestedOutput := filepath.Join(t.TempDir(), "custom-destination")
+
+	out, err := executePluginInitCommand(
+		t,
+		"plugin", "init", "awf-plugin-example",
+		"--kind", "operation",
+		"--output", requestedOutput,
+	)
+
+	require.NoError(t, err, "plugin init output:\n%s", out)
+	assertPluginInitGeneratedFileSet(t, requestedOutput)
+	assert.Contains(t, out, "cd "+requestedOutput)
+}
+
+func TestPluginInitCommand_OutputPathContainingNextStepTextIsNotRewritten(t *testing.T) {
+	requestedOutput := filepath.Join(t.TempDir(), "awf plugin operations", "awf-plugin-example")
+
+	out, err := executePluginInitCommand(
+		t,
+		"plugin", "init", "awf-plugin-example",
+		"--kind", "operation",
+		"--output", requestedOutput,
+	)
+
+	require.NoError(t, err, "plugin init output:\n%s", out)
+	assertPluginInitGeneratedFileSet(t, requestedOutput)
+	assert.Equal(t, []string{
+		"cd " + requestedOutput,
+		"make test",
+		"make build",
+		"make install-local",
+		"awf plugin enable awf-plugin-example",
+		"awf plugin list --operations",
+		"awf run examples/demo.yaml",
+	}, nonEmptyPluginInitOutputLines(out))
+}
+
+func TestPluginInitCommand_ForceIsPassedThroughToRepositoryGeneration(t *testing.T) {
+	outputDir := filepath.Join(t.TempDir(), "awf-plugin-example")
+	require.NoError(t, os.MkdirAll(outputDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(outputDir, "go.mod"), []byte("module stale\n"), 0o644))
+
+	out, err := executePluginInitCommand(
+		t,
+		"plugin", "init", "awf-plugin-example",
+		"--kind", "operation",
+		"--output", outputDir,
+		"--force",
+	)
+
+	require.NoError(t, err, "plugin init output:\n%s", out)
+	assertPluginInitGeneratedFileSet(t, outputDir)
+	assert.NotContains(t, string(readPluginInitTestFile(t, filepath.Join(outputDir, "go.mod"))), "module stale")
+}
+
+func TestPluginInitCommand_UnsupportedKindValidatorReturnsAnExplicitUnsupportedKindErrorNamingOperation(t *testing.T) {
+	outputDir := filepath.Join(t.TempDir(), "awf-plugin-example")
+
+	out, err := executePluginInitCommand(
+		t,
+		"plugin", "init", "awf-plugin-example",
+		"--kind", "validator",
+		"--output", outputDir,
+	)
+
+	require.Error(t, err, "plugin init output:\n%s", out)
+	structErr := requirePluginInitCommandValidationError(t, err, "kind", "validator", "unsupported-kind")
+	assert.Equal(
+		t,
+		`USER.INPUT.VALIDATION_FAILED: invalid plugin init kind "validator" violates unsupported-kind: unsupported plugin init kind "validator"; supported kind is "operation"`,
+		structErr.Message,
+	)
+	assert.NoDirExists(t, outputDir)
+}
+
+func TestPluginInitCommand_RepeatedKindAndCommaSeparatedKindFailWithSingleKindGuidance(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		wantValue   any
+		wantMessage string
+	}{
+		{
+			name:      "repeated --kind",
+			args:      []string{"plugin", "init", "awf-plugin-example", "--kind", "operation", "--kind", "validator"},
+			wantValue: []string{"operation", "validator"},
+			wantMessage: `USER.INPUT.VALIDATION_FAILED: invalid plugin init kind ["operation" "validator"] violates single-kind: ` +
+				`choose exactly one --kind value; awf plugin init supports a single scaffold kind`,
+		},
+		{
+			name:      "comma-separated --kind",
+			args:      []string{"plugin", "init", "awf-plugin-example", "--kind", "operation,validator"},
+			wantValue: "operation,validator",
+			wantMessage: `USER.INPUT.VALIDATION_FAILED: invalid plugin init kind "operation,validator" violates single-kind: ` +
+				`choose exactly one --kind value; supported kind is "operation"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := executePluginInitCommand(t, tt.args...)
+
+			require.Error(t, err, "plugin init output:\n%s", out)
+			structErr := requirePluginInitCommandValidationError(t, err, "kind", tt.wantValue, "single-kind")
+			assert.Equal(t, tt.wantMessage, structErr.Message)
+		})
+	}
+}
+
+func TestPluginInitCommand_InvalidPluginNamesReturnUserFacingValidationErrorsBeforeFileWrites(t *testing.T) {
+	outputDir := filepath.Join(t.TempDir(), "bad-output")
+
+	out, err := executePluginInitCommand(
+		t,
+		"plugin", "init", "example",
+		"--output", outputDir,
+	)
+
+	require.Error(t, err, "plugin init output:\n%s", out)
+	structErr := requirePluginInitCommandValidationError(t, err, "name", "example", "required-prefix")
+	assert.Equal(
+		t,
+		`USER.INPUT.VALIDATION_FAILED: invalid plugin init name "example" violates required-prefix: plugin distribution name must start with "awf-plugin-", for example awf-plugin-example`,
+		structErr.Message,
+	)
+	assert.NoDirExists(t, outputDir)
+}
+
+func TestPluginInitCommand_HelpListsOnlyImplementedOperationKind(t *testing.T) {
+	out, err := executePluginInitCommand(t, "plugin", "init", "--help")
+
+	require.NoError(t, err, "plugin init help output:\n%s", out)
+	assert.Contains(t, out, "operation")
+	assert.Contains(t, strings.ToLower(out), "supported")
+	assert.Contains(t, out, "plugin scaffold kind (supported: operation)")
+	assert.NotContains(t, strings.ToLower(out), "future")
+	assert.NotContains(t, strings.ToLower(out), "deferred")
+	assert.NotContains(t, out, "validator")
 }
 
 func TestPluginListCommand_HasLsAlias(t *testing.T) {
@@ -372,6 +569,42 @@ capabilities:
 	output := out.String()
 	assert.Contains(t, output, "enable-test-plugin", "output should confirm plugin name")
 	assert.Contains(t, output, "enabled", "output should confirm plugin was enabled")
+}
+
+func TestPluginCommand_EnableAwfPluginExampleNormalizesToRuntimeIDExampleWhenInstalledPluginManifestIsKnown(t *testing.T) {
+	tmpDir := t.TempDir()
+	pluginsDir := filepath.Join(tmpDir, "plugins")
+	writePluginCommandTestManifest(t, pluginsDir, "awf-plugin-example", "example")
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "enable", "awf-plugin-example", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err, "plugin enable output:\n%s", out.String())
+	assert.Contains(t, out.String(), "example")
+	assert.NotContains(t, out.String(), "awf-plugin-example")
+}
+
+func TestPluginCommand_EnableExampleContinuesToWork(t *testing.T) {
+	tmpDir := t.TempDir()
+	pluginsDir := filepath.Join(tmpDir, "plugins")
+	writePluginCommandTestManifest(t, pluginsDir, "awf-plugin-example", "example")
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"plugin", "enable", "example", "--storage", tmpDir})
+
+	err := cmd.Execute()
+	require.NoError(t, err, "plugin enable output:\n%s", out.String())
+	assert.Contains(t, out.String(), "example")
+	assert.Contains(t, out.String(), "enabled")
 }
 
 func TestPluginEnableCommand_JSONOutput(t *testing.T) {
@@ -881,4 +1114,45 @@ capabilities:
 
 	err := cmd.Execute()
 	require.Error(t, err, "should exit with code 1 when verification fails")
+}
+
+func executePluginInitCommand(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+
+	cmd := cli.NewRootCommand()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs(append(args, "--storage", filepath.Join(t.TempDir(), "storage")))
+
+	err := cmd.Execute()
+	return out.String(), err
+}
+
+func requirePluginInitCommandValidationError(t *testing.T, err error, field string, value any, rule string) *domerrors.StructuredError {
+	t.Helper()
+
+	var structErr *domerrors.StructuredError
+	require.True(t, errors.As(err, &structErr), "error must be a *domerrors.StructuredError; got %T: %v", err, err)
+	assert.Equal(t, domerrors.ErrorCodeUserInputValidationFailed, structErr.Code)
+	assert.Equal(t, 1, structErr.ExitCode())
+	assert.Equal(t, field, structErr.Details["field"])
+	assert.Equal(t, value, structErr.Details["value"])
+	assert.Equal(t, rule, structErr.Details["rule"])
+
+	return structErr
+}
+
+func writePluginCommandTestManifest(t *testing.T, pluginsDir, directoryName, runtimeID string) {
+	t.Helper()
+
+	pluginDir := filepath.Join(pluginsDir, directoryName)
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+	manifestContent := fmt.Sprintf(`name: %s
+version: 1.0.0
+awf_version: ">=0.1.0"
+capabilities:
+  - operations
+`, runtimeID)
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "plugin.yaml"), []byte(manifestContent), 0o644))
 }

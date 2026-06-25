@@ -362,6 +362,27 @@ awf plugin install myorg/awf-plugin-jira --force
 
 The `owner/repo[@version]` argument must be a GitHub repository path (not a URL). The repository must contain GitHub Releases with `.tar.gz` assets matching the AWF naming convention (see [Release Asset Naming](#release-asset-naming)).
 
+#### Create a Plugin
+
+Use `awf plugin init` to generate a working plugin repository:
+
+```bash
+awf plugin init awf-plugin-example --kind operation
+cd awf-plugin-example
+make test
+make build
+make install-local
+awf plugin enable awf-plugin-example
+awf plugin list --operations
+awf run examples/demo.yaml
+```
+
+The MVP supports `--kind operation`. If `--kind` is omitted, AWF uses the operation scaffold. The generated repository includes source code, tests, a manifest, local install targets, package and checksum targets, a demo workflow, a README, and a GitHub Actions release workflow.
+
+`awf-plugin-example` is the distribution name used for the repository, binary, install directory, and release assets. The generated manifest uses the runtime plugin id `example`, so workflow operation references use `example.echo`.
+
+The scaffold `kind` selects a starter repository shape. Manifest `capabilities` describe what the installed plugin exposes at runtime. The generated operation template advertises `operations`; planned future kinds include `canonical-port`, `adapter`, `direct-integration`, `hybrid`, `validator`, `step-type`, `event-listener`, and `full`.
+
 #### Update a Plugin
 
 Update an installed plugin to the latest version:
@@ -648,39 +669,23 @@ notify.send           notify
 
 External plugins are Go binaries that call `sdk.Serve()` from `main()`. AWF discovers them via their `plugin.yaml` manifest and communicates over gRPC using HashiCorp go-plugin.
 
-### Minimal Plugin
+### First Plugin Scaffold
 
-```go
-package main
+Start new operation plugins with `awf plugin init` instead of copying an example by hand:
 
-import (
-    "context"
-
-    "github.com/awf-project/cli/pkg/plugin/sdk"
-)
-
-type MyPlugin struct {
-    sdk.BasePlugin
-}
-
-func (p *MyPlugin) Operations() []string {
-    return []string{"my_op"}
-}
-
-func (p *MyPlugin) HandleOperation(_ context.Context, name string, inputs map[string]any) (*sdk.OperationResult, error) {
-    text := sdk.GetStringDefault(inputs, "text", "")
-    return sdk.NewSuccessResult(text, nil), nil
-}
-
-func main() {
-    sdk.Serve(&MyPlugin{
-        BasePlugin: sdk.BasePlugin{
-            PluginName:    "awf-plugin-myplugin",
-            PluginVersion: "1.0.0",
-        },
-    })
-}
+```bash
+awf plugin init awf-plugin-example --kind operation
+cd awf-plugin-example
+make test
+make install-local
+awf plugin enable awf-plugin-example
+awf plugin list --operations
+awf run examples/demo.yaml
 ```
+
+The generated `main.go` embeds `sdk.BasePlugin`, calls `sdk.Serve()`, implements `Operations()` and `HandleOperation()`, and exposes operation metadata through `OperationSchemaProvider`. The generated tests cover successful execution, structured operation errors, schema metadata, and manifest validation.
+
+Use the generated repository as the supported authoring baseline. The checked-in examples remain useful for learning additional SDK surfaces: `awf-plugin-echo` mirrors the operation template, `awf-plugin-database` is the future step-type seed, `awf-plugin-security-validator` is the future validator seed, and `awf-plugin-event-logger` is the future event-listener seed.
 
 ### SDK Helpers
 
@@ -693,6 +698,7 @@ func main() {
 | `sdk.GetStringDefault(inputs, key, default)` | Extract string input with fallback |
 | `sdk.GetIntDefault(inputs, key, default)` | Extract integer input with fallback |
 | `sdk.GetBoolDefault(inputs, key, default)` | Extract boolean input with fallback |
+| `sdk.OperationSchemaProvider` | Optional interface for input/output metadata used by docs, validation, and MCP exposure |
 | `sdk.EventSubscriber` | Interface for receiving events (`Patterns()` + `HandleEvent()`) |
 | `sdk.Event` | SDK event struct with ID, Type, Source, Metadata, Payload |
 
@@ -1104,12 +1110,12 @@ make install          # Build and install to ~/.local/share/awf/plugins/
 awf plugin enable awf-plugin-echo
 ```
 
-Use it in a workflow:
+Use it in a workflow by referencing the runtime plugin id:
 
 ```yaml
 echo_step:
   type: operation
-  operation: awf-plugin-echo.echo
+  operation: echo.echo
   inputs:
     text: "Hello from plugin!"
     prefix: ">>>"
@@ -1152,42 +1158,16 @@ Each archive must contain:
 
 A `checksums.txt` file (SHA-256) must be included as a separate release asset. AWF verifies the checksum before installation.
 
-### GoReleaser Configuration
+### Generated Release Workflow
 
-Use [GoReleaser](https://goreleaser.com/) to automate plugin releases. Add a `.goreleaser.yml` to your plugin repository:
+Repositories created by `awf plugin init` include package and checksum targets plus `.github/workflows/release.yml`.
 
-```yaml
-project_name: awf-plugin-myplugin
-
-builds:
-  - main: .
-    binary: awf-plugin-myplugin
-    goos:
-      - linux
-      - darwin
-    goarch:
-      - amd64
-      - arm64
-    ldflags:
-      - -s -w -X main.version={{.Version}}
-
-archives:
-  - format: tar.gz
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files:
-      - plugin.yaml
-
-checksum:
-  name_template: checksums.txt
-  algorithm: sha256
-
-release:
-  github:
-    owner: your-org
-    name: awf-plugin-myplugin
+```bash
+make package
+make checksums
 ```
 
-All archives must use `.tar.gz` format. This differs from AWF's own releases which use `.zip` on macOS.
+The generated workflow builds the plugin, packages the binary plus `plugin.yaml`, and publishes `.tar.gz` archives with SHA-256 checksums. Keep the generated asset pattern unless you also update AWF installer compatibility tests.
 
 ### Authentication
 

@@ -231,7 +231,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	defer cleanup()
 
 	// Initialize dependencies
-	repo := NewWorkflowRepository()
+	repo, workflowName := newWorkflowRepositoryForIdentifier(workflowName)
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
 	shellExecutor := executor.NewShellExecutor()
 	// Table and JSON formats should be silent (structured output only)
@@ -452,7 +452,7 @@ func runDryRun(cmd *cobra.Command, cfg *Config, workflowName string, inputFlags 
 	})
 
 	// Initialize dependencies
-	repo := NewWorkflowRepository()
+	repo, workflowName := newWorkflowRepositoryForIdentifier(workflowName)
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
 	shellExecutor := executor.NewShellExecutor()
 	logger := &cliLogger{
@@ -550,7 +550,7 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	defer signalCleanup()
 
 	// Initialize dependencies
-	repo := NewWorkflowRepository()
+	repo, workflowName := newWorkflowRepositoryForIdentifier(workflowName)
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
 	shellExecutor := executor.NewShellExecutor()
 	logger := &cliLogger{
@@ -882,7 +882,7 @@ func runSingleStep(
 	defer cleanup()
 
 	// Initialize dependencies
-	repo := NewWorkflowRepository()
+	repo, workflowName := newWorkflowRepositoryForIdentifier(workflowName)
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
 	shellExecutor := executor.NewShellExecutor()
 	logger := &cliLogger{

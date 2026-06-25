@@ -12,6 +12,12 @@
       "path": ".zpm/kb/feedback",
       "scope": "project",
       "mode": "rw"
+    },
+    {
+      "name": "pr_feature_f111_plugin_developer_kit_and_onboarding",
+      "path": ".zpm/kb/pr_feature_f111_plugin_developer_kit_and_onboarding",
+      "scope": "project",
+      "mode": "rw"
     }
   ]
 }
