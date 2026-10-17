@@ -1,0 +1,13 @@
+# Tower local project configuration.
+#
+# [extensions] configures native out-of-process sidecars by manifest name.
+# Add names to `disabled` to prevent those sidecars from being spawned.
+[extensions]
+disabled = []
+#
+# [formatter.tools.<id>] entries are commands run by the host format queue when
+# a file changes. mode = "filter" (default, stdin->stdout) or "inplace".
+# Uninstalled tools are skipped, so you can safely keep entries you do not use.
+[formatter.tools.gofmt]
+argv = ["gofmt"]
+extensions = ["go"]

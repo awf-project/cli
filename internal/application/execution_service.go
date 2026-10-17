@@ -494,7 +494,7 @@ func (s *ExecutionService) prepareExecution(
 	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx, true); err != nil {
 		execCtx.Status = workflow.StatusFailed
 		s.checkpoint(ctx, execCtx)
-		s.recordExecutionEnd(ctx, execCtx, err.Error())
+		s.recordExecutionEnd(ctx, execCtx, err, err.Error())
 		s.emitWorkflowTerminalEvent(ctx, execCtx, err)
 		span.End()
 		// Return the failed execCtx (not nil) so callers can surface the aborted-but-
@@ -567,12 +567,6 @@ func (s *ExecutionService) runExecutionLoop(
 			}
 			execCtx.SetCompletedAt(time.Now())
 			s.checkpoint(ctx, execCtx)
-			terminalErrMsg := ""
-			if execErr != nil {
-				terminalErrMsg = execErr.Error()
-			}
-			s.recordExecutionEnd(ctx, execCtx, terminalErrMsg)
-			s.emitWorkflowTerminalEvent(ctx, execCtx, execErr)
 			s.logger.Info("workflow completed", "step", currentStep, "status", execCtx.GetStatus())
 			break
 		}
@@ -596,8 +590,6 @@ func (s *ExecutionService) runExecutionLoop(
 			execCtx.Status = workflow.StatusFailed
 			s.logger.Error("step failed", "step", step.Name, "error", err)
 			s.checkpoint(ctx, execCtx)
-			s.recordExecutionEnd(ctx, execCtx, err.Error())
-			s.emitWorkflowTerminalEvent(ctx, execCtx, err)
 			execErr = err
 			break
 		}
@@ -619,21 +611,26 @@ func (s *ExecutionService) runExecutionLoop(
 	}
 
 	hookCtx := context.Background()
-	intCtx := s.buildInterpolationContext(execCtx)
 
+	// Classify the outcome before persisting it, including explicit terminal failures.
 	if execErr != nil {
 		if errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded) ||
 			ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 			execCtx.Status = workflow.StatusCancelled
 			s.logger.Info("workflow cancelled", "workflow", wf.Name)
 			s.checkpoint(hookCtx, execCtx)
-			s.recordExecutionEnd(hookCtx, execCtx, "workflow cancelled")
+			s.recordExecutionEnd(hookCtx, execCtx, execErr, "workflow cancelled")
+			s.emitWorkflowTerminalEvent(hookCtx, execCtx, execErr)
+			intCtx := s.buildInterpolationContext(execCtx)
 			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx, false); err != nil {
 				s.logger.Warn("workflow_cancel hook failed", "error", err)
 			}
 			return execErr
 		}
 
+		s.recordExecutionEnd(hookCtx, execCtx, execErr, execErr.Error())
+		s.emitWorkflowTerminalEvent(hookCtx, execCtx, execErr)
+		intCtx := s.buildInterpolationContext(execCtx)
 		intCtx.Error = &interpolation.ErrorData{
 			Type:    classifyErrorType(execErr),
 			Message: execErr.Error(),
@@ -645,6 +642,9 @@ func (s *ExecutionService) runExecutionLoop(
 		return execErr
 	}
 
+	s.recordExecutionEnd(hookCtx, execCtx, nil, "")
+	s.emitWorkflowTerminalEvent(hookCtx, execCtx, nil)
+	intCtx := s.buildInterpolationContext(execCtx)
 	if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowEnd, intCtx, false); err != nil {
 		s.logger.Warn("workflow_end hook failed", "error", err)
 	}
@@ -791,6 +791,7 @@ func (s *ExecutionService) recordHistory(execCtx *workflow.ExecutionContext) {
 		Status:       execCtx.Status.String(),
 		StartedAt:    execCtx.StartedAt,
 		CompletedAt:  execCtx.CompletedAt,
+		ExitCode:     execCtx.ExitCode,
 	}
 
 	// Calculate duration
@@ -798,7 +799,8 @@ func (s *ExecutionService) recordHistory(execCtx *workflow.ExecutionContext) {
 		record.DurationMs = execCtx.CompletedAt.Sub(execCtx.StartedAt).Milliseconds()
 	}
 
-	// Find last executed step for exit code and error
+	// Find the last executed step for its error message. ExitCode is normalized
+	// once at the completion boundary and shared by every persistence projection.
 	allStates := execCtx.GetAllStepStates()
 	if len(allStates) > 0 {
 		var lastState workflow.StepState
@@ -811,7 +813,6 @@ func (s *ExecutionService) recordHistory(execCtx *workflow.ExecutionContext) {
 			}
 		}
 		if foundLast {
-			record.ExitCode = lastState.ExitCode
 			if lastState.Error != "" {
 				record.ErrorMessage = lastState.Error
 			}
@@ -827,9 +828,56 @@ func (s *ExecutionService) recordHistory(execCtx *workflow.ExecutionContext) {
 	}
 }
 
-func (s *ExecutionService) recordExecutionEnd(ctx context.Context, execCtx *workflow.ExecutionContext, errorMsg string) {
+func (s *ExecutionService) recordExecutionEnd(
+	ctx context.Context,
+	execCtx *workflow.ExecutionContext,
+	completionErr error,
+	errorMsg string,
+) {
+	normalizeTerminalExitCode(execCtx, completionErr)
 	s.recordHistory(execCtx)
 	s.emitAuditCompleted(ctx, execCtx, errorMsg)
+}
+
+func normalizeTerminalExitCode(execCtx *workflow.ExecutionContext, completionErr error) {
+	if execCtx.ExitCode != 0 || execCtx.GetStatus() == workflow.StatusCompleted {
+		return
+	}
+
+	currentStep := execCtx.GetCurrentStep()
+	if currentState, ok := execCtx.GetStepState(currentStep); ok &&
+		currentState.Status == workflow.StatusFailed && currentState.ExitCode != 0 {
+		execCtx.ExitCode = currentState.ExitCode
+		return
+	}
+
+	var selectedName string
+	var selectedState workflow.StepState
+	for stepName, state := range execCtx.GetAllStepStates() { //nolint:gocritic // rangeValCopy: selecting from a thread-safe snapshot requires value semantics
+		if state.Status != workflow.StatusFailed || state.ExitCode == 0 || state.CompletedAt.IsZero() {
+			continue
+		}
+		if selectedState.CompletedAt.IsZero() || state.CompletedAt.After(selectedState.CompletedAt) ||
+			(state.CompletedAt.Equal(selectedState.CompletedAt) && stepName < selectedName) {
+			selectedName = stepName
+			selectedState = state
+		}
+	}
+	if selectedState.ExitCode != 0 {
+		execCtx.ExitCode = selectedState.ExitCode
+		return
+	}
+
+	var structuredErr *domainerrors.StructuredError
+	if errors.As(completionErr, &structuredErr) && structuredErr != nil && structuredErr.ExitCode() != 0 {
+		execCtx.ExitCode = structuredErr.ExitCode()
+		return
+	}
+
+	status := execCtx.GetStatus()
+	if status == workflow.StatusFailed || status == workflow.StatusCancelled {
+		execCtx.ExitCode = 3
+	}
 }
 
 // buildLoopDataChain recursively converts domain LoopContext to interpolation LoopData.
@@ -1807,7 +1855,7 @@ func (s *ExecutionService) Resume(
 	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx, true); err != nil {
 		execCtx.Status = workflow.StatusFailed
 		s.checkpoint(ctx, execCtx)
-		s.recordExecutionEnd(ctx, execCtx, err.Error())
+		s.recordExecutionEnd(ctx, execCtx, err, err.Error())
 		s.emitWorkflowTerminalEvent(ctx, execCtx, err)
 		return execCtx, fmt.Errorf("workflow_start hook failed: %w", err)
 	}
@@ -1940,12 +1988,6 @@ func (s *ExecutionService) executeFromStep(
 			}
 			execCtx.CompletedAt = time.Now()
 			s.checkpoint(ctx, execCtx)
-			terminalErrMsg := ""
-			if execErr != nil {
-				terminalErrMsg = execErr.Error()
-			}
-			s.recordExecutionEnd(ctx, execCtx, terminalErrMsg)
-			s.emitWorkflowTerminalEvent(ctx, execCtx, execErr)
 			s.logger.Info("workflow completed", "step", currentStep, "status", execCtx.Status)
 			break
 		}
@@ -1969,8 +2011,6 @@ func (s *ExecutionService) executeFromStep(
 			execCtx.Status = workflow.StatusFailed
 			s.logger.Error("step failed", "step", step.Name, "error", err)
 			s.checkpoint(ctx, execCtx)
-			s.recordExecutionEnd(ctx, execCtx, err.Error())
-			s.emitWorkflowTerminalEvent(ctx, execCtx, err)
 			execErr = err
 			break
 		}
@@ -1996,8 +2036,8 @@ func (s *ExecutionService) executeFromStep(
 	// execute workflow hooks based on outcome
 	// use background context for hooks since main ctx may be cancelled
 	hookCtx := context.Background()
-	intCtx := s.buildInterpolationContext(execCtx)
 
+	// Classify the outcome before persisting it, including explicit terminal failures.
 	if execErr != nil {
 		// check if this was a cancellation (SIGINT/SIGTERM) or timeout
 		if errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded) ||
@@ -2005,7 +2045,9 @@ func (s *ExecutionService) executeFromStep(
 			execCtx.Status = workflow.StatusCancelled
 			s.logger.Info("workflow cancelled", "workflow", wf.Name)
 			s.checkpoint(hookCtx, execCtx)
-			s.recordExecutionEnd(hookCtx, execCtx, "workflow cancelled")
+			s.recordExecutionEnd(hookCtx, execCtx, execErr, "workflow cancelled")
+			s.emitWorkflowTerminalEvent(hookCtx, execCtx, execErr)
+			intCtx := s.buildInterpolationContext(execCtx)
 			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx, false); err != nil {
 				s.logger.Warn("workflow_cancel hook failed", "error", err)
 			}
@@ -2013,6 +2055,9 @@ func (s *ExecutionService) executeFromStep(
 		}
 
 		// regular error - execute error hook
+		s.recordExecutionEnd(hookCtx, execCtx, execErr, execErr.Error())
+		s.emitWorkflowTerminalEvent(hookCtx, execCtx, execErr)
+		intCtx := s.buildInterpolationContext(execCtx)
 		intCtx.Error = &interpolation.ErrorData{
 			Type:    classifyErrorType(execErr),
 			Message: execErr.Error(),
@@ -2025,6 +2070,9 @@ func (s *ExecutionService) executeFromStep(
 	}
 
 	// workflow completed successfully
+	s.recordExecutionEnd(hookCtx, execCtx, nil, "")
+	s.emitWorkflowTerminalEvent(hookCtx, execCtx, nil)
+	intCtx := s.buildInterpolationContext(execCtx)
 	if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowEnd, intCtx, false); err != nil {
 		s.logger.Warn("workflow_end hook failed", "error", err)
 	}

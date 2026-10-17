@@ -16,6 +16,11 @@ AWF uses standardized exit codes to indicate the type of error that occurred.
 
 ## Error Categories
 
+For persisted execution outcomes, `success` is paired with exit code `0`, while
+`failure` is always paired with a non-zero code. When a failed or cancelled
+execution has no more precise code, AWF uses code `3` (`Execution Error`). The
+normalized value is shared by the audit trail and execution history.
+
 ### Exit Code 0: Success
 
 The workflow executed and reached a terminal state with `status: success`.

@@ -3,15 +3,243 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
+	"sort"
 	"testing"
 	"time"
 
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestNormalizeTerminalExitCode(t *testing.T) {
+	baseTime := time.Date(2026, time.October, 17, 12, 0, 0, 0, time.UTC)
+	wrappedSystemErr := fmt.Errorf("finalize workflow: %w", domainerrors.NewSystemError(
+		domainerrors.ErrorCodeSystemIOPermissionDenied,
+		"permission denied",
+		nil,
+		nil,
+	))
+
+	tests := []struct {
+		name          string
+		status        workflow.ExecutionStatus
+		exitCode      int
+		currentStep   string
+		states        map[string]workflow.StepState
+		completionErr error
+		repeatErr     error
+		expected      int
+	}{
+		{
+			name:     "preserves successful completion with zero exit code",
+			status:   workflow.StatusCompleted,
+			expected: 0,
+		},
+		{
+			name:     "preserves existing non-zero execution code",
+			status:   workflow.StatusFailed,
+			exitCode: 42,
+			expected: 42,
+		},
+		{
+			name:     "preserves explicit terminal code on completed execution",
+			status:   workflow.StatusCompleted,
+			exitCode: 9,
+			expected: 9,
+		},
+		{
+			name:        "prefers current failed step",
+			status:      workflow.StatusFailed,
+			currentStep: "current",
+			states: map[string]workflow.StepState{
+				"current": {Status: workflow.StatusFailed, ExitCode: 7, CompletedAt: baseTime},
+				"later":   {Status: workflow.StatusFailed, ExitCode: 8, CompletedAt: baseTime.Add(time.Hour)},
+			},
+			expected: 7,
+		},
+		{
+			name:   "selects latest completed failed step",
+			status: workflow.StatusFailed,
+			states: map[string]workflow.StepState{
+				"earlier": {Status: workflow.StatusFailed, ExitCode: 6, CompletedAt: baseTime},
+				"latest":  {Status: workflow.StatusFailed, ExitCode: 8, CompletedAt: baseTime.Add(time.Hour)},
+			},
+			expected: 8,
+		},
+		{
+			name:   "breaks equal completion timestamps by lexicographically smallest key",
+			status: workflow.StatusFailed,
+			states: map[string]workflow.StepState{
+				"zeta":  {Status: workflow.StatusFailed, ExitCode: 9, CompletedAt: baseTime},
+				"alpha": {Status: workflow.StatusFailed, ExitCode: 5, CompletedAt: baseTime},
+			},
+			expected: 5,
+		},
+		{
+			name:        "falls back when current step is missing",
+			status:      workflow.StatusFailed,
+			currentStep: "missing",
+			states: map[string]workflow.StepState{
+				"failed": {Status: workflow.StatusFailed, ExitCode: 6, CompletedAt: baseTime},
+			},
+			expected: 6,
+		},
+		{
+			name:        "falls back when current failed step has zero code",
+			status:      workflow.StatusFailed,
+			currentStep: "current",
+			states: map[string]workflow.StepState{
+				"current": {Status: workflow.StatusFailed, ExitCode: 0, CompletedAt: baseTime.Add(time.Hour)},
+				"failed":  {Status: workflow.StatusFailed, ExitCode: 6, CompletedAt: baseTime},
+			},
+			expected: 6,
+		},
+		{
+			name:        "falls back when current step is not failed",
+			status:      workflow.StatusFailed,
+			currentStep: "current",
+			states: map[string]workflow.StepState{
+				"current": {Status: workflow.StatusCompleted, ExitCode: 7, CompletedAt: baseTime.Add(time.Hour)},
+				"failed":  {Status: workflow.StatusFailed, ExitCode: 6, CompletedAt: baseTime},
+			},
+			expected: 6,
+		},
+		{
+			name:   "ignores undated fallback failed states",
+			status: workflow.StatusFailed,
+			states: map[string]workflow.StepState{
+				"undated": {Status: workflow.StatusFailed, ExitCode: 7},
+			},
+			expected: 3,
+		},
+		{
+			name:   "preserves successful completion after recovered failed step",
+			status: workflow.StatusCompleted,
+			states: map[string]workflow.StepState{
+				"recovered": {Status: workflow.StatusFailed, ExitCode: 7, CompletedAt: baseTime},
+			},
+			completionErr: errors.New("recovered failure"),
+			expected:      0,
+		},
+		{
+			name:          "uses wrapped structured error exit code",
+			status:        workflow.StatusFailed,
+			completionErr: wrappedSystemErr,
+			expected:      4,
+		},
+		{
+			name:          "uses execution fallback for uncategorized failure",
+			status:        workflow.StatusFailed,
+			completionErr: errors.New("uncategorized failure"),
+			expected:      3,
+		},
+		{
+			name:          "uses execution fallback for cancellation",
+			status:        workflow.StatusCancelled,
+			completionErr: context.Canceled,
+			expected:      3,
+		},
+		{
+			name:        "is idempotent when normalization is repeated",
+			status:      workflow.StatusFailed,
+			currentStep: "failed",
+			states: map[string]workflow.StepState{
+				"failed": {Status: workflow.StatusFailed, ExitCode: 7, CompletedAt: baseTime},
+			},
+			completionErr: errors.New("first failure"),
+			repeatErr:     wrappedSystemErr,
+			expected:      7,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			execCtx := workflow.NewExecutionContext("execution-id", "workflow")
+			execCtx.Status = tt.status
+			execCtx.ExitCode = tt.exitCode
+			execCtx.CurrentStep = tt.currentStep
+			for name, state := range tt.states {
+				execCtx.SetStepState(name, state)
+			}
+
+			normalizeTerminalExitCode(execCtx, tt.completionErr)
+			if tt.repeatErr != nil {
+				normalizeTerminalExitCode(execCtx, tt.repeatErr)
+			}
+
+			assert.Equal(t, tt.expected, execCtx.ExitCode)
+		})
+	}
+}
+
+func BenchmarkNormalizeTerminalExitCodeP95(b *testing.B) {
+	baseTime := time.Date(2026, time.October, 17, 12, 0, 0, 0, time.UTC)
+	wrappedExecutionErr := fmt.Errorf("execute workflow: %w", domainerrors.NewExecutionError(
+		domainerrors.ErrorCodeExecutionCommandFailed,
+		"command failed",
+		nil,
+		nil,
+	))
+
+	contexts := make([]*workflow.ExecutionContext, 6)
+	for index := range contexts {
+		contexts[index] = workflow.NewExecutionContext("benchmark", "workflow")
+		contexts[index].Status = workflow.StatusFailed
+	}
+	contexts[0].ExitCode = 2
+	contexts[1].CurrentStep = "current"
+	contexts[1].SetStepState("current", workflow.StepState{
+		Status: workflow.StatusFailed, ExitCode: 7, CompletedAt: baseTime,
+	})
+	for index := range 100 {
+		name := fmt.Sprintf("step-%03d", index)
+		contexts[2].SetStepState(name, workflow.StepState{
+			Status: workflow.StatusFailed, ExitCode: index + 1, CompletedAt: baseTime.Add(time.Duration(index/2) * time.Second),
+		})
+	}
+	errorsByCase := []error{
+		nil,
+		nil,
+		nil,
+		wrappedExecutionErr,
+		errors.New("uncategorized failure"),
+		context.Canceled,
+	}
+	contexts[5].Status = workflow.StatusCancelled
+	durations := make([]time.Duration, b.N)
+
+	b.ResetTimer()
+	for iteration := range b.N {
+		caseIndex := iteration % len(contexts)
+		b.StopTimer()
+		if caseIndex != 0 {
+			contexts[caseIndex].ExitCode = 0
+		}
+		b.StartTimer()
+
+		startedAt := time.Now()
+		normalizeTerminalExitCode(contexts[caseIndex], errorsByCase[caseIndex])
+		elapsed := time.Since(startedAt)
+		b.StopTimer()
+		durations[iteration] = elapsed
+	}
+
+	sort.Slice(durations, func(left, right int) bool {
+		return durations[left] < durations[right]
+	})
+	nearestRank := int(math.Ceil(0.95*float64(len(durations)))) - 1
+	p95 := durations[nearestRank]
+	b.ReportMetric(float64(p95.Nanoseconds()), "p95-ns/op")
+	if p95 >= time.Millisecond {
+		b.Fatalf("p95 normalization latency %s is >= 1ms", p95)
+	}
+}
 
 // TestResolveAuditUser tests the resolveAuditUser method.
 // This method resolves the OS username for audit trail entries.
@@ -671,7 +899,7 @@ func TestRecordExecutionEnd(t *testing.T) {
 			ctx := context.Background()
 
 			// Call the consolidated helper
-			execSvc.recordExecutionEnd(ctx, execCtx, tt.errorMsg)
+			execSvc.recordExecutionEnd(ctx, execCtx, nil, tt.errorMsg)
 
 			// When writer is present, should emit audit completed event
 			if tt.withWriter && mockWriter != nil {
@@ -686,6 +914,66 @@ func TestRecordExecutionEnd(t *testing.T) {
 				assert.NotNil(t, event.DurationMs)
 				assert.GreaterOrEqual(t, *event.DurationMs, int64(50))
 			}
+		})
+	}
+}
+
+func TestRecordExecutionEndPersistsSameNormalizedExitCode(t *testing.T) {
+	tests := []struct {
+		name          string
+		status        workflow.ExecutionStatus
+		completionErr error
+		errorMsg      string
+		expectedCode  int
+	}{
+		{
+			name:   "wrapped structured error",
+			status: workflow.StatusFailed,
+			completionErr: fmt.Errorf("finalize workflow: %w", domainerrors.NewSystemError(
+				domainerrors.ErrorCodeSystemIOPermissionDenied,
+				"permission denied",
+				nil,
+				nil,
+			)),
+			errorMsg:     "finalize workflow: permission denied",
+			expectedCode: 4,
+		},
+		{
+			name:          "cancellation",
+			status:        workflow.StatusCancelled,
+			completionErr: context.Canceled,
+			errorMsg:      "workflow cancelled",
+			expectedCode:  3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			historyStore := testmocks.NewMockHistoryStore()
+			auditWriter := testmocks.NewMockAuditTrailWriter()
+			logger := testmocks.NewMockLogger()
+			execSvc := &ExecutionService{
+				historySvc:       NewHistoryService(historyStore, logger),
+				auditTrailWriter: auditWriter,
+				logger:           logger,
+			}
+			execCtx := workflow.NewExecutionContext("test-exec-id", "test-workflow")
+			execCtx.Status = tt.status
+			execCtx.CompletedAt = execCtx.StartedAt.Add(time.Second)
+
+			execSvc.recordExecutionEnd(context.Background(), execCtx, tt.completionErr, tt.errorMsg)
+
+			records, err := historyStore.List(context.Background(), nil)
+			require.NoError(t, err)
+			require.Len(t, records, 1)
+			events := auditWriter.GetEvents()
+			require.Len(t, events, 1)
+			require.NotNil(t, events[0].ExitCode)
+			assert.Equal(t, tt.expectedCode, execCtx.ExitCode)
+			assert.Equal(t, tt.expectedCode, records[0].ExitCode)
+			assert.Equal(t, tt.expectedCode, *events[0].ExitCode)
+			assert.Equal(t, records[0].ExitCode, *events[0].ExitCode)
+			assert.Equal(t, tt.errorMsg, events[0].Error)
 		})
 	}
 }
@@ -732,7 +1020,7 @@ func TestRecordExecutionEndWithMultipleExitCodes(t *testing.T) {
 			execCtx.ExitCode = tt.exitCode
 			ctx := context.Background()
 
-			execSvc.recordExecutionEnd(ctx, execCtx, "")
+			execSvc.recordExecutionEnd(ctx, execCtx, nil, "")
 
 			events := mockWriter.GetEvents()
 			require.Len(t, events, 1)
@@ -779,7 +1067,7 @@ func TestRecordExecutionEndWithErrorMessages(t *testing.T) {
 			execCtx.ExitCode = 0
 			ctx := context.Background()
 
-			execSvc.recordExecutionEnd(ctx, execCtx, tt.errorMsg)
+			execSvc.recordExecutionEnd(ctx, execCtx, nil, tt.errorMsg)
 
 			events := mockWriter.GetEvents()
 			require.Len(t, events, 1)
@@ -807,7 +1095,7 @@ func TestRecordExecutionEndWithNilWriter(t *testing.T) {
 
 	// Should not panic
 	assert.NotPanics(t, func() {
-		execSvc.recordExecutionEnd(ctx, execCtx, "")
+		execSvc.recordExecutionEnd(ctx, execCtx, nil, "")
 	})
 }
 
@@ -852,7 +1140,7 @@ func TestRecordExecutionEndDurationTracking(t *testing.T) {
 			execCtx.StartedAt = time.Now().Add(-tt.timeOffset)
 			ctx := context.Background()
 
-			execSvc.recordExecutionEnd(ctx, execCtx, "")
+			execSvc.recordExecutionEnd(ctx, execCtx, nil, "")
 
 			events := mockWriter.GetEvents()
 			require.Len(t, events, 1)
@@ -899,7 +1187,7 @@ func TestRecordExecutionEndWithVariousStatuses(t *testing.T) {
 			execCtx.ExitCode = tt.exitCode
 			ctx := context.Background()
 
-			execSvc.recordExecutionEnd(ctx, execCtx, "")
+			execSvc.recordExecutionEnd(ctx, execCtx, nil, "")
 
 			events := mockWriter.GetEvents()
 			require.Len(t, events, 1)
@@ -946,7 +1234,7 @@ func TestRecordExecutionEndPreservesExecutionID(t *testing.T) {
 			execCtx.ExitCode = 0
 			ctx := context.Background()
 
-			execSvc.recordExecutionEnd(ctx, execCtx, "")
+			execSvc.recordExecutionEnd(ctx, execCtx, nil, "")
 
 			events := mockWriter.GetEvents()
 			require.Len(t, events, 1)
@@ -996,7 +1284,7 @@ func TestRecordExecutionEndWriterFailureHandling(t *testing.T) {
 
 			// Should not panic or error even though writer fails
 			assert.NotPanics(t, func() {
-				execSvc.recordExecutionEnd(ctx, execCtx, "")
+				execSvc.recordExecutionEnd(ctx, execCtx, nil, "")
 			})
 		})
 	}
@@ -1019,7 +1307,7 @@ func TestRecordExecutionEndContextCancellation(t *testing.T) {
 
 	// Should not panic even with cancelled context
 	assert.NotPanics(t, func() {
-		execSvc.recordExecutionEnd(ctx, execCtx, "")
+		execSvc.recordExecutionEnd(ctx, execCtx, nil, "")
 	})
 }
 
@@ -1078,7 +1366,7 @@ func TestRecordExecutionEndIntegration(t *testing.T) {
 			execCtx.CompletedAt = time.Now()
 			ctx := context.Background()
 
-			execSvc.recordExecutionEnd(ctx, execCtx, "")
+			execSvc.recordExecutionEnd(ctx, execCtx, nil, "")
 
 			if tt.expectAuditLog {
 				events := mockWriter.GetEvents()

@@ -4,8 +4,8 @@ package features_test
 
 // Audit Trail Integration Tests (F071)
 // Tests verify that FileAuditTrailWriter produces correct JSONL files.
-// These are infrastructure-level tests: they use the writer directly,
-// without wiring the full ExecutionService.
+// Tests cover both direct writer behavior and persisted execution outcomes
+// through ExecutionService, including initial execution and resumption.
 //
 // Scenarios covered:
 //   SC-002: Paired started/completed entries share the same execution_id
@@ -16,14 +16,20 @@ package features_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/audit"
+	"github.com/awf-project/cli/internal/infrastructure/store"
+	"github.com/awf-project/cli/internal/testutil/mocks"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -195,4 +201,309 @@ func TestAuditTrail_OrphanedStartEntry(t *testing.T) {
 		assert.NotEqual(t, workflow.EventWorkflowCompleted, ev.Event,
 			"workflow.completed must not be present in an orphaned trail")
 	}
+}
+
+type completionScenario struct {
+	name               string
+	workflow           *workflow.Workflow
+	executor           ports.CommandExecutor
+	expectedHistory    string
+	expectedAudit      string
+	expectedExitCode   int
+	expectedError      bool
+	expectedAuditError string
+}
+
+func TestExecutionCompletionPersistsConsistentExitCode(t *testing.T) {
+	tests := []completionScenario{
+		{
+			name:             "successful completion",
+			workflow:         terminalWorkflow("successful-completion", workflow.TerminalSuccess, 0),
+			executor:         commandExecutorFunc(successfulCommand),
+			expectedHistory:  "completed",
+			expectedAudit:    "success",
+			expectedExitCode: 0,
+		},
+		{
+			name:             "explicit terminal failure",
+			workflow:         terminalWorkflow("explicit-terminal-failure", workflow.TerminalFailure, 2),
+			executor:         commandExecutorFunc(successfulCommand),
+			expectedHistory:  "failed",
+			expectedAudit:    "failure",
+			expectedExitCode: 2,
+			expectedError:    true,
+		},
+		{
+			name:     "failed command",
+			workflow: commandWorkflow("failed-command", workflow.WorkflowHooks{}),
+			executor: commandExecutorFunc(func(context.Context, *ports.Command) (*ports.CommandResult, error) {
+				return &ports.CommandResult{ExitCode: 7}, nil
+			}),
+			expectedHistory:  "failed",
+			expectedAudit:    "failure",
+			expectedExitCode: 7,
+			expectedError:    true,
+		},
+		{
+			name: "uncategorized application failure",
+			workflow: terminalWorkflowWithHooks(
+				"uncategorized-application-failure",
+				workflow.WorkflowHooks{WorkflowStart: workflow.Hook{{Command: "fail-hook"}}},
+			),
+			executor: commandExecutorFunc(func(context.Context, *ports.Command) (*ports.CommandResult, error) {
+				return nil, errors.New("test hook failure")
+			}),
+			expectedHistory:  "failed",
+			expectedAudit:    "failure",
+			expectedExitCode: 3,
+			expectedError:    true,
+		},
+		{
+			name:               "cancellation",
+			expectedHistory:    "cancelled",
+			workflow:           commandWorkflow("cancellation", workflow.WorkflowHooks{}),
+			expectedAudit:      "failure",
+			expectedExitCode:   3,
+			expectedError:      true,
+			expectedAuditError: "workflow cancelled",
+		},
+	}
+
+	for i := range tests {
+		scenario := &tests[i]
+		for _, mode := range []string{"run", "resume"} {
+			t.Run(scenario.name+"/"+mode, func(t *testing.T) {
+				testPersistedCompletion(t, scenario, mode == "resume")
+			})
+		}
+	}
+}
+
+func testPersistedCompletion(t *testing.T, scenario *completionScenario, resume bool) {
+	t.Helper()
+	tempDir := t.TempDir()
+	auditPath := filepath.Join(tempDir, "audit.jsonl")
+	historyPath := filepath.Join(tempDir, "history.db")
+	runID := "exec-" + strings.ReplaceAll(scenario.name, " ", "-")
+
+	auditWriter, err := audit.NewFileAuditTrailWriter(auditPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, auditWriter.Close()) })
+	historyWriter, err := store.NewSQLiteHistoryStore(historyPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, historyWriter.Close()) })
+
+	executor := scenario.executor
+	var started chan struct{}
+	if executor == nil {
+		started = make(chan struct{})
+		executor = commandExecutorFunc(func(ctx context.Context, _ *ports.Command) (*ports.CommandResult, error) {
+			close(started)
+			<-ctx.Done()
+			return nil, ctx.Err()
+		})
+	}
+	stateStore := &memoryStateStore{}
+	repo := mocks.NewMockWorkflowRepository()
+	repo.AddWorkflow(scenario.workflow.Name, scenario.workflow)
+	workflowService := application.NewWorkflowService(repo, stateStore, executor, ports.NopLogger{}, nil)
+	service := application.NewExecutionService(
+		workflowService, executor, nil, stateStore, ports.NopLogger{}, passthroughResolver{},
+		application.NewHistoryService(historyWriter, ports.NopLogger{}),
+	)
+	service.SetAuditTrailWriter(auditWriter)
+
+	execute := func(ctx context.Context) (*workflow.ExecutionContext, error) {
+		return runWorkflow(ctx, service, scenario.workflow, runID)
+	}
+	if resume {
+		saved := workflow.NewExecutionContext(runID, scenario.workflow.Name)
+		saved.CurrentStep = scenario.workflow.Initial
+		saved.SetStatus(workflow.StatusCancelled)
+		require.NoError(t, stateStore.Save(context.Background(), saved))
+		execute = func(ctx context.Context) (*workflow.ExecutionContext, error) {
+			return service.Resume(ctx, runID, nil, "current")
+		}
+	}
+	execCtx, runErr := executeCompletionScenario(t, execute, started)
+	if scenario.expectedError {
+		require.Error(t, runErr)
+	} else {
+		require.NoError(t, runErr)
+	}
+	require.NotNil(t, execCtx)
+	assert.Equal(t, scenario.expectedHistory, execCtx.GetStatus().String())
+	if started != nil {
+		require.ErrorIs(t, runErr, context.Canceled)
+	}
+	require.NoError(t, auditWriter.Close())
+	require.NoError(t, historyWriter.Close())
+
+	historyReader, err := store.NewSQLiteHistoryStore(historyPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, historyReader.Close()) })
+	records, err := historyReader.List(context.Background(), &workflow.HistoryFilter{Limit: 100})
+	require.NoError(t, err)
+	require.NoError(t, historyReader.Close())
+
+	record := findHistoryRecord(t, records, runID)
+	assert.Equal(t, scenario.expectedHistory, record.Status)
+	assert.Equal(t, scenario.expectedExitCode, record.ExitCode)
+	completions := findAuditCompletions(parseAuditLines(t, auditPath), runID)
+	require.Len(t, completions, 1, "each execution must be finalized exactly once")
+	event := &completions[0]
+	require.NotNil(t, event.ExitCode)
+	assert.Equal(t, scenario.expectedAudit, event.Status)
+	assert.Equal(t, scenario.expectedExitCode, *event.ExitCode)
+	assert.Equal(t, record.ExitCode, *event.ExitCode)
+	if scenario.expectedError {
+		assert.NotZero(t, *event.ExitCode)
+	}
+	if scenario.expectedAuditError != "" {
+		assert.Equal(t, scenario.expectedAuditError, event.Error)
+	}
+}
+
+func executeCompletionScenario(
+	t *testing.T,
+	execute func(context.Context) (*workflow.ExecutionContext, error),
+	started <-chan struct{},
+) (*workflow.ExecutionContext, error) {
+	t.Helper()
+	if started == nil {
+		return execute(context.Background())
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan executionResult, 1)
+	go func() {
+		execCtx, err := execute(ctx)
+		result <- executionResult{execCtx: execCtx, err: err}
+	}()
+	// Bound both synchronization points so a lifecycle regression fails rather than hangs.
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	select {
+	case <-started:
+	case runResult := <-result:
+		t.Fatalf("execution returned before command started: %v", runResult.err)
+	case <-timer.C:
+		t.Fatal("command did not start before cancellation deadline")
+	}
+	cancel()
+	select {
+	case runResult := <-result:
+		return runResult.execCtx, runResult.err
+	case <-timer.C:
+		t.Fatal("execution did not finish after cancellation")
+	}
+	return nil, nil
+}
+
+type commandExecutorFunc func(context.Context, *ports.Command) (*ports.CommandResult, error)
+
+func (f commandExecutorFunc) Execute(ctx context.Context, command *ports.Command) (*ports.CommandResult, error) {
+	return f(ctx, command)
+}
+
+type passthroughResolver struct{}
+
+func (passthroughResolver) Resolve(value string, _ *interpolation.Context) (string, error) {
+	return value, nil
+}
+
+type memoryStateStore struct {
+	states map[string]*workflow.ExecutionContext
+}
+
+func (s *memoryStateStore) Save(_ context.Context, state *workflow.ExecutionContext) error {
+	if s.states == nil {
+		s.states = make(map[string]*workflow.ExecutionContext)
+	}
+	s.states[state.WorkflowID] = state
+	return nil
+}
+
+func (s *memoryStateStore) Load(_ context.Context, id string) (*workflow.ExecutionContext, error) {
+	return s.states[id], nil
+}
+
+func (s *memoryStateStore) Delete(_ context.Context, id string) error {
+	delete(s.states, id)
+	return nil
+}
+
+func (s *memoryStateStore) List(context.Context) ([]string, error) {
+	ids := make([]string, 0, len(s.states))
+	for id := range s.states {
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+func successfulCommand(context.Context, *ports.Command) (*ports.CommandResult, error) {
+	return &ports.CommandResult{ExitCode: 0}, nil
+}
+
+func terminalWorkflow(name string, status workflow.TerminalStatus, exitCode int) *workflow.Workflow {
+	return &workflow.Workflow{
+		Name:    name,
+		Initial: "terminal",
+		Steps: map[string]*workflow.Step{
+			"terminal": {Name: "terminal", Type: workflow.StepTypeTerminal, Status: status, ExitCode: exitCode},
+		},
+	}
+}
+
+func terminalWorkflowWithHooks(name string, hooks workflow.WorkflowHooks) *workflow.Workflow {
+	wf := terminalWorkflow(name, workflow.TerminalSuccess, 0)
+	wf.Hooks = hooks
+	return wf
+}
+
+func commandWorkflow(name string, hooks workflow.WorkflowHooks) *workflow.Workflow {
+	return &workflow.Workflow{
+		Name:    name,
+		Initial: "run",
+		Hooks:   hooks,
+		Steps: map[string]*workflow.Step{
+			"run":  {Name: "run", Type: workflow.StepTypeCommand, Command: "run"},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal, Status: workflow.TerminalSuccess},
+		},
+	}
+}
+
+func runWorkflow(
+	ctx context.Context,
+	service *application.ExecutionService,
+	wf *workflow.Workflow,
+	runID string,
+) (*workflow.ExecutionContext, error) {
+	return service.RunWithWorkflowAndRunID(ctx, wf, nil, runID)
+}
+
+type executionResult struct {
+	execCtx *workflow.ExecutionContext
+	err     error
+}
+
+func findHistoryRecord(t *testing.T, records []*workflow.ExecutionRecord, executionID string) *workflow.ExecutionRecord {
+	t.Helper()
+	for _, record := range records {
+		if record.ID == executionID {
+			return record
+		}
+	}
+	require.FailNow(t, "history record not found", "execution ID: %s", executionID)
+	return nil
+}
+
+func findAuditCompletions(events []workflow.AuditEvent, executionID string) []workflow.AuditEvent {
+	var completions []workflow.AuditEvent
+	for i := range events {
+		if events[i].ExecutionID == executionID && events[i].Event == workflow.EventWorkflowCompleted {
+			completions = append(completions, events[i])
+		}
+	}
+	return completions
 }

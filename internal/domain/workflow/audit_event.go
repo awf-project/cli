@@ -57,6 +57,9 @@ func NewCompletedEvent(execCtx *ExecutionContext, user, errorMsg string) AuditEv
 	}
 
 	exitCode := execCtx.ExitCode
+	if status == "failure" && exitCode == 0 {
+		exitCode = 3
+	}
 	durationMs := execCtx.CompletedAt.Sub(execCtx.StartedAt).Milliseconds()
 
 	return AuditEvent{
