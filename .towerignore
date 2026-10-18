@@ -1,0 +1,15 @@
+# tower index ignore — authoritative, independent of .gitignore.
+# Same syntax as .gitignore. Negate with ! to re-include a path.
+
+# Build artifacts
+target/
+node_modules/
+dist/
+vendor/
+
+# Secrets (must never be fed to the agent/LLM)
+*.key
+*.pem
+.env
+.env.*
+secrets/

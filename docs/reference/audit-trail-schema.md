@@ -125,6 +125,20 @@ Emitted when a workflow execution ends (success or failure), capturing **outcome
 }
 ```
 
+### Completion Exit-Code Invariant
+
+New `workflow.completed` entries use a consistent status/code pair:
+
+- `status: "success"` always has `exit_code: 0`.
+- `status: "failure"` always has a non-zero `exit_code`.
+- Cancelled executions have audit status `failure`.
+- An explicit non-zero code from the execution or failed step is preserved.
+- An uncategorized failure, including a cancellation without a more precise code, uses exit code `3` (execution error).
+
+The execution history record and audit event receive the same normalized exit
+code when both writes succeed. This applies to new records only; existing
+`failure/0` entries are not migrated.
+
 ---
 
 ## Field Constraints

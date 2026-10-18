@@ -23,6 +23,22 @@ awf run deploy-app --input env=staging
 {"event":"workflow.completed","execution_id":"550e8400-...","timestamp":"2026-02-20T23:16:12.456+01:00","user":"deploy-bot","workflow_name":"deploy-app","status":"success","exit_code":0,"duration_ms":30333,"schema_version":1}
 ```
 
+## Completion Status and Exit Codes
+
+Completion records use an unambiguous status/code pair:
+
+- Successful executions are recorded as `status: "success"` with `exit_code: 0`.
+- Failed executions are recorded as `status: "failure"` with a non-zero exit code.
+- Explicit non-zero codes from a failed command, provider, plugin, custom step, or terminal state are preserved.
+- Failures without a more precise code use exit code `3` (`Execution Error`). Cancelled executions have audit status `failure` and also use code `3` when they have no more precise code.
+
+Each initial or resumed execution attempt is finalized once. A cancelled attempt
+is recorded as `cancelled` in execution history and `failure` in the audit trail.
+
+AWF normalizes the outcome before writing it, so the execution history and audit
+trail contain the same exit code when both writes succeed. This correction applies
+to new records; it does not rewrite existing audit entries.
+
 ## Default Location
 
 The audit trail is written to:
