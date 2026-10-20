@@ -64,6 +64,7 @@ func (s *ExecutionService) emitTranscriptStep(ctx context.Context, ec *workflow.
 		// output without an ExecutionContext. Prefer the human-readable DisplayOutput,
 		// mirroring stepHadOutput's display logic.
 		if state, ok := ec.GetStepState(step.Name); ok {
+			payload.Status = string(state.Status)
 			payload.Output = state.DisplayOutput
 			if payload.Output == "" {
 				payload.Output = state.Output

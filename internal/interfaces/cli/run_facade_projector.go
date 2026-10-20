@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 )
 
@@ -43,17 +44,7 @@ func RenderFacadeEventsToTextWithOptions(events []ports.Event, opts facadeRender
 				f.Info(fmt.Sprintf("  → %s", step.StepName))
 			}
 		case ports.EventStepCompleted:
-			if step, ok := ev.Payload.(*ports.EnrichedStepPayload); ok && step != nil {
-				if step.HadOutput {
-					// The step already printed its output out-of-band; just mark completion.
-					f.Success(fmt.Sprintf("  ✓ %s: completed", step.StepName))
-				} else {
-					// Silent step: restore the legacy F037 success feedback (hidden in quiet).
-					f.StepSuccess(step.StepName)
-				}
-			} else {
-				f.Success("Step completed.")
-			}
+			renderCompletedStep(f, ev.Payload)
 		case ports.EventMessageAssistant:
 			if msg, ok := ev.Payload.(*ports.EnrichedMessagePayload); ok && msg != nil {
 				f.Println(msg.Content)
@@ -78,4 +69,24 @@ func RenderFacadeEventsToTextWithOptions(events []ports.Event, opts facadeRender
 		}
 	}
 	return buf.Bytes()
+}
+
+// renderCompletedStep keeps a handled step failure distinct from workflow success.
+func renderCompletedStep(f *ui.Formatter, payload any) {
+	step, ok := payload.(*ports.EnrichedStepPayload)
+	if !ok || step == nil {
+		f.Success("Step completed.")
+		return
+	}
+	// Completion records termination. Older transcripts have no status, so retain
+	// their error-based fallback.
+	if step.Status == string(workflow.StatusFailed) || step.Status == string(workflow.StatusCancelled) || step.Error != "" {
+		f.Error(fmt.Sprintf("%s: failed", step.StepName))
+		return
+	}
+	if step.HadOutput {
+		f.Success(fmt.Sprintf("  ✓ %s: completed", step.StepName))
+		return
+	}
+	f.StepSuccess(step.StepName)
 }

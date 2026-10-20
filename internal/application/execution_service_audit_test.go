@@ -889,6 +889,7 @@ func TestRecordExecutionEnd(t *testing.T) {
 			}
 
 			execSvc := &ExecutionService{
+				store:            testmocks.NewMockStateStore(),
 				auditTrailWriter: auditWriter,
 			}
 
@@ -953,6 +954,7 @@ func TestRecordExecutionEndPersistsSameNormalizedExitCode(t *testing.T) {
 			auditWriter := testmocks.NewMockAuditTrailWriter()
 			logger := testmocks.NewMockLogger()
 			execSvc := &ExecutionService{
+				store:            testmocks.NewMockStateStore(),
 				historySvc:       NewHistoryService(historyStore, logger),
 				auditTrailWriter: auditWriter,
 				logger:           logger,
@@ -962,6 +964,13 @@ func TestRecordExecutionEndPersistsSameNormalizedExitCode(t *testing.T) {
 			execCtx.CompletedAt = execCtx.StartedAt.Add(time.Second)
 
 			execSvc.recordExecutionEnd(context.Background(), execCtx, tt.completionErr, tt.errorMsg)
+
+			saved, loadErr := execSvc.store.Load(context.Background(), execCtx.WorkflowID)
+			require.NoError(t, loadErr)
+			require.NotNil(t, saved)
+			assert.Equal(t, tt.expectedCode, saved.ExitCode)
+			assert.Equal(t, tt.status, saved.GetStatus())
+			assert.Equal(t, execCtx.GetCompletedAt(), saved.GetCompletedAt())
 
 			records, err := historyStore.List(context.Background(), nil)
 			require.NoError(t, err)
@@ -1012,6 +1021,7 @@ func TestRecordExecutionEndWithMultipleExitCodes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockWriter := testmocks.NewMockAuditTrailWriter()
 			execSvc := &ExecutionService{
+				store:            testmocks.NewMockStateStore(),
 				auditTrailWriter: mockWriter,
 			}
 
@@ -1059,6 +1069,7 @@ func TestRecordExecutionEndWithErrorMessages(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockWriter := testmocks.NewMockAuditTrailWriter()
 			execSvc := &ExecutionService{
+				store:            testmocks.NewMockStateStore(),
 				auditTrailWriter: mockWriter,
 			}
 
@@ -1085,6 +1096,7 @@ func TestRecordExecutionEndWithErrorMessages(t *testing.T) {
 // TestRecordExecutionEndWithNilWriter tests that nil writer doesn't cause panics.
 func TestRecordExecutionEndWithNilWriter(t *testing.T) {
 	execSvc := &ExecutionService{
+		store:            testmocks.NewMockStateStore(),
 		auditTrailWriter: nil,
 	}
 
@@ -1131,6 +1143,7 @@ func TestRecordExecutionEndDurationTracking(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockWriter := testmocks.NewMockAuditTrailWriter()
 			execSvc := &ExecutionService{
+				store:            testmocks.NewMockStateStore(),
 				auditTrailWriter: mockWriter,
 			}
 
@@ -1179,6 +1192,7 @@ func TestRecordExecutionEndWithVariousStatuses(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockWriter := testmocks.NewMockAuditTrailWriter()
 			execSvc := &ExecutionService{
+				store:            testmocks.NewMockStateStore(),
 				auditTrailWriter: mockWriter,
 			}
 
@@ -1226,6 +1240,7 @@ func TestRecordExecutionEndPreservesExecutionID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockWriter := testmocks.NewMockAuditTrailWriter()
 			execSvc := &ExecutionService{
+				store:            testmocks.NewMockStateStore(),
 				auditTrailWriter: mockWriter,
 			}
 
@@ -1274,6 +1289,7 @@ func TestRecordExecutionEndWriterFailureHandling(t *testing.T) {
 			}
 
 			execSvc := &ExecutionService{
+				store:            testmocks.NewMockStateStore(),
 				auditTrailWriter: mockWriter,
 			}
 
@@ -1294,6 +1310,7 @@ func TestRecordExecutionEndWriterFailureHandling(t *testing.T) {
 func TestRecordExecutionEndContextCancellation(t *testing.T) {
 	mockWriter := testmocks.NewMockAuditTrailWriter()
 	execSvc := &ExecutionService{
+		store:            testmocks.NewMockStateStore(),
 		auditTrailWriter: mockWriter,
 	}
 
@@ -1355,6 +1372,7 @@ func TestRecordExecutionEndIntegration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockWriter := testmocks.NewMockAuditTrailWriter()
 			execSvc := &ExecutionService{
+				store:            testmocks.NewMockStateStore(),
 				auditTrailWriter: mockWriter,
 			}
 

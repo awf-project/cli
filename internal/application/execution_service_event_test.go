@@ -8,6 +8,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
+	infraexpr "github.com/awf-project/cli/internal/infrastructure/expression"
 	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -193,6 +194,90 @@ func TestExecutionService_EmitEvent_WorkflowFailed(t *testing.T) {
 			assert.NotEmpty(t, failedEvent.Metadata["error"])
 		}
 	})
+}
+
+func TestLoopFailureEmitsFailureEvents(t *testing.T) {
+	tests := []struct {
+		name          string
+		workflow      *workflow.Workflow
+		wantStatus    workflow.ExecutionStatus
+		wantFailed    int
+		wantCompleted int
+	}{
+		{
+			name:          "terminal loop failure",
+			workflow:      loopTransitionWorkflow(workflow.StepTypeForEach, []string{"failing"}, "recovery", "false"),
+			wantStatus:    workflow.StatusFailed,
+			wantFailed:    1,
+			wantCompleted: 0,
+		},
+		{
+			name:          "handled internal failure transition",
+			workflow:      loopTransitionWorkflow(workflow.StepTypeForEach, []string{"failing", "recovery"}, "recovery", ""),
+			wantStatus:    workflow.StatusCompleted,
+			wantFailed:    0,
+			wantCompleted: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			evaluator := infraexpr.NewExprEvaluator()
+			harness := NewTestHarnessWithEvaluator(t, evaluator).
+				WithWorkflow("loop-transition", tt.workflow).
+				WithCommandResult("emit verdict", &ports.CommandResult{ExitCode: 1}).
+				WithCommandResult("run recovery", &ports.CommandResult{ExitCode: 0})
+			svc, _ := buildLoopTransitionService(harness, evaluator)
+			publisher := testmocks.NewMockEventPublisher()
+			svc.SetEventPublisher(publisher)
+
+			execCtx, runErr := svc.RunWithWorkflowAndRunID(
+				context.Background(), tt.workflow, nil, "loop-event-run",
+			)
+			if tt.wantStatus == workflow.StatusFailed {
+				require.Error(t, runErr)
+			} else {
+				require.NoError(t, runErr)
+			}
+			require.NotNil(t, execCtx)
+			assert.Equal(t, tt.wantStatus, execCtx.Status)
+
+			var failed, completed []*pluginmodel.DomainEvent
+			for _, event := range publisher.GetEvents() {
+				switch event.Type {
+				case workflow.EventWorkflowFailed:
+					failed = append(failed, event)
+				case workflow.EventWorkflowCompleted:
+					completed = append(completed, event)
+				}
+			}
+			require.Len(t, failed, tt.wantFailed)
+			require.Len(t, completed, tt.wantCompleted)
+
+			assertLifecycleMetadata := func(event *pluginmodel.DomainEvent) {
+				assert.False(t, event.Timestamp.IsZero())
+				assert.Equal(t, "core", event.Source)
+				assert.Equal(t, execCtx.WorkflowID, event.Metadata["workflow_id"])
+				assert.Equal(t, tt.workflow.Name, event.Metadata["workflow_name"])
+			}
+			for _, event := range failed {
+				assertLifecycleMetadata(event)
+			}
+			for _, event := range completed {
+				assertLifecycleMetadata(event)
+			}
+			if len(failed) == 1 {
+				assert.NotEmpty(t, failed[0].Metadata["error"])
+			}
+			if len(completed) == 1 {
+				assert.NotEmpty(t, completed[0].Metadata["duration"])
+				origin, exists := execCtx.GetStepState("failing")
+				require.True(t, exists)
+				assert.Equal(t, workflow.StatusFailed, origin.Status)
+				assert.Equal(t, 1, origin.ExitCode)
+			}
+		})
+	}
 }
 
 func TestExecutionService_EmitEvent_StepStarted(t *testing.T) {

@@ -27,6 +27,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/audit"
+	infraexpr "github.com/awf-project/cli/internal/infrastructure/expression"
 	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/awf-project/cli/pkg/interpolation"
@@ -279,6 +280,160 @@ func TestExecutionCompletionPersistsConsistentExitCode(t *testing.T) {
 	}
 }
 
+func TestLoopFailurePersistsConsistentOutcome(t *testing.T) {
+	tests := []struct {
+		name          string
+		handled       bool
+		wantStatus    string
+		wantAudit     string
+		wantExitCode  int
+		wantFailed    int
+		wantCompleted int
+		wantRunError  bool
+	}{
+		{
+			name:         "terminal loop failure",
+			wantStatus:   "failed",
+			wantAudit:    "failure",
+			wantExitCode: 1,
+			wantFailed:   1,
+			wantRunError: true,
+		},
+		{
+			name:          "handled internal failure transition",
+			handled:       true,
+			wantStatus:    "completed",
+			wantAudit:     "success",
+			wantExitCode:  0,
+			wantCompleted: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root, err := os.MkdirTemp(".", ".loop-outcome-")
+			require.NoError(t, err)
+			t.Cleanup(func() { assert.NoError(t, os.RemoveAll(root)) })
+
+			runID := "loop-persistence-run"
+			auditPath := filepath.Join(root, "audit.jsonl")
+			historyPath := filepath.Join(root, "history.db")
+			auditWriter, err := audit.NewFileAuditTrailWriter(auditPath)
+			require.NoError(t, err)
+			historyWriter, err := store.NewSQLiteHistoryStore(historyPath)
+			require.NoError(t, err)
+
+			wf := persistedLoopWorkflow(tt.handled)
+			stateStore := store.NewJSONStore(filepath.Join(root, "states"))
+			repo := mocks.NewMockWorkflowRepository()
+			repo.AddWorkflow(wf.Name, wf)
+			executor := commandExecutorFunc(func(_ context.Context, command *ports.Command) (*ports.CommandResult, error) {
+				if command.Program == "emit verdict" {
+					return &ports.CommandResult{ExitCode: 1}, nil
+				}
+				return &ports.CommandResult{ExitCode: 0}, nil
+			})
+			workflowService := application.NewWorkflowService(repo, stateStore, executor, ports.NopLogger{}, nil)
+			service := application.NewExecutionServiceWithEvaluator(
+				workflowService,
+				executor,
+				application.NewParallelExecutor(ports.NopLogger{}),
+				stateStore,
+				ports.NopLogger{},
+				interpolation.NewTemplateResolver(),
+				application.NewHistoryService(historyWriter, ports.NopLogger{}),
+				infraexpr.NewExprEvaluator(),
+			)
+			publisher := mocks.NewMockEventPublisher()
+			service.SetEventPublisher(publisher)
+			service.SetAuditTrailWriter(auditWriter)
+
+			execCtx, runErr := service.RunWithWorkflowAndRunID(context.Background(), wf, nil, runID)
+			if tt.wantRunError {
+				require.Error(t, runErr)
+			} else {
+				require.NoError(t, runErr)
+			}
+			require.NotNil(t, execCtx)
+			assert.Equal(t, tt.wantStatus, execCtx.GetStatus().String())
+			assert.Equal(t, tt.wantExitCode, execCtx.ExitCode)
+			saved, loadErr := stateStore.Load(context.Background(), runID)
+			require.NoError(t, loadErr)
+			require.NotNil(t, saved)
+			assert.Equal(t, tt.wantExitCode, saved.ExitCode)
+			assert.Equal(t, tt.wantStatus, saved.GetStatus().String())
+			assert.False(t, saved.GetCompletedAt().IsZero())
+			origin, exists := execCtx.GetStepState("failing")
+			require.True(t, exists)
+			assert.Equal(t, workflow.StatusFailed, origin.Status)
+			assert.Equal(t, 1, origin.ExitCode)
+
+			var failed, completed int
+			for _, event := range publisher.GetEvents() {
+				switch event.Type {
+				case workflow.EventWorkflowFailed:
+					failed++
+				case workflow.EventWorkflowCompleted:
+					completed++
+				}
+			}
+			assert.Equal(t, tt.wantFailed, failed)
+			assert.Equal(t, tt.wantCompleted, completed)
+
+			require.NoError(t, auditWriter.Close())
+			require.NoError(t, historyWriter.Close())
+
+			historyReader, err := store.NewSQLiteHistoryStore(historyPath)
+			require.NoError(t, err)
+			records, err := historyReader.List(context.Background(), &workflow.HistoryFilter{Limit: 100})
+			require.NoError(t, err)
+			require.NoError(t, historyReader.Close())
+			require.Len(t, records, 1)
+			assert.Equal(t, tt.wantStatus, records[0].Status)
+			assert.Equal(t, tt.wantExitCode, records[0].ExitCode)
+
+			auditReader, err := os.Open(auditPath)
+			require.NoError(t, err)
+			require.NoError(t, auditReader.Close())
+			completions := findAuditCompletions(parseAuditLines(t, auditPath), runID)
+			require.Len(t, completions, 1)
+			require.NotNil(t, completions[0].ExitCode)
+			assert.Equal(t, tt.wantAudit, completions[0].Status)
+			assert.Equal(t, tt.wantExitCode, *completions[0].ExitCode)
+			assert.Equal(t, execCtx.ExitCode, records[0].ExitCode)
+			assert.Equal(t, records[0].ExitCode, *completions[0].ExitCode)
+		})
+	}
+}
+
+func persistedLoopWorkflow(handled bool) *workflow.Workflow {
+	when := "false"
+	body := []string{"failing"}
+	if handled {
+		when = ""
+		body = append(body, "recovery")
+	}
+	return &workflow.Workflow{
+		Name:    "loop-persistence",
+		Initial: "loop",
+		Steps: map[string]*workflow.Step{
+			"loop": {
+				Name: "loop",
+				Type: workflow.StepTypeForEach,
+				Loop: &workflow.LoopConfig{
+					Type: workflow.LoopTypeForEach, Items: `["item"]`, Body: body, MaxIterations: 1, OnComplete: "done",
+				},
+			},
+			"failing": {
+				Name: "failing", Type: workflow.StepTypeCommand, Command: "emit verdict",
+				Transitions: workflow.Transitions{{When: when, Goto: "recovery"}},
+			},
+			"recovery": {Name: "recovery", Type: workflow.StepTypeCommand, Command: "run recovery"},
+			"done":     {Name: "done", Type: workflow.StepTypeTerminal, Status: workflow.TerminalSuccess},
+		},
+	}
+}
+
 func testPersistedCompletion(t *testing.T, scenario *completionScenario, resume bool) {
 	t.Helper()
 	tempDir := t.TempDir()
@@ -303,7 +458,7 @@ func testPersistedCompletion(t *testing.T, scenario *completionScenario, resume 
 			return nil, ctx.Err()
 		})
 	}
-	stateStore := &memoryStateStore{}
+	stateStore := store.NewJSONStore(filepath.Join(tempDir, "states"))
 	repo := mocks.NewMockWorkflowRepository()
 	repo.AddWorkflow(scenario.workflow.Name, scenario.workflow)
 	workflowService := application.NewWorkflowService(repo, stateStore, executor, ports.NopLogger{}, nil)
@@ -333,6 +488,12 @@ func testPersistedCompletion(t *testing.T, scenario *completionScenario, resume 
 	}
 	require.NotNil(t, execCtx)
 	assert.Equal(t, scenario.expectedHistory, execCtx.GetStatus().String())
+	saved, loadErr := stateStore.Load(context.Background(), runID)
+	require.NoError(t, loadErr)
+	require.NotNil(t, saved)
+	assert.Equal(t, scenario.expectedExitCode, saved.ExitCode)
+	assert.Equal(t, scenario.expectedHistory, saved.GetStatus().String())
+	assert.False(t, saved.GetCompletedAt().IsZero())
 	if started != nil {
 		require.ErrorIs(t, runErr, context.Canceled)
 	}
@@ -391,13 +552,14 @@ func executeCompletionScenario(
 		t.Fatal("command did not start before cancellation deadline")
 	}
 	cancel()
-	select {
-	case runResult := <-result:
-		return runResult.execCtx, runResult.err
-	case <-timer.C:
-		t.Fatal("execution did not finish after cancellation")
+	for {
+		select {
+		case runResult := <-result:
+			return runResult.execCtx, runResult.err
+		case <-timer.C:
+			t.Fatal("execution did not finish after cancellation")
+		}
 	}
-	return nil, nil
 }
 
 type commandExecutorFunc func(context.Context, *ports.Command) (*ports.CommandResult, error)
@@ -410,35 +572,6 @@ type passthroughResolver struct{}
 
 func (passthroughResolver) Resolve(value string, _ *interpolation.Context) (string, error) {
 	return value, nil
-}
-
-type memoryStateStore struct {
-	states map[string]*workflow.ExecutionContext
-}
-
-func (s *memoryStateStore) Save(_ context.Context, state *workflow.ExecutionContext) error {
-	if s.states == nil {
-		s.states = make(map[string]*workflow.ExecutionContext)
-	}
-	s.states[state.WorkflowID] = state
-	return nil
-}
-
-func (s *memoryStateStore) Load(_ context.Context, id string) (*workflow.ExecutionContext, error) {
-	return s.states[id], nil
-}
-
-func (s *memoryStateStore) Delete(_ context.Context, id string) error {
-	delete(s.states, id)
-	return nil
-}
-
-func (s *memoryStateStore) List(context.Context) ([]string, error) {
-	ids := make([]string, 0, len(s.states))
-	for id := range s.states {
-		ids = append(ids, id)
-	}
-	return ids, nil
 }
 
 func successfulCommand(context.Context, *ports.Command) (*ports.CommandResult, error) {

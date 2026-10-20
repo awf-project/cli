@@ -6,6 +6,8 @@ type MessagePayload struct {
 }
 
 type StepPayload struct {
+	// Status is the execution outcome; step.completed marks termination, not success.
+	Status string `json:"status,omitempty"`
 	Name   string `json:"name"`
 	Kind   string `json:"kind"`
 	Error  string `json:"error,omitempty"`

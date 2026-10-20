@@ -164,7 +164,7 @@ verify_env:
 Loop body steps can define transitions to control execution flow within iterations. The loop executor evaluates transitions after each step and performs one of the following actions:
 
 1. **Intra-body jump** - Target is another step in the loop body → skip to that step
-2. **Early exit** - Target is outside the loop body → break loop and goto target
+2. **Early exit** - A successful step targeting a state outside the loop body exits the loop
 3. **Sequential execution** - No transition matches → continue to next body step
 4. **Invalid target** - Target doesn't exist → log warning and continue sequentially
 
@@ -173,12 +173,64 @@ Loop body steps can define transitions to control execution flow within iteratio
 When a transition matches, the executor resolves the target as follows:
 
 1. Check if target step exists in `body` array → jump forward or backward within iteration
-2. Check if target step exists in workflow states → exit loop and transition to target
+2. Check if target step exists in workflow states → exit loop and transition to target when the source step succeeded
 3. If target not found → log warning and continue to next body step (graceful degradation)
 
 ### Intra-Body Transitions (Skip Steps)
 
-Transitions can jump to later steps in the body, skipping intermediate steps.
+Transitions can jump to later steps in the body, skipping intermediate steps. An
+explicit transition from a failed body step is also handled when its target is
+another step in the same loop body, even if `continue_on_error: false`. The
+source step retains its failed status and exit code, while execution follows the
+configured target.
+
+### Handled Failure Transitions
+
+Use explicit transitions when a failed operation should route to a recovery or
+classification step within the loop. This complete example handles exit code 1
+without enabling `continue_on_error`:
+
+```yaml
+name: handled-loop-failure
+version: "1.0.0"
+
+states:
+  initial: my_loop
+
+  my_loop:
+    type: for_each
+    items: '["task"]'
+    max_iterations: 1
+    body: [assess, mark_blocked]
+    on_complete: done
+
+  assess:
+    type: step
+    continue_on_error: false
+    command: 'echo "BLOCKED"; exit 1'
+    transitions:
+      - when: 'states.assess.ExitCode == 1'
+        goto: mark_blocked
+
+  mark_blocked:
+    type: step
+    command: echo "recorded block"
+    on_success: my_loop
+
+  done:
+    type: terminal
+    status: success
+```
+
+The `assess` step is recorded as failed with its original exit code, but the
+matching `mark_blocked` transition is not treated as a fatal loop exit because
+`mark_blocked` belongs to the loop body. This behavior applies to both `while`
+and `for_each` loops. If the recovery step succeeds, the loop can continue and
+the workflow can complete successfully.
+
+By contrast, a failed step whose transition targets a state outside the loop
+body remains a fatal external escape when `continue_on_error` is `false`.
+Unmatched failures and cancellations also retain their normal failure behavior.
 
 ```yaml
 test_loop:

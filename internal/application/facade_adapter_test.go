@@ -26,6 +26,63 @@ var (
 	_ ports.UserInputReader = (*mockUserInputReader)(nil)
 )
 
+func TestFacadeAdapter_CancellationWaitsForExecutionOutcome(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	adapter := NewAdapter(nil, nil, nil, nil, nil, NewSessionRegistry())
+	started := make(chan struct{})
+	cancelled := make(chan struct{})
+	release := make(chan struct{})
+	defer close(release)
+	session, err := adapter.newSession(ctx, "cancel-outcome", nil, func(execCtx context.Context) error {
+		close(started)
+		<-execCtx.Done()
+		close(cancelled)
+		<-release
+		return execCtx.Err()
+	})
+	require.NoError(t, err)
+	<-started
+	cancel()
+	<-cancelled
+	select {
+	case <-session.Events():
+		t.Fatal("session closed before execution finalized")
+	case <-time.After(50 * time.Millisecond):
+	}
+	// Permit finalization without closing release twice in the deferred cleanup.
+	release <- struct{}{}
+	done := make(chan error, 1)
+	go func() { done <- Drain(session) }()
+	select {
+	case runErr := <-done:
+		require.ErrorIs(t, runErr, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("cancelled execution did not close its session")
+	}
+}
+
+func TestFacadeAdapter_CloseCancelsExecution(t *testing.T) {
+	adapter := NewAdapter(nil, nil, nil, nil, nil, NewSessionRegistry())
+	started := make(chan struct{})
+	done := make(chan struct{})
+	session, err := adapter.newSession(context.Background(), "close-execution", nil, func(ctx context.Context) error {
+		close(started)
+		<-ctx.Done()
+		close(done)
+		return ctx.Err()
+	})
+	require.NoError(t, err)
+	defer session.Close()
+	<-started
+	require.NoError(t, session.Close())
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("closing a session must cancel its execution")
+	}
+}
+
 // mockRecorder counts Subscribe calls for testing
 type mockRecorder struct {
 	subscribeCount atomic.Int32

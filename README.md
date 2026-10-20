@@ -19,7 +19,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, GitHub Copilot
 - **MCP Proxy** - Intercept and audit AI agent tool calls via Model Context Protocol (MCP); re-expose the 6 built-in tools (`Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`) with full observability (OTel spans, structured logs); expose custom gRPC plugin operations as MCP tools; optional full interception or additive mode per step
 - **OpenAI-Compatible Provider** - Use any Chat Completions API (OpenAI, Ollama, vLLM, Groq) with native HTTP integration, accurate token reporting, and no CLI tool required
 - **Parallel Execution** - Run multiple steps concurrently with configurable strategies
-- **Loop Constructs** - For-each and while loops with full context access
+- **Loop Constructs** - For-each and while loops with full context access and [handled failure transitions](docs/reference/loop.md#handled-failure-transitions) between steps in the same loop body
 - **Sub-Workflows** - Invoke workflows from other workflows with input/output mapping
 - **Retry with Backoff** - Automatic retry with exponential, linear, or constant backoff
 - **Workflow Templates** - Reusable step patterns with parameters

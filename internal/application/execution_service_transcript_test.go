@@ -404,3 +404,22 @@ func emitTranscriptStepCompletedHelper(svc *ExecutionService, ctx context.Contex
 func emitTranscriptAgentMessageHelper(svc *ExecutionService, ctx context.Context, ec *workflow.ExecutionContext, prompt, systemPrompt string) {
 	svc.emitTranscriptAgentMessage(ctx, ec, prompt, systemPrompt)
 }
+
+func TestStepCompletionPreservesOutcomeThroughProjection(t *testing.T) {
+	for _, status := range []workflow.ExecutionStatus{workflow.StatusCompleted, workflow.StatusFailed, workflow.StatusCancelled} {
+		t.Run(string(status), func(t *testing.T) {
+			svc := newTestExecutionService()
+			recorder := &fakeRecorder{}
+			svc.SetRecorder(recorder)
+			ec := workflow.NewExecutionContext("outcome-run", "outcome")
+			ec.SetStepState("probe", workflow.StepState{Name: "probe", Status: status})
+			svc.emitTranscriptStep(context.Background(), ec, &workflow.Step{Name: "probe"}, transcript.EventTypeStepCompleted)
+			require.Len(t, recorder.events, 1)
+			event, err := ProjectEvent(recorder.events[0])
+			require.NoError(t, err)
+			payload, ok := event.Payload.(*ports.EnrichedStepPayload)
+			require.True(t, ok)
+			assert.Equal(t, string(status), payload.Status)
+		})
+	}
+}
