@@ -1,0 +1,110 @@
+name: loop-handled-failure-transitions
+version: "1.0.0"
+
+inputs:
+  - name: loop_kind
+    type: string
+    required: true
+  - name: exit_code
+    type: integer
+    required: true
+  - name: failure_mode
+    type: string
+    required: false
+    default: routed
+
+states:
+  initial: preceding_step
+
+  preceding_step:
+    type: step
+    command: printf 'PRECEDING-OK\n'
+    on_success: choose_loop
+
+  choose_loop:
+    type: step
+    command: printf '{{.inputs.loop_kind}}\n'
+    transitions:
+      - when: 'states.choose_loop.Output contains "for_each"'
+        goto: for_each_loop
+      - goto: while_loop
+
+  for_each_loop:
+    type: for_each
+    items: '["only-item"]'
+    max_iterations: 1
+    body: [choose_probe, routed_probe, unmatched_probe, external_probe, mark_task_complete, mark_task_blocked, error_feature_memory, error_assessment]
+    on_complete: done
+
+  while_loop:
+    type: while
+    while: 'true'
+    max_iterations: 1
+    body: [choose_probe, routed_probe, unmatched_probe, external_probe, mark_task_complete, mark_task_blocked, error_feature_memory, error_assessment]
+    on_complete: done
+
+  choose_probe:
+    type: step
+    command: printf '{{.inputs.failure_mode}}\n'
+    transitions:
+      - when: 'states.choose_probe.Output contains "unmatched"'
+        goto: unmatched_probe
+      - when: 'states.choose_probe.Output contains "external"'
+        goto: external_probe
+      - goto: routed_probe
+
+  routed_probe:
+    type: step
+    continue_on_error: false
+    command: printf 'ZPM-CRITICAL:1\n'; exit {{.inputs.exit_code}}
+    transitions:
+      - when: 'states.routed_probe.ExitCode == 0'
+        goto: mark_task_complete
+      - when: 'states.routed_probe.ExitCode == 1'
+        goto: mark_task_blocked
+      - when: 'states.routed_probe.ExitCode == 70'
+        goto: error_feature_memory
+      - goto: error_assessment
+
+  unmatched_probe:
+    type: step
+    continue_on_error: false
+    command: printf 'ZPM-CRITICAL:1\n'; exit 1
+    on_success: done
+
+  external_probe:
+    type: step
+    continue_on_error: false
+    command: printf 'ZPM-CRITICAL:1\n'; exit 2
+    transitions:
+      - goto: failed_external_target
+
+  mark_task_complete:
+    type: step
+    command: printf 'DESTINATION:mark_task_complete\n'
+    on_success: done
+
+  mark_task_blocked:
+    type: step
+    command: printf 'DESTINATION:mark_task_blocked\n'
+    on_success: done
+
+  error_feature_memory:
+    type: step
+    command: printf 'DESTINATION:error_feature_memory\n'
+    on_success: done
+
+  error_assessment:
+    type: step
+    command: printf 'DESTINATION:error_assessment\n'
+    on_success: done
+
+  failed_external_target:
+    type: step
+    command: printf 'EXTERNAL-TARGET-EXECUTED\n'
+    on_success: done
+
+  done:
+    type: terminal
+    status: success
+    message: LOOP-WORKFLOW-SUCCESS

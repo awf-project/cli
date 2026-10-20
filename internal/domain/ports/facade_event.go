@@ -122,6 +122,8 @@ type Event struct {
 // EnrichedStepPayload carries step metadata for EventStepStarted, EventStepCompleted,
 // EventStepCallWorkflowStarted, and EventStepCallWorkflowCompleted.
 type EnrichedStepPayload struct {
+	// Status preserves the terminal outcome. Empty supports older transcripts.
+	Status     string
 	StepName   string
 	Error      string
 	DurationMs int64

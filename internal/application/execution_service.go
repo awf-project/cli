@@ -835,6 +835,12 @@ func (s *ExecutionService) recordExecutionEnd(
 	errorMsg string,
 ) {
 	normalizeTerminalExitCode(execCtx, completionErr)
+	if execCtx.GetCompletedAt().IsZero() {
+		execCtx.SetCompletedAt(time.Now())
+	}
+	// Persist the final outcome after normalization, including when execution was
+	// cancelled. Earlier step checkpoints may still contain a zero exit code.
+	s.checkpoint(context.WithoutCancel(ctx), execCtx)
 	s.recordHistory(execCtx)
 	s.emitAuditCompleted(ctx, execCtx, errorMsg)
 }
@@ -1116,6 +1122,30 @@ func (s *ExecutionService) executeParallelStep(
 	return s.resolveNextStep(step, intCtx, true)
 }
 
+type loopBodyTransitionLimitError struct {
+	loopName  string
+	iteration int
+	from      string
+	to        string
+	limit     int
+	output    string
+}
+
+func (e *loopBodyTransitionLimitError) Error() string {
+	message := fmt.Sprintf(
+		"loop body transition limit %d exceeded in loop %s iteration %d after backward transition %s -> %s; review intra-body transitions for a cycle",
+		e.limit,
+		e.loopName,
+		e.iteration,
+		e.from,
+		e.to,
+	)
+	if e.output != "" {
+		message += fmt.Sprintf("; last step output: %s", e.output)
+	}
+	return message
+}
+
 // executeLoopStep executes a for_each or while loop step.
 //
 //nolint:gocognit // Complexity 35: loop executor handles iteration, loop state, break/continue, and error cases. Complexity inherent to loop semantics.
@@ -1153,6 +1183,16 @@ func (s *ExecutionService) executeLoopStep(
 	}
 
 	var iterationIndex int
+	bodyStepIndices := make(map[string]int, len(step.Loop.Body))
+	for index, bodyStepName := range step.Loop.Body {
+		bodyStepIndices[bodyStepName] = index
+	}
+	transitionLimit := step.Loop.MaxIterations
+	if transitionLimit <= 0 || step.Loop.IsMaxIterationsDynamic() {
+		transitionLimit = workflow.DefaultMaxIterations
+	}
+	transitionIteration := -1
+	backwardTransitions := 0
 
 	// Create step executor callback that executes body steps
 	// Supports nested loops: body steps can be loops themselves (F043)
@@ -1184,17 +1224,56 @@ func (s *ExecutionService) executeLoopStep(
 		default:
 			nextStep, err = s.executeCustomStepType(ctx, wf, bodyStep, execCtx)
 		}
-		if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return "", err
 		}
-		// Distinguish retry vs escape patterns:
-		// - Retry: on_failure returns to THIS loop (step.Name) → continue loop
-		// - Escape: on_failure transitions ELSEWHERE → propagate failure to break loop
-		if nextStep != "" && nextStep != step.Name {
-			// Step wanted to transition elsewhere while in failed state - escape pattern
+		// Transition evaluation can cancel the context while returning a destination.
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		if err != nil {
+			if state, exists := execCtx.GetStepState(stepName); exists &&
+				bodyStep.Type == workflow.StepTypeCommand && state.Status == workflow.StatusFailed &&
+				state.ExitCode != 0 && strings.TrimSpace(state.Output) != "" {
+				return "", fmt.Errorf("step %s output: %s: %w", stepName, strings.TrimSpace(state.Output), err)
+			}
+			return "", err
+		}
+		loopIteration := 0
+		if loopIntCtx != nil && loopIntCtx.Loop != nil {
+			loopIteration = loopIntCtx.Loop.Index
+		}
+		if loopIteration != transitionIteration {
+			transitionIteration = loopIteration
+			backwardTransitions = 0
+		}
+		targetIndex, internal := bodyStepIndices[nextStep]
+		if internal && targetIndex <= bodyStepIndices[stepName] {
+			backwardTransitions++
+			if backwardTransitions > transitionLimit {
+				var output string
+				if state, exists := execCtx.GetStepState(stepName); exists {
+					output = strings.TrimSpace(state.Output)
+				}
+				return "", &loopBodyTransitionLimitError{
+					loopName:  step.Name,
+					iteration: loopIteration,
+					from:      stepName,
+					to:        nextStep,
+					limit:     transitionLimit,
+					output:    output,
+				}
+			}
+		}
+		// Internal destinations are handled routing; loop-self targets retain retry semantics.
+		// Only failed destinations outside this loop body are fatal escapes.
+		if nextStep != "" && nextStep != step.Name && !internal {
 			// Skip escape detection for continue_on_error steps (they intentionally proceed despite failure)
 			if !bodyStep.ContinueOnError {
 				if state, exists := execCtx.GetStepState(stepName); exists && state.Status == workflow.StatusFailed {
+					if strings.TrimSpace(state.Output) != "" {
+						return "", fmt.Errorf("step %s failed: %s", stepName, strings.TrimSpace(state.Output))
+					}
 					if state.Error != "" {
 						return "", fmt.Errorf("step %s failed: %s", stepName, state.Error)
 					}

@@ -57,6 +57,7 @@ func projectPayload(payload any) any {
 	case *transcript.StepPayload:
 		hadOutput, ok := p.Result.(bool)
 		return &ports.EnrichedStepPayload{
+			Status:    p.Status,
 			StepName:  p.Name,
 			Error:     p.Error,
 			HadOutput: ok && hadOutput,

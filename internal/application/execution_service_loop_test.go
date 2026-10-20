@@ -9,11 +9,14 @@ package application_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
+	infraexpr "github.com/awf-project/cli/internal/infrastructure/expression"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1435,4 +1438,285 @@ func TestExecuteLoopStep_MaxIterationBoundaryWithEarlyExit(t *testing.T) {
 
 	// And: No mention of max iterations in error (loop exited early, not via limit)
 	assert.NotContains(t, loopState.Error, "maximum iterations", "should not mention max iterations when NextStep breaks early")
+}
+
+func TestExecuteLoopStep_HandlesInternalFailureTransition(t *testing.T) {
+	for _, loopType := range []workflow.StepType{workflow.StepTypeForEach, workflow.StepTypeWhile} {
+		t.Run(loopType.String(), func(t *testing.T) {
+			wf := loopTransitionWorkflow(loopType, []string{"failing", "skipped", "recovery"}, "recovery", "")
+			evaluator := infraexpr.NewExprEvaluator()
+			harness := NewTestHarnessWithEvaluator(t, evaluator).
+				WithWorkflow("loop-transition", wf).
+				WithCommandResult("emit verdict", &ports.CommandResult{
+					Stdout:   "ZPM-CRITICAL:1\n",
+					Stderr:   "progress: 50%\n",
+					ExitCode: 1,
+				}).
+				WithCommandResult("must be skipped", &ports.CommandResult{Stdout: "unexpected\n", ExitCode: 0}).
+				WithCommandResult("run recovery", &ports.CommandResult{Stdout: "recovered\n", ExitCode: 0})
+			execSvc, mocks := buildLoopTransitionService(harness, evaluator)
+
+			execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "internal-transition")
+
+			require.NoError(t, err)
+			assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+			assert.Equal(t, []string{"emit verdict", "run recovery"}, commandsExecuted(mocks))
+			_, skipped := execCtx.GetStepState("skipped")
+			assert.False(t, skipped, "an explicit internal transition must skip intervening body steps")
+
+			failing, exists := execCtx.GetStepState("failing")
+			require.True(t, exists)
+			assert.Equal(t, workflow.StatusFailed, failing.Status)
+			assert.Equal(t, 1, failing.ExitCode)
+			assert.Equal(t, "ZPM-CRITICAL:1\n", failing.Output)
+			assert.Equal(t, "progress: 50%\n", failing.Stderr)
+
+			recovery, exists := execCtx.GetStepState("recovery")
+			require.True(t, exists)
+			assert.Equal(t, workflow.StatusCompleted, recovery.Status)
+		})
+	}
+}
+
+func TestExecuteLoopStep_PreservesFailureBoundaries(t *testing.T) {
+	transitionErr := errors.New("transition evaluation failed")
+	tests := []loopFailureBoundaryTest{
+		{name: "no matched transition", body: []string{"failing"}, target: "recovery", when: "false", wantErr: true},
+		{name: "context cancellation", body: []string{"failing"}, target: "recovery", when: "cancel-during-transition", cancel: true, wantCancelled: true, wantErr: true},
+		{name: "transition back to loop", body: []string{"failing"}, target: "loop"},
+		{name: "backward transition cycle", body: []string{"recovery", "failing"}, target: "recovery", wantErr: true, wantTransitionLimit: true},
+		{name: "failed external escape", body: []string{"failing"}, target: "external", wantErr: true},
+		{name: "transition error cause", body: []string{"failing"}, target: "recovery", when: "transition-error", cause: transitionErr, wantErr: true},
+		{name: "transition deadline", body: []string{"failing"}, target: "recovery", when: "transition-deadline", cause: context.DeadlineExceeded, wantErr: true},
+	}
+
+	for _, loopType := range []workflow.StepType{workflow.StepTypeForEach, workflow.StepTypeWhile} {
+		t.Run(loopType.String(), func(t *testing.T) {
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					runLoopFailureBoundaryScenario(t, loopType, tt)
+				})
+			}
+		})
+	}
+}
+
+type loopFailureBoundaryTest struct {
+	name                string
+	body                []string
+	target              string
+	when                string
+	cancel              bool
+	wantCancelled       bool
+	wantErr             bool
+	wantTransitionLimit bool
+	cause               error
+}
+
+func runLoopFailureBoundaryScenario(t *testing.T, loopType workflow.StepType, tt loopFailureBoundaryTest) {
+	t.Helper()
+
+	wf := loopTransitionWorkflow(loopType, tt.body, tt.target, tt.when)
+	ctx := context.Background()
+	evaluator := ports.ExpressionEvaluator(infraexpr.NewExprEvaluator())
+	if tt.cancel {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithCancel(ctx)
+		defer cancel()
+		evaluator = loopTransitionEvaluator{
+			ExpressionEvaluator: evaluator,
+			cancel:              cancel,
+			transition:          tt.when,
+		}
+	}
+	if tt.cause != nil {
+		evaluator = loopTransitionEvaluator{
+			ExpressionEvaluator: evaluator,
+			transition:          tt.when,
+			err:                 tt.cause,
+		}
+	}
+	configureLoopRetryScenario(wf, loopType, tt.name)
+
+	harness := NewTestHarnessWithEvaluator(t, evaluator).
+		WithWorkflow("loop-transition", wf).
+		WithCommandResult("emit verdict", &ports.CommandResult{
+			Stdout:   "ZPM-CRITICAL:1\n",
+			Stderr:   "progress: 50%\n",
+			ExitCode: 1,
+		}).
+		WithCommandResult("run recovery", &ports.CommandResult{Stdout: "recovered\n", ExitCode: 0}).
+		WithCommandResult("run external", &ports.CommandResult{Stdout: "unexpected external execution\n", ExitCode: 0})
+	execSvc, mocks := buildLoopTransitionService(harness, evaluator)
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(ctx, wf, nil, "failure-boundary")
+
+	if tt.wantErr {
+		require.Error(t, err)
+	} else {
+		require.NoError(t, err)
+	}
+	if tt.cause != nil {
+		assert.ErrorIs(t, err, tt.cause, "the original transition error must remain discoverable")
+	}
+	if tt.wantCancelled {
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.Equal(t, []string{"emit verdict"}, commandsExecuted(mocks),
+			"cancellation must occur after the loop body reaches transition handling")
+		loop, exists := execCtx.GetStepState("loop")
+		require.True(t, exists, "loop boundary should record cancellation after the body step executes")
+		assert.Equal(t, workflow.StatusFailed, loop.Status)
+		return
+	}
+	if tt.wantErr {
+		if !errors.Is(tt.cause, context.DeadlineExceeded) {
+			assert.Contains(t, err.Error(), "ZPM-CRITICAL:1")
+		}
+		assert.False(t, errors.Is(err, context.Canceled))
+	}
+	if tt.wantTransitionLimit {
+		assert.Contains(t, err.Error(), "loop body transition limit")
+		assert.LessOrEqual(t, len(commandsExecuted(mocks)), 6,
+			"a backward transition cycle must be bounded within the current iteration")
+	}
+	if tt.name == "failed external escape" {
+		assert.Equal(t, []string{"emit verdict"}, commandsExecuted(mocks),
+			"a failed loop-body escape must remain fatal before the external command executes")
+		_, externalExists := execCtx.GetStepState("external")
+		assert.False(t, externalExists, "a failed external escape must not create external step state")
+	}
+
+	failing, exists := execCtx.GetStepState("failing")
+	require.True(t, exists)
+	assert.Equal(t, workflow.StatusFailed, failing.Status)
+	assert.Equal(t, 1, failing.ExitCode)
+	assert.Equal(t, "ZPM-CRITICAL:1\n", failing.Output)
+	assert.Equal(t, "progress: 50%\n", failing.Stderr)
+
+	if tt.name == "transition back to loop" {
+		assert.Equal(t, []string{"emit verdict", "emit verdict"}, commandsExecuted(mocks),
+			"transitioning to the loop must retry through the next iteration")
+		loop, exists := execCtx.GetStepState("loop")
+		require.True(t, exists)
+		assert.Equal(t, workflow.StatusCompleted, loop.Status)
+		assert.Contains(t, loop.Output, "2 iterations")
+	}
+}
+
+func configureLoopRetryScenario(wf *workflow.Workflow, loopType workflow.StepType, name string) {
+	if name != "transition back to loop" {
+		return
+	}
+
+	wf.Steps["loop"].Loop.MaxIterations = 2
+	if loopType == workflow.StepTypeForEach {
+		wf.Steps["loop"].Loop.Items = `["first", "second"]`
+		return
+	}
+	wf.Steps["loop"].Loop.BreakCondition = "false"
+	wf.Steps["loop"].Loop.Condition = "true"
+}
+
+type loopTransitionEvaluator struct {
+	ports.ExpressionEvaluator
+	cancel     context.CancelFunc
+	transition string
+	err        error
+}
+
+func (e loopTransitionEvaluator) EvaluateBool(expr string, ctx *interpolation.Context) (bool, error) {
+	if expr == e.transition {
+		if e.cancel != nil {
+			e.cancel()
+		}
+		return true, e.err
+	}
+	return e.ExpressionEvaluator.EvaluateBool(expr, ctx)
+}
+
+func buildLoopTransitionService(
+	harness *ServiceTestHarness,
+	evaluator ports.ExpressionEvaluator,
+) (*application.ExecutionService, *TestMocks) {
+	wfSvc := application.NewWorkflowService(
+		harness.repository,
+		harness.store,
+		harness.executor,
+		harness.logger,
+		nil,
+	)
+	execSvc := application.NewExecutionServiceWithEvaluator(
+		wfSvc,
+		harness.executor,
+		application.NewParallelExecutor(harness.logger),
+		harness.store,
+		harness.logger,
+		interpolation.NewTemplateResolver(),
+		nil,
+		evaluator,
+	)
+	execSvc.SetAuditTrailWriter(harness.auditTrail)
+
+	return execSvc, &TestMocks{
+		Repository: harness.repository,
+		StateStore: harness.store,
+		Executor:   harness.executor,
+		Logger:     harness.logger,
+		AuditTrail: harness.auditTrail,
+	}
+}
+
+func loopTransitionWorkflow(loopType workflow.StepType, body []string, target, when string) *workflow.Workflow {
+	loop := &workflow.LoopConfig{
+		Type:          workflow.LoopTypeForEach,
+		Items:         `["item"]`,
+		Body:          body,
+		MaxIterations: 2,
+		OnComplete:    "done",
+	}
+	if loopType == workflow.StepTypeWhile {
+		loop.Type = workflow.LoopTypeWhile
+		loop.Items = ""
+		// Bound normal completion without breaking before iteration errors propagate.
+		loop.Condition = "loop.Index == 0"
+		loop.BreakCondition = "false"
+	}
+
+	return &workflow.Workflow{
+		Name:    "loop-transition",
+		Initial: "loop",
+		Steps: map[string]*workflow.Step{
+			"loop": {
+				Name: "loop",
+				Type: loopType,
+				Loop: loop,
+			},
+			"failing": {
+				Name:            "failing",
+				Type:            workflow.StepTypeCommand,
+				Command:         "emit verdict",
+				ContinueOnError: false,
+				Transitions:     workflow.Transitions{{When: when, Goto: target}},
+			},
+			"recovery": {
+				Name:    "recovery",
+				Type:    workflow.StepTypeCommand,
+				Command: "run recovery",
+			},
+			"skipped": {
+				Name:    "skipped",
+				Type:    workflow.StepTypeCommand,
+				Command: "must be skipped",
+			},
+			"external": {
+				Name:    "external",
+				Type:    workflow.StepTypeCommand,
+				Command: "run external",
+			},
+			"done": {
+				Name:   "done",
+				Type:   workflow.StepTypeTerminal,
+				Status: workflow.TerminalSuccess,
+			},
+		},
+	}
 }

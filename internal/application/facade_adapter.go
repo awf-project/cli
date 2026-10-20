@@ -590,15 +590,17 @@ func (a *Adapter) newSession(ctx context.Context, id string, rec ports.Recorder,
 		// park via EventInputRequired and resume via RunSession.Respond, instead of a
 		// process-global stdin read that EOFs prematurely under the facade. ACP leaves
 		// this edge nil — it answers input requests through its own facadeInputBridge.
-		execCtx := ctx
+		execCtx := session.ctx
 		if a.getUserInputReader() != nil {
-			execCtx = withUserInputReader(ctx, newSessionInputReader(session))
+			execCtx = withUserInputReader(session.ctx, newSessionInputReader(session))
 		}
 
 		// Execution is started here (not before the goroutine) so the recorder's already-
 		// buffered transcript events keep select priority before execDone becomes ready.
 		execDone := a.startExecution(execCtx, exec)
 
+		// Cancellation stops execution through session.ctx. Keep waiting for
+		// execDone so persistence and the terminal error precede channel closure.
 		for {
 			select {
 			case ev, ok := <-sub:
@@ -630,10 +632,6 @@ func (a *Adapter) newSession(ctx context.Context, id string, rec ports.Recorder,
 						a.drainTranscript(session, sub)
 					}()
 				}
-				return
-
-			case <-session.ctx.Done():
-				// Session closed manually before execution finished — exit and clean up.
 				return
 			}
 		}

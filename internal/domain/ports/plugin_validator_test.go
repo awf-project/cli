@@ -34,11 +34,10 @@ func newMockWorkflowValidatorProvider() *mockWorkflowValidatorProvider {
 
 func (m *mockWorkflowValidatorProvider) ValidateWorkflow(ctx context.Context, workflowJSON []byte) ([]ports.ValidationResult, error) {
 	m.validateWorkflowCalls++
-	key := string(workflowJSON)
-	if err, ok := m.validateWorkflowErrors[key]; ok {
+	if err, ok := m.validateWorkflowErrors[string(workflowJSON)]; ok {
 		return nil, err
 	}
-	return m.validateWorkflowResults[key], nil
+	return m.validateWorkflowResults[string(workflowJSON)], nil
 }
 
 func (m *mockWorkflowValidatorProvider) ValidateStep(ctx context.Context, workflowJSON []byte, stepName string) ([]ports.ValidationResult, error) {
