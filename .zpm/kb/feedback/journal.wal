@@ -1,6 +1,6 @@
-{"ts":1792512655,"op":"assert","clause":"rule('route_handled_loop_failures_symmetrically',pitfall,'Ensure handled failures follow equivalent transition behavior for both supported loop kinds, including failed-loop state and lifecycle events.',high,'implement')"}
-{"ts":1792512656,"op":"assert","clause":"trigger('route_handled_loop_failures_symmetrically','internal/application/*loop*.go',file)"}
-{"ts":1792512656,"op":"assert","clause":"rule('test_configured_loop_exit_routes',test,'Require configured YAML integration tests for both loop kinds to cover exit-code routes 0, 1, 70, and the default route.',high,'implement')"}
-{"ts":1792512656,"op":"assert","clause":"trigger('test_configured_loop_exit_routes','tests/integration/loops/*.go',file)"}
-{"ts":1792512656,"op":"assert","clause":"rule('preserve_loop_terminal_outcome_pipeline',architecture,'Ensure handled loop transitions preserve the normalized execution exit code across state, lifecycle events, history, and audit completion.',high,'implement')"}
-{"ts":1792512657,"op":"assert","clause":"trigger('preserve_loop_terminal_outcome_pipeline','internal/application/execution_service.go',file)"}
+{"ts":1792628524,"op":"assert","clause":"rule('remove_case_colliding_cli_artifacts',pitfall,'Always remove all tracked CLI artifacts whose names differ only by case before validating or publishing the Go module archive.',high,'implement')"}
+{"ts":1792628524,"op":"assert","clause":"trigger('remove_case_colliding_cli_artifacts','internal/interfaces/cli',directory)"}
+{"ts":1792628524,"op":"assert","clause":"rule('place_integration_feature_metadata_before_package',pitfall,'Always place integration-test feature metadata before the package clause and use a descriptive feature identifier instead of a bare issue number.',medium,'implement')"}
+{"ts":1792628524,"op":"assert","clause":"trigger('place_integration_feature_metadata_before_package','tests/integration',directory)"}
+{"ts":1792628524,"op":"assert","clause":"rule('synchronize_validation_change_inventory',pitfall,'Ensure validation reports include every modified or added implementation and dependency file, including generated module checksum files.',medium,'implement')"}
+{"ts":1792628525,"op":"assert","clause":"trigger('synchronize_validation_change_inventory','validation-report.md',file)"}
