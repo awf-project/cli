@@ -73,39 +73,6 @@ func TestBuildAuditWriter_UnsetEnvVarUsesDefault(t *testing.T) {
 	assert.NoError(t, err, "should not error with default path")
 }
 
-// TestBuildAuditWriter_OffIsCaseSensitive verifies that "off" matching is case-sensitive
-func TestBuildAuditWriter_OffIsCaseSensitive(t *testing.T) {
-	tests := []struct {
-		name           string
-		envValue       string
-		expectDisabled bool
-		description    string
-	}{
-		{"off lowercase", "off", true, "exact 'off' should disable"},
-		{"OFF uppercase", "OFF", false, "uppercase OFF should not match 'off'"},
-		{"Off mixed", "Off", false, "mixed case Off should not match 'off'"},
-		{"OFF lowercase", "oFF", false, "partial case variation should not match"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("AWF_AUDIT_LOG", tt.envValue)
-
-			writer, cleanup, err := auditpkg.NewWriterFromEnv()
-			require.NotNil(t, cleanup, "cleanup must always be provided")
-			defer cleanup()
-
-			if tt.expectDisabled {
-				assert.Nil(t, writer, tt.description+": writer should be nil")
-				assert.NoError(t, err, tt.description+": should not error")
-			} else {
-				assert.NotNil(t, writer, tt.description+": writer should not be nil")
-				assert.NoError(t, err, tt.description+": should not error")
-			}
-		})
-	}
-}
-
 // TestBuildAuditWriter_CleanupAlwaysProvided verifies cleanup is returned in all scenarios
 func TestBuildAuditWriter_CleanupAlwaysProvided(t *testing.T) {
 	tests := []struct {

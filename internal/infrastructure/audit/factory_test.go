@@ -8,15 +8,36 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/audit"
 )
 
-func TestNewWriterFromEnv_Off(t *testing.T) {
-	t.Setenv("AWF_AUDIT_LOG", "off")
-	w, cleanup, err := audit.NewWriterFromEnv()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	defer cleanup()
-	if w != nil {
-		t.Error("expected nil writer when AWF_AUDIT_LOG=off")
+func TestNewWriterFromEnv_OffIsCaseSensitive(t *testing.T) {
+	for _, value := range []string{"off", "OFF"} {
+		t.Run(value, func(t *testing.T) {
+			// Relative audit paths must stay inside the test's temporary directory.
+			t.Chdir(t.TempDir())
+			t.Setenv("AWF_AUDIT_LOG", value)
+
+			writer, cleanup, err := audit.NewWriterFromEnv()
+			if err != nil {
+				t.Fatalf("create audit writer: %v", err)
+			}
+			defer cleanup()
+
+			if value == "off" {
+				if writer != nil {
+					t.Error("expected nil writer when AWF_AUDIT_LOG=off")
+				}
+				if _, err := os.Stat(value); !os.IsNotExist(err) {
+					t.Errorf("disabled audit must not create a file; stat error: %v", err)
+				}
+				return
+			}
+
+			if writer == nil {
+				t.Fatal("expected non-nil writer when AWF_AUDIT_LOG=OFF")
+			}
+			if _, err := os.Stat(value); err != nil {
+				t.Errorf("expected audit file named %q: %v", value, err)
+			}
+		})
 	}
 }
 
