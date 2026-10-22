@@ -323,13 +323,17 @@ This project uses ZPM memory segments as its knowledge base. **Query ZPM before 
 |---------|---------|-------|
 | `default` | Project knowledge: ADRs, decisions, observations, conventions, architecture facts | auto |
 | `feedback` | Learned rules from past implementations/reviews — queryable by file pattern | auto |
+| `architecture` | Durable components, ports, decisions and conventions promoted across PRs | auto |
 | `pr_<branch>` | PR tracking: TODOs, stubs, mocks, blocking issues, completion gate | per-implementation |
 
 ### Read before acting
 
 ```bash
 # What decisions exist about this area?
-zpm query-logic --goal "decision(Id, What, Why)" --memory default
+zpm query-logic --goal "decision(Id, What, Why, TradeOff)" --memory default
+# What architecture decisions and conventions must be preserved?
+zpm query-logic --goal "arch_decision(Id, Topic, Choice, Rationale, PR)" --memory architecture
+zpm query-logic --goal "arch_convention(Id, Scope, Rule, PR)" --memory architecture
 # What feedback rules apply to files I'm touching?
 zpm query-logic --goal "rule(Id, Cat, Desc, Prio, Src)" --memory feedback
 # What rules apply specifically to a file/directory?
@@ -378,3 +382,25 @@ Query: `zpm query-logic --goal "rule(Id, pitfall, Desc, Prio, Src)" --memory fee
 ### Review Standards
 
 Query: `zpm query-logic --goal "rule(Id, review, Desc, Prio, Src)" --memory feedback`
+
+## Tower workspace tools
+
+Tower reads `.tower/config.toml` and `.towerignore` independently of Git ignore
+rules. Keep generated site output, binaries and runtime storage out of its index.
+Use indexed search and AST tools for Go navigation, and version-guarded edits for
+mutations. `gopls` supplies hover, definitions, references and semantic rename for
+`.go` files; inspect `supported` and `outcome` before trusting a result.
+
+The existing automatic formatter uses `golangci-lint fmt --stdin`, so gofumpt and
+goimports follow `.golangci.yml`. Do not invoke workspace-wide formatting merely
+to verify Tower. Full static analysis remains `make lint`: the installed native
+lint sidecar limits a linter process to two seconds, which is insufficient for
+this module. A diagnostics request timed out with the installed LSP sidecar and
+gopls during setup; use `make lint` for validation rather than treating an exposed
+LSP diagnostics tool as proof of working diagnostics.
+
+The MCP entry point is `tower mcp` from this workspace, or
+`tower --workspace-dir /path/to/checkout mcp`. Configuration changes require a
+new daemon; coordinate shutdown with other clients. Reconnect the agent's MCP
+client if its tool catalogue predates startup. Never delete `.tower/db` to refresh
+configuration or indexing.

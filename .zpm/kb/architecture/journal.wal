@@ -1,0 +1,6 @@
+{"ts":1792664157,"op":"retractall","clause":"arch_decision(dec_module_path_collision_cleanup, _, _, _, _)"}
+{"ts":1792664157,"op":"assert","clause":"arch_decision(dec_module_path_collision_cleanup, 'Go module distribution', 'Remove tracked artifacts whose paths collide under Unicode case folding', 'Go module archive creation rejects these collisions; the removed artifacts have no runtime responsibility', 'issue_382')"}
+{"ts":1792664157,"op":"retractall","clause":"arch_convention(conv_case_fold_safe_paths, _, _, _)"}
+{"ts":1792664157,"op":"assert","clause":"arch_convention(conv_case_fold_safe_paths, 'tracked repository paths', 'Do not add tracked paths that collide under Unicode case folding', 'issue_382')"}
+{"ts":1792664157,"op":"retractall","clause":"arch_convention(conv_audit_off_sentinel, _, _, _)"}
+{"ts":1792664157,"op":"assert","clause":"arch_convention(conv_audit_off_sentinel, 'AWF_AUDIT_LOG configuration', 'Only the exact lowercase value off disables audit logging; case variants are file paths', 'issue_382')"}

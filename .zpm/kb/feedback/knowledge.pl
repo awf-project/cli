@@ -1,4 +1,3 @@
-:- module(feedback, []).
 % ─── Feedback Rules Schema ───────────────────────────────────────────────────
 % Memory segment: feedback
 % Lifecycle: created at project setup, accumulates across workflow runs.

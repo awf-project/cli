@@ -1,13 +1,22 @@
-# Tower local project configuration.
-#
-# [extensions] configures native out-of-process sidecars by manifest name.
-# Add names to `disabled` to prevent those sidecars from being spawned.
+# Shared Tower settings for the AWF Go module.
 [extensions]
 disabled = []
-#
-# [formatter.tools.<id>] entries are commands run by the host format queue when
-# a file changes. mode = "filter" (default, stdin->stdout) or "inplace".
-# Uninstalled tools are skipped, so you can safely keep entries you do not use.
-[formatter.tools.gofmt]
-argv = ["gofmt"]
+
+# Avoid rebuilding the AST index after every short gap between agent calls.
+[daemon]
+idle_timeout_secs = 300
+
+[lsp]
+idle_timeout_secs = 300
+
+[lsp.go]
+command = "gopls"
+args = []
 extensions = ["go"]
+
+# Keep the existing change-driven formatting, using the project's gofumpt and
+# goimports configuration without downloading a second formatter toolchain.
+[formatter.tools.golangci]
+argv = ["golangci-lint", "fmt", "--stdin"]
+extensions = ["go"]
+

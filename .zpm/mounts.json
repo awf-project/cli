@@ -8,6 +8,12 @@
       "mode": "rw"
     },
     {
+      "name": "architecture",
+      "path": ".zpm/kb/architecture",
+      "scope": "project",
+      "mode": "rw"
+    },
+    {
       "name": "feedback",
       "path": ".zpm/kb/feedback",
       "scope": "project",

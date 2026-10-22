@@ -13,3 +13,21 @@ vendor/
 .env
 .env.*
 secrets/
+
+# AWF build, test and runtime output (Tower does not read .gitignore).
+/bin/
+/awf
+/npm-cache/
+/coverage.out
+/coverage.html
+*.test
+/storage/states/
+/storage/logs/
+/storage/history.db
+/storage/history.db-*
+/site/public/
+/site/resources/
+examples/plugins/*/awf-plugin-*
+!examples/plugins/*/awf-plugin-*.go
+!examples/plugins/*/awf-plugin-*_test.go
+*.env
