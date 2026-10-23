@@ -9,6 +9,31 @@ import (
 	"testing"
 )
 
+// setupProjectConfig creates and selects a project-local config file for tests
+// that require configuration. setupTestDir deliberately does not call it so
+// missing-config scenarios can keep AWF_CONFIG_PATH unset.
+func setupProjectConfig(t *testing.T, tmpDir, content string) string {
+	t.Helper()
+
+	configDir := filepath.Join(tmpDir, ".awf")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("create project config directory: %v", err)
+	}
+
+	configPath := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write project config: %v", err)
+	}
+	// WriteFile applies the process umask. Chmod makes the helper's advertised
+	// mode deterministic for tests that inspect the resulting fixture.
+	if err := os.Chmod(configPath, 0o644); err != nil {
+		t.Fatalf("set project config permissions: %v", err)
+	}
+	t.Setenv("AWF_CONFIG_PATH", configPath)
+
+	return configPath
+}
+
 // setupTestDir creates an isolated test directory with .awf/workflows structure.
 // Returns the temporary directory path.
 // Thread-safe: uses t.TempDir() instead of os.Chdir to avoid process-wide state changes.
@@ -103,6 +128,18 @@ func createTestWorkflow(t *testing.T, baseDir, filename, content string) string 
 // TestSetupTestDir verifies the thread-safe directory setup helper.
 // This test validates T002 acceptance criteria: setupTestDir uses t.TempDir().
 func TestSetupTestDir(t *testing.T) {
+	originalConfigPath, configPathWasSet := os.LookupEnv("AWF_CONFIG_PATH")
+	if err := os.Unsetenv("AWF_CONFIG_PATH"); err != nil {
+		t.Fatalf("failed to unset AWF_CONFIG_PATH: %v", err)
+	}
+	t.Cleanup(func() {
+		if configPathWasSet {
+			_ = os.Setenv("AWF_CONFIG_PATH", originalConfigPath)
+			return
+		}
+		_ = os.Unsetenv("AWF_CONFIG_PATH")
+	})
+
 	tmpDir := setupTestDir(t)
 
 	// Verify directory was created
@@ -120,6 +157,45 @@ func TestSetupTestDir(t *testing.T) {
 	pwd := os.Getenv("PWD")
 	if pwd != tmpDir {
 		t.Errorf("expected PWD=%s, got PWD=%s", tmpDir, pwd)
+	}
+
+	if _, exists := os.LookupEnv("AWF_CONFIG_PATH"); exists {
+		t.Error("setupTestDir must leave AWF_CONFIG_PATH unset")
+	}
+
+	xdgDataHome := os.Getenv("XDG_DATA_HOME")
+	if xdgDataHome != "" {
+		info, err := os.Stat(xdgDataHome) //nolint:gosec // TestMain creates and owns this isolated test directory.
+		if err != nil {
+			t.Fatalf("package XDG data root is unavailable: %v", err)
+		}
+		if !info.IsDir() {
+			t.Fatalf("package XDG data root is not a directory: %s", xdgDataHome)
+		}
+	}
+
+	configContent := "log:\n  level: debug\n"
+	configPath := setupProjectConfig(t, tmpDir, configContent)
+	wantConfigPath := filepath.Join(tmpDir, ".awf", "config.yaml")
+	if configPath != wantConfigPath {
+		t.Fatalf("setupProjectConfig path = %q, want %q", configPath, wantConfigPath)
+	}
+	if got := os.Getenv("AWF_CONFIG_PATH"); got != wantConfigPath {
+		t.Errorf("AWF_CONFIG_PATH = %q, want %q", got, wantConfigPath)
+	}
+	configInfo, err := os.Stat(configPath)
+	if err != nil {
+		t.Fatalf("project config is unavailable: %v", err)
+	}
+	if got := configInfo.Mode().Perm(); got != 0o644 {
+		t.Errorf("project config mode = %o, want 644", got)
+	}
+	gotContent, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read project config: %v", err)
+	}
+	if string(gotContent) != configContent {
+		t.Errorf("project config content = %q, want %q", gotContent, configContent)
 	}
 }
 

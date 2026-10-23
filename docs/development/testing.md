@@ -112,6 +112,36 @@ tests/
         └── parallel.yaml
 ```
 
+### CLI Test Environment Isolation
+
+CLI tests must keep filesystem-backed configuration and runtime data inside
+test-owned temporary directories. The `internal/interfaces/cli` package uses
+`TestMain` to set `XDG_DATA_HOME` to a temporary directory before any command
+is constructed. This preserves normal audit-trail behavior while preventing
+tests from writing to the developer's default `$XDG_DATA_HOME/awf` location.
+`TestMain` removes the temporary directory after all package tests finish.
+
+Use `setupTestDir(t)` for workflow and prompt fixtures. It uses `t.TempDir`
+and environment injection (`PWD`, `AWF_WORKFLOWS_PATH`, and
+`AWF_PROMPTS_PATH`) instead of changing the process working directory. The
+helper intentionally does not set `AWF_CONFIG_PATH`, because tests that verify
+missing-configuration behavior depend on that variable being unset.
+
+For a scenario that needs project configuration, opt in explicitly with the
+shared helper:
+
+```go
+tmpDir := setupTestDir(t)
+setupProjectConfig(t, tmpDir, "inputs:\n  user_name: test-user\n")
+```
+
+`setupProjectConfig` writes `.awf/config.yaml` below the test directory and
+selects it through `AWF_CONFIG_PATH`. This makes the configuration source
+observable and keeps input-resolution tests deterministic. Keep assertions on
+the public command contract: require successful execution, assert the resolved
+value in command output, and retain separate scenarios for CLI-over-config
+precedence, workflow defaults, and genuinely missing required inputs.
+
 ## Table-Driven Tests
 
 AWF uses table-driven tests for comprehensive coverage:
