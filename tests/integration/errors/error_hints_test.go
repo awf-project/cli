@@ -1,6 +1,5 @@
 //go:build integration
 
-// Feature: C048
 package errors_test
 
 import (

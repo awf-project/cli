@@ -86,10 +86,9 @@ func TestWorkflowInstall_ValidRepoWithVersion(t *testing.T) {
 func TestWorkflowInstall_GlobalFlag(t *testing.T) {
 	tmpDir := t.TempDir()
 	xdgDataHome := filepath.Join(tmpDir, "data")
-	require.NoError(t, os.Setenv("XDG_DATA_HOME", xdgDataHome))
-	t.Cleanup(func() {
-		os.Unsetenv("XDG_DATA_HOME")
-	})
+	// Restore the package-owned XDG root after this scenario, including when
+	// TestMain already isolated audit persistence before the tests started.
+	t.Setenv("XDG_DATA_HOME", xdgDataHome)
 
 	cfg := &Config{}
 	flags := workflowInstallFlags{global: true, force: false}
@@ -282,10 +281,9 @@ func TestWorkflowRemove_SearchesGlobal(t *testing.T) {
 	require.NoError(t, os.MkdirAll(globalPackDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(globalPackDir, "manifest.yaml"), []byte("name: speckit\n"), 0o644))
 
-	require.NoError(t, os.Setenv("XDG_DATA_HOME", xdgDataHome))
-	t.Cleanup(func() {
-		os.Unsetenv("XDG_DATA_HOME")
-	})
+	// Restore the package-owned XDG root after this scenario, including when
+	// TestMain already isolated audit persistence before the tests started.
+	t.Setenv("XDG_DATA_HOME", xdgDataHome)
 
 	projDir := filepath.Join(tmpDir, "project")
 	require.NoError(t, os.Mkdir(projDir, 0o755))

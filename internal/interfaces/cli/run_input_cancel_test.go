@@ -27,6 +27,7 @@ import (
 	"strings"
 	"testing"
 
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/spf13/cobra"
@@ -151,6 +152,11 @@ func TestCollectMissingInputsIfNeeded_NonTerminalStdin_MissingInputs(t *testing.
 	assert.Nil(t, result, "result must be nil on error")
 	assert.Contains(t, err.Error(), "missing required inputs",
 		"error must describe the missing input condition")
+
+	var structuredErr *domainerrors.StructuredError
+	require.ErrorAs(t, err, &structuredErr, "missing input error must retain its structured type")
+	assert.Equal(t, domainerrors.ErrorCodeUserInputValidationFailed, structuredErr.Code)
+	assert.Equal(t, 1, structuredErr.ExitCode())
 }
 
 // TestCollectMissingInputsIfNeeded_CtxAcceptedAsFirstParam is a compile-time

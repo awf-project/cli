@@ -195,6 +195,8 @@ func (s *ExecutionService) executeCallWorkflowStep(
 		}
 	}
 
+	var failureErr error
+
 	// Handle execution error
 	if execErr != nil {
 		result.Error = execErr
@@ -216,44 +218,35 @@ func (s *ExecutionService) executeCallWorkflowStep(
 			return "", execErr
 		}
 
-		state.Status = workflow.StatusFailed
 		state.Error = execErr.Error()
-		execCtx.SetStepState(step.Name, state)
-
-		// Execute post-hooks even on failure
-		intCtx = s.buildInterpolationContext(execCtx)
-		if hookErr := s.hookExecutor.ExecuteHooks(subCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
-			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
-		}
-
-		if step.ContinueOnError {
-			return step.OnSuccess, nil
-		}
-		if step.OnFailure != "" {
-			return step.OnFailure, nil
-		}
-		return "", fmt.Errorf("step %s: sub-workflow %s failed: %w", step.Name, config.Workflow, execErr)
+		failureErr = fmt.Errorf("step %s: sub-workflow %s failed: %w", step.Name, config.Workflow, execErr)
 	}
 
 	// Handle sub-workflow failure (completed but with failed status)
-	if subResult != nil && subResult.Status == workflow.StatusFailed {
-		state.Status = workflow.StatusFailed
+	if execErr == nil && subResult != nil && subResult.Status == workflow.StatusFailed {
 		state.Error = "sub-workflow completed with failed status"
+		failureErr = fmt.Errorf("step %s: sub-workflow %s failed", step.Name, config.Workflow)
+	}
+
+	if failureErr != nil {
+		state.Status = workflow.StatusFailed
 		execCtx.SetStepState(step.Name, state)
 
-		// Execute post-hooks
+		// Execute post-hooks even on failure.
 		intCtx = s.buildInterpolationContext(execCtx)
 		if hookErr := s.hookExecutor.ExecuteHooks(subCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
 
-		if step.ContinueOnError {
-			return step.OnSuccess, nil
+		// Ordered transitions take priority over legacy error routing (ADR-001).
+		nextStep, transitionErr := s.resolveNextStep(step, intCtx, step.ContinueOnError)
+		if transitionErr != nil {
+			return "", transitionErr
 		}
-		if step.OnFailure != "" {
-			return step.OnFailure, nil
+		if nextStep != "" || step.ContinueOnError {
+			return nextStep, nil
 		}
-		return "", fmt.Errorf("step %s: sub-workflow %s failed", step.Name, config.Workflow)
+		return "", failureErr
 	}
 
 	// Success

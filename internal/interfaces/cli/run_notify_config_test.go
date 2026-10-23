@@ -337,9 +337,7 @@ func TestRunCommand_LoadsNotifyConfig_WithInputsSection(t *testing.T) {
 notify:
   default_backend: "desktop"
 `
-	configPath := filepath.Join(tmpDir, ".awf", "config.yaml")
-	err := os.WriteFile(configPath, []byte(configContent), 0o644)
-	require.NoError(t, err)
+	setupProjectConfig(t, tmpDir, configContent)
 
 	workflowContent := `name: mixed-config
 version: "1.0.0"
@@ -350,6 +348,10 @@ states:
     operation: notify.send
     inputs:
       message: "Hello {{inputs.user_name}}"
+    on_success: show_configured_input
+  show_configured_input:
+    type: step
+    command: echo "configured-user={{inputs.user_name}}"
     on_success: done
   done:
     type: terminal
@@ -361,15 +363,10 @@ states:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "mixed-config"})
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "mixed-config", "--output=buffered"})
 
-	err = cmd.Execute()
-	// THEN: Both inputs and notify config should be loaded
-	if err != nil {
-		errMsg := err.Error()
-		assert.NotContains(t, errMsg, "config error", "both config sections should load")
-		assert.NotContains(t, errMsg, "nil pointer", "should handle mixed config")
-	}
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, out.String(), "configured-user=test-user")
 }
 
 func TestRunCommand_LoadsNotifyConfig_InvalidYAML(t *testing.T) {
@@ -596,9 +593,7 @@ func TestRunCommand_NotifyConfigWiringToProvider_FullStack(t *testing.T) {
 inputs:
   workflow_name: "integration-test"
 `
-	configPath := filepath.Join(tmpDir, ".awf", "config.yaml")
-	err := os.WriteFile(configPath, []byte(configContent), 0o644)
-	require.NoError(t, err)
+	setupProjectConfig(t, tmpDir, configContent)
 
 	workflowContent := `name: full-stack-wiring
 version: "1.0.0"
@@ -609,6 +604,10 @@ states:
     operation: notify.send
     inputs:
       message: "Testing {{inputs.workflow_name}}"
+    on_success: show_configured_input
+  show_configured_input:
+    type: step
+    command: echo "configured-workflow={{inputs.workflow_name}}"
     on_success: done
   done:
     type: terminal
@@ -620,20 +619,8 @@ states:
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "full-stack-wiring"})
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "full-stack-wiring", "--output=buffered"})
 
-	err = cmd.Execute()
-	// THEN: Full stack wiring should work without nil pointers
-	// Test verifies:
-	// 1. loadProjectConfig() loads config from .awf/config.yaml
-	// 2. projectCfg.Notify is populated with YAML values
-	// 3. notify.NotifyConfig is constructed from projectCfg.Notify
-	// 4. NewNotifyOperationProvider receives config
-	// 5. Provider is wired to ExecutionService
-	if err != nil {
-		errMsg := err.Error()
-		assert.NotContains(t, errMsg, "nil pointer", "full wiring should not have nil pointers")
-		assert.NotContains(t, errMsg, "missing configuration", "config should be properly loaded and wired")
-		assert.NotContains(t, errMsg, "config error", "config loading should succeed")
-	}
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, out.String(), "configured-workflow=integration-test")
 }
