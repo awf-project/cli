@@ -106,6 +106,48 @@ func TestProviderPreflightChecksAuthenticationWithoutExecutingPrompt(t *testing.
 	t.Run("ProviderAvailability", checkProviderAvailability)
 }
 
+func TestCodexPreflightStatusStreams(t *testing.T) {
+	tests := []struct {
+		name   string
+		stdout string
+		stderr string
+		err    error
+		reason PreflightFailureReason
+	}{
+		{name: "stderr authenticated", stderr: "Logged in using ChatGPT\n"},
+		{name: "stderr warning and status", stderr: "WARNING: could not create PATH aliases\nLogged in using ChatGPT\n"},
+		{name: "stdout warning and status", stdout: "WARNING: startup warning\nLogged in using ChatGPT\n"},
+		{name: "api key", stderr: "Logged in using an API key\r\n"},
+		{name: "duplicate status", stdout: "Logged in using ChatGPT\n", stderr: "Logged in using ChatGPT\n"},
+		{name: "stderr unauthenticated", stderr: "WARNING: startup warning\nNot logged in\n", err: errors.New("exit status 1"), reason: PreflightNotAuthenticated},
+		{name: "unsuccessful authenticated command", stderr: "Logged in using ChatGPT\n", err: errors.New("exit status 1"), reason: PreflightStatusMalformed},
+		{name: "status substring", stderr: "WARNING: Logged in using ChatGPT\n", reason: PreflightStatusMalformed},
+		{name: "status suffix", stderr: "Logged in using ChatGPT account details\n", reason: PreflightStatusMalformed},
+		{name: "conflicting streams", stdout: "Logged in using ChatGPT\n", stderr: "Not logged in\n", reason: PreflightStatusMalformed},
+		{name: "conflicting lines", stderr: "Not logged in\nLogged in using ChatGPT\n", reason: PreflightStatusMalformed},
+		{name: "warning only", stderr: "WARNING: startup warning\n", reason: PreflightStatusMalformed},
+		{name: "empty", reason: PreflightStatusMalformed},
+	}
+	for i := range tests {
+		tc := &tests[i]
+		t.Run(tc.name, func(t *testing.T) {
+			executor := newPreflightExecutor(tc.stdout, tc.stderr, tc.err)
+			provider := NewCodexProviderWithOptions(WithCodexExecutor(executor))
+			err := provider.Preflight(context.Background(), nil)
+			if tc.reason == "" {
+				require.NoError(t, err)
+				return
+			}
+			var preflightErr *ProviderPreflightError
+			require.ErrorAs(t, err, &preflightErr)
+			assert.Equal(t, tc.reason, preflightErr.Reason)
+			if tc.err != nil {
+				assert.ErrorIs(t, err, tc.err)
+			}
+		})
+	}
+}
+
 func checkCoreCLIPreflight(t *testing.T) {
 	const (
 		promptCanary = "PROMPT_MUST_NOT_EXECUTE"
