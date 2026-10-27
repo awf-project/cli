@@ -23,6 +23,34 @@ func TestTemplateValidator_ValidWorkflow(t *testing.T) {
 	assert.False(t, result.HasErrors(), "valid workflow should have no errors")
 }
 
+func TestTemplateValidator_AWFPathsInFeatureMemoryCommands(t *testing.T) {
+	w := newTestWorkflow()
+	w.Initial = "initialize_feature_memory"
+	w.Steps = map[string]*workflow.Step{
+		"initialize_feature_memory": {
+			Name: "initialize_feature_memory", Type: workflow.StepTypeCommand,
+			Command: "python3 {{.awf.scripts_dir}}/feature-memory.py initialize", OnSuccess: "snapshot_feature_memory",
+		},
+		"snapshot_feature_memory": {
+			Name: "snapshot_feature_memory", Type: workflow.StepTypeCommand,
+			Command: "python3 {{.awf.scripts_dir}}/feature-memory.py snapshot", OnSuccess: "unmount_feature_memory",
+		},
+		"unmount_feature_memory": {
+			Name: "unmount_feature_memory", Type: workflow.StepTypeCommand,
+			Command: "python3 {{.awf.scripts_dir}}/feature-memory.py unmount", OnSuccess: "done",
+		},
+		"done": {Name: "done", Type: workflow.StepTypeTerminal, Status: workflow.TerminalSuccess},
+	}
+	result := workflow.NewTemplateValidator(w, newTestAnalyzer()).Validate()
+	require.False(t, result.HasErrors(), "unexpected validation errors: %v", result.Errors)
+
+	// Supporting AWF paths must not silently allow unrelated namespaces.
+	w.Steps["initialize_feature_memory"].Command = "echo {{.unknown.scripts_dir}}"
+	result = workflow.NewTemplateValidator(w, newTestAnalyzer()).Validate()
+	require.True(t, result.HasErrors())
+	assert.Equal(t, workflow.ErrUnknownReferenceType, result.Errors[0].Code)
+}
+
 func TestTemplateValidator_NoTemplateReferences(t *testing.T) {
 	w := newTestWorkflow()
 	w.Steps["start"].Command = "echo plain text without templates"

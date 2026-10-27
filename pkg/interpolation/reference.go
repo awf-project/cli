@@ -20,6 +20,8 @@ const (
 	TypeContext ReferenceType = "context"
 	// TypeLoop references loop runtime data ({{loop.Index}}).
 	TypeLoop ReferenceType = "loop"
+	// TypeAWF references runtime AWF paths ({{.awf.scripts_dir}}).
+	TypeAWF ReferenceType = "awf"
 	// TypeUnknown for unrecognized namespaces.
 	TypeUnknown ReferenceType = "unknown"
 )
@@ -297,6 +299,8 @@ func CategorizeNamespace(namespace string) ReferenceType {
 		return TypeContext
 	case "loop":
 		return TypeLoop
+	case "awf":
+		return TypeAWF
 	default:
 		return TypeUnknown
 	}

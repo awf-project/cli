@@ -27,6 +27,13 @@ func TestExtractReferences(t *testing.T) {
 		wantErr  bool
 	}{
 		{
+			name:     "AWF runtime scripts path",
+			template: "python3 {{.awf.scripts_dir}}/feature-memory.py",
+			want: []workflow.TemplateReference{
+				{Type: workflow.TypeAWF, Namespace: "awf", Path: "scripts_dir", Raw: "{{.awf.scripts_dir}}"},
+			},
+		},
+		{
 			name:     "empty template",
 			template: "",
 			want:     nil,

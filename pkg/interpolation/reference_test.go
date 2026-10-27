@@ -19,6 +19,14 @@ func TestExtractReferences_NamespaceTypes(t *testing.T) {
 		wantRaw  string
 	}{
 		{
+			name:     "AWF runtime path",
+			template: "python3 {{.awf.scripts_dir}}/feature-memory.py",
+			wantType: interpolation.TypeAWF,
+			wantNS:   "awf",
+			wantPath: "scripts_dir",
+			wantRaw:  "{{.awf.scripts_dir}}",
+		},
+		{
 			name:     "inputs",
 			template: "echo {{inputs.name}}",
 			wantType: interpolation.TypeInputs,

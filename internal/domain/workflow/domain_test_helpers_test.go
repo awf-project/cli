@@ -53,6 +53,8 @@ func convertRefType(t interpolation.ReferenceType) workflow.ReferenceType {
 		return workflow.TypeError
 	case interpolation.TypeContext:
 		return workflow.TypeContext
+	case interpolation.TypeAWF:
+		return workflow.TypeAWF
 	case interpolation.TypeLoop:
 		return workflow.TypeLoop
 	default:
