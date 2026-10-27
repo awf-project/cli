@@ -146,16 +146,29 @@ func (p *CodexProvider) Preflight(ctx context.Context, options map[string]any) e
 		return &ProviderPreflightError{Provider: "codex", Reason: PreflightStatusUnsupported, Cause: err}
 	}
 
-	// Codex CLI 0.163.0 exposes a stable, line-oriented login status. Match the
-	// complete trimmed line so account details or changed formats cannot be
-	// mistaken for authenticated readiness.
-	switch strings.TrimSpace(string(stdout)) {
+	// Codex CLI 0.165.0 writes login status to stderr. Accept either stream
+	// for compatibility, matching complete lines so warnings and account details
+	// cannot be mistaken for a status. Contradictory statuses fail closed.
+	status := ""
+	for _, output := range [][]byte{stdout, stderr} {
+		for _, line := range strings.Split(string(output), "\n") {
+			line = strings.TrimSpace(line)
+			switch line {
+			case "Logged in using ChatGPT", "Logged in using an API key", "Not logged in":
+				if status != "" && status != line {
+					return &ProviderPreflightError{Provider: "codex", Reason: PreflightStatusMalformed, Cause: err}
+				}
+				status = line
+			}
+		}
+	}
+	switch status {
+	case "Not logged in":
+		return &ProviderPreflightError{Provider: "codex", Reason: PreflightNotAuthenticated, Cause: err}
 	case "Logged in using ChatGPT", "Logged in using an API key":
 		if err == nil {
 			return nil
 		}
-	case "Not logged in":
-		return &ProviderPreflightError{Provider: "codex", Reason: PreflightNotAuthenticated, Cause: err}
 	}
 	return &ProviderPreflightError{Provider: "codex", Reason: PreflightStatusMalformed, Cause: err}
 }
