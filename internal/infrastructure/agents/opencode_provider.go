@@ -10,6 +10,9 @@ import (
 	"maps"
 	"os"
 	"os/exec"
+	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
@@ -187,6 +190,52 @@ func (p *OpenCodeProvider) Validate() error {
 		return fmt.Errorf("opencode CLI not found in PATH: %w", err)
 	}
 	return nil
+}
+
+func (p *OpenCodeProvider) Preflight(ctx context.Context, options map[string]any) error {
+	stdout, stderr, err := runProviderPreflight(ctx, p.executor, "opencode", options, "auth", "list")
+	if opencodeStatusUnsupported(stderr) {
+		return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusUnsupported, Cause: sanitizedPreflightCause(err)}
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusMalformed, Cause: sanitizedPreflightCause(err)}
+	}
+
+	// OpenCode 1.18.29 emits a final "N credential(s)" line. Treat only that
+	// complete footer as authoritative so changed or partial output fails closed.
+	matches := opencodeCredentialCount.FindStringSubmatch(strings.TrimSpace(string(stdout)))
+	if len(matches) != 2 {
+		return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusMalformed, Cause: sanitizedPreflightCause(err)}
+	}
+	count, parseErr := strconv.Atoi(matches[1])
+	if parseErr != nil {
+		return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusMalformed, Cause: errors.New("status output was malformed")}
+	}
+	if count == 0 {
+		return &ProviderPreflightError{Provider: "opencode", Reason: PreflightNotAuthenticated, Cause: sanitizedPreflightCause(err)}
+	}
+	if err != nil {
+		return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusMalformed, Cause: sanitizedPreflightCause(err)}
+	}
+	return nil
+}
+
+var opencodeCredentialCount = regexp.MustCompile(`(?m)(?:^|\n)[^\n]*\b(\d+) credentials?\s*$`)
+
+func opencodeStatusUnsupported(stderr []byte) bool {
+	message := strings.ToLower(string(stderr))
+	return strings.Contains(message, "unknown command") || strings.Contains(message, "unknown subcommand")
+}
+
+func sanitizedPreflightCause(err error) error {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return fmt.Errorf("status probe failed: %w", context.Canceled)
+	case errors.Is(err, context.DeadlineExceeded):
+		return fmt.Errorf("status probe failed: %w", context.DeadlineExceeded)
+	default:
+		return errors.New("status probe did not establish readiness")
+	}
 }
 
 // validateOpenCodeOptions validates provider-specific options.

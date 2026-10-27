@@ -205,17 +205,22 @@ func TestAuditTrail_OrphanedStartEntry(t *testing.T) {
 }
 
 type completionScenario struct {
-	name               string
-	workflow           *workflow.Workflow
-	executor           ports.CommandExecutor
-	expectedHistory    string
-	expectedAudit      string
-	expectedExitCode   int
-	expectedError      bool
-	expectedAuditError string
+	name                   string
+	workflow               *workflow.Workflow
+	executor               ports.CommandExecutor
+	contextTimeout         time.Duration
+	expectedHistory        string
+	expectedAudit          string
+	expectedExitCode       int
+	expectedError          bool
+	expectedCause          error
+	expectedReturnedError  string
+	expectedAuditError     string
+	expectedTruncatedError bool
+	expectedHistoryError   string
 }
 
-func TestExecutionCompletionPersistsConsistentExitCode(t *testing.T) {
+func TestAuditLifecyclePersistsExactlyOneCompletionForEveryStartedExecution(t *testing.T) {
 	tests := []completionScenario{
 		{
 			name:             "successful completion",
@@ -226,13 +231,15 @@ func TestExecutionCompletionPersistsConsistentExitCode(t *testing.T) {
 			expectedExitCode: 0,
 		},
 		{
-			name:             "explicit terminal failure",
-			workflow:         terminalWorkflow("explicit-terminal-failure", workflow.TerminalFailure, 2),
-			executor:         commandExecutorFunc(successfulCommand),
-			expectedHistory:  "failed",
-			expectedAudit:    "failure",
-			expectedExitCode: 2,
-			expectedError:    true,
+			name:                  "explicit terminal failure",
+			workflow:              terminalWorkflow("explicit-terminal-failure", workflow.TerminalFailure, 2),
+			executor:              commandExecutorFunc(successfulCommand),
+			expectedHistory:       "failed",
+			expectedAudit:         "failure",
+			expectedExitCode:      2,
+			expectedError:         true,
+			expectedReturnedError: "workflow reached terminal failure state: terminal",
+			expectedAuditError:    "workflow reached terminal failure state: terminal",
 		},
 		{
 			name:     "failed command",
@@ -240,10 +247,13 @@ func TestExecutionCompletionPersistsConsistentExitCode(t *testing.T) {
 			executor: commandExecutorFunc(func(context.Context, *ports.Command) (*ports.CommandResult, error) {
 				return &ports.CommandResult{ExitCode: 7}, nil
 			}),
-			expectedHistory:  "failed",
-			expectedAudit:    "failure",
-			expectedExitCode: 7,
-			expectedError:    true,
+			expectedHistory:       "failed",
+			expectedAudit:         "failure",
+			expectedExitCode:      7,
+			expectedError:         true,
+			expectedReturnedError: "step run: exit code 7",
+			expectedAuditError:    "step run: exit code 7",
+			expectedHistoryError:  "exit code 7",
 		},
 		{
 			name: "uncategorized application failure",
@@ -254,19 +264,65 @@ func TestExecutionCompletionPersistsConsistentExitCode(t *testing.T) {
 			executor: commandExecutorFunc(func(context.Context, *ports.Command) (*ports.CommandResult, error) {
 				return nil, errors.New("test hook failure")
 			}),
-			expectedHistory:  "failed",
-			expectedAudit:    "failure",
-			expectedExitCode: 3,
-			expectedError:    true,
+			expectedHistory:       "failed",
+			expectedAudit:         "failure",
+			expectedExitCode:      3,
+			expectedError:         true,
+			expectedReturnedError: "workflow_start hook failed: execute hook command: test hook failure",
+			expectedAuditError:    "workflow_start hook failed: execute hook command: test hook failure",
 		},
 		{
-			name:               "cancellation",
-			expectedHistory:    "cancelled",
-			workflow:           commandWorkflow("cancellation", workflow.WorkflowHooks{}),
+			name: "oversized terminal error",
+			workflow: terminalWorkflowWithHooks("oversized-terminal-error", workflow.WorkflowHooks{
+				WorkflowStart: workflow.Hook{{Command: "fail-hook"}},
+			}),
+			executor: commandExecutorFunc(func(context.Context, *ports.Command) (*ports.CommandResult, error) {
+				return nil, errors.New(strings.Repeat("long failure ", 1000))
+			}),
+			expectedHistory:        "failed",
+			expectedAudit:          "failure",
+			expectedExitCode:       3,
+			expectedError:          true,
+			expectedTruncatedError: true,
+		},
+		{
+			name:                 "cancellation",
+			expectedHistory:      "cancelled",
+			workflow:             commandWorkflow("cancellation", workflow.WorkflowHooks{}),
+			expectedAudit:        "failure",
+			expectedExitCode:     3,
+			expectedError:        true,
+			expectedCause:        context.Canceled,
+			expectedAuditError:   "step run: context canceled",
+			expectedHistoryError: "context canceled",
+		},
+		{
+			name: "timeout",
+			// Keep adapter startup outside the race-sensitive edge of the deadline.
+			// The command readiness signal below proves execution reached the command
+			// before this deadline exercises timeout finalization.
+			contextTimeout:       2 * time.Second,
+			expectedHistory:      "cancelled",
+			workflow:             commandWorkflow("timeout", workflow.WorkflowHooks{}),
+			expectedAudit:        "failure",
+			expectedExitCode:     3,
+			expectedError:        true,
+			expectedCause:        context.DeadlineExceeded,
+			expectedAuditError:   "step run: context deadline exceeded",
+			expectedHistoryError: "context deadline exceeded",
+		},
+		{
+			name:     "recovered panic",
+			workflow: commandWorkflow("recovered-panic", workflow.WorkflowHooks{}),
+			executor: commandExecutorFunc(func(context.Context, *ports.Command) (*ports.CommandResult, error) {
+				panicValues := []string{"CONFIDENTIAL_PANIC_CANARY"}
+				return nil, errors.New(panicValues[len(panicValues)])
+			}),
+			expectedHistory:    "failed",
 			expectedAudit:      "failure",
 			expectedExitCode:   3,
 			expectedError:      true,
-			expectedAuditError: "workflow cancelled",
+			expectedAuditError: "workflow execution panic",
 		},
 	}
 
@@ -480,9 +536,12 @@ func testPersistedCompletion(t *testing.T, scenario *completionScenario, resume 
 			return service.Resume(ctx, runID, nil, "current")
 		}
 	}
-	execCtx, runErr := executeCompletionScenario(t, execute, started)
+	execCtx, runErr := executeCompletionScenario(t, execute, started, scenario.contextTimeout)
 	if scenario.expectedError {
 		require.Error(t, runErr)
+		if scenario.expectedReturnedError != "" {
+			assert.Equal(t, scenario.expectedReturnedError, runErr.Error())
+		}
 	} else {
 		require.NoError(t, runErr)
 	}
@@ -495,7 +554,7 @@ func testPersistedCompletion(t *testing.T, scenario *completionScenario, resume 
 	assert.Equal(t, scenario.expectedHistory, saved.GetStatus().String())
 	assert.False(t, saved.GetCompletedAt().IsZero())
 	if started != nil {
-		require.ErrorIs(t, runErr, context.Canceled)
+		require.ErrorIs(t, runErr, scenario.expectedCause)
 	}
 	require.NoError(t, auditWriter.Close())
 	require.NoError(t, historyWriter.Close())
@@ -510,9 +569,15 @@ func testPersistedCompletion(t *testing.T, scenario *completionScenario, resume 
 	record := findHistoryRecord(t, records, runID)
 	assert.Equal(t, scenario.expectedHistory, record.Status)
 	assert.Equal(t, scenario.expectedExitCode, record.ExitCode)
-	completions := findAuditCompletions(parseAuditLines(t, auditPath), runID)
+	assert.Equal(t, scenario.expectedHistoryError, record.ErrorMessage)
+	events := parseAuditLines(t, auditPath)
+	startedEvents := findAuditEvents(events, runID, workflow.EventWorkflowStarted)
+	require.Len(t, startedEvents, 1, "each execution must be started exactly once")
+	completions := findAuditCompletions(events, runID)
 	require.Len(t, completions, 1, "each execution must be finalized exactly once")
 	event := &completions[0]
+	assert.Equal(t, startedEvents[0].ExecutionID, event.ExecutionID)
+	assert.Equal(t, record.ID, event.ExecutionID)
 	require.NotNil(t, event.ExitCode)
 	assert.Equal(t, scenario.expectedAudit, event.Status)
 	assert.Equal(t, scenario.expectedExitCode, *event.ExitCode)
@@ -520,43 +585,60 @@ func testPersistedCompletion(t *testing.T, scenario *completionScenario, resume 
 	if scenario.expectedError {
 		assert.NotZero(t, *event.ExitCode)
 	}
-	if scenario.expectedAuditError != "" {
+	if scenario.expectedTruncatedError {
+		assert.Contains(t, event.Error, "workflow_start hook failed:")
+		assert.True(t, strings.HasSuffix(event.Error, "… [truncated]"))
+	} else {
 		assert.Equal(t, scenario.expectedAuditError, event.Error)
 	}
+	if scenario.expectedCause != nil {
+		assert.Contains(t, record.ErrorMessage, scenario.expectedCause.Error())
+	}
+	assert.NotContains(t, event.Error, "CONFIDENTIAL_PANIC_CANARY")
+	assert.NotContains(t, record.ErrorMessage, "CONFIDENTIAL_PANIC_CANARY")
 }
 
 func executeCompletionScenario(
 	t *testing.T,
 	execute func(context.Context) (*workflow.ExecutionContext, error),
 	started <-chan struct{},
+	timeout time.Duration,
 ) (*workflow.ExecutionContext, error) {
 	t.Helper()
 	if started == nil {
 		return execute(context.Background())
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	}
 	defer cancel()
 	result := make(chan executionResult, 1)
 	go func() {
 		execCtx, err := execute(ctx)
 		result <- executionResult{execCtx: execCtx, err: err}
 	}()
-	// Bound both synchronization points so a lifecycle regression fails rather than hangs.
-	timer := time.NewTimer(5 * time.Second)
-	defer timer.Stop()
+	// Bound both synchronization points independently so time spent reaching the
+	// command does not consume the finalization guard.
+	startupTimer := time.NewTimer(5 * time.Second)
+	defer startupTimer.Stop()
 	select {
 	case <-started:
 	case runResult := <-result:
 		t.Fatalf("execution returned before command started: %v", runResult.err)
-	case <-timer.C:
+	case <-startupTimer.C:
 		t.Fatal("command did not start before cancellation deadline")
 	}
-	cancel()
+	if timeout == 0 {
+		cancel()
+	}
+	completionTimer := time.NewTimer(5 * time.Second)
+	defer completionTimer.Stop()
 	for {
 		select {
 		case runResult := <-result:
 			return runResult.execCtx, runResult.err
-		case <-timer.C:
+		case <-completionTimer.C:
 			t.Fatal("execution did not finish after cancellation")
 		}
 	}
@@ -632,11 +714,15 @@ func findHistoryRecord(t *testing.T, records []*workflow.ExecutionRecord, execut
 }
 
 func findAuditCompletions(events []workflow.AuditEvent, executionID string) []workflow.AuditEvent {
-	var completions []workflow.AuditEvent
+	return findAuditEvents(events, executionID, workflow.EventWorkflowCompleted)
+}
+
+func findAuditEvents(events []workflow.AuditEvent, executionID, eventType string) []workflow.AuditEvent {
+	var matches []workflow.AuditEvent
 	for i := range events {
-		if events[i].ExecutionID == executionID && events[i].Event == workflow.EventWorkflowCompleted {
-			completions = append(completions, events[i])
+		if events[i].ExecutionID == executionID && events[i].Event == eventType {
+			matches = append(matches, events[i])
 		}
 	}
-	return completions
+	return matches
 }

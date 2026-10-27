@@ -101,7 +101,8 @@ func TestExecCLIExecutor_Run_CommandWithFlags(t *testing.T) {
 		{
 			name:   "ls with flags",
 			binary: "ls",
-			args:   []string{"-la", "/tmp"},
+			// Avoid listing shared /tmp while other tests remove their temporary files.
+			args: []string{"-la", t.TempDir()},
 		},
 		{
 			name:   "echo with flag-like args",

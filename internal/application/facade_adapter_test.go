@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/transcript"
@@ -20,6 +22,107 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestAdapterValidationRejectsProviderPreflightFailure(t *testing.T) {
+	readinessErr := errors.New("authentication failed canary-secret")
+	provider := &preflightTestProvider{name: "test", preflightErr: readinessErr}
+	wf := preflightWorkflow("test", "single")
+	repo := testmocks.NewMockWorkflowRepository()
+	repo.AddWorkflow("preflight", wf)
+	service := NewWorkflowService(repo, nil, nil, nil, nil)
+	wiring, ok := any(service).(workflowServicePreflightWiring)
+	require.True(t, ok, "WorkflowService must expose provider-preflight dependency setters")
+	wiring.SetAgentRegistry(&preflightTestRegistry{provider: provider})
+
+	recorder := &mockRecorder{}
+	publisher := testmocks.NewMockEventPublisher()
+	execSvc := &ExecutionService{}
+	execSvc.SetEventPublisher(publisher)
+	registry := NewSessionRegistry()
+	adapter := NewAdapter(service, execSvc, &HistoryService{}, NewResolver(nil, repo), recorder, registry)
+	req := ports.RunRequest{
+		Identifier:   "preflight",
+		Inputs:       map[string]any{},
+		ValidateOpts: ports.ValidateOptions{SkipPlugins: true, ValidatorTimeout: time.Nanosecond},
+	}
+
+	report, err := adapter.Validate(context.Background(), req)
+	require.NoError(t, err)
+	require.False(t, report.Valid)
+	require.Len(t, report.Errors, 1)
+	assert.Equal(t, domainerrors.ErrorCodeUserInputValidationFailed, report.Errors[0].Code)
+	assert.NotContains(t, report.Errors[0].Message, "canary-secret")
+
+	session, err := adapter.Run(context.Background(), req)
+	require.Nil(t, session)
+	require.Error(t, err)
+	var structured *domainerrors.StructuredError
+	require.ErrorAs(t, err, &structured)
+	assert.Equal(t, domainerrors.ErrorCodeUserInputValidationFailed, structured.Code)
+	assert.Equal(t, report.Errors[0].Message, structured.Message, "Validate and Run must preserve the same validation message")
+	assert.Equal(t, map[string]any{"provider": "test", "step": "agent", "reason": "not_ready"}, structured.Details)
+	assert.ErrorIs(t, err, readinessErr)
+	assert.Zero(t, registry.Len())
+	assert.Zero(t, recorder.subscribeCount.Load())
+	assert.Zero(t, provider.executeCalls.Load())
+	assert.Equal(t, int32(2), provider.preflightCalls.Load(), "Validate and Run must use the same preflight contract")
+	for _, event := range publisher.GetEvents() {
+		assert.NotEqual(t, "workflow.started", event.Type, "validation failures must not publish workflow.started")
+	}
+}
+
+// optionSensitiveValidator makes each ValidateOptions branch observably different:
+// skipping suppresses it, a deadline returns DeadlineExceeded, and zero options return
+// a stable plugin failure. This lets the facade test prove Run deliberately uses zero
+// options while Adapter.Validate retains request-configured options.
+type optionSensitiveValidator struct {
+	calls atomic.Int32
+}
+
+func (v *optionSensitiveValidator) ValidateWorkflow(ctx context.Context, _ []byte) ([]ports.ValidationResult, error) {
+	v.calls.Add(1)
+	if _, hasDeadline := ctx.Deadline(); hasDeadline {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	return nil, errors.New("zero-value plugin validation")
+}
+
+func (*optionSensitiveValidator) ValidateStep(context.Context, []byte, string) ([]ports.ValidationResult, error) {
+	return []ports.ValidationResult{}, nil
+}
+
+func TestFacadeAdapter_RunIgnoresValidationOptions(t *testing.T) {
+	wf := preflightWorkflow("{{inputs.provider}}", "single")
+	repo := testmocks.NewMockWorkflowRepository()
+	repo.AddWorkflow("options", wf)
+	service := NewWorkflowService(repo, nil, nil, nil, nil)
+	validator := &optionSensitiveValidator{}
+	service.SetValidatorProvider(validator)
+	adapter := NewAdapter(service, &ExecutionService{}, &HistoryService{}, NewResolver(nil, repo), &mockRecorder{}, NewSessionRegistry())
+
+	// Validate honors SkipPlugins, so the plugin does not run.
+	report, err := adapter.Validate(context.Background(), ports.RunRequest{Identifier: "options", ValidateOpts: ports.ValidateOptions{SkipPlugins: true}})
+	require.NoError(t, err)
+	assert.True(t, report.Valid)
+	assert.Zero(t, validator.calls.Load())
+
+	// Validate also honors ValidatorTimeout, which gives the provider a deadline.
+	report, err = adapter.Validate(context.Background(), ports.RunRequest{Identifier: "options", ValidateOpts: ports.ValidateOptions{ValidatorTimeout: time.Nanosecond}})
+	require.NoError(t, err)
+	require.False(t, report.Valid)
+	assert.Contains(t, report.Errors[0].Message, context.DeadlineExceeded.Error())
+
+	// Run must ignore both request options and therefore receive the zero-value path.
+	session, err := adapter.Run(context.Background(), ports.RunRequest{
+		Identifier:   "options",
+		ValidateOpts: ports.ValidateOptions{SkipPlugins: true, ValidatorTimeout: time.Nanosecond},
+	})
+	require.Nil(t, session)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "zero-value plugin validation")
+	assert.Equal(t, int32(2), validator.calls.Load(), "Run must call the validator once with zero-value options")
+}
 
 var (
 	_ ports.EventPublisher  = (*mockEventPublisher)(nil)
@@ -179,21 +282,60 @@ func TestFacadeAdapter_NilBridgesAreNoOps(t *testing.T) {
 	}
 }
 
-// TestFacadeAdapter_SetUserInputReader stores reader
-func TestFacadeAdapter_SetUserInputReader(t *testing.T) {
-	adapter := NewAdapter(
-		&WorkflowService{},
-		&ExecutionService{},
-		&HistoryService{},
-		nil,
-		&mockRecorder{},
-		NewSessionRegistry(),
-	)
+func TestFacadeAdapter_SetUserInputReaderPropagatesToValidation(t *testing.T) {
+	provider := &preflightTestProvider{name: "test"}
+	wf := preflightWorkflow("test", "conversation")
+	repo := testmocks.NewMockWorkflowRepository()
+	repo.AddWorkflow("conversation", wf)
+	service := NewWorkflowService(repo, nil, nil, nil, nil)
+	wiring, ok := any(service).(workflowServicePreflightWiring)
+	require.True(t, ok, "WorkflowService must expose provider-preflight dependency setters")
+	wiring.SetAgentRegistry(&preflightTestRegistry{provider: provider})
+	adapter := NewAdapter(service, &ExecutionService{}, &HistoryService{}, NewResolver(nil, repo), &mockRecorder{}, NewSessionRegistry())
 
-	reader := &mockUserInputReader{}
-	adapter.SetUserInputReader(reader)
+	before, err := adapter.Validate(context.Background(), ports.RunRequest{Identifier: "conversation"})
+	require.NoError(t, err)
+	require.False(t, before.Valid)
+	require.Len(t, before.Errors, 1)
+	assert.Equal(t, domainerrors.ErrorCodeUserInputValidationFailed, before.Errors[0].Code)
 
-	assert.Equal(t, reader, adapter.userInputReader)
+	adapter.SetUserInputReader(&mockUserInputReader{})
+	after, err := adapter.Validate(context.Background(), ports.RunRequest{Identifier: "conversation"})
+	require.NoError(t, err)
+	assert.True(t, after.Valid)
+	assert.Equal(t, int32(2), provider.preflightCalls.Load())
+}
+
+func TestFacadeAdapter_SetUserInputReaderConcurrentWithValidation(t *testing.T) {
+	provider := &preflightTestProvider{name: "test"}
+	wf := preflightWorkflow("test", "conversation")
+	repo := testmocks.NewMockWorkflowRepository()
+	repo.AddWorkflow("conversation", wf)
+	service := NewWorkflowService(repo, nil, nil, nil, nil)
+	service.SetAgentRegistry(&preflightTestRegistry{provider: provider})
+	adapter := NewAdapter(service, &ExecutionService{}, &HistoryService{}, NewResolver(nil, repo), &mockRecorder{}, NewSessionRegistry())
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, 100)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for range 100 {
+			adapter.SetUserInputReader(&mockUserInputReader{})
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range 100 {
+			_, err := adapter.Validate(context.Background(), ports.RunRequest{Identifier: "conversation"})
+			errCh <- err
+		}
+	}()
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		require.NoError(t, err)
+	}
 }
 
 // TestFacadeAdapter_RunReturnsRunSession verifies Run returns valid session

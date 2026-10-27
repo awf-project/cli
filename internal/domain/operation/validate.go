@@ -9,6 +9,16 @@ import (
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 )
 
+type InputValidationFinding struct {
+	Field   string
+	Message string
+}
+
+func ValidateInputsDetailed(schema *pluginmodel.OperationSchema, inputs map[string]any) ([]InputValidationFinding, error) {
+	working := cloneInputs(inputs)
+	return validateInputs(schema, working, true)
+}
+
 // ValidateInputs validates runtime inputs against an operation schema.
 //
 // This function performs the following validations:
@@ -22,16 +32,23 @@ import (
 //
 // Returns ErrInvalidInputs if validation fails, with details in the error message.
 func ValidateInputs(schema *pluginmodel.OperationSchema, inputs map[string]any) error {
+	_, err := validateInputs(schema, inputs, false)
+	return err
+}
+
+func validateInputs(schema *pluginmodel.OperationSchema, inputs map[string]any, redact bool) ([]InputValidationFinding, error) {
 	if schema == nil {
-		return fmt.Errorf("%w: schema cannot be nil", ErrInvalidInputs)
+		message := "schema cannot be nil"
+		return []InputValidationFinding{{Message: message}}, fmt.Errorf("%w: %s", ErrInvalidInputs, message)
 	}
 
 	if inputs == nil {
-		return fmt.Errorf("%w: inputs map cannot be nil", ErrInvalidInputs)
+		message := "inputs map cannot be nil"
+		return []InputValidationFinding{{Message: message}}, fmt.Errorf("%w: %s", ErrInvalidInputs, message)
 	}
 
-	// Collect all errors instead of failing fast
-	var errors []string
+	var findings []InputValidationFinding
+	var messages []string
 
 	// Get sorted list of input names for deterministic iteration
 	inputNames := getSortedInputNames(schema.Inputs)
@@ -41,12 +58,50 @@ func ValidateInputs(schema *pluginmodel.OperationSchema, inputs map[string]any) 
 		inputSchema := schema.Inputs[inputName]
 		value, exists := inputs[inputName]
 
-		if err := validateInput(inputName, inputSchema, value, exists, inputs); err != nil {
-			errors = append(errors, err...)
+		if issues := validateInput(inputName, inputSchema, value, exists, inputs); issues != nil {
+			for _, issue := range issues {
+				message := issue.message
+				if redact {
+					message = issue.redacted
+				}
+				findings = append(findings, InputValidationFinding{Field: inputName, Message: message})
+				messages = append(messages, message)
+			}
 		}
 	}
 
-	return formatValidationErrors(errors)
+	return findings, formatValidationErrors(messages)
+}
+
+func cloneInputs(inputs map[string]any) map[string]any {
+	if inputs == nil {
+		return nil
+	}
+	cloned := make(map[string]any, len(inputs))
+	for key, value := range inputs {
+		cloned[key] = cloneInputValue(value)
+	}
+	return cloned
+}
+
+func cloneInputValue(value any) any {
+	switch value := value.(type) {
+	case map[string]any:
+		return cloneInputs(value)
+	case []any:
+		cloned := make([]any, len(value))
+		for i := range value {
+			cloned[i] = cloneInputValue(value[i])
+		}
+		return cloned
+	default:
+		return value
+	}
+}
+
+type inputValidationIssue struct {
+	message  string
+	redacted string
 }
 
 // getSortedInputNames returns a sorted list of input names for deterministic iteration
@@ -60,13 +115,14 @@ func getSortedInputNames(inputs map[string]pluginmodel.InputSchema) []string {
 }
 
 // validateInput validates a single input field and returns any errors
-func validateInput(name string, schema pluginmodel.InputSchema, value any, exists bool, inputs map[string]any) []string {
-	var errors []string
+func validateInput(name string, schema pluginmodel.InputSchema, value any, exists bool, inputs map[string]any) []inputValidationIssue {
+	var issues []inputValidationIssue
 
 	// Check required fields
 	if schema.Required {
 		if !exists || value == nil || (value == "" && schema.Type == pluginmodel.InputTypeString) {
-			return []string{fmt.Sprintf("required field %q is missing or empty", name)}
+			message := fmt.Sprintf("required field %q is missing or empty", name)
+			return []inputValidationIssue{{message: message, redacted: message}}
 		}
 	}
 
@@ -76,23 +132,26 @@ func validateInput(name string, schema pluginmodel.InputSchema, value any, exist
 			inputs[name] = schema.Default
 			value = schema.Default
 		} else {
-			return nil // No value and no default, skip validation
+			return nil
 		}
 	}
 
 	// Validate type correctness
 	if err := validateType(name, value, schema.Type); err != nil {
-		return []string{err.Error()}
+		return []inputValidationIssue{{message: err.Error(), redacted: err.Error()}}
 	}
 
 	// Apply validation rules if set
 	if schema.Validation != "" {
 		if err := validateRule(name, value, schema.Validation); err != nil {
-			errors = append(errors, err.Error())
+			issues = append(issues, inputValidationIssue{
+				message:  err.Error(),
+				redacted: fmt.Sprintf("field %q: invalid %s", name, schema.Validation),
+			})
 		}
 	}
 
-	return errors
+	return issues
 }
 
 // formatValidationErrors formats multiple validation errors into a single error message

@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
@@ -188,6 +189,7 @@ func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inpu
 		for k := range p.backends {
 			availableBackends = append(availableBackends, k)
 		}
+		sort.Strings(availableBackends)
 		return &pluginmodel.OperationResult{
 			Success: false,
 			Outputs: make(map[string]any),
@@ -251,17 +253,19 @@ func (p *NotifyOperationProvider) Execute(ctx context.Context, name string, inpu
 }
 
 func extractStringInput(inputs map[string]any, key string, required bool) (string, error) {
+	var emptyValue string
+
 	value, ok := inputs[key]
 	if !ok {
 		if required {
-			return "", fmt.Errorf("required input %q is missing", key)
+			return emptyValue, fmt.Errorf("required input %q is missing", key)
 		}
-		return "", nil
+		return emptyValue, nil
 	}
 
 	strValue, ok := value.(string)
 	if !ok {
-		return "", fmt.Errorf("input %q must be a string, got %T", key, value)
+		return emptyValue, fmt.Errorf("input %q must be a string, got %T", key, value)
 	}
 
 	return strings.TrimSpace(strValue), nil

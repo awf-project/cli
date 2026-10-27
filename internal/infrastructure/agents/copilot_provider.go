@@ -99,6 +99,17 @@ func (p *CopilotProvider) Validate() error {
 	return nil
 }
 
+func (p *CopilotProvider) Preflight(ctx context.Context, options map[string]any) error {
+	_ = options
+	// GitHub Copilot CLI exposes no reliable non-interactive readiness probe.
+	// Prompt execution could incur model usage, so fail closed without executing.
+	return &ProviderPreflightError{
+		Provider: "copilot",
+		Reason:   PreflightStatusUnsupported,
+		Cause:    unsupportedPreflightCause(ctx),
+	}
+}
+
 func (p *CopilotProvider) buildCopilotExecuteArgs(prompt string, options map[string]any) ([]string, error) {
 	args := []string{"-p", prompt, "--output-format=json", "--silent"}
 	args = appendCopilotOptions(args, options)

@@ -3,6 +3,7 @@ package audit_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -638,6 +639,362 @@ func main() {
 	assert.Equal(t, totalLines, nonEmptyLines, "total line count must be exactly %d", totalLines)
 	assert.Equal(t, linesPerProcess, countByProcess["A"], "process A must have written %d lines", linesPerProcess)
 	assert.Equal(t, linesPerProcess, countByProcess["B"], "process B must have written %d lines", linesPerProcess)
+}
+
+func TestFileAuditTrailWriterConcurrentWritesRemainIndependentJSONLines(t *testing.T) {
+	const (
+		writerCount     = 2
+		writesPerWriter = 64
+	)
+
+	path := filepath.Join(t.TempDir(), "audit.jsonl")
+	writers := make([]*audit.FileAuditTrailWriter, writerCount)
+	for i := range writers {
+		writer, err := audit.NewFileAuditTrailWriter(path)
+		require.NoError(t, err)
+		writers[i] = writer
+		t.Cleanup(func() { _ = writer.Close() })
+	}
+
+	var wg sync.WaitGroup
+	errs := make(chan error, writerCount*writesPerWriter)
+	for writerIndex, writer := range writers {
+		for writeIndex := 0; writeIndex < writesPerWriter; writeIndex++ {
+			wg.Add(1)
+			go func(writerIndex, writeIndex int, writer *audit.FileAuditTrailWriter) {
+				defer wg.Done()
+				event := newAuditEvent(fmt.Sprintf("writer-%d-event-%d", writerIndex, writeIndex))
+				errs <- writer.Write(context.Background(), &event)
+			}(writerIndex, writeIndex, writer)
+		}
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		require.NoError(t, err)
+	}
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.True(t, strings.HasSuffix(string(data), "\n"))
+
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	require.Len(t, lines, writerCount*writesPerWriter)
+	seen := make(map[string]struct{}, len(lines))
+	for _, line := range lines {
+		var event workflow.AuditEvent
+		require.NoError(t, json.Unmarshal([]byte(line), &event))
+		_, duplicate := seen[event.ExecutionID]
+		assert.False(t, duplicate, "execution ID %q must occur once", event.ExecutionID)
+		seen[event.ExecutionID] = struct{}{}
+	}
+}
+
+func TestFileAuditTrailWriterTruncatesLargeTerminalErrors(t *testing.T) {
+	for _, text := range []string{strings.Repeat("failure ", 1000), strings.Repeat("界\n\"", 2000)} {
+		path := filepath.Join(t.TempDir(), "audit.jsonl")
+		writer, err := audit.NewFileAuditTrailWriter(path)
+		require.NoError(t, err)
+		event := newAuditEvent("terminal-large-error")
+		event.Event = workflow.EventWorkflowCompleted
+		event.Status = "failure"
+		exitCode := 3
+		event.ExitCode = &exitCode
+		event.Error = text
+		require.NoError(t, writer.Write(context.Background(), &event))
+		require.NoError(t, writer.Close())
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.LessOrEqual(t, len(data), 4096)
+		var written workflow.AuditEvent
+		require.NoError(t, json.Unmarshal(data, &written))
+		assert.Equal(t, event.ExecutionID, written.ExecutionID)
+		assert.Equal(t, "failure", written.Status)
+		assert.Equal(t, 3, *written.ExitCode)
+		assert.True(t, strings.HasSuffix(written.Error, "… [truncated]"))
+		assert.Equal(t, text, event.Error)
+	}
+}
+
+func TestFileAuditTrailWriterRejectsRecordsThatCannotFitWithoutAppending(t *testing.T) {
+	tests := []struct {
+		name  string
+		event workflow.AuditEvent
+	}{
+		{
+			name: "no inputs",
+			event: func() workflow.AuditEvent {
+				event := newAuditEvent("oversized-no-inputs")
+				event.WorkflowName = strings.Repeat("w", 5000)
+				return event
+			}(),
+		},
+		{
+			name: "oversized non-input field",
+			event: func() workflow.AuditEvent {
+				event := newAuditEvent("oversized-error")
+				event.Inputs = map[string]any{"small": "value"}
+				event.Error = strings.Repeat("e", 5000)
+				return event
+			}(),
+		},
+		{
+			name: "already truncated input cannot make progress",
+			event: func() workflow.AuditEvent {
+				event := newAuditEvent("already-truncated")
+				event.Inputs = map[string]any{"value": "…"}
+				event.Error = strings.Repeat("e", 5000)
+				return event
+			}(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "audit.jsonl")
+			const existing = "existing-record\n"
+			require.NoError(t, os.WriteFile(path, []byte(existing), 0o600))
+			writer, err := audit.NewFileAuditTrailWriter(path)
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = writer.Close() })
+
+			result := make(chan error, 1)
+			go func() { result <- writer.Write(context.Background(), &tt.event) }()
+
+			select {
+			case err := <-result:
+				require.ErrorIs(t, err, audit.ErrAuditRecordTooLarge)
+			case <-time.After(time.Second):
+				t.Fatal("oversized write did not terminate")
+			}
+
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			assert.Equal(t, existing, string(data))
+		})
+	}
+}
+
+func TestFileAuditTrailWriterBoundsCompletePayloadAndPreservesCallerInputs(t *testing.T) {
+	t.Run("truncation is longest first with lexical tie breaking", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "audit.jsonl")
+		writer, err := audit.NewFileAuditTrailWriter(path)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = writer.Close() })
+
+		// alpha and zeta deliberately have the same serialized length.  Reducing
+		// alpha alone makes the record fit, so the persisted event identifies both
+		// the lexical tie-breaker and the values that must not be touched.
+		event := newAuditEvent("ordered-truncation")
+		event.Inputs = map[string]any{
+			"alpha":  strings.Repeat("a", 2000),
+			"zeta":   strings.Repeat("z", 2000),
+			"short":  "x",
+			"nested": map[string]any{"preserve": true},
+			"number": 7,
+		}
+
+		require.NoError(t, writer.Write(context.Background(), &event))
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		require.LessOrEqual(t, len(data), 4096)
+
+		var persisted workflow.AuditEvent
+		require.NoError(t, json.Unmarshal(data, &persisted))
+		require.True(t, persisted.InputsTruncated)
+		assert.Equal(t, "…", persisted.Inputs["alpha"])
+		assert.Equal(t, strings.Repeat("z", 2000), persisted.Inputs["zeta"])
+		assert.Equal(t, "x", persisted.Inputs["short"])
+		assert.Equal(t, float64(7), persisted.Inputs["number"])
+		assert.Equal(t, map[string]any{"preserve": true}, persisted.Inputs["nested"])
+
+		// The adapter must work from a private copy, including when it truncates.
+		assert.Equal(t, strings.Repeat("a", 2000), event.Inputs["alpha"])
+		assert.Equal(t, strings.Repeat("z", 2000), event.Inputs["zeta"])
+		assert.Equal(t, "x", event.Inputs["short"])
+		assert.Equal(t, map[string]any{"preserve": true}, event.Inputs["nested"])
+		assert.False(t, event.InputsTruncated)
+	})
+
+	t.Run("exact payload limit includes newline", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "audit.jsonl")
+		writer, err := audit.NewFileAuditTrailWriter(path)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = writer.Close() })
+
+		exact := eventWithSerializedSize(t, 4096)
+		require.NoError(t, writer.Write(context.Background(), &exact))
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Len(t, data, 4096)
+		require.True(t, strings.HasSuffix(string(data), "\n"))
+		var decoded workflow.AuditEvent
+		require.NoError(t, json.Unmarshal(data, &decoded))
+
+		over := eventWithSerializedSize(t, 4097)
+		err = writer.Write(context.Background(), &over)
+		require.ErrorIs(t, err, audit.ErrAuditRecordTooLarge)
+		after, err := os.ReadFile(path)
+		require.NoError(t, err)
+		assert.Equal(t, data, after)
+	})
+
+	t.Run("nested and escaped inputs use a private deep copy", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "audit.jsonl")
+		writer, err := audit.NewFileAuditTrailWriter(path)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = writer.Close() })
+
+		nested := map[string]any{"child": strings.Repeat("\"\\", 3000)}
+		event := newAuditEvent("nested-input")
+		event.Inputs = map[string]any{
+			"nested": nested,
+			"number": 42,
+		}
+
+		const writes = 8
+		var wg sync.WaitGroup
+		errs := make(chan error, writes)
+		for range writes {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				errs <- writer.Write(context.Background(), &event)
+			}()
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			require.NoError(t, err)
+		}
+
+		assert.Equal(t, strings.Repeat("\"\\", 3000), nested["child"])
+		assert.False(t, event.InputsTruncated)
+		assert.Equal(t, 42, event.Inputs["number"])
+
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+		require.Len(t, lines, writes)
+		for _, line := range lines {
+			assert.LessOrEqual(t, len(line)+1, 4096)
+			var decoded workflow.AuditEvent
+			require.NoError(t, json.Unmarshal([]byte(line), &decoded))
+			assert.True(t, decoded.InputsTruncated)
+		}
+	})
+}
+
+func TestFileAuditTrailWriterWriteAfterCloseReturnsNamedError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.jsonl")
+	writer, err := audit.NewFileAuditTrailWriter(path)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	require.NoError(t, writer.Close())
+
+	const writes = 16
+	var wg sync.WaitGroup
+	errs := make(chan error, writes)
+	for i := 0; i < writes; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			event := newAuditEvent(fmt.Sprintf("closed-%d", i))
+			errs <- writer.Write(context.Background(), &event)
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		assert.EqualError(t, err, "writing audit event: audit writer is closed")
+		assert.True(t, errors.Is(err, audit.ErrAuditWriterClosed))
+	}
+}
+
+func TestFileAuditTrailWriterWriteThenCloseRejectsLaterConcurrentWrites(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit.jsonl")
+	writer, err := audit.NewFileAuditTrailWriter(path)
+	require.NoError(t, err)
+
+	// This write establishes the ordered side of the lifecycle boundary. Close
+	// cannot complete until this public Write call has serialized its append.
+	accepted := newAuditEvent("accepted-before-close")
+	require.NoError(t, writer.Write(context.Background(), &accepted))
+	require.NoError(t, writer.Close())
+
+	const laterWrites = 16
+	var wg sync.WaitGroup
+	errs := make(chan error, laterWrites)
+	for i := 0; i < laterWrites; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			event := newAuditEvent(fmt.Sprintf("later-%d", i))
+			errs <- writer.Write(context.Background(), &event)
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		require.ErrorIs(t, err, audit.ErrAuditWriterClosed)
+		assert.EqualError(t, err, "writing audit event: audit writer is closed")
+	}
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	lines := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
+	require.Len(t, lines, 1)
+	var persisted workflow.AuditEvent
+	require.NoError(t, json.Unmarshal([]byte(lines[0]), &persisted))
+	assert.Equal(t, accepted.ExecutionID, persisted.ExecutionID)
+}
+
+func BenchmarkFileAuditTrailWriterConcurrentWrite(b *testing.B) {
+	path := filepath.Join(b.TempDir(), "audit.jsonl")
+	writer, err := audit.NewFileAuditTrailWriter(path)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { _ = writer.Close() })
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			event := newAuditEvent("benchmark-execution")
+			event.Inputs = map[string]any{"payload": strings.Repeat("x", 512)}
+			if err := writer.Write(context.Background(), &event); err != nil {
+				b.Error(err)
+			}
+		}
+	})
+}
+
+func newAuditEvent(executionID string) workflow.AuditEvent {
+	return workflow.AuditEvent{
+		SchemaVersion: 1,
+		Event:         workflow.EventWorkflowStarted,
+		ExecutionID:   executionID,
+		Timestamp:     time.Unix(0, 0).UTC(),
+		User:          "test-user",
+		WorkflowName:  "test-workflow",
+	}
+}
+
+func eventWithSerializedSize(t *testing.T, size int) workflow.AuditEvent {
+	t.Helper()
+	event := newAuditEvent("payload-boundary")
+	for padding := 0; padding <= size; padding++ {
+		event.User = strings.Repeat("x", padding)
+		data, err := event.MarshalJSON()
+		require.NoError(t, err)
+		if len(data)+1 == size {
+			return event
+		}
+	}
+	t.Fatalf("could not construct audit event with %d-byte JSONL payload", size)
+	return workflow.AuditEvent{}
 }
 
 // Helper: find index of field in JSON string

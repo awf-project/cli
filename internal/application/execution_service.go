@@ -81,6 +81,96 @@ type ExecutionService struct {
 	agentOutputNormalizer  ports.AgentOutputNormalizer
 }
 
+type terminalOutcome struct {
+	err               error
+	cancellationCause error
+	errorMessage      string
+}
+
+type terminalFinalizer struct {
+	finalized bool
+}
+
+func (s *ExecutionService) finalizeTerminalOutcome(
+	ctx context.Context,
+	execCtx *workflow.ExecutionContext,
+	finalizer *terminalFinalizer,
+	outcome terminalOutcome,
+) {
+	if finalizer.finalized {
+		return
+	}
+	finalizer.finalized = true
+
+	switch {
+	case outcome.err == nil:
+		execCtx.SetStatus(workflow.StatusCompleted)
+	case errors.Is(outcome.cancellationCause, context.Canceled) ||
+		errors.Is(outcome.cancellationCause, context.DeadlineExceeded) ||
+		errors.Is(outcome.err, context.Canceled) || errors.Is(outcome.err, context.DeadlineExceeded):
+		execCtx.SetStatus(workflow.StatusCancelled)
+	default:
+		execCtx.SetStatus(workflow.StatusFailed)
+	}
+	execCtx.SetCompletedAt(time.Now())
+	normalizeTerminalExitCode(execCtx, outcome.err)
+	s.checkpoint(ctx, execCtx)
+	s.recordHistory(ctx, execCtx)
+	s.emitAuditCompleted(ctx, execCtx, outcome.errorMessage)
+	s.emitWorkflowTerminalEvent(ctx, execCtx, outcome.err)
+}
+
+func (s *ExecutionService) executeStartedAttempt(ctx context.Context, wf *workflow.Workflow, execCtx *workflow.ExecutionContext, run func() error) error {
+	finalizer := &terminalFinalizer{}
+	outcome := func() (result terminalOutcome) {
+		defer func() {
+			result.cancellationCause = ctx.Err()
+			if recover() != nil {
+				result.err = errors.New("workflow execution panic")
+				result.errorMessage = result.err.Error()
+			}
+		}()
+		s.emitAuditStarted(ctx, execCtx, execCtx.Inputs)
+		s.emitEvent(ctx, workflow.EventWorkflowStarted, map[string]string{
+			"workflow_id": execCtx.WorkflowID, "workflow_name": execCtx.WorkflowName,
+		})
+		if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, s.buildInterpolationContext(execCtx), true); err != nil {
+			result.err = fmt.Errorf("workflow_start hook failed: %w", err)
+			result.errorMessage = result.err.Error()
+			return result
+		}
+		result.err = run()
+		if result.err != nil {
+			result.errorMessage = result.err.Error()
+		}
+		return result
+	}()
+
+	finalizationCtx := context.Background()
+	s.finalizeTerminalOutcome(finalizationCtx, execCtx, finalizer, outcome)
+	s.executeTerminalHook(finalizationCtx, wf, execCtx, outcome.err)
+	return outcome.err
+}
+
+func (s *ExecutionService) executeTerminalHook(ctx context.Context, wf *workflow.Workflow, execCtx *workflow.ExecutionContext, execErr error) {
+	intCtx := s.buildInterpolationContext(execCtx)
+	hookName := "workflow_end"
+	hooks := wf.Hooks.WorkflowEnd
+	if execErr != nil {
+		if execCtx.GetStatus() == workflow.StatusCancelled {
+			hookName, hooks = "workflow_cancel", wf.Hooks.WorkflowCancel
+		} else {
+			hookName, hooks = "workflow_error", wf.Hooks.WorkflowError
+			intCtx.Error = &interpolation.ErrorData{Type: classifyErrorType(execErr), Message: execErr.Error(), State: execCtx.CurrentStep}
+		}
+	}
+	for _, action := range hooks {
+		if err := s.hookExecutor.ExecuteHooks(ctx, workflow.Hook{action}, intCtx, true); err != nil {
+			s.logger.Warn(hookName+" hook failed", "workflow_id", execCtx.WorkflowID, "workflow_name", execCtx.WorkflowName, "error", err)
+		}
+	}
+}
+
 // SetOutputWriters configures streaming output writers.
 func (s *ExecutionService) SetOutputWriters(stdout, stderr io.Writer) {
 	s.stdoutWriter = stdout
@@ -484,25 +574,6 @@ func (s *ExecutionService) prepareExecution(
 	}
 
 	s.logger.Info("starting workflow", "workflow", wf.Name, "id", execCtx.WorkflowID)
-	s.emitAuditStarted(ctx, execCtx, execCtx.Inputs)
-	s.emitEvent(ctx, workflow.EventWorkflowStarted, map[string]string{
-		"workflow_id":   execCtx.WorkflowID,
-		"workflow_name": execCtx.WorkflowName,
-	})
-
-	intCtx := s.buildInterpolationContext(execCtx)
-	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx, true); err != nil {
-		execCtx.Status = workflow.StatusFailed
-		s.checkpoint(ctx, execCtx)
-		s.recordExecutionEnd(ctx, execCtx, err, err.Error())
-		s.emitWorkflowTerminalEvent(ctx, execCtx, err)
-		span.End()
-		// Return the failed execCtx (not nil) so callers can surface the aborted-but-
-		// recorded execution state to the user, matching the Resume path contract.
-		// span is nil to signal callers must not End() it again (already ended above).
-		return ctx, nil, execCtx, fmt.Errorf("workflow_start hook failed: %w", err)
-	}
-
 	return ctx, span, execCtx, nil
 }
 
@@ -565,8 +636,6 @@ func (s *ExecutionService) runExecutionLoop(
 			} else {
 				execCtx.SetStatus(workflow.StatusCompleted)
 			}
-			execCtx.SetCompletedAt(time.Now())
-			s.checkpoint(ctx, execCtx)
 			s.logger.Info("workflow completed", "step", currentStep, "status", execCtx.GetStatus())
 			break
 		}
@@ -589,7 +658,6 @@ func (s *ExecutionService) runExecutionLoop(
 			})
 			execCtx.Status = workflow.StatusFailed
 			s.logger.Error("step failed", "step", step.Name, "error", err)
-			s.checkpoint(ctx, execCtx)
 			execErr = err
 			break
 		}
@@ -610,45 +678,7 @@ func (s *ExecutionService) runExecutionLoop(
 		currentStep = nextStep
 	}
 
-	hookCtx := context.Background()
-
-	// Classify the outcome before persisting it, including explicit terminal failures.
-	if execErr != nil {
-		if errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded) ||
-			ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
-			execCtx.Status = workflow.StatusCancelled
-			s.logger.Info("workflow cancelled", "workflow", wf.Name)
-			s.checkpoint(hookCtx, execCtx)
-			s.recordExecutionEnd(hookCtx, execCtx, execErr, "workflow cancelled")
-			s.emitWorkflowTerminalEvent(hookCtx, execCtx, execErr)
-			intCtx := s.buildInterpolationContext(execCtx)
-			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx, false); err != nil {
-				s.logger.Warn("workflow_cancel hook failed", "error", err)
-			}
-			return execErr
-		}
-
-		s.recordExecutionEnd(hookCtx, execCtx, execErr, execErr.Error())
-		s.emitWorkflowTerminalEvent(hookCtx, execCtx, execErr)
-		intCtx := s.buildInterpolationContext(execCtx)
-		intCtx.Error = &interpolation.ErrorData{
-			Type:    classifyErrorType(execErr),
-			Message: execErr.Error(),
-			State:   execCtx.CurrentStep,
-		}
-		if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowError, intCtx, false); err != nil {
-			s.logger.Warn("workflow_error hook failed", "error", err)
-		}
-		return execErr
-	}
-
-	s.recordExecutionEnd(hookCtx, execCtx, nil, "")
-	s.emitWorkflowTerminalEvent(hookCtx, execCtx, nil)
-	intCtx := s.buildInterpolationContext(execCtx)
-	if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowEnd, intCtx, false); err != nil {
-		s.logger.Warn("workflow_end hook failed", "error", err)
-	}
-	return nil
+	return execErr
 }
 
 // runWithCallStack executes a workflow by name with an optional parent call stack.
@@ -691,7 +721,9 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 	}
 	defer span.End()
 
-	return execCtx, s.runExecutionLoop(spanCtx, wf, execCtx)
+	return execCtx, s.executeStartedAttempt(spanCtx, wf, execCtx, func() error {
+		return s.runExecutionLoop(spanCtx, wf, execCtx)
+	})
 }
 
 // executeStep executes a single step and returns the next step name.
@@ -771,7 +803,7 @@ func (s *ExecutionService) checkpoint(ctx context.Context, execCtx *workflow.Exe
 
 // recordHistory saves execution to history when workflow reaches terminal state.
 // Failures are logged but not fatal - execution continues.
-func (s *ExecutionService) recordHistory(execCtx *workflow.ExecutionContext) {
+func (s *ExecutionService) recordHistory(ctx context.Context, execCtx *workflow.ExecutionContext) {
 	if s.historySvc == nil {
 		return
 	}
@@ -819,8 +851,6 @@ func (s *ExecutionService) recordHistory(execCtx *workflow.ExecutionContext) {
 		}
 	}
 
-	// Record to history store (use background context to avoid cancellation)
-	ctx := context.Background()
 	if err := s.historySvc.Record(ctx, record); err != nil {
 		s.logger.Warn("failed to record history", "workflow_id", execCtx.WorkflowID, "error", err)
 	} else {
@@ -841,7 +871,7 @@ func (s *ExecutionService) recordExecutionEnd(
 	// Persist the final outcome after normalization, including when execution was
 	// cancelled. Earlier step checkpoints may still contain a zero exit code.
 	s.checkpoint(context.WithoutCancel(ctx), execCtx)
-	s.recordHistory(execCtx)
+	s.recordHistory(context.WithoutCancel(ctx), execCtx)
 	s.emitAuditCompleted(ctx, execCtx, errorMsg)
 }
 
@@ -1906,6 +1936,12 @@ func (s *ExecutionService) Resume(
 		return nil, err
 	}
 
+	// Validate the effective inputs before changing state or emitting a new start.
+	effectiveInputs := MergeInputs(execCtx.GetInputs(), inputOverrides)
+	if err := s.workflowSvc.ValidateLoadedWorkflowWithInputs(ctx, wf, execCtx.WorkflowName, ports.ValidateOptions{}, effectiveInputs); err != nil {
+		return nil, fmt.Errorf("validate workflow before resume: %w", err)
+	}
+
 	// 6. Cleanup states after target and persist atomically before execution
 	if targetStep != execCtx.CurrentStep {
 		s.cleanupStatesAfter(execCtx, targetStep)
@@ -1926,21 +1962,10 @@ func (s *ExecutionService) Resume(
 	// 10. Execute from resolved step
 	s.logger.Info("resuming workflow", "id", workflowID, "from", execCtx.CurrentStep)
 
-	// emit audit started event before workflow_start hooks (resume path)
-	s.emitAuditStarted(ctx, execCtx, execCtx.Inputs)
-
-	// execute workflow_start hooks (on resume we might want these again)
-	intCtx := s.buildInterpolationContext(execCtx)
-	if err := s.hookExecutor.ExecuteHooks(ctx, wf.Hooks.WorkflowStart, intCtx, true); err != nil {
-		execCtx.Status = workflow.StatusFailed
-		s.checkpoint(ctx, execCtx)
-		s.recordExecutionEnd(ctx, execCtx, err, err.Error())
-		s.emitWorkflowTerminalEvent(ctx, execCtx, err)
-		return execCtx, fmt.Errorf("workflow_start hook failed: %w", err)
-	}
-
-	// Continue execution from current step
-	return s.executeFromStep(ctx, wf, execCtx)
+	return execCtx, s.executeStartedAttempt(ctx, wf, execCtx, func() error {
+		_, runErr := s.executeFromStep(ctx, wf, execCtx)
+		return runErr
+	})
 }
 
 // resolveFromStep resolves the --from flag value to a concrete step name.
@@ -2065,8 +2090,6 @@ func (s *ExecutionService) executeFromStep(
 			} else {
 				execCtx.Status = workflow.StatusCompleted
 			}
-			execCtx.CompletedAt = time.Now()
-			s.checkpoint(ctx, execCtx)
 			s.logger.Info("workflow completed", "step", currentStep, "status", execCtx.Status)
 			break
 		}
@@ -2089,7 +2112,6 @@ func (s *ExecutionService) executeFromStep(
 			})
 			execCtx.Status = workflow.StatusFailed
 			s.logger.Error("step failed", "step", step.Name, "error", err)
-			s.checkpoint(ctx, execCtx)
 			execErr = err
 			break
 		}
@@ -2112,50 +2134,7 @@ func (s *ExecutionService) executeFromStep(
 		currentStep = nextStep
 	}
 
-	// execute workflow hooks based on outcome
-	// use background context for hooks since main ctx may be cancelled
-	hookCtx := context.Background()
-
-	// Classify the outcome before persisting it, including explicit terminal failures.
-	if execErr != nil {
-		// check if this was a cancellation (SIGINT/SIGTERM) or timeout
-		if errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded) ||
-			ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
-			execCtx.Status = workflow.StatusCancelled
-			s.logger.Info("workflow cancelled", "workflow", wf.Name)
-			s.checkpoint(hookCtx, execCtx)
-			s.recordExecutionEnd(hookCtx, execCtx, execErr, "workflow cancelled")
-			s.emitWorkflowTerminalEvent(hookCtx, execCtx, execErr)
-			intCtx := s.buildInterpolationContext(execCtx)
-			if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowCancel, intCtx, false); err != nil {
-				s.logger.Warn("workflow_cancel hook failed", "error", err)
-			}
-			return execCtx, execErr
-		}
-
-		// regular error - execute error hook
-		s.recordExecutionEnd(hookCtx, execCtx, execErr, execErr.Error())
-		s.emitWorkflowTerminalEvent(hookCtx, execCtx, execErr)
-		intCtx := s.buildInterpolationContext(execCtx)
-		intCtx.Error = &interpolation.ErrorData{
-			Type:    classifyErrorType(execErr),
-			Message: execErr.Error(),
-			State:   execCtx.CurrentStep,
-		}
-		if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowError, intCtx, false); err != nil {
-			s.logger.Warn("workflow_error hook failed", "error", err)
-		}
-		return execCtx, execErr
-	}
-
-	// workflow completed successfully
-	s.recordExecutionEnd(hookCtx, execCtx, nil, "")
-	s.emitWorkflowTerminalEvent(hookCtx, execCtx, nil)
-	intCtx := s.buildInterpolationContext(execCtx)
-	if err := s.hookExecutor.ExecuteHooks(hookCtx, wf.Hooks.WorkflowEnd, intCtx, false); err != nil {
-		s.logger.Warn("workflow_end hook failed", "error", err)
-	}
-	return execCtx, nil
+	return execCtx, execErr
 }
 
 // ErrNoStepTypeProvider is returned when a custom step type is executed without a configured provider.

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -122,6 +123,64 @@ func (p *OpenAICompatibleProvider) Name() string {
 
 func (p *OpenAICompatibleProvider) Validate() error {
 	return nil
+}
+
+func (p *OpenAICompatibleProvider) Preflight(ctx context.Context, options map[string]any) error {
+	if err := ctx.Err(); err != nil {
+		return &ProviderPreflightError{
+			Provider: "openai_compatible",
+			Reason:   PreflightConfigurationInvalid,
+			Cause:    fmt.Errorf("configuration validation interrupted: %w", err),
+		}
+	}
+	if err := validateOpenAICompatiblePreflightOptions(options); err != nil {
+		return &ProviderPreflightError{
+			Provider: "openai_compatible",
+			Reason:   PreflightConfigurationInvalid,
+			Cause:    err,
+		}
+	}
+	return nil
+}
+
+func validateOpenAICompatiblePreflightOptions(options map[string]any) error {
+	_, _, _, err := resolveOpenAICompatibleConfiguration(options)
+	return err
+}
+
+func resolveOpenAICompatibleConfiguration(options map[string]any) (baseURL, model, apiKey string, err error) {
+	baseURL, err = resolveOpenAICompatibleString(options, "base_url", "OPENAI_BASE_URL", true)
+	if err != nil {
+		return "", "", "", err
+	}
+	parsedURL, parseErr := url.Parse(baseURL)
+	if parseErr != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
+		return "", "", "", errors.New("base_url configuration is invalid")
+	}
+	model, err = resolveOpenAICompatibleString(options, "model", "OPENAI_MODEL", true)
+	if err != nil {
+		return "", "", "", err
+	}
+	apiKey, err = resolveOpenAICompatibleString(options, "api_key", "OPENAI_API_KEY", false)
+	if err != nil {
+		return "", "", "", err
+	}
+	return strings.TrimSuffix(baseURL, "/"), model, apiKey, nil
+}
+
+func resolveOpenAICompatibleString(options map[string]any, key, environmentKey string, required bool) (string, error) {
+	if raw, present := options[key]; present {
+		value, ok := raw.(string)
+		if !ok || (required && strings.TrimSpace(value) == "") {
+			return "", fmt.Errorf("%s configuration is invalid", key)
+		}
+		return strings.TrimSpace(value), nil
+	}
+	value := strings.TrimSpace(os.Getenv(environmentKey))
+	if required && value == "" {
+		return "", fmt.Errorf("%s configuration is invalid", key)
+	}
+	return value, nil
 }
 
 // maxToolCallIterations is the hard cap on multi-turn tool-call loops.
@@ -499,29 +558,19 @@ func (p *OpenAICompatibleProvider) writeDisplayOutput(w io.Writer, output string
 func (p *OpenAICompatibleProvider) parseAndValidateOptions(options map[string]any) (parsedOptions, error) {
 	var opts parsedOptions
 
-	rawBaseURL, ok := options["base_url"]
-	if ok {
-		opts.baseURL = strings.TrimSuffix(fmt.Sprintf("%v", rawBaseURL), "/")
-	} else if envURL := os.Getenv("OPENAI_BASE_URL"); envURL != "" {
-		opts.baseURL = strings.TrimSuffix(envURL, "/")
-	} else {
-		return opts, fmt.Errorf("openai_compatible: base_url is required")
+	baseURL, model, apiKey, err := resolveOpenAICompatibleConfiguration(options)
+	if err != nil {
+		if _, present := options["base_url"]; !present && strings.TrimSpace(os.Getenv("OPENAI_BASE_URL")) == "" {
+			return opts, fmt.Errorf("openai_compatible: base_url is required")
+		}
+		if _, present := options["model"]; !present && strings.TrimSpace(os.Getenv("OPENAI_MODEL")) == "" {
+			return opts, fmt.Errorf("openai_compatible: model is required")
+		}
+		return opts, fmt.Errorf("openai_compatible: invalid configuration: %w", err)
 	}
-
-	rawModel, ok := options["model"]
-	if ok {
-		opts.model = fmt.Sprintf("%v", rawModel)
-	} else if envModel := os.Getenv("OPENAI_MODEL"); envModel != "" {
-		opts.model = envModel
-	} else {
-		return opts, fmt.Errorf("openai_compatible: model is required")
-	}
-
-	if rawKey, ok := options["api_key"]; ok {
-		opts.apiKey = fmt.Sprintf("%v", rawKey)
-	} else {
-		opts.apiKey = os.Getenv("OPENAI_API_KEY")
-	}
+	opts.baseURL = baseURL
+	opts.model = model
+	opts.apiKey = apiKey
 
 	if rawSP, ok := options["system_prompt"]; ok {
 		opts.systemPrompt = fmt.Sprintf("%v", rawSP)
@@ -548,10 +597,10 @@ func (p *OpenAICompatibleProvider) parseAndValidateOptions(options map[string]an
 	return opts, nil
 }
 
-func parseTemperatureOption(options map[string]any) (*float64, error) {
+func parseTemperatureOption(options map[string]any) (value *float64, err error) {
 	raw, ok := options["temperature"]
 	if !ok {
-		return nil, nil
+		return
 	}
 	var v float64
 	switch t := raw.(type) {
@@ -568,13 +617,13 @@ func parseTemperatureOption(options map[string]any) (*float64, error) {
 	return &v, nil
 }
 
-func parseMaxCompletionTokensOption(options map[string]any) (*int, error) {
+func parseMaxCompletionTokensOption(options map[string]any) (value *int, err error) {
 	// Prefer max_completion_tokens, fall back to max_tokens for legacy support.
 	raw, ok := options["max_completion_tokens"]
 	if !ok {
 		raw, ok = options["max_tokens"]
 		if !ok {
-			return nil, nil
+			return
 		}
 	}
 
@@ -591,13 +640,13 @@ func parseMaxCompletionTokensOption(options map[string]any) (*int, error) {
 		}
 		return &iv, nil
 	}
-	return nil, nil
+	return nil, fmt.Errorf("openai_compatible: max_completion_tokens must be a number, got %T", raw)
 }
 
-func parseTopPOption(options map[string]any) (*float64, error) {
+func parseTopPOption(options map[string]any) (value *float64, err error) {
 	raw, ok := options["top_p"]
 	if !ok {
-		return nil, nil
+		return
 	}
 	var v float64
 	switch t := raw.(type) {

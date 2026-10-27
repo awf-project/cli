@@ -294,6 +294,7 @@ func runResumeViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWriter
 	}
 	startTime := time.Now()
 
+	configureFacadeInput(cfg.Facade, cmd.InOrStdin(), writer.Out())
 	session, err := cfg.Facade.Resume(ctx, ports.ResumeRequest{
 		RunID:          workflowID,
 		InputOverrides: inputOverrides,

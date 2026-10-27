@@ -105,6 +105,18 @@ func (c *ExecutionContext) SetInput(key string, value any) {
 	c.UpdatedAt = time.Now()
 }
 
+// GetInputs returns a snapshot of the input map. Values are retained as-is;
+// validation deep-copies nested values before processing them.
+func (c *ExecutionContext) GetInputs() map[string]any {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	result := make(map[string]any, len(c.Inputs))
+	for key, value := range c.Inputs {
+		result[key] = value
+	}
+	return result
+}
+
 // GetInput retrieves an input value.
 func (c *ExecutionContext) GetInput(key string) (any, bool) {
 	c.mu.RLock()

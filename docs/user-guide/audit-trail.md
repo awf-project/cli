@@ -2,7 +2,7 @@
 title: "Audit Trail"
 ---
 
-AWF records a structured audit log for every workflow execution. Each execution produces two JSONL entries — one at start, one at completion — enabling post-hoc tracing of who ran what, when, and what happened.
+When audit logging is enabled and writes succeed, AWF records two JSONL entries for each started execution attempt — one at start and one at completion — enabling post-hoc tracing of who ran what, when, and what happened.
 
 ## How It Works
 
@@ -39,6 +39,17 @@ AWF normalizes the outcome before writing it, so the execution history and audit
 trail contain the same exit code when both writes succeed. This correction applies
 to new records; it does not rewrite existing audit entries.
 
+AWF finalizes each started attempt once and writes a matching
+`workflow.completed` entry, including executions that fail during a step, time
+out, are interrupted by a signal, are cancelled, or recover from a panic. The
+completion is written from the final execution result, so an error cannot be
+reported as a successful execution.
+
+Before a workflow starts its affected step, AWF also validates referenced inputs
+and operation configuration. Provider-backed and conversation steps perform the
+available non-interactive readiness checks before invoking the provider. These
+checks prevent an invalid or unavailable workflow from producing a partial run.
+
 ## Default Location
 
 The audit trail is written to:
@@ -58,7 +69,7 @@ export AWF_AUDIT_LOG=/var/log/awf/audit.jsonl
 awf run deploy-app --input env=production
 ```
 
-AWF creates the file and parent directories automatically with `0600` permissions.
+AWF creates the file and parent directories automatically. New audit files use `0600` permissions; newly created parent directories use `0750`.
 
 ## Disable the Audit Trail
 
@@ -100,7 +111,7 @@ awf run deploy --input api_key=sk-secret123
 ```
 
 ```json
-{"event":"workflow.started","inputs":{"api_key":"***"},...}
+{"event":"workflow.started","inputs":{"api_key":"***"}}
 ```
 
 ## Resilience
@@ -109,6 +120,25 @@ Audit trail failures never block workflow execution:
 
 - If the audit file path is not writable, a warning is emitted to stderr and the workflow proceeds normally.
 - Audit write errors do not change the workflow exit code.
+
+Each serialized record is bounded to 4 KiB. Large input values are truncated in
+deterministic order and marked with `inputs_truncated`. Oversized completion
+errors are shortened with an explicit `… [truncated]` marker so the terminal
+identity, status, and exit code are still recorded. Records whose identity fields
+alone exceed the limit are rejected without appending a partial line. Concurrent executions append
+complete JSON objects, so readers can parse each line independently.
+
+For automated tests, redirect the default data directory to a test-owned
+temporary location or set `AWF_AUDIT_LOG=off` when audit output is not under test.
+This keeps test and fixture executions out of the user's audit trail.
+
+```bash
+test_data_dir=$(mktemp -d)
+XDG_DATA_HOME="$test_data_dir" awf run example
+```
+
+If `AWF_AUDIT_LOG` is set, it overrides the XDG location; set it to a temporary
+file path for that run or unset it before using this example.
 
 ## Canonical Transcript vs. Audit Trail
 

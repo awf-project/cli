@@ -131,6 +131,38 @@ func (p *ClaudeProvider) Validate() error {
 	return nil
 }
 
+func (p *ClaudeProvider) Preflight(ctx context.Context, options map[string]any) error {
+	stdout, stderr, err := runProviderPreflight(ctx, p.executor, "claude", options, "auth", "status", "--json")
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return &ProviderPreflightError{Provider: "claude", Reason: PreflightStatusMalformed, Cause: err}
+	}
+	if claudeStatusUnsupported(stderr) {
+		return &ProviderPreflightError{Provider: "claude", Reason: PreflightStatusUnsupported, Cause: err}
+	}
+
+	// Claude Code 2.1.301 returns a JSON object whose loggedIn boolean is the
+	// authentication authority. A pointer distinguishes false from a missing or
+	// type-invalid field so unknown versions fail closed.
+	var status struct {
+		LoggedIn *bool `json:"loggedIn"`
+	}
+	if json.Unmarshal(stdout, &status) != nil || status.LoggedIn == nil {
+		return &ProviderPreflightError{Provider: "claude", Reason: PreflightStatusMalformed, Cause: err}
+	}
+	if !*status.LoggedIn {
+		return &ProviderPreflightError{Provider: "claude", Reason: PreflightNotAuthenticated, Cause: err}
+	}
+	if err != nil {
+		return &ProviderPreflightError{Provider: "claude", Reason: PreflightStatusMalformed, Cause: err}
+	}
+	return nil
+}
+
+func claudeStatusUnsupported(stderr []byte) bool {
+	message := strings.ToLower(string(stderr))
+	return strings.Contains(message, "unknown command") || strings.Contains(message, "unknown option")
+}
+
 // buildExecuteArgs constructs CLI arguments for a single-turn Execute call.
 func (p *ClaudeProvider) buildExecuteArgs(prompt string, options map[string]any) ([]string, error) {
 	args := []string{"-p", prompt}

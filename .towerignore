@@ -6,12 +6,38 @@ target/
 node_modules/
 dist/
 vendor/
+/bin/
+/awf
+/npm-cache/
+/site/public/
+/site/resources/
+/site/hugo_stats.json
+coverage.out
+coverage.html
+*.test
+# Example plugin executables share their prefix with source files.
+/examples/plugins/*/awf-plugin-*
+!/examples/plugins/*/awf-plugin-*.go
+!/examples/plugins/*/awf-plugin-*_test.go
+
+# Editor backups and temporary output are not project sources.
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# Runtime state and generated data; keep workflow definitions and fixtures visible.
+/storage/states/
+/storage/logs/
+/storage/history.db*
+/audit/
 
 # Secrets (must never be fed to the agent/LLM)
 *.key
 *.pem
 .env
 .env.*
+*.env
 secrets/
 
 # AWF build, test and runtime output (Tower does not read .gitignore).

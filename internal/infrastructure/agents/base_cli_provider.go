@@ -24,6 +24,54 @@ var (
 
 const cliProviderEnvOptionKey = "__awf_cli_provider_env"
 
+type PreflightFailureReason string
+
+const (
+	PreflightNotAuthenticated     PreflightFailureReason = "not_authenticated"
+	PreflightStatusUnsupported    PreflightFailureReason = "status_unsupported"
+	PreflightStatusMalformed      PreflightFailureReason = "status_malformed"
+	PreflightConfigurationInvalid PreflightFailureReason = "configuration_invalid"
+)
+
+type ProviderPreflightError struct {
+	Provider string
+	Reason   PreflightFailureReason
+	Cause    error
+}
+
+func (e *ProviderPreflightError) Error() string {
+	return fmt.Sprintf("%s preflight failed: %s", e.Provider, e.Reason)
+}
+
+func (e *ProviderPreflightError) Unwrap() error {
+	return e.Cause
+}
+
+func unsupportedPreflightCause(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("readiness probe unavailable: %w", err)
+	}
+	return errors.New("no non-interactive readiness probe is supported")
+}
+
+func runProviderPreflight(ctx context.Context, executor ports.CLIExecutor, provider string, options map[string]any, args ...string) (stdout, stderr []byte, err error) {
+	err = ctx.Err()
+	if err != nil {
+		err = fmt.Errorf("%s preflight context: %w", provider, err)
+		return
+	}
+
+	env, err := cliProviderEnv(options)
+	if err != nil {
+		return
+	}
+	stdout, stderr, err = runCLIWithProviderEnv(ctx, executor, provider, env, io.Discard, io.Discard, args...)
+	if contextErr := ctx.Err(); contextErr != nil {
+		return stdout, stderr, errors.Join(err, contextErr)
+	}
+	return stdout, stderr, err
+}
+
 type cliEnvExecutor interface {
 	RunWithEnv(ctx context.Context, name string, env map[string]string, stdoutW, stderrW io.Writer, args ...string) (stdout, stderr []byte, err error)
 }
@@ -51,11 +99,13 @@ func mcpServeCommand(configPath string) []string {
 
 func cliProviderEnv(options map[string]any) (map[string]string, error) {
 	if options == nil {
-		return nil, nil
+		var env map[string]string
+		return env, nil
 	}
 	raw, ok := options[cliProviderEnvOptionKey]
 	if !ok || raw == nil {
-		return nil, nil
+		var env map[string]string
+		return env, nil
 	}
 	env, ok := raw.(map[string]string)
 	if !ok {
@@ -70,7 +120,8 @@ func runCLIWithProviderEnv(ctx context.Context, executor ports.CLIExecutor, bina
 	}
 	envExec, ok := executor.(cliEnvExecutor)
 	if !ok {
-		return nil, nil, fmt.Errorf("CLI executor does not support provider environment overrides")
+		err = fmt.Errorf("CLI executor does not support provider environment overrides")
+		return
 	}
 	return envExec.RunWithEnv(ctx, binary, env, stdout, stderr, args...)
 }

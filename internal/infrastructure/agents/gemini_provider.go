@@ -130,6 +130,17 @@ func (p *GeminiProvider) Validate() error {
 	return nil
 }
 
+func (p *GeminiProvider) Preflight(ctx context.Context, options map[string]any) error {
+	// Gemini CLI 0.50.0 has no non-interactive authentication/status command.
+	// Prompt mode can incur model usage, so readiness fails closed without
+	// invoking the executor. Preserve an already-terminal context as the cause.
+	return &ProviderPreflightError{
+		Provider: "gemini",
+		Reason:   PreflightStatusUnsupported,
+		Cause:    ctx.Err(),
+	}
+}
+
 func prependGeminiGlobalFlags(args []string, options map[string]any) []string {
 	if model, ok := getStringOption(options, "model"); ok {
 		args = append([]string{"--model", model}, args...)

@@ -30,6 +30,12 @@ type AgentProvider interface {
 	Validate() error
 }
 
+// AgentPreflighter reports whether an available provider is ready for non-interactive use.
+// Implementations own provider-specific authentication and configuration checks.
+type AgentPreflighter interface {
+	Preflight(ctx context.Context, options map[string]any) error
+}
+
 // AgentRegistry manages available agent providers and resolves them by name.
 type AgentRegistry interface {
 	// Register adds a provider to the registry.
