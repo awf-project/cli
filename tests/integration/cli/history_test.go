@@ -777,6 +777,7 @@ func TestRunHistory_FullIDDisplay(t *testing.T) {
 	record := &workflow.ExecutionRecord{
 		ID:           fullUUID,
 		WorkflowID:   "wf-staging-deploy-001",
+		Attempt:      1,
 		WorkflowName: fullWorkflowName,
 		Status:       "success",
 		ExitCode:     0,

@@ -2,8 +2,11 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -87,6 +90,7 @@ func TestSQLiteHistoryStore_Record(t *testing.T) {
 			record: &workflow.ExecutionRecord{
 				ID:           "exec-001",
 				WorkflowID:   "wf-001",
+				Attempt:      1,
 				WorkflowName: "test-workflow",
 				Status:       "success",
 				ExitCode:     0,
@@ -103,10 +107,11 @@ func TestSQLiteHistoryStore_Record(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "duplicate ID returns error",
+			name: "duplicate ID returns record conflict",
 			record: &workflow.ExecutionRecord{
 				ID:           "duplicate-id",
 				WorkflowID:   "wf-002",
+				Attempt:      1,
 				WorkflowName: "test-workflow-2",
 				Status:       "success",
 				ExitCode:     0,
@@ -121,6 +126,7 @@ func TestSQLiteHistoryStore_Record(t *testing.T) {
 				return store.Record(ctx, &workflow.ExecutionRecord{
 					ID:           "duplicate-id",
 					WorkflowID:   "wf-001",
+					Attempt:      1,
 					WorkflowName: "test-workflow",
 					Status:       "failed",
 					ExitCode:     1,
@@ -137,6 +143,7 @@ func TestSQLiteHistoryStore_Record(t *testing.T) {
 			record: &workflow.ExecutionRecord{
 				ID:           "exec-cancelled",
 				WorkflowID:   "wf-003",
+				Attempt:      1,
 				WorkflowName: "test-workflow",
 				Status:       "success",
 				ExitCode:     0,
@@ -152,6 +159,7 @@ func TestSQLiteHistoryStore_Record(t *testing.T) {
 			record: &workflow.ExecutionRecord{
 				ID:           "",
 				WorkflowID:   "wf-004",
+				Attempt:      1,
 				WorkflowName: "test-workflow",
 				Status:       "success",
 				ExitCode:     0,
@@ -167,6 +175,7 @@ func TestSQLiteHistoryStore_Record(t *testing.T) {
 			record: &workflow.ExecutionRecord{
 				ID:           "exec-005",
 				WorkflowID:   "",
+				Attempt:      1,
 				WorkflowName: "test-workflow",
 				Status:       "success",
 				ExitCode:     0,
@@ -182,6 +191,7 @@ func TestSQLiteHistoryStore_Record(t *testing.T) {
 			record: &workflow.ExecutionRecord{
 				ID:           "exec-006",
 				WorkflowID:   "wf-006",
+				Attempt:      1,
 				WorkflowName: "",
 				Status:       "success",
 				ExitCode:     0,
@@ -222,6 +232,9 @@ func TestSQLiteHistoryStore_Record(t *testing.T) {
 
 			if tt.wantErr {
 				assert.Error(t, err)
+				if tt.name == "duplicate ID returns record conflict" {
+					assert.ErrorIs(t, err, ErrHistoryRecordConflict)
+				}
 			} else {
 				require.NoError(t, err)
 
@@ -250,6 +263,179 @@ func TestSQLiteHistoryStore_Record(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSQLiteHistoryStore_RecordPersistsAttemptLineage(t *testing.T) {
+	t.Parallel()
+
+	startedAt := time.Unix(1_700_000_000, 123_456_789)
+	completedAt := time.Unix(1_700_000_030, 987_654_321)
+	record := &workflow.ExecutionRecord{
+		ID:            "run-attempt-2",
+		WorkflowID:    "workflow-lineage",
+		Attempt:       2,
+		ResumedFromID: "run-attempt-1",
+		WorkflowName:  "deploy",
+		Status:        "failed",
+		ExitCode:      17,
+		StartedAt:     startedAt,
+		CompletedAt:   completedAt,
+		DurationMs:    30_864,
+		ErrorMessage:  "confidential-canary",
+	}
+
+	t.Run("persists lineage and accepts an exact replay", func(t *testing.T) {
+		historyStore := openSQLiteHistoryStoreForTest(t)
+
+		require.NoError(t, historyStore.Record(context.Background(), record))
+		require.NoError(t, historyStore.Record(context.Background(), record))
+
+		records, err := historyStore.List(context.Background(), &workflow.HistoryFilter{
+			WorkflowID: record.WorkflowID,
+			Limit:      10,
+		})
+		require.NoError(t, err)
+		require.Len(t, records, 1)
+		assert.Equal(t, record, records[0])
+	})
+
+	t.Run("rejects a conflicting record ID without leaking record contents", func(t *testing.T) {
+		historyStore := openSQLiteHistoryStoreForTest(t)
+		require.NoError(t, historyStore.Record(context.Background(), record))
+
+		conflict := *record
+		conflict.Status = "success"
+		err := historyStore.Record(context.Background(), &conflict)
+
+		require.ErrorIs(t, err, ErrHistoryRecordConflict)
+		assert.Contains(t, err.Error(), "record_id")
+		assert.Contains(t, err.Error(), record.ID)
+		assert.Contains(t, err.Error(), "workflow_id")
+		assert.Contains(t, err.Error(), record.WorkflowID)
+		assert.Contains(t, err.Error(), "attempt")
+		assert.NotContains(t, err.Error(), record.ErrorMessage)
+		assert.NotContains(t, strings.ToLower(err.Error()), "sqlite")
+	})
+
+	t.Run("compares every persisted field for replay equality", func(t *testing.T) {
+		mutations := []struct {
+			name   string
+			mutate func(*workflow.ExecutionRecord)
+		}{
+			{"workflow ID", func(candidate *workflow.ExecutionRecord) { candidate.WorkflowID = "other-workflow" }},
+			{"attempt", func(candidate *workflow.ExecutionRecord) { candidate.Attempt = 3 }},
+			{"predecessor", func(candidate *workflow.ExecutionRecord) { candidate.ResumedFromID = "other-predecessor" }},
+			{"workflow name", func(candidate *workflow.ExecutionRecord) { candidate.WorkflowName = "other-name" }},
+			{"status", func(candidate *workflow.ExecutionRecord) { candidate.Status = "success" }},
+			{"exit code", func(candidate *workflow.ExecutionRecord) { candidate.ExitCode++ }},
+			{"started at", func(candidate *workflow.ExecutionRecord) {
+				candidate.StartedAt = candidate.StartedAt.Add(time.Nanosecond)
+			}},
+			{"completed at", func(candidate *workflow.ExecutionRecord) {
+				candidate.CompletedAt = candidate.CompletedAt.Add(time.Nanosecond)
+			}},
+			{"duration", func(candidate *workflow.ExecutionRecord) { candidate.DurationMs++ }},
+			{"error message", func(candidate *workflow.ExecutionRecord) { candidate.ErrorMessage = "different-secret" }},
+		}
+
+		for _, tt := range mutations {
+			t.Run(tt.name, func(t *testing.T) {
+				historyStore := openSQLiteHistoryStoreForTest(t)
+				require.NoError(t, historyStore.Record(context.Background(), record))
+
+				candidate := *record
+				tt.mutate(&candidate)
+				err := historyStore.Record(context.Background(), &candidate)
+
+				require.ErrorIs(t, err, ErrHistoryRecordConflict)
+				assert.NotContains(t, err.Error(), record.ErrorMessage)
+				assert.NotContains(t, err.Error(), candidate.ErrorMessage)
+			})
+		}
+	})
+
+	t.Run("rejects reuse of a workflow attempt by a different record", func(t *testing.T) {
+		historyStore := openSQLiteHistoryStoreForTest(t)
+		require.NoError(t, historyStore.Record(context.Background(), record))
+
+		conflict := *record
+		conflict.ID = "different-record-id"
+		err := historyStore.Record(context.Background(), &conflict)
+
+		require.ErrorIs(t, err, ErrHistoryRecordConflict)
+		assert.Contains(t, err.Error(), conflict.ID)
+		assert.Contains(t, err.Error(), record.WorkflowID)
+		assert.Contains(t, err.Error(), fmt.Sprint(record.Attempt))
+		assert.NotContains(t, err.Error(), record.ErrorMessage)
+		assert.NotContains(t, strings.ToLower(err.Error()), "sqlite")
+	})
+
+	t.Run("rejects invalid local lineage before insertion", func(t *testing.T) {
+		invalidRecords := []struct {
+			name          string
+			attempt       int
+			resumedFromID string
+		}{
+			{name: "zero attempt", attempt: 0},
+			{name: "negative attempt", attempt: -1},
+			{name: "first attempt has predecessor", attempt: 1, resumedFromID: "previous"},
+			{name: "later attempt lacks predecessor", attempt: 2},
+			{name: "self predecessor", attempt: 2, resumedFromID: "invalid-record"},
+		}
+
+		for _, tt := range invalidRecords {
+			t.Run(tt.name, func(t *testing.T) {
+				historyStore := openSQLiteHistoryStoreForTest(t)
+				invalid := *record
+				invalid.ID = "invalid-record"
+				invalid.WorkflowID = "invalid-workflow"
+				invalid.Attempt = tt.attempt
+				invalid.ResumedFromID = tt.resumedFromID
+
+				err := historyStore.Record(context.Background(), &invalid)
+
+				require.ErrorIs(t, err, workflow.ErrInvalidHistoryAttempt)
+				records, listErr := historyStore.List(context.Background(), &workflow.HistoryFilter{Limit: 10})
+				require.NoError(t, listErr)
+				assert.Empty(t, records)
+			})
+		}
+	})
+
+	t.Run("rejects nonpositive attempts after legacy migration", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "history.db")
+		db, err := sql.Open("sqlite", path)
+		require.NoError(t, err)
+		_, err = db.ExecContext(context.Background(), `CREATE TABLE execution_records (
+			id TEXT PRIMARY KEY,
+			workflow_id TEXT NOT NULL,
+			workflow_name TEXT NOT NULL,
+			status TEXT NOT NULL,
+			exit_code INTEGER NOT NULL DEFAULT 0,
+			started_at INTEGER NOT NULL,
+			completed_at INTEGER NOT NULL,
+			duration_ms INTEGER NOT NULL DEFAULT 0,
+			error_message TEXT NOT NULL DEFAULT ''
+		)`)
+		require.NoError(t, err)
+		require.NoError(t, db.Close())
+
+		historyStore, err := NewSQLiteHistoryStore(path)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, historyStore.Close()) })
+
+		invalid := *record
+		invalid.ID = "post-migration-invalid"
+		invalid.WorkflowID = "post-migration-workflow"
+		invalid.Attempt = 0
+		invalid.ResumedFromID = ""
+		err = historyStore.Record(context.Background(), &invalid)
+
+		require.ErrorIs(t, err, workflow.ErrInvalidHistoryAttempt)
+		records, listErr := historyStore.List(context.Background(), &workflow.HistoryFilter{Limit: 10})
+		require.NoError(t, listErr)
+		assert.Empty(t, records)
+	})
 }
 
 // TestSQLiteHistoryStore_List tests querying execution records with filters
@@ -299,15 +485,15 @@ func TestSQLiteHistoryStore_List(t *testing.T) {
 			},
 			setupData: []*workflow.ExecutionRecord{
 				{
-					ID: "exec-1", WorkflowID: "wf-1", WorkflowName: "workflow-alpha",
+					ID: "exec-1", WorkflowID: "wf-1", Attempt: 1, WorkflowName: "workflow-alpha",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 60000,
 				},
 				{
-					ID: "exec-2", WorkflowID: "wf-2", WorkflowName: "workflow-beta",
+					ID: "exec-2", WorkflowID: "wf-2", Attempt: 1, WorkflowName: "workflow-beta",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 60000,
 				},
 				{
-					ID: "exec-3", WorkflowID: "wf-3", WorkflowName: "workflow-alpha",
+					ID: "exec-3", WorkflowID: "wf-3", Attempt: 1, WorkflowName: "workflow-alpha",
 					Status: "failed", ExitCode: 1, StartedAt: baseTime, CompletedAt: baseTime.Add(2 * time.Minute), DurationMs: 120000,
 				},
 			},
@@ -321,15 +507,15 @@ func TestSQLiteHistoryStore_List(t *testing.T) {
 			},
 			setupData: []*workflow.ExecutionRecord{
 				{
-					ID: "exec-s1", WorkflowID: "wf-1", WorkflowName: "test-workflow",
+					ID: "exec-s1", WorkflowID: "wf-1", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 60000,
 				},
 				{
-					ID: "exec-f1", WorkflowID: "wf-2", WorkflowName: "test-workflow",
+					ID: "exec-f1", WorkflowID: "wf-2", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "failed", ExitCode: 1, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 60000,
 				},
 				{
-					ID: "exec-s2", WorkflowID: "wf-3", WorkflowName: "test-workflow",
+					ID: "exec-s2", WorkflowID: "wf-3", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(2 * time.Minute), DurationMs: 120000,
 				},
 			},
@@ -343,11 +529,11 @@ func TestSQLiteHistoryStore_List(t *testing.T) {
 			},
 			setupData: []*workflow.ExecutionRecord{
 				{
-					ID: "exec-old", WorkflowID: "wf-1", WorkflowName: "test-workflow",
+					ID: "exec-old", WorkflowID: "wf-1", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0, StartedAt: now.Add(-20 * time.Hour), CompletedAt: now.Add(-20 * time.Hour), DurationMs: 60000,
 				},
 				{
-					ID: "exec-recent", WorkflowID: "wf-2", WorkflowName: "test-workflow",
+					ID: "exec-recent", WorkflowID: "wf-2", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0, StartedAt: now.Add(-6 * time.Hour), CompletedAt: now.Add(-6 * time.Hour), DurationMs: 60000,
 				},
 			},
@@ -361,11 +547,11 @@ func TestSQLiteHistoryStore_List(t *testing.T) {
 			},
 			setupData: []*workflow.ExecutionRecord{
 				{
-					ID: "exec-old", WorkflowID: "wf-1", WorkflowName: "test-workflow",
+					ID: "exec-old", WorkflowID: "wf-1", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0, StartedAt: now.Add(-20 * time.Hour), CompletedAt: now.Add(-20 * time.Hour), DurationMs: 60000,
 				},
 				{
-					ID: "exec-recent", WorkflowID: "wf-2", WorkflowName: "test-workflow",
+					ID: "exec-recent", WorkflowID: "wf-2", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0, StartedAt: now.Add(-6 * time.Hour), CompletedAt: now.Add(-6 * time.Hour), DurationMs: 60000,
 				},
 			},
@@ -390,19 +576,19 @@ func TestSQLiteHistoryStore_List(t *testing.T) {
 			},
 			setupData: []*workflow.ExecutionRecord{
 				{
-					ID: "exec-match-1", WorkflowID: "wf-1", WorkflowName: "workflow-alpha",
+					ID: "exec-match-1", WorkflowID: "wf-1", Attempt: 1, WorkflowName: "workflow-alpha",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 60000,
 				},
 				{
-					ID: "exec-no-match-1", WorkflowID: "wf-2", WorkflowName: "workflow-beta",
+					ID: "exec-no-match-1", WorkflowID: "wf-2", Attempt: 1, WorkflowName: "workflow-beta",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 60000,
 				},
 				{
-					ID: "exec-no-match-2", WorkflowID: "wf-3", WorkflowName: "workflow-alpha",
+					ID: "exec-no-match-2", WorkflowID: "wf-3", Attempt: 1, WorkflowName: "workflow-alpha",
 					Status: "failed", ExitCode: 1, StartedAt: baseTime, CompletedAt: baseTime.Add(2 * time.Minute), DurationMs: 120000,
 				},
 				{
-					ID: "exec-match-2", WorkflowID: "wf-4", WorkflowName: "workflow-alpha",
+					ID: "exec-match-2", WorkflowID: "wf-4", Attempt: 1, WorkflowName: "workflow-alpha",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(3 * time.Minute), DurationMs: 180000,
 				},
 			},
@@ -416,7 +602,7 @@ func TestSQLiteHistoryStore_List(t *testing.T) {
 			},
 			setupData: []*workflow.ExecutionRecord{
 				{
-					ID: "exec-1", WorkflowID: "wf-1", WorkflowName: "test-workflow",
+					ID: "exec-1", WorkflowID: "wf-1", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 60000,
 				},
 			},
@@ -494,19 +680,19 @@ func TestSQLiteHistoryStore_GetStats(t *testing.T) {
 			filter: nil,
 			setupData: []*workflow.ExecutionRecord{
 				{
-					ID: "exec-s1", WorkflowID: "wf-1", WorkflowName: "test-workflow",
+					ID: "exec-s1", WorkflowID: "wf-1", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 60000,
 				},
 				{
-					ID: "exec-s2", WorkflowID: "wf-2", WorkflowName: "test-workflow",
+					ID: "exec-s2", WorkflowID: "wf-2", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(2 * time.Minute), DurationMs: 120000,
 				},
 				{
-					ID: "exec-f1", WorkflowID: "wf-3", WorkflowName: "test-workflow",
+					ID: "exec-f1", WorkflowID: "wf-3", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "failed", ExitCode: 1, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 60000,
 				},
 				{
-					ID: "exec-c1", WorkflowID: "wf-4", WorkflowName: "test-workflow",
+					ID: "exec-c1", WorkflowID: "wf-4", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "cancelled", ExitCode: 130, StartedAt: baseTime, CompletedAt: baseTime.Add(30 * time.Second), DurationMs: 30000,
 				},
 			},
@@ -526,15 +712,15 @@ func TestSQLiteHistoryStore_GetStats(t *testing.T) {
 			},
 			setupData: []*workflow.ExecutionRecord{
 				{
-					ID: "exec-1", WorkflowID: "wf-1", WorkflowName: "workflow-alpha",
+					ID: "exec-1", WorkflowID: "wf-1", Attempt: 1, WorkflowName: "workflow-alpha",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 100000,
 				},
 				{
-					ID: "exec-2", WorkflowID: "wf-2", WorkflowName: "workflow-beta",
+					ID: "exec-2", WorkflowID: "wf-2", Attempt: 1, WorkflowName: "workflow-beta",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 200000,
 				},
 				{
-					ID: "exec-3", WorkflowID: "wf-3", WorkflowName: "workflow-alpha",
+					ID: "exec-3", WorkflowID: "wf-3", Attempt: 1, WorkflowName: "workflow-alpha",
 					Status: "failed", ExitCode: 1, StartedAt: baseTime, CompletedAt: baseTime.Add(2 * time.Minute), DurationMs: 50000,
 				},
 			},
@@ -552,15 +738,15 @@ func TestSQLiteHistoryStore_GetStats(t *testing.T) {
 			filter: nil,
 			setupData: []*workflow.ExecutionRecord{
 				{
-					ID: "exec-1", WorkflowID: "wf-1", WorkflowName: "test-workflow",
+					ID: "exec-1", WorkflowID: "wf-1", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 100000,
 				},
 				{
-					ID: "exec-2", WorkflowID: "wf-2", WorkflowName: "test-workflow",
+					ID: "exec-2", WorkflowID: "wf-2", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 200000,
 				},
 				{
-					ID: "exec-3", WorkflowID: "wf-3", WorkflowName: "test-workflow",
+					ID: "exec-3", WorkflowID: "wf-3", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0, StartedAt: baseTime, CompletedAt: baseTime.Add(1 * time.Minute), DurationMs: 300000,
 				},
 			},
@@ -580,7 +766,7 @@ func TestSQLiteHistoryStore_GetStats(t *testing.T) {
 			},
 			setupData: []*workflow.ExecutionRecord{
 				{
-					ID: "exec-1", WorkflowID: "wf-1", WorkflowName: "test-workflow",
+					ID: "exec-1", WorkflowID: "wf-1", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0,
 					StartedAt:   time.Now().Add(-2 * time.Hour),
 					CompletedAt: time.Now().Add(-2 * time.Hour),
@@ -660,21 +846,21 @@ func TestSQLiteHistoryStore_Cleanup(t *testing.T) {
 			olderThan: 24 * time.Hour,
 			setupData: []*workflow.ExecutionRecord{
 				{
-					ID: "exec-old-1", WorkflowID: "wf-1", WorkflowName: "test-workflow",
+					ID: "exec-old-1", WorkflowID: "wf-1", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0,
 					StartedAt:   now.Add(-48 * time.Hour),
 					CompletedAt: now.Add(-48 * time.Hour),
 					DurationMs:  60000,
 				},
 				{
-					ID: "exec-old-2", WorkflowID: "wf-2", WorkflowName: "test-workflow",
+					ID: "exec-old-2", WorkflowID: "wf-2", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0,
 					StartedAt:   now.Add(-36 * time.Hour),
 					CompletedAt: now.Add(-36 * time.Hour),
 					DurationMs:  60000,
 				},
 				{
-					ID: "exec-recent", WorkflowID: "wf-3", WorkflowName: "test-workflow",
+					ID: "exec-recent", WorkflowID: "wf-3", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0,
 					StartedAt:   now.Add(-12 * time.Hour),
 					CompletedAt: now.Add(-12 * time.Hour),
@@ -690,14 +876,14 @@ func TestSQLiteHistoryStore_Cleanup(t *testing.T) {
 			olderThan: 1 * time.Hour,
 			setupData: []*workflow.ExecutionRecord{
 				{
-					ID: "exec-recent-1", WorkflowID: "wf-1", WorkflowName: "test-workflow",
+					ID: "exec-recent-1", WorkflowID: "wf-1", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0,
 					StartedAt:   now.Add(-30 * time.Minute),
 					CompletedAt: now.Add(-30 * time.Minute),
 					DurationMs:  60000,
 				},
 				{
-					ID: "exec-recent-2", WorkflowID: "wf-2", WorkflowName: "test-workflow",
+					ID: "exec-recent-2", WorkflowID: "wf-2", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0,
 					StartedAt:   now.Add(-15 * time.Minute),
 					CompletedAt: now.Add(-15 * time.Minute),
@@ -713,7 +899,7 @@ func TestSQLiteHistoryStore_Cleanup(t *testing.T) {
 			olderThan: 24 * time.Hour,
 			setupData: []*workflow.ExecutionRecord{
 				{
-					ID: "exec-1", WorkflowID: "wf-1", WorkflowName: "test-workflow",
+					ID: "exec-1", WorkflowID: "wf-1", Attempt: 1, WorkflowName: "test-workflow",
 					Status: "success", ExitCode: 0,
 					StartedAt:   now.Add(-48 * time.Hour),
 					CompletedAt: now.Add(-48 * time.Hour),
@@ -867,6 +1053,7 @@ func TestSQLiteHistoryStore_ClosedState(t *testing.T) {
 				record := &workflow.ExecutionRecord{
 					ID:           "test-id",
 					WorkflowID:   "wf-1",
+					Attempt:      1,
 					WorkflowName: "test-workflow",
 					Status:       "success",
 					ExitCode:     0,
@@ -895,6 +1082,81 @@ func TestSQLiteHistoryStore_ClosedState(t *testing.T) {
 
 // TestSQLiteHistoryStore_ConcurrentAccess tests thread-safety
 func TestSQLiteHistoryStore_ConcurrentAccess(t *testing.T) {
+	t.Run("identical replay across store instances", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "history.db")
+		firstStore, err := NewSQLiteHistoryStore(path)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, firstStore.Close()) })
+		secondStore, err := NewSQLiteHistoryStore(path)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, secondStore.Close()) })
+
+		record := newSQLiteHistoryRecord(
+			"shared-record",
+			"shared-workflow",
+			1,
+			"",
+			time.Unix(1_700_400_000, 123),
+		)
+		errorsByWriter := recordConcurrently(
+			context.Background(),
+			[]*SQLiteHistoryStore{firstStore, secondStore},
+			[]*workflow.ExecutionRecord{record, record},
+		)
+		for _, recordErr := range errorsByWriter {
+			require.NoError(t, recordErr)
+		}
+
+		records, err := firstStore.List(context.Background(), &workflow.HistoryFilter{
+			WorkflowID: record.WorkflowID,
+			Limit:      10,
+		})
+		require.NoError(t, err)
+		require.Len(t, records, 1)
+		assert.Equal(t, record, records[0])
+	})
+
+	t.Run("competing ordinal claims across store instances", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "history.db")
+		firstStore, err := NewSQLiteHistoryStore(path)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, firstStore.Close()) })
+		secondStore, err := NewSQLiteHistoryStore(path)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, secondStore.Close()) })
+
+		completedAt := time.Unix(1_700_500_000, 456)
+		firstRecord := newSQLiteHistoryRecord("claim-one", "shared-workflow", 1, "", completedAt)
+		secondRecord := newSQLiteHistoryRecord("claim-two", "shared-workflow", 1, "", completedAt)
+		errorsByWriter := recordConcurrently(
+			context.Background(),
+			[]*SQLiteHistoryStore{firstStore, secondStore},
+			[]*workflow.ExecutionRecord{firstRecord, secondRecord},
+		)
+
+		successes := 0
+		conflicts := 0
+		for _, recordErr := range errorsByWriter {
+			switch {
+			case recordErr == nil:
+				successes++
+			case errors.Is(recordErr, ErrHistoryRecordConflict):
+				conflicts++
+			default:
+				t.Fatalf("unexpected concurrent Record error: %v", recordErr)
+			}
+		}
+		assert.Equal(t, 1, successes)
+		assert.Equal(t, 1, conflicts)
+
+		records, err := firstStore.List(context.Background(), &workflow.HistoryFilter{
+			WorkflowID: firstRecord.WorkflowID,
+			Limit:      10,
+		})
+		require.NoError(t, err)
+		assert.Len(t, records, 1)
+	})
+
 	t.Run("concurrent writes", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		path := filepath.Join(tmpDir, "history.db")
@@ -915,6 +1177,7 @@ func TestSQLiteHistoryStore_ConcurrentAccess(t *testing.T) {
 				record := &workflow.ExecutionRecord{
 					ID:           fmt.Sprintf("exec-%d", n),
 					WorkflowID:   fmt.Sprintf("wf-%d", n),
+					Attempt:      1,
 					WorkflowName: "concurrent-workflow",
 					Status:       "success",
 					ExitCode:     0,
@@ -950,6 +1213,7 @@ func TestSQLiteHistoryStore_ConcurrentAccess(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: "test-workflow",
 				Status:       "success",
 				ExitCode:     0,
@@ -998,6 +1262,7 @@ func TestSQLiteHistoryStore_ConcurrentAccess(t *testing.T) {
 				record := &workflow.ExecutionRecord{
 					ID:           fmt.Sprintf("exec-write-%d", n),
 					WorkflowID:   fmt.Sprintf("wf-%d", n),
+					Attempt:      1,
 					WorkflowName: "mixed-workflow",
 					Status:       "success",
 					ExitCode:     0,
@@ -1028,6 +1293,27 @@ func TestSQLiteHistoryStore_ConcurrentAccess(t *testing.T) {
 	})
 }
 
+func recordConcurrently(
+	ctx context.Context,
+	stores []*SQLiteHistoryStore,
+	records []*workflow.ExecutionRecord,
+) []error {
+	start := make(chan struct{})
+	errorsByWriter := make([]error, len(stores))
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(len(stores))
+	for index := range stores {
+		go func() {
+			defer waitGroup.Done()
+			<-start
+			errorsByWriter[index] = stores[index].Record(ctx, records[index])
+		}()
+	}
+	close(start)
+	waitGroup.Wait()
+	return errorsByWriter
+}
+
 // TestSQLiteHistoryStore_EdgeCases tests edge cases and error paths
 func TestSQLiteHistoryStore_EdgeCases(t *testing.T) {
 	t.Run("empty workflow name in filter", func(t *testing.T) {
@@ -1045,6 +1331,7 @@ func TestSQLiteHistoryStore_EdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: fmt.Sprintf("workflow-%d", i),
 				Status:       "success",
 				ExitCode:     0,
@@ -1079,6 +1366,7 @@ func TestSQLiteHistoryStore_EdgeCases(t *testing.T) {
 		record := &workflow.ExecutionRecord{
 			ID:           "exec-1",
 			WorkflowID:   "wf-1",
+			Attempt:      1,
 			WorkflowName: "test-workflow",
 			Status:       "success",
 			ExitCode:     0,
@@ -1113,6 +1401,7 @@ func TestSQLiteHistoryStore_EdgeCases(t *testing.T) {
 		record := &workflow.ExecutionRecord{
 			ID:           "exec-1",
 			WorkflowID:   "wf-1",
+			Attempt:      1,
 			WorkflowName: "test-workflow",
 			Status:       "success",
 			ExitCode:     0,
@@ -1149,6 +1438,7 @@ func TestSQLiteHistoryStore_EdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: "test-workflow",
 				Status:       "success",
 				ExitCode:     0,
@@ -1184,6 +1474,7 @@ func TestSQLiteHistoryStore_EdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: "production-workflow",
 				Status:       "success",
 				ExitCode:     0,
@@ -1242,6 +1533,7 @@ func TestSQLiteHistoryStore_EdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: fmt.Sprintf("workflow-%d", i%10), // 10 different workflows
 				Status:       "success",
 				ExitCode:     0,
@@ -1292,6 +1584,7 @@ func TestSQLiteHistoryStore_EdgeCases(t *testing.T) {
 		record := &workflow.ExecutionRecord{
 			ID:           "exec-large-error",
 			WorkflowID:   "wf-1",
+			Attempt:      1,
 			WorkflowName: "test-workflow",
 			Status:       "failed",
 			ExitCode:     1,
@@ -1339,6 +1632,7 @@ func TestSQLiteHistoryStore_List_ErrorPaths(t *testing.T) {
 				record := &workflow.ExecutionRecord{
 					ID:           "test-id",
 					WorkflowID:   "wf-1",
+					Attempt:      1,
 					WorkflowName: "test-workflow",
 					Status:       "success",
 					ExitCode:     0,
@@ -1404,6 +1698,7 @@ func TestSQLiteHistoryStore_GetStats_ErrorPaths(t *testing.T) {
 				record := &workflow.ExecutionRecord{
 					ID:           "test-id",
 					WorkflowID:   "wf-1",
+					Attempt:      1,
 					WorkflowName: "test-workflow",
 					Status:       "success",
 					ExitCode:     0,
@@ -1469,6 +1764,7 @@ func TestSQLiteHistoryStore_Cleanup_ErrorPaths(t *testing.T) {
 				record := &workflow.ExecutionRecord{
 					ID:           "test-id",
 					WorkflowID:   "wf-1",
+					Attempt:      1,
 					WorkflowName: "test-workflow",
 					Status:       "success",
 					ExitCode:     0,
@@ -1530,6 +1826,7 @@ func TestSQLiteHistoryStore_AdditionalEdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: "test-workflow",
 				Status:       "success",
 				ExitCode:     0,
@@ -1565,6 +1862,7 @@ func TestSQLiteHistoryStore_AdditionalEdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: "test-workflow",
 				Status:       "success",
 				ExitCode:     0,
@@ -1618,6 +1916,7 @@ func TestSQLiteHistoryStore_AdditionalEdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: name,
 				Status:       "success",
 				ExitCode:     0,
@@ -1695,6 +1994,7 @@ func TestSQLiteHistoryStore_AdditionalEdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: tc.name,
 				Status:       "success",
 				ExitCode:     0,
@@ -1751,6 +2051,7 @@ func TestSQLiteHistoryStore_AdditionalEdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: tc.name,
 				Status:       "success",
 				ExitCode:     0,
@@ -1797,6 +2098,7 @@ func TestSQLiteHistoryStore_AdditionalEdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: string(longName),
 				Status:       "success",
 				ExitCode:     0,
@@ -1838,6 +2140,7 @@ func TestSQLiteHistoryStore_AdditionalEdgeCases(t *testing.T) {
 		record := &workflow.ExecutionRecord{
 			ID:           "exec-1",
 			WorkflowID:   "wf-1",
+			Attempt:      1,
 			WorkflowName: "test-workflow",
 			Status:       "success",
 			ExitCode:     0,
@@ -1881,6 +2184,7 @@ func TestSQLiteHistoryStore_AdditionalEdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: "test-workflow",
 				Status:       "success",
 				ExitCode:     0,
@@ -1920,6 +2224,7 @@ func TestSQLiteHistoryStore_AdditionalEdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: "test-workflow",
 				Status:       "success",
 				ExitCode:     code,
@@ -1971,6 +2276,7 @@ func TestSQLiteHistoryStore_AdditionalEdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: "test-workflow",
 				Status:       status,
 				ExitCode:     0,
@@ -2012,6 +2318,7 @@ func TestSQLiteHistoryStore_AdditionalEdgeCases(t *testing.T) {
 			record := &workflow.ExecutionRecord{
 				ID:           fmt.Sprintf("exec-%d", i),
 				WorkflowID:   fmt.Sprintf("wf-%d", i),
+				Attempt:      1,
 				WorkflowName: "test-workflow",
 				Status:       "success",
 				ExitCode:     0,
@@ -2054,6 +2361,157 @@ func TestSQLiteHistoryStore_AdditionalEdgeCases(t *testing.T) {
 	})
 }
 
+func TestSQLiteHistoryStore_ListScansAttemptLineageAndFiltersWorkflowID(t *testing.T) {
+	t.Parallel()
+
+	historyStore := openSQLiteHistoryStoreForTest(t)
+	ctx := context.Background()
+	completedAt := time.Unix(1_700_100_000, 0)
+	targetRecords := []*workflow.ExecutionRecord{
+		newSQLiteHistoryRecord("target-1", "target-workflow", 1, "", completedAt),
+		newSQLiteHistoryRecord("target-2", "target-workflow", 2, "target-1", completedAt),
+		newSQLiteHistoryRecord("target-3", "target-workflow", 3, "target-2", completedAt),
+	}
+	for _, record := range targetRecords {
+		require.NoError(t, historyStore.Record(ctx, record))
+	}
+	for index := 0; index < defaultSQLiteLimit; index++ {
+		record := newSQLiteHistoryRecord(
+			fmt.Sprintf("other-%02d", index),
+			fmt.Sprintf("other-workflow-%02d", index),
+			1,
+			"",
+			completedAt.Add(-time.Duration(index+1)*time.Second),
+		)
+		require.NoError(t, historyStore.Record(ctx, record))
+	}
+
+	defaultRecords, err := historyStore.List(ctx, nil)
+	require.NoError(t, err)
+	assert.Len(t, defaultRecords, defaultSQLiteLimit)
+
+	records, err := historyStore.List(ctx, &workflow.HistoryFilter{
+		WorkflowID: "target-workflow",
+		Limit:      10,
+	})
+	require.NoError(t, err)
+	require.Len(t, records, 3)
+	assert.Equal(t, []string{"target-3", "target-2", "target-1"}, []string{
+		records[0].ID,
+		records[1].ID,
+		records[2].ID,
+	})
+	assert.Equal(t, []int{3, 2, 1}, []int{
+		records[0].Attempt,
+		records[1].Attempt,
+		records[2].Attempt,
+	})
+	assert.Equal(t, []string{"target-2", "target-1", ""}, []string{
+		records[0].ResumedFromID,
+		records[1].ResumedFromID,
+		records[2].ResumedFromID,
+	})
+	for _, record := range records {
+		assert.Equal(t, "target-workflow", record.WorkflowID)
+	}
+}
+
+func TestSQLiteHistoryStore_GetStatsFiltersWorkflowID(t *testing.T) {
+	t.Parallel()
+
+	historyStore := openSQLiteHistoryStoreForTest(t)
+	ctx := context.Background()
+	baseTime := time.Unix(1_700_200_000, 0)
+	records := []*workflow.ExecutionRecord{
+		newSQLiteHistoryRecord("target-success", "target-workflow", 1, "", baseTime),
+		newSQLiteHistoryRecord("target-failed", "target-workflow", 2, "target-success", baseTime.Add(time.Second)),
+		newSQLiteHistoryRecord("other-cancelled", "other-workflow", 1, "", baseTime.Add(2*time.Second)),
+	}
+	records[0].Status = "success"
+	records[0].DurationMs = 100
+	records[1].Status = "failed"
+	records[1].DurationMs = 300
+	records[2].Status = "cancelled"
+	records[2].DurationMs = 9_999
+	for _, record := range records {
+		require.NoError(t, historyStore.Record(ctx, record))
+	}
+
+	stats, err := historyStore.GetStats(ctx, &workflow.HistoryFilter{
+		WorkflowID: "target-workflow",
+		Limit:      1,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, &workflow.HistoryStats{
+		TotalExecutions: 2,
+		SuccessCount:    1,
+		FailedCount:     1,
+		CancelledCount:  0,
+		AvgDurationMs:   200,
+	}, stats)
+}
+
+func BenchmarkSQLiteHistoryStore_ListAttemptsByWorkflowID(b *testing.B) {
+	historyStore, err := NewSQLiteHistoryStore(filepath.Join(b.TempDir(), "history.db"))
+	require.NoError(b, err)
+	b.Cleanup(func() { require.NoError(b, historyStore.Close()) })
+
+	ctx := context.Background()
+	completedAt := time.Unix(1_700_300_000, 0)
+	for workflowIndex := 0; workflowIndex < 10; workflowIndex++ {
+		workflowID := fmt.Sprintf("workflow-%02d", workflowIndex)
+		predecessor := ""
+		for attempt := 1; attempt <= 100; attempt++ {
+			id := fmt.Sprintf("%s-attempt-%03d", workflowID, attempt)
+			record := newSQLiteHistoryRecord(id, workflowID, attempt, predecessor, completedAt.Add(time.Duration(attempt)))
+			require.NoError(b, historyStore.Record(ctx, record))
+			predecessor = id
+		}
+	}
+
+	filter := &workflow.HistoryFilter{WorkflowID: "workflow-05", Limit: 100}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		records, listErr := historyStore.List(ctx, filter)
+		if listErr != nil {
+			b.Fatal(listErr)
+		}
+		if len(records) != 100 {
+			b.Fatalf("got %d records, want 100", len(records))
+		}
+	}
+}
+
+func openSQLiteHistoryStoreForTest(t *testing.T) *SQLiteHistoryStore {
+	t.Helper()
+
+	historyStore, err := NewSQLiteHistoryStore(filepath.Join(t.TempDir(), "history.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, historyStore.Close()) })
+	return historyStore
+}
+
+func newSQLiteHistoryRecord(
+	id string,
+	workflowID string,
+	attempt int,
+	resumedFromID string,
+	completedAt time.Time,
+) *workflow.ExecutionRecord {
+	return &workflow.ExecutionRecord{
+		ID:            id,
+		WorkflowID:    workflowID,
+		Attempt:       attempt,
+		ResumedFromID: resumedFromID,
+		WorkflowName:  "workflow-name",
+		Status:        "success",
+		StartedAt:     completedAt.Add(-time.Second),
+		CompletedAt:   completedAt,
+		DurationMs:    1_000,
+	}
+}
+
 // Helper function to generate test records
 func generateRecords(count int, baseTime time.Time) []*workflow.ExecutionRecord {
 	records := make([]*workflow.ExecutionRecord, count)
@@ -2061,6 +2519,7 @@ func generateRecords(count int, baseTime time.Time) []*workflow.ExecutionRecord 
 		records[i] = &workflow.ExecutionRecord{
 			ID:           fmt.Sprintf("exec-%d", i),
 			WorkflowID:   fmt.Sprintf("wf-%d", i),
+			Attempt:      1,
 			WorkflowName: fmt.Sprintf("workflow-%d", i%3), // Rotate through 3 workflow names
 			Status:       []string{"success", "failed", "cancelled"}[i%3],
 			ExitCode:     i % 2,

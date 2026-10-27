@@ -2,11 +2,13 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,15 +23,23 @@ import (
 )
 
 type finalizationTestTrace struct {
+	mu                  sync.Mutex
 	calls               []string
 	terminalCheckpoints []*workflow.ExecutionContext
 	historyRecords      []*workflow.ExecutionRecord
 	auditEvents         []workflow.AuditEvent
 	domainEvents        []*pluginmodel.DomainEvent
 	hookCalls           map[string]int
+	commandCalls        int
 	checkpointErr       error
+	checkpointErrors    []error
 	historyErr          error
+	historyErrors       []error
 	auditErr            error
+	stepFailureErr      error
+	stepFailureSuccess  bool
+	historyStarted      chan struct{}
+	historyRelease      chan struct{}
 	allContextsActive   bool
 }
 
@@ -43,33 +53,72 @@ func (t *finalizationTestTrace) recordContext(ctx context.Context) {
 	}
 }
 
+func (t *finalizationTestTrace) snapshot() (calls []string, records []*workflow.ExecutionRecord, audits []workflow.AuditEvent) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return append([]string(nil), t.calls...), append([]*workflow.ExecutionRecord(nil), t.historyRecords...),
+		append([]workflow.AuditEvent(nil), t.auditEvents...)
+}
+
 type finalizationTestStore struct {
+	mu     sync.Mutex
 	trace  *finalizationTestTrace
 	states map[string]*workflow.ExecutionContext
 }
 
 func (s *finalizationTestStore) Save(ctx context.Context, state *workflow.ExecutionContext) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.states[state.WorkflowID] = state
 	if !state.CompletedAt.IsZero() && (state.Status == workflow.StatusCompleted ||
 		state.Status == workflow.StatusFailed || state.Status == workflow.StatusCancelled) {
 		s.trace.calls = append(s.trace.calls, "checkpoint")
 		s.trace.terminalCheckpoints = append(s.trace.terminalCheckpoints, state)
 		s.trace.recordContext(ctx)
+		if len(s.trace.checkpointErrors) > 0 {
+			err := s.trace.checkpointErrors[0]
+			s.trace.checkpointErrors = s.trace.checkpointErrors[1:]
+			return err
+		}
 		return s.trace.checkpointErr
 	}
 	return nil
 }
 
 func (s *finalizationTestStore) Load(_ context.Context, id string) (*workflow.ExecutionContext, error) {
-	return s.states[id], nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state := s.states[id]
+	if state == nil {
+		return nil, nil
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return nil, err
+	}
+	var loaded workflow.ExecutionContext
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		return nil, err
+	}
+	// JSONStore returns a distinct context, but retaining monotonic clock data in
+	// this fake keeps exact-replay assertions focused on lifecycle fields rather
+	// than encoding details of time.Time.
+	loaded.StartedAt = state.StartedAt
+	loaded.UpdatedAt = state.UpdatedAt
+	loaded.CompletedAt = state.GetCompletedAt()
+	return &loaded, nil
 }
 
 func (s *finalizationTestStore) Delete(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	delete(s.states, id)
 	return nil
 }
 
 func (s *finalizationTestStore) List(_ context.Context) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	ids := make([]string, 0, len(s.states))
 	for id := range s.states {
 		ids = append(ids, id)
@@ -80,13 +129,33 @@ func (s *finalizationTestStore) List(_ context.Context) ([]string, error) {
 type finalizationTestHistoryStore struct{ trace *finalizationTestTrace }
 
 func (s *finalizationTestHistoryStore) Record(ctx context.Context, record *workflow.ExecutionRecord) error {
+	s.trace.mu.Lock()
 	s.trace.calls = append(s.trace.calls, "history")
-	s.trace.historyRecords = append(s.trace.historyRecords, record)
+	recordCopy := *record
+	s.trace.historyRecords = append(s.trace.historyRecords, &recordCopy)
 	s.trace.recordContext(ctx)
-	return s.trace.historyErr
+	err := s.trace.historyErr
+	if len(s.trace.historyErrors) > 0 {
+		err = s.trace.historyErrors[0]
+		s.trace.historyErrors = s.trace.historyErrors[1:]
+	}
+	started, release := s.trace.historyStarted, s.trace.historyRelease
+	s.trace.mu.Unlock()
+	if started != nil {
+		select {
+		case started <- struct{}{}:
+		default:
+		}
+	}
+	if release != nil {
+		<-release
+	}
+	return err
 }
 
 func (s *finalizationTestHistoryStore) List(context.Context, *workflow.HistoryFilter) ([]*workflow.ExecutionRecord, error) {
+	s.trace.mu.Lock()
+	defer s.trace.mu.Unlock()
 	return s.trace.historyRecords, nil
 }
 
@@ -102,6 +171,8 @@ func (*finalizationTestHistoryStore) Close() error { return nil }
 type finalizationTestAuditWriter struct{ trace *finalizationTestTrace }
 
 func (w *finalizationTestAuditWriter) Write(ctx context.Context, event *workflow.AuditEvent) error {
+	w.trace.mu.Lock()
+	defer w.trace.mu.Unlock()
 	w.trace.auditEvents = append(w.trace.auditEvents, *event)
 	if event.Event == workflow.EventWorkflowCompleted {
 		w.trace.calls = append(w.trace.calls, "audit")
@@ -129,8 +200,17 @@ func (*finalizationTestEventPublisher) Close() error { return nil }
 type finalizationTestExecutor struct{ trace *finalizationTestTrace }
 
 func (e *finalizationTestExecutor) Execute(_ context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
+	e.trace.mu.Lock()
+	e.trace.commandCalls++
+	e.trace.mu.Unlock()
 	switch cmd.Program {
 	case "step-failure":
+		if e.trace.stepFailureSuccess {
+			return &ports.CommandResult{}, nil
+		}
+		if e.trace.stepFailureErr != nil {
+			return &ports.CommandResult{ExitCode: 23}, e.trace.stepFailureErr
+		}
 		return &ports.CommandResult{ExitCode: 23, Stderr: "synthetic step failure"}, nil
 	case "cancel":
 		return nil, context.Canceled
@@ -152,18 +232,44 @@ func (e *finalizationTestExecutor) Execute(_ context.Context, cmd *ports.Command
 	return &ports.CommandResult{}, nil
 }
 
-type finalizationTestLogger struct{ entries []string }
+type finalizationTestLogEntry struct {
+	level   string
+	message string
+	fields  []any
+}
+
+type finalizationTestLogger struct {
+	mu      sync.Mutex
+	entries []string
+	logs    []finalizationTestLogEntry
+}
 
 func (*finalizationTestLogger) Debug(string, ...any) {}
 func (*finalizationTestLogger) Info(string, ...any)  {}
 func (l *finalizationTestLogger) Warn(message string, fields ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.entries = append(l.entries, fmt.Sprint(append([]any{message}, fields...)...))
+	l.logs = append(l.logs, finalizationTestLogEntry{
+		level: "warn", message: message, fields: append([]any(nil), fields...),
+	})
 }
 
 func (l *finalizationTestLogger) Error(message string, fields ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.entries = append(l.entries, fmt.Sprint(append([]any{message}, fields...)...))
+	l.logs = append(l.logs, finalizationTestLogEntry{
+		level: "error", message: message, fields: append([]any(nil), fields...),
+	})
 }
 func (l *finalizationTestLogger) WithContext(map[string]any) ports.Logger { return l }
+
+func (l *finalizationTestLogger) snapshot() ([]string, []finalizationTestLogEntry) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.entries...), append([]finalizationTestLogEntry(nil), l.logs...)
+}
 
 type finalizationTestRig struct {
 	service *ExecutionService
@@ -307,7 +413,7 @@ func TestExecutionFinalizationCoversEveryTerminalOutcome(t *testing.T) {
 				}
 			}
 
-			require.Len(t, rig.trace.terminalCheckpoints, 1)
+			require.Len(t, rig.trace.terminalCheckpoints, 2)
 			require.Len(t, rig.trace.historyRecords, 1)
 			completedAudits := make([]workflow.AuditEvent, 0, 1)
 			for _, event := range rig.trace.auditEvents {
@@ -325,13 +431,14 @@ func TestExecutionFinalizationCoversEveryTerminalOutcome(t *testing.T) {
 			require.Len(t, terminalEvents, 1)
 
 			executionID := execCtx.WorkflowID
-			assert.Equal(t, executionID, rig.trace.historyRecords[0].ID)
+			assert.Equal(t, execCtx.HistoryRecordID, rig.trace.historyRecords[0].ID)
+			assert.Equal(t, executionID, rig.trace.historyRecords[0].WorkflowID)
 			assert.Equal(t, executionID, completedAudits[0].ExecutionID)
 			assert.Equal(t, executionID, terminalEvents[0].Metadata["workflow_id"])
 			assert.Equal(t, execCtx.ExitCode, rig.trace.historyRecords[0].ExitCode)
 			require.NotNil(t, completedAudits[0].ExitCode)
 			assert.Equal(t, execCtx.ExitCode, *completedAudits[0].ExitCode)
-			assert.Equal(t, []string{"checkpoint", "history", "audit", "event", "hook"}, rig.trace.calls)
+			assert.Equal(t, []string{"audit", "checkpoint", "history", "checkpoint", "event", "hook"}, rig.trace.calls)
 			assert.Equal(t, 1, rig.trace.hookCalls[tt.wantHook])
 			assert.True(t, rig.trace.allContextsActive, "terminal projections must use a non-cancelled context")
 		})
@@ -373,7 +480,12 @@ func TestExecutionFinalizationCoversEveryTerminalOutcome(t *testing.T) {
 			require.NotNil(t, execCtx)
 			assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 			assert.Equal(t, 1, rig.trace.hookCalls["end-hook"])
-			assert.Equal(t, []string{"checkpoint", "history", "audit", "event", "hook"}, rig.trace.calls)
+			wantCalls := map[string][]string{
+				"checkpoint": {"audit", "checkpoint", "event", "hook"},
+				"history":    {"audit", "checkpoint", "history", "event", "hook"},
+				"audit":      {"audit", "checkpoint", "history", "checkpoint", "event", "hook"},
+			}[projection]
+			assert.Equal(t, wantCalls, rig.trace.calls)
 			matchingLogs := 0
 			for _, entry := range rig.logger.entries {
 				if strings.Contains(entry, injectedErr.Error()) {
@@ -381,7 +493,11 @@ func TestExecutionFinalizationCoversEveryTerminalOutcome(t *testing.T) {
 				}
 				assert.NotContains(t, entry, "CONFIDENTIAL_PROJECTION_CANARY")
 			}
-			assert.Equal(t, 1, matchingLogs, "each projection failure must be logged exactly once")
+			wantMatchingLogs := 0
+			if projection == "audit" {
+				wantMatchingLogs = 1
+			}
+			assert.Equal(t, wantMatchingLogs, matchingLogs, "history diagnostics must not expose raw persistence errors")
 		})
 	}
 
@@ -408,6 +524,376 @@ func TestExecutionFinalizationCoversEveryTerminalOutcome(t *testing.T) {
 		assert.Equal(t, 1, matchingLogs)
 		assert.Len(t, rig.trace.historyRecords, 1)
 	})
+}
+
+func TestExecutionService_DuplicateTerminationRecordsOnce(t *testing.T) {
+	wf := finalizationTestWorkflow("resume-command", workflow.TerminalSuccess, 0, "", "end-hook")
+	rig := newFinalizationTestRig(t, wf, false)
+	started := time.Date(2026, time.October, 24, 10, 0, 0, 0, time.UTC)
+	pending := workflow.NewExecutionContext("stable-workflow-id", wf.Name)
+	pending.StartedAt = started
+	pending.CurrentStep = "execute"
+	pending.SetStatus(workflow.StatusFailed)
+	pending.SetCompletedAt(started.Add(3 * time.Second))
+	pending.ExitCode = 17
+	pending.SetStepState("zeta", workflow.StepState{Status: workflow.StatusFailed, Error: "CONFIDENTIAL_ZETA_CANARY", CompletedAt: pending.CompletedAt})
+	pending.SetStepState("alpha", workflow.StepState{Status: workflow.StatusFailed, Error: "deterministic failure", CompletedAt: pending.CompletedAt})
+	require.NoError(t, pending.BeginInitialHistoryAttempt("attempt-record-1"))
+	rig.store.states[pending.WorkflowID] = pending
+	rig.trace.historyErrors = []error{errors.New("uncertain insert"), nil, nil}
+	rig.trace.historyStarted = make(chan struct{}, 1)
+	rig.trace.historyRelease = make(chan struct{})
+
+	start := make(chan struct{})
+	errCh := make(chan error, 12)
+	var workers sync.WaitGroup
+	for range 12 {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			_, err := rig.service.Resume(context.Background(), pending.WorkflowID, nil, "current")
+			errCh <- err
+		}()
+	}
+	close(start)
+	select {
+	case <-rig.trace.historyStarted:
+	case <-time.After(time.Second):
+		t.Error("public resume boundary did not reach history persistence")
+	}
+	_, records, _ := rig.trace.snapshot()
+	assert.Len(t, records, 1, "duplicate terminal notifications must not enter the in-flight writer")
+	var failures int
+	for range 11 {
+		select {
+		case concurrentErr := <-errCh:
+			if concurrentErr != nil {
+				failures++
+			}
+		case <-time.After(time.Second):
+			t.Fatal("concurrent duplicate did not return while the winning writer was in flight")
+		}
+	}
+	close(rig.trace.historyRelease)
+	workers.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			failures++
+		}
+	}
+	assert.Positive(t, failures, "the failed winning persistence must be observable through Resume")
+
+	resumed, err := rig.service.Resume(context.Background(), pending.WorkflowID, nil, "current")
+	require.NoError(t, err)
+	require.NotNil(t, resumed)
+	_, records, audits := rig.trace.snapshot()
+	require.GreaterOrEqual(t, len(records), 3)
+	first, replay := records[0], records[1]
+	assert.Equal(t, *first, *replay, "an uncertain insert retry must replay the exact terminal record")
+	assert.Equal(t, "attempt-record-1", first.ID)
+	assert.Equal(t, "stable-workflow-id", first.WorkflowID)
+	assert.Equal(t, 1, first.Attempt)
+	assert.Equal(t, workflow.StatusFailed.String(), first.Status)
+	assert.Equal(t, started, first.StartedAt)
+	assert.Equal(t, started.Add(3*time.Second), first.CompletedAt)
+	assert.Equal(t, int64(3000), first.DurationMs)
+	assert.Equal(t, 17, first.ExitCode)
+	assert.Equal(t, "deterministic failure", first.ErrorMessage, "tied timestamps must select the lexicographically first failed step")
+	var completionAudits int
+	for _, event := range audits {
+		if event.Event == workflow.EventWorkflowCompleted {
+			completionAudits++
+		}
+	}
+	assert.Equal(t, 3, completionAudits,
+		"a separately loaded context may retry best-effort audit; only each in-memory context is latched")
+
+	t.Run("absent audit writer consumes only the audit latch", func(t *testing.T) {
+		caseRig := newFinalizationTestRig(t, wf, false)
+		caseRig.service.SetAuditTrailWriter(nil)
+		caseCtx := workflow.NewExecutionContext("no-audit-workflow", wf.Name)
+		caseCtx.StartedAt = started
+		caseCtx.CurrentStep = "execute"
+		caseCtx.SetStatus(workflow.StatusFailed)
+		caseCtx.SetCompletedAt(started.Add(3 * time.Second))
+		caseCtx.ExitCode = 17
+		caseCtx.SetStepState("execute", workflow.StepState{
+			Status: workflow.StatusFailed, Error: "stable failure", CompletedAt: caseCtx.CompletedAt,
+		})
+		require.NoError(t, caseCtx.BeginInitialHistoryAttempt("no-audit-record-1"))
+		caseRig.trace.historyErrors = []error{errors.New("retryable history failure"), nil}
+
+		firstErr := caseRig.service.finalizeAttemptHistory(context.Background(), caseCtx, "stable failure", nil)
+		require.Error(t, firstErr)
+		caseRig.service.SetAuditTrailWriter(&finalizationTestAuditWriter{trace: caseRig.trace})
+		require.NoError(t, caseRig.service.finalizeAttemptHistory(context.Background(), caseCtx, "stable failure", nil))
+
+		_, caseRecords, caseAudits := caseRig.trace.snapshot()
+		require.Len(t, caseRecords, 2)
+		assert.Equal(t, *caseRecords[0], *caseRecords[1], "history retry must preserve the original record")
+		assert.Empty(t, caseAudits, "a later writer must not receive the already-consumed best-effort audit")
+		_, _, _, recorded := caseCtx.GetHistoryAttempt()
+		assert.True(t, recorded)
+	})
+}
+
+func TestExecutionService_HistoryPersistenceFailurePreservesExecutionOutcome(t *testing.T) {
+	wf := finalizationTestWorkflow("step-failure", workflow.TerminalSuccess, 0, "", "end-hook")
+	rig := newFinalizationTestRig(t, wf, false)
+	executionErr := errors.New("stable execution failure")
+	rig.trace.stepFailureErr = executionErr
+	rig.trace.historyErrors = []error{errors.New("CONFIDENTIAL_STORE_CANARY"), nil}
+
+	execCtx, runErr := rig.service.RunWithWorkflowAndRunID(context.Background(), wf, map[string]any{
+		"PASSWORD": "CONFIDENTIAL_INPUT_CANARY",
+	}, "stable-failed-run")
+
+	require.Error(t, runErr)
+	assert.ErrorIs(t, runErr, executionErr)
+	require.NotNil(t, execCtx)
+	assert.Equal(t, workflow.StatusFailed, execCtx.Status)
+	assert.Equal(t, 23, execCtx.ExitCode)
+	predecessorRecordID := execCtx.HistoryRecordID
+
+	// The retry reconciles the failed predecessor, then executes a successful next attempt.
+	rig.trace.stepFailureErr = nil
+	rig.trace.stepFailureSuccess = true
+	resumed, resumeErr := rig.service.Resume(context.Background(), execCtx.WorkflowID, nil, "current")
+	require.NoError(t, resumeErr)
+	require.NotNil(t, resumed)
+	assert.ErrorIs(t, runErr, executionErr, "history persistence failure must not replace the workflow error")
+	_, records, _ := rig.trace.snapshot()
+	require.GreaterOrEqual(t, len(records), 3)
+	assert.Equal(t, *records[0], *records[1])
+	assert.Equal(t, predecessorRecordID, records[0].ID)
+	assert.Equal(t, execCtx.WorkflowID, records[0].WorkflowID)
+	assert.Equal(t, 1, records[0].Attempt)
+
+	entries, logs := rig.logger.snapshot()
+	var warnings []finalizationTestLogEntry
+	for _, entry := range logs {
+		if entry.message == "history persistence failed" {
+			warnings = append(warnings, entry)
+		}
+	}
+	require.Len(t, warnings, 1)
+	assert.Equal(t, "warn", warnings[0].level)
+	require.Len(t, warnings[0].fields, 6)
+	assert.Equal(t, []any{
+		"workflow_id", execCtx.WorkflowID,
+		"history_record_id", predecessorRecordID,
+		"attempt", 1,
+	}, warnings[0].fields, "the warning must contain only approved metadata")
+
+	for _, entry := range entries {
+		assert.NotContains(t, entry, "CONFIDENTIAL_INPUT_CANARY")
+		assert.NotContains(t, entry, "CONFIDENTIAL_STORE_CANARY")
+	}
+	assert.NotContains(t, fmt.Sprint(warnings), records[0].ErrorMessage)
+
+	t.Run("terminal snapshot failure prevents an unreplayable insert", func(t *testing.T) {
+		caseRig := newFinalizationTestRig(t, wf, false)
+		caseRig.trace.checkpointErr = errors.New("snapshot unavailable")
+
+		caseCtx, caseErr := caseRig.service.RunWithWorkflowAndRunID(context.Background(), wf, nil, "snapshot-failure-run")
+
+		require.Error(t, caseErr)
+		assert.Contains(t, caseErr.Error(), "synthetic step failure")
+		require.NotNil(t, caseCtx)
+		_, caseRecords, caseAudits := caseRig.trace.snapshot()
+		assert.Empty(t, caseRecords)
+		var completionAudits int
+		for _, event := range caseAudits {
+			if event.Event == workflow.EventWorkflowCompleted {
+				completionAudits++
+			}
+		}
+		assert.Equal(t, 1, completionAudits, "best-effort audit remains independent of history snapshot persistence")
+		_, _, _, recorded := caseCtx.GetHistoryAttempt()
+		assert.False(t, recorded)
+	})
+
+	t.Run("marker save failure keeps the in-memory commit and prevents duplicate write", func(t *testing.T) {
+		caseWF := finalizationTestWorkflow("", workflow.TerminalSuccess, 0, "", "end-hook")
+		caseRig := newFinalizationTestRig(t, caseWF, false)
+		caseRig.trace.checkpointErrors = []error{nil, errors.New("marker unavailable")}
+
+		caseCtx, caseErr := caseRig.service.RunWithWorkflowAndRunID(context.Background(), caseWF, nil, "marker-failure-run")
+
+		require.NoError(t, caseErr)
+		require.NotNil(t, caseCtx)
+		_, _, _, recorded := caseCtx.GetHistoryAttempt()
+		assert.True(t, recorded)
+		_, caseRecords, _ := caseRig.trace.snapshot()
+		assert.Len(t, caseRecords, 1)
+		var markerDiagnostics int
+		for _, entry := range caseRig.logger.entries {
+			if strings.Contains(entry, "history") && strings.Contains(entry, "marker") {
+				markerDiagnostics++
+			}
+		}
+		assert.Equal(t, 1, markerDiagnostics)
+	})
+}
+
+func TestExecutionService_ResumePreservesPendingAttemptHistory(t *testing.T) {
+	newPendingRig := func(t *testing.T) (*finalizationTestRig, *workflow.ExecutionContext) {
+		t.Helper()
+		wf := finalizationTestWorkflow("resume-command", workflow.TerminalSuccess, 0, "", "end-hook")
+		rig := newFinalizationTestRig(t, wf, false)
+		started := time.Date(2026, time.October, 24, 9, 0, 0, 0, time.UTC)
+		pending := workflow.NewExecutionContext("stable-resume-id", wf.Name)
+		pending.StartedAt = started
+		pending.CurrentStep = "execute"
+		pending.SetStatus(workflow.StatusFailed)
+		pending.SetCompletedAt(started.Add(time.Minute))
+		pending.ExitCode = 31
+		pending.SetStepState("execute", workflow.StepState{
+			Status: workflow.StatusFailed, ExitCode: 31, Error: "predecessor failure", CompletedAt: pending.CompletedAt,
+		})
+		require.NoError(t, pending.BeginInitialHistoryAttempt("pending-record-1"))
+		rig.store.states[pending.WorkflowID] = pending
+		return rig, pending
+	}
+
+	t.Run("failed reconciliation blocks the resumed command and preserves identity", func(t *testing.T) {
+		rig, pending := newPendingRig(t)
+		persistErr := errors.New("history unavailable")
+		rig.trace.historyErr = persistErr
+
+		got, err := rig.service.Resume(context.Background(), pending.WorkflowID, nil, "current")
+
+		assert.ErrorIs(t, err, persistErr)
+		assert.Nil(t, got)
+		rig.trace.mu.Lock()
+		assert.Zero(t, rig.trace.commandCalls)
+		rig.trace.mu.Unlock()
+		assert.Equal(t, "pending-record-1", pending.HistoryRecordID)
+		assert.Equal(t, 1, pending.HistoryAttempt)
+		assert.Equal(t, workflow.StatusFailed, pending.Status)
+		assert.Equal(t, time.Minute, pending.CompletedAt.Sub(pending.StartedAt))
+	})
+
+	t.Run("uncertain predecessor replay preserves both attempts", func(t *testing.T) {
+		rig, pending := newPendingRig(t)
+		rig.trace.historyErrors = []error{errors.New("uncertain predecessor insert"), nil, nil}
+
+		first, firstErr := rig.service.Resume(context.Background(), pending.WorkflowID, nil, "current")
+		assert.Error(t, firstErr)
+		assert.Nil(t, first)
+		resumed, resumeErr := rig.service.Resume(context.Background(), pending.WorkflowID, nil, "current")
+
+		require.NoError(t, resumeErr)
+		require.NotNil(t, resumed)
+		_, records, _ := rig.trace.snapshot()
+		require.Len(t, records, 3)
+		assert.Equal(t, *records[0], *records[1], "the acknowledged but unmarked predecessor must replay exactly")
+		assert.Equal(t, "pending-record-1", records[0].ID)
+		assert.Equal(t, 1, records[0].Attempt)
+		assert.Equal(t, 2, records[2].Attempt)
+		assert.Equal(t, records[0].ID, records[2].ResumedFromID)
+		assert.Equal(t, records[0].WorkflowID, records[2].WorkflowID)
+		assert.NotEqual(t, records[0].ID, records[2].ID)
+	})
+
+	t.Run("invalid resume is rejected before reconciliation", func(t *testing.T) {
+		rig, pending := newPendingRig(t)
+		pending.CurrentStep = "removed-step"
+
+		got, err := rig.service.Resume(context.Background(), pending.WorkflowID, nil, "current")
+
+		assert.Error(t, err)
+		assert.Nil(t, got)
+		_, records, audits := rig.trace.snapshot()
+		assert.Empty(t, records)
+		assert.Empty(t, audits)
+	})
+
+	t.Run("legacy context still normalizes after validation", func(t *testing.T) {
+		rig, pending := newPendingRig(t)
+		pending.HistoryRecordID = ""
+		pending.HistoryAttempt = 0
+
+		resumed, err := rig.service.Resume(context.Background(), pending.WorkflowID, nil, "current")
+
+		require.NoError(t, err)
+		require.NotNil(t, resumed)
+		assert.Equal(t, 1, resumed.HistoryAttempt)
+		assert.NotEmpty(t, resumed.HistoryRecordID)
+		_, records, _ := rig.trace.snapshot()
+		require.Len(t, records, 1)
+		assert.Equal(t, 1, records[0].Attempt)
+	})
+
+	t.Run("disabled history does not block resume", func(t *testing.T) {
+		rig, pending := newPendingRig(t)
+		rig.service.historySvc = NewHistoryService(nil, rig.logger)
+
+		resumed, err := rig.service.Resume(context.Background(), pending.WorkflowID, nil, "current")
+
+		require.NoError(t, err)
+		require.NotNil(t, resumed)
+		rig.trace.mu.Lock()
+		assert.Positive(t, rig.trace.commandCalls)
+		rig.trace.mu.Unlock()
+		_, records, _ := rig.trace.snapshot()
+		assert.Empty(t, records)
+		require.NotEmpty(t, rig.trace.terminalCheckpoints)
+		checkpoint := rig.trace.terminalCheckpoints[len(rig.trace.terminalCheckpoints)-1]
+		assert.Equal(t, workflow.StatusCompleted, checkpoint.GetStatus())
+		assert.False(t, checkpoint.GetCompletedAt().IsZero(), "disabled history must still persist the terminal snapshot")
+	})
+}
+
+func TestExecutionService_ParentAndChildAttemptsKeepIndependentLineage(t *testing.T) {
+	trace := newFinalizationTestTrace()
+	store := &finalizationTestStore{trace: trace, states: make(map[string]*workflow.ExecutionContext)}
+	executor := &finalizationTestExecutor{trace: trace}
+	logger := &finalizationTestLogger{}
+	child := finalizationTestWorkflow("child-command", workflow.TerminalSuccess, 0, "", "")
+	child.Name = "child-history-workflow"
+	parent := &workflow.Workflow{
+		Name: "parent-history-workflow", Initial: "call-child",
+		Steps: map[string]*workflow.Step{
+			"call-child": {
+				Name: "call-child", Type: workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{Workflow: child.Name}, OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+	repository := testmocks.NewMockWorkflowRepository()
+	repository.AddWorkflow(parent.Name, parent)
+	repository.AddWorkflow(child.Name, child)
+	wfSvc := NewWorkflowService(repository, store, executor, logger, testmocks.NewMockExpressionValidator())
+	service := NewExecutionService(wfSvc, executor, nil, store, logger, interpolation.NewTemplateResolver(),
+		NewHistoryService(&finalizationTestHistoryStore{trace: trace}, logger))
+
+	parentCtx, err := service.RunWithWorkflowAndRunID(context.Background(), parent, nil, "stable-parent-run")
+
+	require.NoError(t, err)
+	require.NotNil(t, parentCtx)
+	_, records, _ := trace.snapshot()
+	require.Len(t, records, 2)
+	recordByName := make(map[string]*workflow.ExecutionRecord, 2)
+	for _, record := range records {
+		recordByName[record.WorkflowName] = record
+	}
+	parentRecord := recordByName[parent.Name]
+	childRecord := recordByName[child.Name]
+	require.NotNil(t, parentRecord)
+	require.NotNil(t, childRecord)
+	assert.Equal(t, "stable-parent-run", parentRecord.WorkflowID)
+	assert.Equal(t, parentCtx.HistoryRecordID, parentRecord.ID)
+	assert.Equal(t, 1, parentRecord.Attempt)
+	assert.Empty(t, parentRecord.ResumedFromID)
+	assert.NotEqual(t, parentRecord.WorkflowID, childRecord.WorkflowID)
+	assert.NotEqual(t, parentRecord.ID, childRecord.ID)
+	assert.Equal(t, 1, childRecord.Attempt)
+	assert.Empty(t, childRecord.ResumedFromID, "call-workflow ancestry must not become resume lineage")
 }
 
 func TestNormalizeTerminalExitCode(t *testing.T) {

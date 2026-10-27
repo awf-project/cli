@@ -155,6 +155,7 @@ func TestSQLiteHistoryStore_Integration(t *testing.T) {
 		record := &workflow.ExecutionRecord{
 			ID:           fmt.Sprintf("exec-%d", i+1),
 			WorkflowID:   fmt.Sprintf("wf-%d", i+1),
+			Attempt:      1,
 			WorkflowName: "test",
 			Status:       "success",
 			ExitCode:     0,

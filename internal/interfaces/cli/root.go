@@ -46,7 +46,10 @@ func NewRootCommandAutoFacade() (cmd *cobra.Command, cleanup func()) {
 }
 
 func newRootCommand(autoFacade bool) (cmd *cobra.Command, cleanup func()) {
-	cfg := DefaultConfig()
+	return newRootCommandWithConfig(DefaultConfig(), autoFacade)
+}
+
+func newRootCommandWithConfig(cfg *Config, autoFacade bool) (cmd *cobra.Command, cleanup func()) {
 	var facadeCleanup func()
 
 	cmd = &cobra.Command{

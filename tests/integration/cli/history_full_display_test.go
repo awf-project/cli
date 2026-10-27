@@ -59,6 +59,7 @@ func TestFullIDDisplay_MultipleRecords(t *testing.T) {
 		err = historyStore.Record(ctx, &workflow.ExecutionRecord{
 			ID:           r.id,
 			WorkflowID:   r.workflowID,
+			Attempt:      1,
 			WorkflowName: r.workflowName,
 			Status:       r.status,
 			StartedAt:    now.Add(-time.Duration(len(records)-i) * 10 * time.Minute),
@@ -102,6 +103,7 @@ func TestFullIDDisplay_TabwriterAlignment(t *testing.T) {
 	err = historyStore.Record(ctx, &workflow.ExecutionRecord{
 		ID:           "short-id",
 		WorkflowID:   "wf-1",
+		Attempt:      1,
 		WorkflowName: "ci",
 		Status:       "success",
 		StartedAt:    now.Add(-2 * time.Minute),
@@ -113,6 +115,7 @@ func TestFullIDDisplay_TabwriterAlignment(t *testing.T) {
 	err = historyStore.Record(ctx, &workflow.ExecutionRecord{
 		ID:           "550e8400-e29b-41d4-a716-446655440000",
 		WorkflowID:   "wf-prod-deploy-multi-region-failover-v3",
+		Attempt:      1,
 		WorkflowName: "deploy-production-multi-region-failover",
 		Status:       "failed",
 		StartedAt:    now.Add(-time.Minute),
@@ -163,6 +166,7 @@ func TestFullIDDisplay_JSONPreservesFullValues(t *testing.T) {
 	err = historyStore.Record(ctx, &workflow.ExecutionRecord{
 		ID:           fullUUID,
 		WorkflowID:   fullWorkflowID,
+		Attempt:      1,
 		WorkflowName: fullWorkflowName,
 		Status:       "success",
 		StartedAt:    now.Add(-5 * time.Minute),

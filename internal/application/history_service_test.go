@@ -158,6 +158,14 @@ func TestNewHistoryService(t *testing.T) {
 	require.NotNil(t, svc)
 }
 
+func TestHistoryService_IsEnabled(t *testing.T) {
+	var nilService *application.HistoryService
+
+	assert.False(t, nilService.IsEnabled())
+	assert.False(t, application.NewHistoryService(nil, nil).IsEnabled())
+	assert.True(t, application.NewHistoryService(newMockHistoryStore(), nil).IsEnabled())
+}
+
 func TestHistoryService_Record(t *testing.T) {
 	tests := []struct {
 		name     string

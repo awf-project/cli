@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -28,10 +29,25 @@ type HistoryService struct {
 // NewHistoryService constructs a HistoryService backed by the given store and
 // logger. Either dependency may be nil; nil-store calls degrade gracefully.
 func NewHistoryService(store ports.HistoryStore, logger ports.Logger) *HistoryService {
+	if isNilHistoryStore(store) {
+		store = nil
+	}
 	return &HistoryService{
 		store:  store,
 		logger: logger,
 	}
+}
+
+func (s *HistoryService) IsEnabled() bool {
+	return s != nil && s.store != nil
+}
+
+func isNilHistoryStore(store ports.HistoryStore) bool {
+	if store == nil {
+		return true
+	}
+	value := reflect.ValueOf(store)
+	return value.Kind() == reflect.Pointer && value.IsNil()
 }
 
 // Record persists a single execution record to the history store.

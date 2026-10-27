@@ -2,6 +2,9 @@ package application
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -11,6 +14,125 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestAdapter_Status_PersistedWorkflowAttempts(t *testing.T) {
+	t.Run("selects greatest workflow attempt", func(t *testing.T) {
+		workflowID := "stable-workflow"
+		records := make([]*workflow.ExecutionRecord, 0, 26)
+		for attempt := 1; attempt <= 25; attempt++ {
+			status := "success"
+			if attempt == 25 {
+				// The timestamps deliberately make this greatest ordinal the oldest row.
+				// Its distinct status proves selection is based on Attempt, not recency.
+				status = "failed"
+			}
+			records = append(records, &workflow.ExecutionRecord{
+				ID:           fmt.Sprintf("history-row-%02d", attempt),
+				WorkflowID:   workflowID,
+				Attempt:      attempt,
+				Status:       status,
+				StartedAt:    time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC).Add(-time.Duration(attempt) * time.Hour),
+				CompletedAt:  time.Date(2026, 6, 1, 0, 30, 0, 0, time.UTC).Add(-time.Duration(attempt) * time.Hour),
+				WorkflowName: "deploy",
+			})
+		}
+		records = append(records, &workflow.ExecutionRecord{ID: "unrelated-newer", WorkflowID: "other-workflow", Attempt: 99, Status: "success"})
+		store := &facadeHistoryStoreSpy{listFn: func(filter *workflow.HistoryFilter) ([]*workflow.ExecutionRecord, error) {
+			if filter.WorkflowID == workflowID {
+				return records, nil
+			}
+			return []*workflow.ExecutionRecord{}, nil
+		}}
+		adapter := NewAdapter(nil, nil, NewHistoryService(store, nil), nil, nil, NewSessionRegistry())
+
+		status, err := adapter.Status(context.Background(), workflowID)
+		require.NoError(t, err)
+		assert.Equal(t, workflowID, status.RunID)
+		assert.Equal(t, ports.RunState("failed"), status.Status)
+		require.NotEmpty(t, store.listFilters)
+		assert.Equal(t, workflow.HistoryFilter{WorkflowID: workflowID, Limit: math.MaxInt}, store.listFilters[0])
+	})
+
+	t.Run("keeps live session priority", func(t *testing.T) {
+		store := &facadeHistoryStoreSpy{listErr: errors.New("history must not be queried")}
+		adapter := NewAdapter(nil, nil, NewHistoryService(store, nil), nil, &mockRecorder{}, NewSessionRegistry())
+		started := make(chan struct{})
+		release := make(chan struct{})
+		session, err := adapter.newSession(context.Background(), "live-workflow", nil, func(context.Context) error {
+			close(started)
+			<-release
+			return nil
+		})
+		require.NoError(t, err)
+		defer func() {
+			close(release)
+			require.NoError(t, session.Close())
+		}()
+		<-started
+
+		status, err := adapter.Status(context.Background(), "live-workflow")
+		require.NoError(t, err)
+		assert.Equal(t, "live-workflow", status.RunID)
+		assert.Empty(t, store.listFilters)
+	})
+
+	t.Run("falls back to history record ID", func(t *testing.T) {
+		store := &facadeHistoryStoreSpy{listFn: func(filter *workflow.HistoryFilter) ([]*workflow.ExecutionRecord, error) {
+			if filter.WorkflowID != "" {
+				return []*workflow.ExecutionRecord{}, nil
+			}
+			return []*workflow.ExecutionRecord{{ID: "legacy-row-id", WorkflowID: "stable-workflow", Attempt: 2, Status: "failed"}}, nil
+		}}
+		adapter := NewAdapter(nil, nil, NewHistoryService(store, nil), nil, nil, NewSessionRegistry())
+
+		status, err := adapter.Status(context.Background(), "legacy-row-id")
+		require.NoError(t, err)
+		assert.Equal(t, "legacy-row-id", status.RunID)
+		require.Len(t, store.listFilters, 2)
+		assert.Equal(t, workflow.HistoryFilter{WorkflowID: "legacy-row-id", Limit: math.MaxInt}, store.listFilters[0])
+		assert.Equal(t, 10_000, store.listFilters[1].Limit)
+	})
+
+	t.Run("degrades store errors and missing records", func(t *testing.T) {
+		for _, testCase := range []struct {
+			name  string
+			store *facadeHistoryStoreSpy
+		}{
+			{name: "store error", store: &facadeHistoryStoreSpy{listErr: errors.New("database unavailable")}},
+			{name: "not found", store: &facadeHistoryStoreSpy{records: []*workflow.ExecutionRecord{}}},
+		} {
+			t.Run(testCase.name, func(t *testing.T) {
+				adapter := NewAdapter(nil, nil, NewHistoryService(testCase.store, nil), nil, nil, NewSessionRegistry())
+
+				status, err := adapter.Status(context.Background(), "missing-workflow")
+				require.ErrorIs(t, err, ports.ErrRunNotFound)
+				assert.Empty(t, status.RunID)
+			})
+		}
+	})
+
+	t.Run("does not fall back after workflow-scoped store error", func(t *testing.T) {
+		storeErr := errors.New("workflow-scoped query unavailable")
+		store := &facadeHistoryStoreSpy{listFn: func(filter *workflow.HistoryFilter) ([]*workflow.ExecutionRecord, error) {
+			if filter.WorkflowID != "" {
+				return nil, storeErr
+			}
+			return []*workflow.ExecutionRecord{{
+				ID:         "stable-workflow",
+				WorkflowID: "different-workflow",
+				Attempt:    9,
+				Status:     "success",
+			}}, nil
+		}}
+		adapter := NewAdapter(nil, nil, NewHistoryService(store, nil), nil, nil, NewSessionRegistry())
+
+		status, err := adapter.Status(context.Background(), "stable-workflow")
+		require.ErrorIs(t, err, ports.ErrRunNotFound)
+		assert.Empty(t, status.RunID)
+		require.Len(t, store.listFilters, 1)
+		assert.Equal(t, workflow.HistoryFilter{WorkflowID: "stable-workflow", Limit: math.MaxInt}, store.listFilters[0])
+	})
+}
 
 // TestAdapter_Status_LiveSession verifies Status returns the live run from SessionRegistry.Get(id)
 // when present (Acceptance #33).

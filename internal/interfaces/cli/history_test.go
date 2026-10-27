@@ -2,12 +2,17 @@ package cli_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -758,6 +763,115 @@ func TestHistoryCommand_JSONOutput_SQLite(t *testing.T) {
 	var records []interface{}
 	jsonErr := json.Unmarshal([]byte(output), &records)
 	require.NoError(t, jsonErr, "output should be valid JSON array")
+}
+
+func TestHistoryCommand_FiltersByWorkflowID(t *testing.T) {
+	storageDir := t.TempDir()
+	startedAt := time.Date(2026, time.October, 27, 12, 0, 0, 0, time.UTC)
+	seedHistoryRecords(t, storageDir,
+		workflow.ExecutionRecord{ID: "target-run-1", WorkflowID: "target-workflow", Attempt: 1, WorkflowName: "deploy", Status: "success", StartedAt: startedAt, CompletedAt: startedAt.Add(time.Second), DurationMs: 1000},
+		workflow.ExecutionRecord{ID: "target-run-2", WorkflowID: "target-workflow", Attempt: 2, ResumedFromID: "target-run-1", WorkflowName: "deploy", Status: "failed", StartedAt: startedAt.Add(time.Minute), CompletedAt: startedAt.Add(time.Minute + 2*time.Second), DurationMs: 2000},
+		workflow.ExecutionRecord{ID: "target-run-3", WorkflowID: "target-workflow", Attempt: 3, ResumedFromID: "target-run-2", WorkflowName: "deploy", Status: "success", StartedAt: startedAt.Add(2 * time.Minute), CompletedAt: startedAt.Add(2*time.Minute + 3*time.Second), DurationMs: 3000},
+		workflow.ExecutionRecord{ID: "other-run", WorkflowID: "other-workflow", Attempt: 1, WorkflowName: "deploy", Status: "success", StartedAt: startedAt.Add(3 * time.Minute), CompletedAt: startedAt.Add(3*time.Minute + 4*time.Second), DurationMs: 4000},
+	)
+
+	t.Run("list", func(t *testing.T) {
+		output := executeHistoryCommand(t, storageDir, "--format=json", "history", "--workflow-id", "target-workflow", "--limit", "2")
+
+		var records []cli.HistoryInfo
+		require.NoError(t, json.Unmarshal([]byte(output), &records))
+		require.Len(t, records, 2)
+		assert.Equal(t, []string{"target-run-3", "target-run-2"}, []string{records[0].ID, records[1].ID})
+		assert.Equal(t, "target-workflow", records[0].WorkflowID)
+		assert.Equal(t, "target-workflow", records[1].WorkflowID)
+		assert.NotContains(t, output, "other-run")
+	})
+
+	t.Run("stats", func(t *testing.T) {
+		output := executeHistoryCommand(t, storageDir, "--format=json", "history", "--workflow-id", "target-workflow", "--limit", "2", "--stats")
+
+		var stats cli.HistoryStatsInfo
+		require.NoError(t, json.Unmarshal([]byte(output), &stats))
+		assert.Equal(t, 2, stats.TotalExecutions)
+		assert.Equal(t, 1, stats.SuccessCount)
+		assert.Equal(t, 1, stats.FailedCount)
+		assert.Equal(t, int64(2500), stats.AvgDurationMs)
+	})
+}
+
+func TestHistoryCommand_PrintsAttemptLineage(t *testing.T) {
+	storageDir := t.TempDir()
+	startedAt := time.Date(2026, time.October, 27, 12, 0, 0, 0, time.UTC)
+	seedHistoryRecords(t, storageDir, workflow.ExecutionRecord{
+		ID:            "attempt-run-2",
+		WorkflowID:    "stable-workflow-id",
+		Attempt:       2,
+		ResumedFromID: "attempt-run-1",
+		WorkflowName:  "deploy",
+		Status:        "success",
+		StartedAt:     startedAt,
+		CompletedAt:   startedAt.Add(1500 * time.Millisecond),
+		DurationMs:    1500,
+	})
+
+	t.Run("json", func(t *testing.T) {
+		output := executeHistoryCommand(t, storageDir, "--format=json", "history")
+
+		var records []cli.HistoryInfo
+		require.NoError(t, json.Unmarshal([]byte(output), &records))
+		require.Len(t, records, 1)
+		assert.Equal(t, "attempt-run-2", records[0].ID)
+		assert.Equal(t, "stable-workflow-id", records[0].WorkflowID)
+		assert.Equal(t, 2, records[0].Attempt)
+		assert.Equal(t, "attempt-run-1", records[0].ResumedFromID)
+	})
+
+	t.Run("table", func(t *testing.T) {
+		output := executeHistoryCommand(t, storageDir, "history")
+
+		assert.Contains(t, output, "ATTEMPT")
+		assert.Regexp(t,
+			regexp.MustCompile(`(?m)^attempt-run-2\s+stable-workflow-id\s+2\s+attempt-run-1(?:\s|$)`),
+			output,
+			"the lineage row must render its run ID, stable workflow ID, exact attempt, and predecessor in their table columns",
+		)
+	})
+}
+
+func TestHistoryCommand_HelpIncludesWorkflowIDExample(t *testing.T) {
+	cmd := cli.NewRootCommand()
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"history", "--help"})
+
+	require.NoError(t, cmd.Execute())
+	assert.Contains(t, output.String(), "--workflow-id string")
+	assert.Contains(t, output.String(), "awf history --workflow-id 00000000-0000-0000-0000-000000000001")
+}
+
+func seedHistoryRecords(t *testing.T, storageDir string, records ...workflow.ExecutionRecord) {
+	t.Helper()
+
+	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(storageDir, "history.db"))
+	require.NoError(t, err)
+	for i := range records {
+		require.NoError(t, historyStore.Record(context.Background(), &records[i]))
+	}
+	require.NoError(t, historyStore.Close())
+}
+
+func executeHistoryCommand(t *testing.T, storageDir string, args ...string) string {
+	t.Helper()
+
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	t.Cleanup(cleanup)
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs(append([]string{"--storage=" + storageDir}, args...))
+	require.NoError(t, cmd.Execute())
+	return output.String()
 }
 
 // TestHistoryCommand_StatsJSON_SQLite validates JSON stats output with SQLite

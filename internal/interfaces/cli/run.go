@@ -751,6 +751,10 @@ func (e *exitError) Error() string {
 	return e.err.Error()
 }
 
+func (e *exitError) Unwrap() error {
+	return e.err
+}
+
 func (e *exitError) ExitCode() int {
 	return e.code
 }

@@ -2,12 +2,16 @@ package cli_test
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -122,6 +126,73 @@ func TestResumeCommand_ListFlag_NoResumableWorkflows(t *testing.T) {
 
 	output := buf.String()
 	assert.Contains(t, output, "No resumable workflows")
+}
+
+func TestResumeCommand_ListUsesStableWorkflowIdentity(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", filepath.Join(tmpDir, "xdg-data"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg-config"))
+	dbPath := filepath.Join(tmpDir, "storage", "history.db")
+	historyStore, err := store.NewSQLiteHistoryStore(dbPath)
+	require.NoError(t, err)
+	require.NoError(t, historyStore.Close())
+
+	db, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	base := time.Date(2026, time.October, 20, 12, 0, 0, 0, time.UTC)
+	insertHistoryRow := func(rowID, workflowID, workflowName, status string, attempt int, completedAt time.Time) {
+		t.Helper()
+		_, insertErr := db.ExecContext(context.Background(), `
+			INSERT INTO execution_records
+				(id, workflow_id, workflow_name, status, exit_code, started_at, completed_at,
+				 duration_ms, error_message, attempt, resumed_from_id)
+			VALUES (?, ?, ?, ?, 0, ?, ?, 1, '', ?, ?)`,
+			rowID, workflowID, workflowName, status, completedAt.Add(-time.Second).UnixNano(),
+			completedAt.UnixNano(), attempt, func() string {
+				if attempt > 1 {
+					return rowID + "-predecessor"
+				}
+				return ""
+			}())
+		require.NoError(t, insertErr)
+	}
+
+	insertHistoryRow("attempt-a-1", "stable-a", "workflow-a", "failed", 1, base.Add(40*time.Minute))
+	insertHistoryRow("attempt-a-2", "stable-a", "workflow-a", "failed", 2, base.Add(10*time.Minute))
+	insertHistoryRow("attempt-b-1", "stable-b", "workflow-b", "cancelled", 1, base.Add(20*time.Minute))
+	insertHistoryRow("attempt-done-1", "stable-done", "workflow-done", "failed", 1, base.Add(50*time.Minute))
+	insertHistoryRow("attempt-done-2", "stable-done", "workflow-done", "completed", 2, base.Add(5*time.Minute))
+	for i := 0; i < 21; i++ {
+		insertHistoryRow(
+			fmt.Sprintf("completed-row-%02d", i),
+			fmt.Sprintf("completed-workflow-%02d", i),
+			"completed-workflow",
+			"completed",
+			1,
+			base.Add(time.Duration(100+i)*time.Minute),
+		)
+	}
+	require.NoError(t, db.Close())
+
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"--storage=" + filepath.Dir(dbPath), "resume", "--list"})
+
+	require.NoError(t, cmd.Execute())
+	output := buf.String()
+	assert.Equal(t, 1, strings.Count(output, "stable-a"))
+	assert.Equal(t, 1, strings.Count(output, "stable-b"))
+	assert.Less(t, strings.Index(output, "stable-b"), strings.Index(output, "stable-a"))
+	assert.NotContains(t, output, "stable-done")
+	assert.NotContains(t, output, "attempt-a-1")
+	assert.NotContains(t, output, "attempt-a-2")
+	assert.NotContains(t, output, "attempt-b-1")
+	assert.NotContains(t, output, "attempt-done-1")
+	assert.NotContains(t, output, "attempt-done-2")
 }
 
 func TestResumeCommand_WorkflowNotFound(t *testing.T) {

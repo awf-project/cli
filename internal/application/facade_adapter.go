@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -168,7 +169,7 @@ func (a *Adapter) Validate(ctx context.Context, req ports.RunRequest) (ports.Val
 
 // Status returns the current state of a run identified by id.
 //
-// Priority: live session registry (always wins) → history via GetByID.
+// Priority: live session registry (always wins) → workflow-scoped history → history via GetByID.
 // A history-unavailable error (nil store, missing record) degrades to ErrRunNotFound
 // rather than panicking (Acceptance #35).
 func (a *Adapter) Status(ctx context.Context, id string) (ports.RunStatus, error) {
@@ -181,10 +182,30 @@ func (a *Adapter) Status(ctx context.Context, id string) (ports.RunStatus, error
 		}
 		return ports.RunStatus{RunID: id}, nil
 	}
-	// Registry miss: the run may have completed and left the live registry. Fall back to
-	// persisted history via GetByID (O(1) intent; currently an O(N) scan bounded at 10 k
-	// records). A nil historySvc or a missing record degrades to ErrRunNotFound.
+	// Registry miss: the run may have completed and left the live registry. Prefer the
+	// greatest persisted attempt correlated by stable workflow ID. The unbounded sentinel
+	// ensures workflows with more than the default page of attempts are considered.
 	if a.historySvc != nil {
+		records, err := a.historySvc.List(ctx, &workflow.HistoryFilter{
+			WorkflowID: id,
+			Limit:      math.MaxInt,
+		})
+		if err != nil {
+			return ports.RunStatus{}, fmt.Errorf("%w: %s", ports.ErrRunNotFound, id)
+		}
+		if rec := latestWorkflowAttempt(records, id); rec != nil {
+			return ports.RunStatus{
+				RunID:       id,
+				Status:      ports.RunState(rec.Status),
+				StartedAt:   rec.StartedAt,
+				CompletedAt: rec.CompletedAt,
+			}, nil
+		}
+
+		// Compatibility: callers may still address a persisted attempt by its unique
+		// history row ID. This fallback runs only after a successful workflow-scoped
+		// query returned no match, so unavailable scoped history cannot be mistaken
+		// for a compatible record-ID result.
 		rec, err := a.historySvc.GetByID(ctx, id)
 		if err == nil && rec != nil {
 			return ports.RunStatus{
@@ -200,12 +221,34 @@ func (a *Adapter) Status(ctx context.Context, id string) (ports.RunStatus, error
 	return ports.RunStatus{}, fmt.Errorf("%w: %s", ports.ErrRunNotFound, id)
 }
 
+func latestWorkflowAttempt(records []*workflow.ExecutionRecord, workflowID string) *workflow.ExecutionRecord {
+	var latest *workflow.ExecutionRecord
+	for _, record := range records {
+		if record == nil || record.WorkflowID != workflowID {
+			continue
+		}
+		if latest == nil || record.Attempt > latest.Attempt ||
+			(record.Attempt == 0 && latest.Attempt == 0 && legacyRecordLater(record, latest)) {
+			latest = record
+		}
+	}
+	return latest
+}
+
+func legacyRecordLater(candidate, current *workflow.ExecutionRecord) bool {
+	if !candidate.StartedAt.Equal(current.StartedAt) {
+		return candidate.StartedAt.After(current.StartedAt)
+	}
+	return candidate.ID > current.ID
+}
+
 // History returns past run records from the history service, mapped to facade records.
 func (a *Adapter) History(ctx context.Context, filter ports.HistoryFilter) ([]ports.RunRecord, error) { //nolint:gocritic // hugeParam: interface contract requires value type; pointer would break WorkflowFacade conformance
 	if a.historySvc == nil {
 		return nil, fmt.Errorf("listing history: history service not configured")
 	}
 	records, err := a.historySvc.List(ctx, &workflow.HistoryFilter{
+		WorkflowID:   filter.WorkflowID,
 		WorkflowName: filter.WorkflowName,
 		Status:       filter.Status,
 		Since:        filter.Since,
@@ -218,14 +261,16 @@ func (a *Adapter) History(ctx context.Context, filter ports.HistoryFilter) ([]po
 	out := make([]ports.RunRecord, len(records))
 	for i, rec := range records {
 		out[i] = ports.RunRecord{
-			RunID:        rec.ID,
-			WorkflowID:   rec.WorkflowID,
-			WorkflowName: rec.WorkflowName,
-			Status:       ports.RunState(rec.Status),
-			StartedAt:    rec.StartedAt,
-			CompletedAt:  rec.CompletedAt,
-			DurationMs:   rec.DurationMs,
-			ErrorMessage: rec.ErrorMessage,
+			RunID:         rec.ID,
+			WorkflowID:    rec.WorkflowID,
+			Attempt:       rec.Attempt,
+			ResumedFromID: rec.ResumedFromID,
+			WorkflowName:  rec.WorkflowName,
+			Status:        ports.RunState(rec.Status),
+			StartedAt:     rec.StartedAt,
+			CompletedAt:   rec.CompletedAt,
+			DurationMs:    rec.DurationMs,
+			ErrorMessage:  rec.ErrorMessage,
 		}
 	}
 	return out, nil
@@ -252,6 +297,7 @@ func (a *Adapter) HistoryStats(ctx context.Context, filter ports.HistoryFilter) 
 		return nil, fmt.Errorf("history stats: history service not configured")
 	}
 	return a.historySvc.GetStats(ctx, &workflow.HistoryFilter{
+		WorkflowID:   filter.WorkflowID,
 		WorkflowName: filter.WorkflowName,
 		Status:       filter.Status,
 		Since:        filter.Since,
