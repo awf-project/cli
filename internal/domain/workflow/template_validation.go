@@ -333,9 +333,8 @@ func (v *TemplateValidator) ValidateReference(ref *TemplateReference, stepName, 
 		v.validateStateRef(ref, stepName, fieldName, currentStepIndex)
 	case TypeWorkflow:
 		v.validateWorkflowRef(ref, stepName, fieldName)
-	case TypeEnv:
-		// Environment variables are validated at runtime, not statically
-		// No validation needed
+	case TypeEnv, TypeAWF:
+		// Environment variables and injected AWF paths are resolved at runtime.
 	case TypeError:
 		v.validateErrorRef(ref, stepName, fieldName, isErrorHook)
 	case TypeContext:
