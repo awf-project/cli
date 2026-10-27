@@ -3,8 +3,10 @@ package cli
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/awf-project/cli/internal/application"
@@ -67,7 +69,6 @@ Examples:
 }
 
 func runResumeList(cmd *cobra.Command, cfg *Config) error {
-	ctx := context.Background()
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
 	// Route through WorkflowFacade when wired (T069). resume-list has no dedicated
@@ -75,7 +76,7 @@ func runResumeList(cmd *cobra.Command, cfg *Config) error {
 	// so it is served by History + a resumable filter: any record whose status is not
 	// "completed" is resumable.
 	if cfg.Facade != nil {
-		return runResumeListViaFacade(cmd, cfg, writer, ctx)
+		return runResumeListViaFacade(cmd, cfg, writer, cmd.Context())
 	}
 
 	// Facade not wired: return a meaningful error stub. Production always wires
@@ -89,19 +90,45 @@ func runResumeList(cmd *cobra.Command, cfg *Config) error {
 // (T069). The facade exposes no ResumeList method, so resumable runs are derived
 // by filtering History records to any run whose status is not "completed".
 func runResumeListViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWriter, ctx context.Context) error { //nolint:revive // context.Context not first param: writer is a pre-built dependency, not a new chain
-	records, err := cfg.Facade.History(ctx, ports.HistoryFilter{})
+	records, err := cfg.Facade.History(ctx, ports.HistoryFilter{Limit: math.MaxInt})
 	if err != nil {
 		return writeErrorAndExit(writer, fmt.Errorf("list history: %w", err), ExitSystem)
 	}
 
-	infos := make([]ui.ResumableInfo, 0, len(records))
+	latestByWorkflow := make(map[string]*ports.RunRecord, len(records))
 	for i := range records {
 		rec := &records[i]
-		if rec.Status == ports.RunStateCompleted {
-			continue
+		workflowID := rec.WorkflowID
+		if workflowID == "" {
+			workflowID = rec.RunID
 		}
+		latest, found := latestByWorkflow[workflowID]
+		if !found || resumeRecordIsLater(rec, latest) {
+			latestByWorkflow[workflowID] = rec
+		}
+	}
+
+	selected := make([]*ports.RunRecord, 0, len(latestByWorkflow))
+	for _, rec := range latestByWorkflow {
+		if rec.Status != ports.RunStateCompleted {
+			selected = append(selected, rec)
+		}
+	}
+	sort.Slice(selected, func(i, j int) bool {
+		if !selected[i].CompletedAt.Equal(selected[j].CompletedAt) {
+			return selected[i].CompletedAt.After(selected[j].CompletedAt)
+		}
+		if selected[i].Attempt != selected[j].Attempt {
+			return selected[i].Attempt > selected[j].Attempt
+		}
+		return resumeWorkflowID(selected[i]) < resumeWorkflowID(selected[j])
+	})
+
+	infos := make([]ui.ResumableInfo, 0, len(selected))
+	for i := range selected {
+		rec := selected[i]
 		infos = append(infos, ui.ResumableInfo{
-			WorkflowID:   rec.RunID,
+			WorkflowID:   resumeWorkflowID(rec),
 			WorkflowName: rec.WorkflowName,
 			Status:       string(rec.Status),
 			UpdatedAt:    rec.CompletedAt.Format(time.RFC3339),
@@ -132,6 +159,25 @@ func runResumeListViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWr
 	}
 
 	return nil
+}
+
+func resumeRecordIsLater(candidate, current *ports.RunRecord) bool {
+	if candidate.Attempt > 0 || current.Attempt > 0 {
+		if candidate.Attempt != current.Attempt {
+			return candidate.Attempt > current.Attempt
+		}
+	}
+	if !candidate.CompletedAt.Equal(current.CompletedAt) {
+		return candidate.CompletedAt.After(current.CompletedAt)
+	}
+	return candidate.RunID > current.RunID
+}
+
+func resumeWorkflowID(rec *ports.RunRecord) string {
+	if rec.WorkflowID != "" {
+		return rec.WorkflowID
+	}
+	return rec.RunID
 }
 
 func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []string) error {
@@ -182,7 +228,11 @@ func runResume(cmd *cobra.Command, cfg *Config, workflowID string, inputFlags []
 // run-capable Adapter the `run` path uses (buildRunCapableFacade). The returned cleanup
 // releases the execution stack's resources (history store, etc.).
 func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter) (facade ports.WorkflowFacade, cleanup func(), err error) {
-	ctx := context.Background()
+	ctx := cmd.Context()
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		err = ctxErr
+		return
+	}
 
 	repo := NewWorkflowRepository()
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
@@ -197,14 +247,16 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 	// Load project config from .awf/config.yaml. A malformed config is a USER error
 	// (FR-005): surface it before building the execution stack.
 	if _, cfgErr := loadProjectConfig(logger); cfgErr != nil {
-		return nil, nil, fmt.Errorf("config error: %w", cfgErr)
+		err = fmt.Errorf("config error: %w", cfgErr)
+		return
 	}
 
 	// History store: lifecycle is owned by the ExecutionSetup builder via WithHistoryStore,
 	// which closes it during SetupResult.Cleanup.
 	historyStore, hsErr := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
 	if hsErr != nil {
-		return nil, nil, fmt.Errorf("failed to open history store: %w", hsErr)
+		err = fmt.Errorf("failed to open history store: %w", hsErr)
+		return
 	}
 
 	setupOpts := []application.SetupOption{
@@ -249,7 +301,8 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 		if transcriptCleanup != nil {
 			_ = transcriptCleanup() //nolint:errcheck // best-effort transcript flush on cleanup
 		}
-		return nil, nil, fmt.Errorf("failed to initialize execution: %w", buildErr)
+		err = fmt.Errorf("failed to initialize execution: %w", buildErr)
+		return
 	}
 
 	runFacade := buildRunCapableFacade(setupResult.ExecService, setupResult.WorkflowSvc, historyStore, repo, recorder, logger)
@@ -261,7 +314,8 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 		if transcriptCleanup != nil {
 			_ = transcriptCleanup() //nolint:errcheck // best-effort transcript flush on cleanup
 		}
-		return nil, nil, fmt.Errorf("resume: failed to construct run-capable facade")
+		err = fmt.Errorf("resume: failed to construct run-capable facade")
+		return
 	}
 
 	cleanup = func() {
@@ -285,7 +339,7 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 // A nil inputOverrides map means "no overrides; use the values stored with the original run".
 // An empty fromStep means "resume from the current/last persisted step" (the facade default).
 func runResumeViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWriter, formatter *ui.Formatter, workflowID string, inputOverrides map[string]any, fromStep string) error {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 
 	silentOutput := cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatTable

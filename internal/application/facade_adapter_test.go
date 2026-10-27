@@ -411,6 +411,134 @@ func TestFacadeAdapter_HistoryDelegatesToHistoryService(t *testing.T) {
 	assert.Equal(t, int64(42), records[0].DurationMs)
 }
 
+type facadeHistoryStoreSpy struct {
+	records      []*workflow.ExecutionRecord
+	stats        *workflow.HistoryStats
+	listErr      error
+	statsErr     error
+	listFilters  []workflow.HistoryFilter
+	statsFilters []workflow.HistoryFilter
+	listFn       func(*workflow.HistoryFilter) ([]*workflow.ExecutionRecord, error)
+}
+
+func (s *facadeHistoryStoreSpy) Record(context.Context, *workflow.ExecutionRecord) error {
+	return nil
+}
+
+func (s *facadeHistoryStoreSpy) List(_ context.Context, filter *workflow.HistoryFilter) ([]*workflow.ExecutionRecord, error) {
+	s.listFilters = append(s.listFilters, *filter)
+	if s.listFn != nil {
+		return s.listFn(filter)
+	}
+	return s.records, s.listErr
+}
+
+func (s *facadeHistoryStoreSpy) GetStats(_ context.Context, filter *workflow.HistoryFilter) (*workflow.HistoryStats, error) {
+	s.statsFilters = append(s.statsFilters, *filter)
+	return s.stats, s.statsErr
+}
+
+func (*facadeHistoryStoreSpy) Cleanup(context.Context, time.Duration) (int, error) { return 0, nil }
+func (*facadeHistoryStoreSpy) Close() error                                        { return nil }
+
+func TestFacadeAdapter_HistoryMapsWorkflowAttemptFilter(t *testing.T) {
+	t.Run("maps exact filter", func(t *testing.T) {
+		store := &facadeHistoryStoreSpy{records: []*workflow.ExecutionRecord{}}
+		adapter := NewAdapter(nil, nil, NewHistoryService(store, nil), nil, nil, NewSessionRegistry())
+		filter := ports.HistoryFilter{
+			WorkflowID:   " stable/workflow:id ",
+			WorkflowName: "deploy",
+			Status:       "failed",
+			Since:        time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+			Until:        time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC),
+			Limit:        37,
+		}
+
+		_, err := adapter.History(context.Background(), filter)
+		require.NoError(t, err)
+		require.Len(t, store.listFilters, 1)
+		assert.Equal(t, workflow.HistoryFilter(filter), store.listFilters[0])
+	})
+
+	t.Run("preserves missing service error", func(t *testing.T) {
+		adapter := NewAdapter(nil, nil, nil, nil, nil, NewSessionRegistry())
+
+		_, err := adapter.History(context.Background(), ports.HistoryFilter{})
+		require.EqualError(t, err, "listing history: history service not configured")
+	})
+
+	t.Run("wraps store failure once", func(t *testing.T) {
+		storeErr := errors.New("history unavailable")
+		store := &facadeHistoryStoreSpy{listErr: storeErr}
+		adapter := NewAdapter(nil, nil, NewHistoryService(store, nil), nil, nil, NewSessionRegistry())
+
+		_, err := adapter.History(context.Background(), ports.HistoryFilter{Limit: 1})
+		require.ErrorIs(t, err, storeErr)
+		assert.Equal(t, "listing history: list history records: history unavailable", err.Error())
+	})
+}
+
+func TestFacadeAdapter_HistoryReturnsAttemptLineage(t *testing.T) {
+	startedAt := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
+	completedAt := startedAt.Add(8 * time.Second)
+	store := &facadeHistoryStoreSpy{records: []*workflow.ExecutionRecord{{
+		ID:            "history-row-3",
+		WorkflowID:    "stable-workflow",
+		Attempt:       3,
+		ResumedFromID: "history-row-2",
+		WorkflowName:  "deploy",
+		Status:        "success",
+		StartedAt:     startedAt,
+		CompletedAt:   completedAt,
+		DurationMs:    8000,
+		ErrorMessage:  "retained diagnostic",
+	}}}
+	adapter := NewAdapter(nil, nil, NewHistoryService(store, nil), nil, nil, NewSessionRegistry())
+
+	records, err := adapter.History(context.Background(), ports.HistoryFilter{Limit: 1})
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	assert.Equal(t, ports.RunRecord{
+		RunID:         "history-row-3",
+		WorkflowID:    "stable-workflow",
+		Attempt:       3,
+		ResumedFromID: "history-row-2",
+		WorkflowName:  "deploy",
+		Status:        ports.RunState("success"),
+		StartedAt:     startedAt,
+		CompletedAt:   completedAt,
+		DurationMs:    8000,
+		ErrorMessage:  "retained diagnostic",
+	}, records[0])
+}
+
+func TestFacadeAdapter_HistoryStatsMapsWorkflowID(t *testing.T) {
+	t.Run("maps exact workflow scope", func(t *testing.T) {
+		expected := &workflow.HistoryStats{TotalExecutions: 41, SuccessCount: 29, FailedCount: 7, CancelledCount: 5, AvgDurationMs: 1234}
+		store := &facadeHistoryStoreSpy{stats: expected}
+		adapter := NewAdapter(nil, nil, NewHistoryService(store, nil), nil, nil, NewSessionRegistry())
+		filter := ports.HistoryFilter{WorkflowID: " stable/workflow:id ", WorkflowName: "deploy", Status: "success", Limit: 9}
+
+		stats, err := adapter.HistoryStats(context.Background(), filter)
+		require.NoError(t, err)
+		assert.Same(t, expected, stats)
+		require.Len(t, store.statsFilters, 1)
+		assert.Equal(t, workflow.HistoryFilter(filter), store.statsFilters[0])
+	})
+
+	t.Run("preserves missing service and store errors", func(t *testing.T) {
+		adapter := NewAdapter(nil, nil, nil, nil, nil, NewSessionRegistry())
+		_, err := adapter.HistoryStats(context.Background(), ports.HistoryFilter{})
+		require.EqualError(t, err, "history stats: history service not configured")
+
+		storeErr := errors.New("statistics unavailable")
+		adapter = NewAdapter(nil, nil, NewHistoryService(&facadeHistoryStoreSpy{statsErr: storeErr}, nil), nil, nil, NewSessionRegistry())
+		_, err = adapter.HistoryStats(context.Background(), ports.HistoryFilter{WorkflowID: "stable-workflow"})
+		require.ErrorIs(t, err, storeErr)
+		assert.Equal(t, "get history stats: statistics unavailable", err.Error())
+	})
+}
+
 // TestFacadeAdapter_ValidateReturnsValidationReport verifies Validate delegates
 func TestFacadeAdapter_ValidateReturnsValidationReport(t *testing.T) {
 	adapter := NewAdapter(

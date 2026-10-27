@@ -18,3 +18,9 @@
 {"ts":1793055828,"op":"assert","clause":"trigger(sort_notification_backend_diagnostics, '', project)"}
 {"ts":1793055828,"op":"assert","clause":"rule(test_audit_lifecycle_failure_paths, test, 'Always test audit persistence across timeout, recovered-panic, resume, and operating-system signal lifecycle paths using isolated storage.', high, implement)"}
 {"ts":1793055828,"op":"assert","clause":"trigger(test_audit_lifecycle_failure_paths, '', project)"}
+{"ts":1793136647,"op":"assert","clause":"rule(allocate_attempt_identity_before_execution, 'architecture', 'Always allocate and attach a durable attempt identity before starting both fresh and resumed workflow execution.', 'high', 'implement')"}
+{"ts":1793136647,"op":"assert","clause":"trigger(allocate_attempt_identity_before_execution, 'internal/application/history_service.go', file)"}
+{"ts":1793136647,"op":"assert","clause":"rule(test_repeated_resume_lineage, 'test', 'Always test repeated resume flows across failed, interrupted, and successful attempts, asserting chronological lineage and stable workflow-ID filtering.', 'high', 'implement')"}
+{"ts":1793136648,"op":"assert","clause":"trigger(test_repeated_resume_lineage, 'tests/integration/cli/resume_test.go', file)"}
+{"ts":1793136648,"op":"assert","clause":"rule(verify_sqlite_history_replay_concurrency, 'test', 'Always test SQLite history replay idempotence, conflicting lineage detection, filtering, and multi-connection concurrency with a real database.', 'high', 'implement')"}
+{"ts":1793136648,"op":"assert","clause":"trigger(verify_sqlite_history_replay_concurrency, 'internal/infrastructure/store/sqlite_history_store.go', file)"}

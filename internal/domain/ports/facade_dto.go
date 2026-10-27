@@ -142,6 +142,7 @@ type ValidationReport struct {
 
 // HistoryFilter scopes a WorkflowFacade.History query.
 type HistoryFilter struct {
+	WorkflowID   string
 	WorkflowName string
 	Status       string
 	Since        time.Time
@@ -151,14 +152,16 @@ type HistoryFilter struct {
 
 // RunRecord is a single entry in the workflow execution history.
 type RunRecord struct {
-	RunID        string
-	WorkflowID   string
-	WorkflowName string
-	Status       RunState
-	StartedAt    time.Time
-	CompletedAt  time.Time
-	DurationMs   int64
-	ErrorMessage string
+	RunID         string
+	WorkflowID    string
+	Attempt       int
+	ResumedFromID string
+	WorkflowName  string
+	Status        RunState
+	StartedAt     time.Time
+	CompletedAt   time.Time
+	DurationMs    int64
+	ErrorMessage  string
 }
 
 // InputRequest describes a prompt that the workflow needs answered.

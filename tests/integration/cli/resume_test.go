@@ -6,18 +6,436 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/interfaces/cli"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestResumeCommand_PersistsChronologicalAttemptsAcrossRepeatedResumes(t *testing.T) {
+	root := setupInitTestDir(t)
+	storageDir := filepath.Join(root, "owned storage")
+	readyPath := filepath.Join(root, "owned storage", "resume ready")
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "xdg data"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg config"))
+	t.Setenv("AWF_AUDIT_LOG", "off")
+
+	const workflowName = "repeated-resume-lineage"
+	workflowSource := fmt.Sprintf(`name: repeated-resume-lineage
+version: "1.0.0"
+inputs:
+  - name: behavior
+    type: string
+    required: true
+    validation:
+      enum: [fail, wait, success]
+states:
+  initial: execute
+  execute:
+    type: step
+    command: >-
+      case {{inputs.behavior}} in
+        fail) exit 17 ;;
+        wait) touch %s; while :; do sleep 1; done ;;
+        success) exit 0 ;;
+      esac
+    on_success: done
+  done:
+    type: terminal
+`, interpolation.ShellEscape(readyPath))
+	workflowPath := filepath.Join(root, ".awf", "workflows", workflowName+".yaml")
+	createTestWorkflow(t, root, workflowName+".yaml", workflowSource)
+	originalWorkflow, err := os.ReadFile(workflowPath)
+	require.NoError(t, err)
+
+	run := func(ctx context.Context, args []string) (string, error) {
+		t.Helper()
+		cmd, cleanup := cli.NewRootCommandAutoFacade()
+		var output bytes.Buffer
+		cmd.SetOut(&output)
+		cmd.SetErr(&output)
+		commandArgs := make([]string, 2+len(args))
+		commandArgs[0] = "--storage=" + storageDir
+		commandArgs[1] = "--no-color"
+		copy(commandArgs[2:], args)
+		cmd.SetArgs(commandArgs)
+		err := cmd.ExecuteContext(ctx)
+		cleanup()
+		return output.String(), err
+	}
+
+	validationOutput, err := run(context.Background(), []string{"validate", workflowName})
+	require.NoError(t, err, validationOutput)
+
+	initialOutput, err := run(context.Background(), []string{"run", workflowName, "--input=behavior=fail", "--skip-plugins"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exit code 17")
+	assertNoHistoryPersistenceDiagnostic(t, initialOutput)
+
+	history := readResumeHistory(t, run, "")
+	require.Len(t, history, 1)
+	workflowID := history[0].WorkflowID
+	require.NotEmpty(t, workflowID)
+	assert.Equal(t, "failed", history[0].Status)
+	assert.Equal(t, 1, history[0].Attempt)
+	assert.Empty(t, history[0].ResumedFromID)
+	assertResumePublicViews(t, run, workflowID, 1, "failed", true)
+
+	otherStore, err := store.NewSQLiteHistoryStore(filepath.Join(storageDir, "history.db"))
+	require.NoError(t, err)
+	now := time.Now().UTC().Add(-time.Hour)
+	unrelated := ports.RunRecord{
+		RunID: "other-record", WorkflowID: "other-workflow", Attempt: 1,
+		WorkflowName: "other", Status: ports.RunStateCompleted, StartedAt: now, CompletedAt: now.Add(time.Second),
+	}
+	require.NoError(t, otherStore.Record(context.Background(), executionRecordFromRunRecord(unrelated)))
+	conflicting := ports.RunRecord{
+		RunID: "conflicting-record", WorkflowID: workflowID, Attempt: 1,
+		WorkflowName: workflowName, Status: ports.RunStateFailed, StartedAt: now, CompletedAt: now.Add(time.Second),
+	}
+	conflictErr := otherStore.Record(context.Background(), executionRecordFromRunRecord(conflicting))
+	require.Error(t, conflictErr)
+	assert.True(t, errors.Is(conflictErr, store.ErrHistoryRecordConflict), conflictErr)
+	require.NoError(t, otherStore.Close())
+
+	failedOutput, err := run(context.Background(), []string{"resume", workflowID, "--input=behavior=fail"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exit code 17")
+	assertNoHistoryPersistenceDiagnostic(t, failedOutput)
+	assertResumePublicViews(t, run, workflowID, 2, "failed", true)
+
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	type commandResult struct {
+		output string
+		err    error
+	}
+	result := make(chan commandResult, 1)
+	commandJoined := false
+	go func() {
+		output, runErr := run(cancelCtx, []string{"resume", workflowID, "--input=behavior=wait"})
+		result <- commandResult{output: output, err: runErr}
+	}()
+	t.Cleanup(func() {
+		cancel()
+		if commandJoined {
+			return
+		}
+		select {
+		case <-result:
+		case <-time.After(5 * time.Second):
+			t.Error("cleanup timed out joining cancelled resume command")
+		}
+	})
+
+	readyDeadline := time.NewTimer(10 * time.Second)
+	defer readyDeadline.Stop()
+	readyTicker := time.NewTicker(20 * time.Millisecond)
+	defer readyTicker.Stop()
+	for {
+		if _, statErr := os.Stat(readyPath); statErr == nil {
+			break
+		} else if !os.IsNotExist(statErr) {
+			cancel()
+			t.Fatalf("inspect readiness file: %v", statErr)
+		}
+		select {
+		case <-readyTicker.C:
+		case <-readyDeadline.C:
+			cancel()
+			select {
+			case <-result:
+				commandJoined = true
+			case <-time.After(5 * time.Second):
+			}
+			t.Fatal("resume command did not reach its blocking shell branch")
+		}
+	}
+	cancel()
+
+	var cancelled commandResult
+	select {
+	case cancelled = <-result:
+		commandJoined = true
+	case <-time.After(5 * time.Second):
+		t.Fatal("cancelled resume command did not terminate")
+	}
+	require.Error(t, cancelled.err)
+	assert.ErrorIs(t, cancelled.err, context.Canceled)
+	var exitCoder interface{ ExitCode() int }
+	require.ErrorAs(t, cancelled.err, &exitCoder)
+	assert.Equal(t, cli.ExitExecution, exitCoder.ExitCode())
+	assertNoHistoryPersistenceDiagnostic(t, cancelled.output)
+	assertResumePublicViews(t, run, workflowID, 3, "cancelled", true)
+
+	successOutput, err := run(context.Background(), []string{"resume", workflowID, "--input=behavior=success"})
+	require.NoError(t, err, successOutput)
+	assertNoHistoryPersistenceDiagnostic(t, successOutput)
+	assertResumePublicViews(t, run, workflowID, 4, "completed", false)
+
+	history = readResumeHistory(t, run, workflowID)
+	require.Len(t, history, 4)
+	seenIDs := make(map[string]struct{}, len(history))
+	expectedStatuses := []string{"completed", "cancelled", "failed", "failed"}
+	for i := range history {
+		record := history[i]
+		assert.Equal(t, workflowID, record.WorkflowID)
+		assert.Equal(t, 4-i, record.Attempt)
+		assert.Equal(t, expectedStatuses[i], record.Status)
+		assert.NotEmpty(t, record.ID)
+		_, duplicate := seenIDs[record.ID]
+		assert.False(t, duplicate, "history record IDs must be unique")
+		seenIDs[record.ID] = struct{}{}
+		if i == len(history)-1 {
+			assert.Empty(t, record.ResumedFromID)
+		} else {
+			assert.Equal(t, history[i+1].ID, record.ResumedFromID)
+		}
+	}
+
+	persistedWorkflow, err := os.ReadFile(workflowPath)
+	require.NoError(t, err)
+	assert.Equal(t, originalWorkflow, persistedWorkflow, "resume must not rewrite the workflow definition")
+	assert.FileExists(t, filepath.Join(storageDir, "history.db"), "resume must retain the SQLite history database")
+	assert.FileExists(t, filepath.Join(storageDir, "states", workflowID+".json"), "resume must retain the workflow state")
+}
+
+func TestResumeCommand_SerializesAcrossProcesses(t *testing.T) {
+	root := setupInitTestDir(t)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "xdg-data"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg-config"))
+	t.Setenv("AWF_AUDIT_LOG", "off")
+	storageDir := filepath.Join(root, "storage")
+	readyPath := filepath.Join(root, "owner ready")
+	releasePath := filepath.Join(root, "owner release")
+	executionsPath := filepath.Join(root, "executions")
+	createTestWorkflow(t, root, "serialized-resume.yaml", fmt.Sprintf(`name: serialized-resume
+version: "1.0.0"
+states:
+  initial: execute
+  execute:
+    type: step
+    command: >-
+      echo executed >> %s; touch %s; while [ ! -f %s ]; do sleep 0.05; done
+    on_success: done
+  done:
+    type: terminal
+`, interpolation.ShellEscape(executionsPath), interpolation.ShellEscape(readyPath), interpolation.ShellEscape(releasePath)))
+	state := workflow.NewExecutionContext("serialized-workflow", "serialized-resume")
+	state.Status = workflow.StatusFailed
+	state.CurrentStep = "execute"
+	require.NoError(t, state.BeginInitialHistoryAttempt("serialized-record-1"))
+	state.HistoryRecorded = true
+	stateStore := store.NewJSONStore(filepath.Join(storageDir, "states"))
+	require.NoError(t, stateStore.Save(context.Background(), state))
+	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(storageDir, "history.db"))
+	require.NoError(t, err)
+	require.NoError(t, historyStore.Record(context.Background(), &workflow.ExecutionRecord{
+		ID: "serialized-record-1", WorkflowID: state.WorkflowID, WorkflowName: state.WorkflowName,
+		Attempt: 1, Status: "failed", StartedAt: time.Now().Add(-time.Minute), CompletedAt: time.Now(),
+	}))
+	require.NoError(t, historyStore.Close())
+
+	executable, err := os.Executable()
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	newProcess := func(role string) *exec.Cmd {
+		// Self-host the test executable so each root command gets an independent
+		// service and process-global resume guard, while sharing real JSON/SQLite.
+		cmd := exec.CommandContext(ctx, executable, "-test.run=^TestResumeCommand_ProcessHelper$", "-test.count=1") //nolint:gosec // executable is this test binary, not user input.
+		cmd.Dir = root
+		cmd.Env = append(os.Environ(), "AWF_RESUME_TEST_ROLE="+role, "AWF_RESUME_TEST_STORAGE="+storageDir)
+		return cmd
+	}
+	owner := newProcess("owner")
+	var ownerOutput bytes.Buffer
+	owner.Stdout = &ownerOutput
+	owner.Stderr = &ownerOutput
+	require.NoError(t, owner.Start())
+	ownerResult := make(chan error, 1)
+	ownerDone := make(chan struct{})
+	go func() {
+		defer close(ownerDone)
+		ownerResult <- owner.Wait()
+	}()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-ownerDone:
+		case <-time.After(5 * time.Second):
+			t.Error("owner process did not terminate")
+		}
+	})
+	require.Eventually(t, func() bool {
+		_, statErr := os.Stat(readyPath)
+		return statErr == nil
+	}, 10*time.Second, 10*time.Millisecond, "owner must be executing before contender starts")
+	statePath := filepath.Join(storageDir, "states", state.WorkflowID+".json")
+	before, err := os.ReadFile(statePath)
+	require.NoError(t, err)
+	contenderOutput, contenderErr := newProcess("contender").CombinedOutput()
+	require.NoError(t, contenderErr, string(contenderOutput))
+	after, err := os.ReadFile(statePath)
+	require.NoError(t, err)
+	assert.Equal(t, before, after, "a blocked contender must not allocate or change the owner's running attempt")
+	executions, err := os.ReadFile(executionsPath)
+	require.NoError(t, err)
+	assert.Equal(t, "executed\n", string(executions), "only the lease owner may execute commands")
+	require.NoError(t, os.WriteFile(releasePath, nil, 0o600))
+	select {
+	case err = <-ownerResult:
+		require.NoError(t, err, ownerOutput.String())
+	case <-ctx.Done():
+		t.Fatal("owner did not complete after release")
+	}
+	historyStore, err = store.NewSQLiteHistoryStore(filepath.Join(storageDir, "history.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, historyStore.Close()) })
+	records, err := historyStore.List(context.Background(), &workflow.HistoryFilter{WorkflowID: state.WorkflowID})
+	require.NoError(t, err)
+	require.Len(t, records, 2)
+	assert.Equal(t, 2, records[0].Attempt)
+	assert.Equal(t, "serialized-record-1", records[0].ResumedFromID)
+	assert.Equal(t, "completed", records[0].Status)
+}
+
+func TestResumeCommand_ProcessHelper(t *testing.T) {
+	role := os.Getenv("AWF_RESUME_TEST_ROLE")
+	if role == "" {
+		return
+	}
+	timeout := 20 * time.Second
+	if role == "contender" {
+		timeout = 500 * time.Millisecond
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	defer cleanup()
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"--storage", os.Getenv("AWF_RESUME_TEST_STORAGE"), "--no-color", "resume", "serialized-workflow"})
+	err := cmd.ExecuteContext(ctx)
+	if role == "contender" {
+		require.ErrorIs(t, err, context.DeadlineExceeded, output.String())
+		assert.ErrorContains(t, err, "acquire resume lease", "contender must lose before load, allocation, hooks, or commands")
+	} else {
+		require.NoError(t, err, output.String())
+	}
+	assertNoHistoryPersistenceDiagnostic(t, output.String())
+}
+
+type resumeCommandRunner func(context.Context, []string) (string, error)
+
+func readResumeHistory(t *testing.T, run resumeCommandRunner, workflowID string) []cli.HistoryInfo {
+	t.Helper()
+	args := []string{"--format=json", "history"}
+	if workflowID != "" {
+		args = append(args, "--workflow-id="+workflowID)
+	}
+	output, err := run(context.Background(), args)
+	require.NoError(t, err, output)
+	var records []cli.HistoryInfo
+	require.NoError(t, json.Unmarshal([]byte(output), &records), output)
+	return records
+}
+
+func executionRecordFromRunRecord(record ports.RunRecord) *workflow.ExecutionRecord {
+	return &workflow.ExecutionRecord{
+		ID:            record.RunID,
+		WorkflowID:    record.WorkflowID,
+		Attempt:       record.Attempt,
+		ResumedFromID: record.ResumedFromID,
+		WorkflowName:  record.WorkflowName,
+		Status:        string(record.Status),
+		StartedAt:     record.StartedAt,
+		CompletedAt:   record.CompletedAt,
+		DurationMs:    record.DurationMs,
+		ErrorMessage:  record.ErrorMessage,
+	}
+}
+
+func assertResumePublicViews(
+	t *testing.T,
+	run resumeCommandRunner,
+	workflowID string,
+	expectedAttempt int,
+	status string,
+	resumable bool,
+) {
+	t.Helper()
+	history := readResumeHistory(t, run, workflowID)
+	require.NotEmpty(t, history)
+	latest := history[0]
+	assert.Equal(t, expectedAttempt, latest.Attempt)
+	assert.Equal(t, workflowID, latest.WorkflowID)
+	assert.NotEmpty(t, latest.ID)
+	assert.Equal(t, status, latest.Status)
+	if expectedAttempt == 1 {
+		assert.Empty(t, latest.ResumedFromID)
+	} else {
+		assert.NotEmpty(t, latest.ResumedFromID)
+	}
+
+	statusOutput, err := run(context.Background(), []string{"--format=json", "status", workflowID})
+	require.NoError(t, err, statusOutput)
+	var projectedStatus struct {
+		WorkflowID  string `json:"workflow_id"`
+		Status      string `json:"status"`
+		CompletedAt string `json:"completed_at"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(statusOutput), &projectedStatus), statusOutput)
+	assert.Equal(t, workflowID, projectedStatus.WorkflowID)
+	assert.Equal(t, status, projectedStatus.Status)
+	assert.Equal(t, latest.CompletedAt, projectedStatus.CompletedAt)
+
+	listOutput, err := run(context.Background(), []string{"--format=json", "resume", "--list"})
+	require.NoError(t, err, listOutput)
+	var resumableWorkflows []struct {
+		WorkflowID string `json:"workflow_id"`
+		Status     string `json:"status"`
+		UpdatedAt  string `json:"updated_at"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(listOutput), &resumableWorkflows), listOutput)
+	var projectedResume *struct {
+		WorkflowID string `json:"workflow_id"`
+		Status     string `json:"status"`
+		UpdatedAt  string `json:"updated_at"`
+	}
+	for i := range resumableWorkflows {
+		if resumableWorkflows[i].WorkflowID == workflowID {
+			projectedResume = &resumableWorkflows[i]
+			break
+		}
+	}
+	if resumable {
+		require.NotNil(t, projectedResume)
+		assert.Equal(t, status, projectedResume.Status)
+		assert.Equal(t, latest.CompletedAt, projectedResume.UpdatedAt)
+	} else {
+		assert.Nil(t, projectedResume)
+	}
+}
+
+func assertNoHistoryPersistenceDiagnostic(t *testing.T, output string) {
+	t.Helper()
+	assert.NotContains(t, output, "history persistence failed")
+	assert.NotContains(t, output, "UNIQUE constraint failed")
+	assert.NotContains(t, output, store.ErrHistoryRecordConflict.Error())
+}
 
 func recordResumeHistory(t *testing.T, storageDir, id, workflowName, status string) {
 	t.Helper()
@@ -30,12 +448,81 @@ func recordResumeHistory(t *testing.T, storageDir, id, workflowName, status stri
 	err = historyStore.Record(context.Background(), &workflow.ExecutionRecord{
 		ID:           id,
 		WorkflowID:   id,
+		Attempt:      1,
 		WorkflowName: workflowName,
 		Status:       status,
 		StartedAt:    now.Add(-5 * time.Minute),
 		CompletedAt:  now,
 	})
 	require.NoError(t, err)
+}
+
+// TestResumeCommand_PersistsAttemptLineage verifies the public resume command
+// carries a stable workflow identity into a distinct, linked history attempt.
+func TestResumeCommand_PersistsAttemptLineage(t *testing.T) {
+	tmpDir := setupInitTestDir(t)
+	const (
+		workflowID    = "stable-workflow-id"
+		workflowName  = "lineage-workflow"
+		firstRecordID = "attempt-record-1"
+	)
+
+	createTestWorkflow(t, tmpDir, workflowName+".yaml", `name: lineage-workflow
+version: "1.0.0"
+states:
+  initial: done
+  done:
+    type: terminal
+`)
+
+	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(tmpDir, "history.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, historyStore.Close()) })
+	startedAt := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	require.NoError(t, historyStore.Record(context.Background(), &workflow.ExecutionRecord{
+		ID:           firstRecordID,
+		WorkflowID:   workflowID,
+		Attempt:      1,
+		WorkflowName: workflowName,
+		Status:       "cancelled",
+		StartedAt:    startedAt,
+		CompletedAt:  startedAt.Add(time.Second),
+	}))
+	require.NoError(t, historyStore.Close())
+
+	stateStore := store.NewJSONStore(filepath.Join(tmpDir, "states"))
+	saved := workflow.NewExecutionContext(workflowID, workflowName)
+	saved.CurrentStep = "done"
+	saved.SetStatus(workflow.StatusCancelled)
+	require.NoError(t, saved.BeginInitialHistoryAttempt(firstRecordID))
+	require.True(t, saved.TryBeginHistoryFinalization())
+	saved.FinishHistoryFinalization(true)
+	require.NoError(t, stateStore.Save(context.Background(), saved))
+
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	t.Cleanup(cleanup)
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"--storage=" + tmpDir, "resume", workflowID})
+	require.NoError(t, cmd.ExecuteContext(context.Background()))
+
+	historyReader, err := store.NewSQLiteHistoryStore(filepath.Join(tmpDir, "history.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, historyReader.Close()) })
+	records, err := historyReader.List(context.Background(), &workflow.HistoryFilter{WorkflowID: workflowID, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, records, 2, "resume must append a second attempt without replacing the predecessor")
+
+	assert.Equal(t, workflowID, records[0].WorkflowID)
+	assert.Equal(t, 2, records[0].Attempt)
+	assert.Equal(t, firstRecordID, records[0].ResumedFromID)
+	assert.NotEmpty(t, records[0].ID)
+	assert.NotEqual(t, firstRecordID, records[0].ID)
+	assert.Equal(t, firstRecordID, records[1].ID)
+	assert.Equal(t, 1, records[1].Attempt)
+	assert.Empty(t, records[1].ResumedFromID)
+	assert.NotContains(t, output.String(), "UNIQUE constraint failed")
 }
 
 func TestResumeCommand_Exists(t *testing.T) {

@@ -2,13 +2,75 @@ package cli
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
+	"github.com/awf-project/cli/internal/testutil/facadetest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestWriteHistoryRunRecordsStats_CountsPersistedSuccess(t *testing.T) {
+	var output bytes.Buffer
+	writer := ui.NewOutputWriter(&output, &output, ui.FormatJSON, true, true)
+
+	err := writeHistoryRunRecordsStats(writer, []ports.RunRecord{
+		{Status: ports.RunState("success"), DurationMs: 1000},
+		{Status: ports.RunStateFailed, DurationMs: 3000},
+	})
+	require.NoError(t, err)
+
+	var stats HistoryStatsInfo
+	require.NoError(t, json.Unmarshal(output.Bytes(), &stats))
+	assert.Equal(t, 2, stats.TotalExecutions)
+	assert.Equal(t, 1, stats.SuccessCount)
+	assert.Equal(t, 1, stats.FailedCount)
+	assert.Equal(t, int64(2000), stats.AvgDurationMs)
+}
+
+// failingHistoryFacade preserves the real facade contract while injecting the
+// sole failure this command-level test needs to exercise.
+type failingHistoryFacade struct {
+	*facadetest.Fake
+	err error
+}
+
+func (f *failingHistoryFacade) History(context.Context, ports.HistoryFilter) ([]ports.RunRecord, error) {
+	return nil, f.err
+}
+
+func TestHistoryCommand_FacadeFailureRetainsSystemExit(t *testing.T) {
+	const failureMessage = "history backend unavailable"
+	failure := errors.New(failureMessage)
+
+	cfg := DefaultConfig()
+	cfg.Facade = &failingHistoryFacade{
+		Fake: facadetest.New(),
+		err:  failure,
+	}
+	cmd, cleanup := newRootCommandWithConfig(cfg, false)
+	t.Cleanup(cleanup)
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	cmd.SetArgs([]string{"--storage", t.TempDir(), "--no-color", "history", "--workflow-id", "opaque-workflow-id"})
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, failure)
+	assert.ErrorContains(t, err, "list history: "+failureMessage)
+
+	var exitErr *exitError
+	require.ErrorAs(t, err, &exitErr)
+	assert.Equal(t, ExitSystem, exitErr.ExitCode())
+	assert.Equal(t, 4, exitErr.ExitCode())
+	assert.Contains(t, output.String(), "list history: "+failureMessage)
+}
 
 func TestFormatDuration(t *testing.T) {
 	tests := []struct {

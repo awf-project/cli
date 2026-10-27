@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
+
+const resumeLeasePollInterval = 10 * time.Millisecond
 
 // JSONStore implements StateStore for JSON file persistence.
 type JSONStore struct {
@@ -68,6 +71,44 @@ func (s *JSONStore) Save(ctx context.Context, state *workflow.ExecutionContext) 
 	_ = f.Close()
 
 	return os.Rename(tmpPath, finalPath)
+}
+
+// AcquireResumeLease obtains a process-wide advisory lock for one workflow's
+// complete resume lifecycle. The separate stable lock file remains valid while
+// state saves atomically replace the workflow JSON file.
+func (s *JSONStore) AcquireResumeLease(ctx context.Context, workflowID string) (func() error, error) {
+	if err := os.MkdirAll(s.basePath, 0o755); err != nil {
+		return nil, err
+	}
+	lockPath := s.filePath(workflowID) + ".resume.lock"
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+
+	ticker := time.NewTicker(resumeLeasePollInterval)
+	defer ticker.Stop()
+	for {
+		err = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) //nolint:gosec // G115: file descriptor values are within int range on all supported platforms
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
+			_ = lockFile.Close()
+			return nil, err
+		}
+		select {
+		case <-ctx.Done():
+			_ = lockFile.Close()
+			return nil, ctx.Err()
+		case <-ticker.C:
+		}
+	}
+
+	return func() error {
+		unlockErr := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN) //nolint:gosec // G115: file descriptor values are within int range on all supported platforms
+		return errors.Join(unlockErr, lockFile.Close())
+	}, nil
 }
 
 // Load retrieves execution state from a JSON file.

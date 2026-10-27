@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"os"
 	"os/user"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/awf-project/cli/internal/application/tools"
@@ -79,6 +81,7 @@ type ExecutionService struct {
 	recorderFactory        ports.RecorderFactory
 	transcriptDir          string
 	agentOutputNormalizer  ports.AgentOutputNormalizer
+	resumeValidationMu     sync.Mutex
 }
 
 type terminalOutcome struct {
@@ -89,6 +92,131 @@ type terminalOutcome struct {
 
 type terminalFinalizer struct {
 	finalized bool
+}
+
+var (
+	errHistoryFinalizationInProgress = errors.New("history finalization already in progress")
+	errResumeInProgress              = errors.New("workflow resume already in progress")
+	resumeLifecycleMu                sync.Mutex
+	activeResumes                    = make(map[string]struct{})
+)
+
+func tryBeginResume(workflowID string) bool {
+	resumeLifecycleMu.Lock()
+	defer resumeLifecycleMu.Unlock()
+	if _, active := activeResumes[workflowID]; active {
+		return false
+	}
+	activeResumes[workflowID] = struct{}{}
+	return true
+}
+
+func finishResume(workflowID string) {
+	resumeLifecycleMu.Lock()
+	defer resumeLifecycleMu.Unlock()
+	delete(activeResumes, workflowID)
+}
+
+func (s *ExecutionService) finalizeAttemptHistory(
+	ctx context.Context,
+	execCtx *workflow.ExecutionContext,
+	errorMessage string,
+	prepareTerminalSnapshot func(),
+) error {
+	if !execCtx.TryBeginHistoryFinalization() {
+		_, _, _, recorded := execCtx.GetHistoryAttempt()
+		if !recorded {
+			return errHistoryFinalizationInProgress
+		}
+		return nil
+	}
+
+	if prepareTerminalSnapshot != nil {
+		prepareTerminalSnapshot()
+	}
+	if execCtx.TryBeginCompletionAudit() {
+		s.emitAuditCompleted(ctx, execCtx, errorMessage)
+	}
+
+	recordID, attempt, resumedFromID, _ := execCtx.GetHistoryAttempt()
+	if !s.historySvc.IsEnabled() {
+		// The terminal snapshot is the workflow state source of truth even when
+		// optional history projection is disabled. Keep resume non-blocking and
+		// omit history diagnostics in this mode, as there is no history record to
+		// claim or retry.
+		if err := s.store.Save(ctx, execCtx); err != nil {
+			s.logger.Debug("terminal snapshot save failed while history disabled",
+				"workflow_id", execCtx.WorkflowID,
+				"history_record_id", recordID,
+				"attempt", attempt,
+			)
+		}
+		execCtx.FinishHistoryFinalization(false)
+		return nil
+	}
+
+	if err := s.store.Save(ctx, execCtx); err != nil {
+		execCtx.FinishHistoryFinalization(false)
+		s.warnHistoryPersistenceFailure(execCtx, recordID, attempt)
+		return fmt.Errorf("persist terminal history snapshot: %w", err)
+	}
+
+	record := buildExecutionRecord(execCtx, recordID, attempt, resumedFromID)
+	if err := s.historySvc.Record(ctx, record); err != nil {
+		execCtx.FinishHistoryFinalization(false)
+		s.warnHistoryPersistenceFailure(execCtx, recordID, attempt)
+		return fmt.Errorf("persist execution history: %w", err)
+	}
+
+	execCtx.FinishHistoryFinalization(true)
+	if err := s.store.Save(ctx, execCtx); err != nil {
+		s.logger.Warn("history recorded marker save failed",
+			"workflow_id", execCtx.WorkflowID,
+			"history_record_id", recordID,
+			"attempt", attempt,
+		)
+	}
+	return nil
+}
+
+func (s *ExecutionService) warnHistoryPersistenceFailure(execCtx *workflow.ExecutionContext, recordID string, attempt int) {
+	s.logger.Warn("history persistence failed",
+		"workflow_id", execCtx.WorkflowID,
+		"history_record_id", recordID,
+		"attempt", attempt,
+	)
+}
+
+func buildExecutionRecord(execCtx *workflow.ExecutionContext, recordID string, attempt int, resumedFromID string) *workflow.ExecutionRecord {
+	record := &workflow.ExecutionRecord{
+		ID:            recordID,
+		WorkflowID:    execCtx.WorkflowID,
+		Attempt:       attempt,
+		ResumedFromID: resumedFromID,
+		WorkflowName:  execCtx.WorkflowName,
+		Status:        execCtx.GetStatus().String(),
+		ExitCode:      execCtx.ExitCode,
+		StartedAt:     execCtx.StartedAt,
+		CompletedAt:   execCtx.GetCompletedAt(),
+	}
+	if !record.CompletedAt.IsZero() {
+		record.DurationMs = record.CompletedAt.Sub(record.StartedAt).Milliseconds()
+	}
+
+	var selectedName string
+	var selectedState workflow.StepState
+	for stepName, state := range execCtx.GetAllStepStates() { //nolint:gocritic // rangeValCopy: selecting from a thread-safe snapshot requires value semantics
+		if state.Error == "" {
+			continue
+		}
+		if selectedName == "" || state.CompletedAt.After(selectedState.CompletedAt) ||
+			(state.CompletedAt.Equal(selectedState.CompletedAt) && stepName < selectedName) {
+			selectedName = stepName
+			selectedState = state
+		}
+	}
+	record.ErrorMessage = selectedState.Error
+	return record
 }
 
 func (s *ExecutionService) finalizeTerminalOutcome(
@@ -102,21 +230,28 @@ func (s *ExecutionService) finalizeTerminalOutcome(
 	}
 	finalizer.finalized = true
 
-	switch {
-	case outcome.err == nil:
-		execCtx.SetStatus(workflow.StatusCompleted)
-	case errors.Is(outcome.cancellationCause, context.Canceled) ||
-		errors.Is(outcome.cancellationCause, context.DeadlineExceeded) ||
-		errors.Is(outcome.err, context.Canceled) || errors.Is(outcome.err, context.DeadlineExceeded):
-		execCtx.SetStatus(workflow.StatusCancelled)
-	default:
-		execCtx.SetStatus(workflow.StatusFailed)
+	finalizationErr := s.finalizeAttemptHistory(ctx, execCtx, outcome.errorMessage, func() {
+		switch {
+		case outcome.err == nil:
+			execCtx.SetStatus(workflow.StatusCompleted)
+		case errors.Is(outcome.cancellationCause, context.Canceled) ||
+			errors.Is(outcome.cancellationCause, context.DeadlineExceeded) ||
+			errors.Is(outcome.err, context.Canceled) || errors.Is(outcome.err, context.DeadlineExceeded):
+			execCtx.SetStatus(workflow.StatusCancelled)
+		default:
+			execCtx.SetStatus(workflow.StatusFailed)
+		}
+		execCtx.SetCompletedAt(time.Now())
+		normalizeTerminalExitCode(execCtx, outcome.err)
+	})
+	if finalizationErr != nil {
+		recordID, attempt, _, _ := execCtx.GetHistoryAttempt()
+		s.logger.Debug("terminal history finalization deferred",
+			"workflow_id", execCtx.WorkflowID,
+			"history_record_id", recordID,
+			"attempt", attempt,
+		)
 	}
-	execCtx.SetCompletedAt(time.Now())
-	normalizeTerminalExitCode(execCtx, outcome.err)
-	s.checkpoint(ctx, execCtx)
-	s.recordHistory(ctx, execCtx)
-	s.emitAuditCompleted(ctx, execCtx, outcome.errorMessage)
 	s.emitWorkflowTerminalEvent(ctx, execCtx, outcome.err)
 }
 
@@ -146,7 +281,7 @@ func (s *ExecutionService) executeStartedAttempt(ctx context.Context, wf *workfl
 		return result
 	}()
 
-	finalizationCtx := context.Background()
+	finalizationCtx := context.WithoutCancel(ctx)
 	s.finalizeTerminalOutcome(finalizationCtx, execCtx, finalizer, outcome)
 	s.executeTerminalHook(finalizationCtx, wf, execCtx, outcome.err)
 	return outcome.err
@@ -720,10 +855,126 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 		return execCtx, err
 	}
 	defer span.End()
+	if err := s.prepareInitialHistoryAttempt(spanCtx, execCtx); err != nil {
+		return nil, err
+	}
 
 	return execCtx, s.executeStartedAttempt(spanCtx, wf, execCtx, func() error {
 		return s.runExecutionLoop(spanCtx, wf, execCtx)
 	})
+}
+
+func (s *ExecutionService) prepareInitialHistoryAttempt(ctx context.Context, execCtx *workflow.ExecutionContext) error {
+	if err := execCtx.BeginInitialHistoryAttempt(uuid.NewString()); err != nil {
+		return fmt.Errorf("allocate initial history attempt: %w", err)
+	}
+	return s.persistHistoryAttemptAllocation(ctx, execCtx)
+}
+
+func (s *ExecutionService) persistHistoryAttemptAllocation(ctx context.Context, execCtx *workflow.ExecutionContext) error {
+	if err := s.store.Save(ctx, execCtx); err != nil {
+		return fmt.Errorf("persist history attempt allocation: %w", err)
+	}
+	return nil
+}
+
+func (s *ExecutionService) prepareResumedHistoryAttempt(ctx context.Context, execCtx *workflow.ExecutionContext) error {
+	previousID := execCtx.HistoryRecordID
+	previousAttempt := execCtx.HistoryAttempt
+	if previousAttempt == 0 {
+		var err error
+		previousID, previousAttempt, err = s.normalizeLegacyHistoryAttempt(ctx, execCtx.WorkflowID)
+		if err != nil {
+			return err
+		}
+	}
+	if previousAttempt < 0 || previousAttempt == math.MaxInt || (previousAttempt > 0 && previousID == "") {
+		return fmt.Errorf("invalid saved history lineage: %w", workflow.ErrInvalidHistoryAttempt)
+	}
+
+	var err error
+	if previousAttempt == 0 {
+		err = execCtx.BeginInitialHistoryAttempt(uuid.NewString())
+	} else {
+		err = execCtx.BeginResumedHistoryAttempt(uuid.NewString(), previousID, previousAttempt+1)
+	}
+	if err != nil {
+		return fmt.Errorf("allocate resumed history attempt: %w", err)
+	}
+	execCtx.StartedAt = time.Now()
+	execCtx.UpdatedAt = execCtx.StartedAt
+	execCtx.CompletedAt = time.Time{}
+	return s.persistHistoryAttemptAllocation(ctx, execCtx)
+}
+
+func (s *ExecutionService) normalizeLegacyHistoryAttempt(
+	ctx context.Context,
+	workflowID string,
+) (recordID string, attempt int, err error) {
+	if !s.historySvc.IsEnabled() {
+		return "", 0, nil
+	}
+	records, err := s.historySvc.List(ctx, &workflow.HistoryFilter{WorkflowID: workflowID, Limit: math.MaxInt})
+	if err != nil {
+		return "", 0, fmt.Errorf("list workflow history for attempt allocation: %w", err)
+	}
+	recordsByID, err := indexLegacyHistoryRecords(records, workflowID)
+	if err != nil {
+		return "", 0, err
+	}
+	idsByAttempt := make(map[int]string, len(records))
+	maxAttempt := 0
+	maxID := ""
+	for _, record := range records {
+		if record.WorkflowID != workflowID {
+			continue
+		}
+		if err := validateLegacyHistoryRecord(record, recordsByID); err != nil {
+			return "", 0, err
+		}
+		if existingID, exists := idsByAttempt[record.Attempt]; exists && existingID != record.ID {
+			return "", 0, fmt.Errorf("conflicting workflow history ordinal %d: %w", record.Attempt, workflow.ErrInvalidHistoryAttempt)
+		}
+		idsByAttempt[record.Attempt] = record.ID
+		if record.Attempt > maxAttempt {
+			maxAttempt, maxID = record.Attempt, record.ID
+		}
+	}
+	if maxAttempt == math.MaxInt {
+		return "", 0, fmt.Errorf("workflow history attempt overflow: %w", workflow.ErrInvalidHistoryAttempt)
+	}
+	return maxID, maxAttempt, nil
+}
+
+func indexLegacyHistoryRecords(records []*workflow.ExecutionRecord, workflowID string) (map[string]*workflow.ExecutionRecord, error) {
+	recordsByID := make(map[string]*workflow.ExecutionRecord, len(records))
+	for _, record := range records {
+		if record == nil {
+			return nil, fmt.Errorf("nil workflow history record: %w", workflow.ErrInvalidHistoryAttempt)
+		}
+		previous, exists := recordsByID[record.ID]
+		if exists && (record.WorkflowID == workflowID || previous.WorkflowID == workflowID) &&
+			(record.WorkflowID != previous.WorkflowID || record.Attempt != previous.Attempt || record.ResumedFromID != previous.ResumedFromID) {
+			return nil, fmt.Errorf("conflicting workflow history identity: %w", workflow.ErrInvalidHistoryAttempt)
+		}
+		recordsByID[record.ID] = record
+	}
+	return recordsByID, nil
+}
+
+func validateLegacyHistoryRecord(record *workflow.ExecutionRecord, recordsByID map[string]*workflow.ExecutionRecord) error {
+	if record.ID == "" || record.Attempt < 1 ||
+		(record.Attempt == 1 && record.ResumedFromID != "") ||
+		(record.Attempt > 1 && record.ResumedFromID == "") || record.ResumedFromID == record.ID {
+		return fmt.Errorf("invalid workflow history lineage: %w", workflow.ErrInvalidHistoryAttempt)
+	}
+	// Retention may remove a predecessor. Validate its relationship only when
+	// the referenced record is still present, independently of result ordering.
+	if predecessor, exists := recordsByID[record.ResumedFromID]; record.ResumedFromID != "" && exists &&
+		(predecessor.WorkflowID != record.WorkflowID || predecessor.Attempt != record.Attempt-1) {
+		return fmt.Errorf("inconsistent workflow history predecessor: %w", workflow.ErrInvalidHistoryAttempt)
+	}
+	return nil
 }
 
 // executeStep executes a single step and returns the next step name.
@@ -1905,6 +2156,23 @@ func (s *ExecutionService) Resume(
 	inputOverrides map[string]any,
 	fromStep string,
 ) (*workflow.ExecutionContext, error) {
+	if !tryBeginResume(workflowID) {
+		return nil, fmt.Errorf("resume workflow %s: %w", workflowID, errResumeInProgress)
+	}
+	defer finishResume(workflowID)
+
+	if leaseStore, ok := s.store.(ports.ResumeLeaseStore); ok {
+		release, err := leaseStore.AcquireResumeLease(ctx, workflowID)
+		if err != nil {
+			return nil, fmt.Errorf("acquire resume lease: %w", err)
+		}
+		defer func() {
+			if releaseErr := release(); releaseErr != nil {
+				s.logger.Warn("release resume lease failed", "workflow_id", workflowID, "error", releaseErr)
+			}
+		}()
+	}
+
 	// 1. Load state
 	execCtx, err := s.store.Load(ctx, workflowID)
 	if err != nil {
@@ -1938,14 +2206,33 @@ func (s *ExecutionService) Resume(
 
 	// Validate the effective inputs before changing state or emitting a new start.
 	effectiveInputs := MergeInputs(execCtx.GetInputs(), inputOverrides)
-	if err := s.workflowSvc.ValidateLoadedWorkflowWithInputs(ctx, wf, execCtx.WorkflowName, ports.ValidateOptions{}, effectiveInputs); err != nil {
-		return nil, fmt.Errorf("validate workflow before resume: %w", err)
+	s.resumeValidationMu.Lock()
+	validationErr := s.workflowSvc.ValidateLoadedWorkflowWithInputs(ctx, wf, execCtx.WorkflowName, ports.ValidateOptions{}, effectiveInputs)
+	s.resumeValidationMu.Unlock()
+	if validationErr != nil {
+		return nil, fmt.Errorf("validate workflow before resume: %w", validationErr)
 	}
 
-	// 6. Cleanup states after target and persist atomically before execution
+	stagedCtx, err := cloneExecutionContext(execCtx)
+	if err != nil {
+		return nil, fmt.Errorf("stage resume state: %w", err)
+	}
+	execCtx = stagedCtx
+
+	// Reconcile a terminal predecessor before replacing its durable attempt identity.
+	// The detached context lets persistence finish even when the execution context
+	// supplied to Resume has already been cancelled.
+	_, previousAttempt, _, previousRecorded := execCtx.GetHistoryAttempt()
+	if previousAttempt > 0 && !previousRecorded && isTerminalExecutionStatus(execCtx.GetStatus()) {
+		if err := s.finalizeAttemptHistory(context.WithoutCancel(ctx), execCtx, historyErrorMessage(execCtx), nil); err != nil {
+			return nil, fmt.Errorf("reconcile pending attempt history: %w", err)
+		}
+	}
+
+	// 6. Stage cleanup, inputs, target, status, and attempt identity. The
+	// mandatory allocation save below commits them as one durable snapshot.
 	if targetStep != execCtx.CurrentStep {
 		s.cleanupStatesAfter(execCtx, targetStep)
-		s.checkpoint(ctx, execCtx)
 	}
 
 	// 7. Merge input overrides
@@ -1958,7 +2245,9 @@ func (s *ExecutionService) Resume(
 
 	// 9. Reset status to running
 	execCtx.Status = workflow.StatusRunning
-
+	if err := s.prepareResumedHistoryAttempt(ctx, execCtx); err != nil {
+		return nil, err
+	}
 	// 10. Execute from resolved step
 	s.logger.Info("resuming workflow", "id", workflowID, "from", execCtx.CurrentStep)
 
@@ -1966,6 +2255,47 @@ func (s *ExecutionService) Resume(
 		_, runErr := s.executeFromStep(ctx, wf, execCtx)
 		return runErr
 	})
+}
+
+func cloneExecutionContext(execCtx *workflow.ExecutionContext) (*workflow.ExecutionContext, error) {
+	if execCtx == nil {
+		return nil, errors.New("execution context cannot be nil")
+	}
+	var currentLoop *workflow.LoopContext
+	if execCtx.CurrentLoop != nil {
+		loopCopy := *execCtx.CurrentLoop
+		currentLoop = &loopCopy
+	}
+	recordID, attempt, resumedFromID, recorded := execCtx.GetHistoryAttempt()
+	return &workflow.ExecutionContext{
+		WorkflowID:              execCtx.WorkflowID,
+		WorkflowName:            execCtx.WorkflowName,
+		ParentRunID:             execCtx.ParentRunID,
+		Status:                  execCtx.GetStatus(),
+		CurrentStep:             execCtx.GetCurrentStep(),
+		ExitCode:                execCtx.ExitCode,
+		Inputs:                  execCtx.GetInputs(),
+		States:                  execCtx.GetAllStepStates(),
+		Env:                     maps.Clone(execCtx.Env),
+		StartedAt:               execCtx.StartedAt,
+		UpdatedAt:               execCtx.GetUpdatedAt(),
+		CompletedAt:             execCtx.GetCompletedAt(),
+		CurrentLoop:             currentLoop,
+		CallStack:               append([]string(nil), execCtx.CallStack...),
+		HistoryRecordID:         recordID,
+		HistoryAttempt:          attempt,
+		PreviousHistoryRecordID: resumedFromID,
+		HistoryRecorded:         recorded,
+	}, nil
+}
+
+func isTerminalExecutionStatus(status workflow.ExecutionStatus) bool {
+	return status == workflow.StatusCompleted || status == workflow.StatusFailed || status == workflow.StatusCancelled
+}
+
+func historyErrorMessage(execCtx *workflow.ExecutionContext) string {
+	record := buildExecutionRecord(execCtx, "", 0, "")
+	return record.ErrorMessage
 }
 
 // resolveFromStep resolves the --from flag value to a concrete step name.

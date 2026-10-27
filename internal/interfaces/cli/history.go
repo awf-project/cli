@@ -13,15 +13,17 @@ import (
 )
 
 type HistoryInfo struct {
-	ID           string `json:"id"`
-	WorkflowID   string `json:"workflow_id"`
-	WorkflowName string `json:"workflow_name"`
-	Status       string `json:"status"`
-	ExitCode     int    `json:"exit_code,omitempty"`
-	StartedAt    string `json:"started_at"`
-	CompletedAt  string `json:"completed_at"`
-	DurationMs   int64  `json:"duration_ms"`
-	ErrorMessage string `json:"error_message,omitempty"`
+	ID            string `json:"id"`
+	WorkflowID    string `json:"workflow_id"`
+	Attempt       int    `json:"attempt"`
+	ResumedFromID string `json:"resumed_from_id,omitempty"`
+	WorkflowName  string `json:"workflow_name"`
+	Status        string `json:"status"`
+	ExitCode      int    `json:"exit_code,omitempty"`
+	StartedAt     string `json:"started_at"`
+	CompletedAt   string `json:"completed_at"`
+	DurationMs    int64  `json:"duration_ms"`
+	ErrorMessage  string `json:"error_message,omitempty"`
 }
 
 type HistoryStatsInfo struct {
@@ -35,6 +37,7 @@ type HistoryStatsInfo struct {
 func newHistoryCommand(cfg *Config) *cobra.Command {
 	var (
 		workflowName string
+		workflowID   string
 		status       string
 		since        string
 		limit        int
@@ -49,14 +52,16 @@ func newHistoryCommand(cfg *Config) *cobra.Command {
 Examples:
   awf history
   awf history --workflow deploy
+  awf history --workflow-id 00000000-0000-0000-0000-000000000001
   awf history --status failed --since 2025-12-01
   awf history --stats`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runHistory(cmd, cfg, workflowName, status, since, limit, showStats)
+			return runHistory(cmd, cfg, workflowName, workflowID, status, since, limit, showStats)
 		},
 	}
 
 	cmd.Flags().StringVarP(&workflowName, "workflow", "w", "", "Filter by workflow name")
+	cmd.Flags().StringVar(&workflowID, "workflow-id", "", "Filter by workflow ID")
 	cmd.Flags().StringVarP(&status, "status", "s", "", "Filter by status (success, failed, cancelled)")
 	cmd.Flags().StringVar(&since, "since", "", "Show executions since date (YYYY-MM-DD)")
 	cmd.Flags().IntVarP(&limit, "limit", "n", 20, "Maximum entries to show")
@@ -65,7 +70,7 @@ Examples:
 	return cmd
 }
 
-func runHistory(cmd *cobra.Command, cfg *Config, workflowName, status, since string, limit int, showStats bool) error {
+func runHistory(cmd *cobra.Command, cfg *Config, workflowName, workflowID, status, since string, limit int, showStats bool) error {
 	ctx := context.Background()
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
@@ -85,6 +90,7 @@ func runHistory(cmd *cobra.Command, cfg *Config, workflowName, status, since str
 	if cfg.Facade != nil {
 		records, err := cfg.Facade.History(ctx, ports.HistoryFilter{
 			WorkflowName: workflowName,
+			WorkflowID:   workflowID,
 			Status:       status,
 			Since:        sinceTime,
 			Limit:        limit,
@@ -113,14 +119,16 @@ func writeHistoryRunRecords(writer *ui.OutputWriter, records []ports.RunRecord) 
 	for i := range records {
 		r := &records[i]
 		infos[i] = HistoryInfo{
-			ID:           r.RunID,
-			WorkflowID:   r.WorkflowID,
-			WorkflowName: r.WorkflowName,
-			Status:       string(r.Status),
-			StartedAt:    r.StartedAt.Format(time.RFC3339),
-			CompletedAt:  r.CompletedAt.Format(time.RFC3339),
-			DurationMs:   r.DurationMs,
-			ErrorMessage: r.ErrorMessage,
+			ID:            r.RunID,
+			WorkflowID:    r.WorkflowID,
+			Attempt:       r.Attempt,
+			ResumedFromID: r.ResumedFromID,
+			WorkflowName:  r.WorkflowName,
+			Status:        string(r.Status),
+			StartedAt:     r.StartedAt.Format(time.RFC3339),
+			CompletedAt:   r.CompletedAt.Format(time.RFC3339),
+			DurationMs:    r.DurationMs,
+			ErrorMessage:  r.ErrorMessage,
 		}
 	}
 	return writeHistoryInfos(writer, infos)
@@ -137,7 +145,10 @@ func writeHistoryRunRecordsStats(writer *ui.OutputWriter, records []ports.RunRec
 		r := &records[i]
 		total++
 		switch r.Status {
-		case ports.RunStateCompleted:
+		case ports.RunStateCompleted, ports.RunState("success"):
+			// SQLite history predates RunStateCompleted and persists successful
+			// executions as "success". Accept both representations while legacy
+			// records remain readable through the facade adapter.
 			success++
 		case ports.RunStateFailed:
 			failed++
@@ -202,15 +213,18 @@ func writeHistoryInfos(writer *ui.OutputWriter, infos []HistoryInfo) error {
 	}
 
 	w := tabwriter.NewWriter(writer.Out(), 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "ID\tWORKFLOW\tSTATUS\tDURATION\tCOMPLETED")
-	_, _ = fmt.Fprintln(w, "----\t--------\t------\t--------\t---------")
+	_, _ = fmt.Fprintln(w, "ID\tWORKFLOW ID\tATTEMPT\tRESUMED FROM\tWORKFLOW\tSTATUS\tDURATION\tCOMPLETED")
+	_, _ = fmt.Fprintln(w, "----\t-----------\t-------\t------------\t--------\t------\t--------\t---------")
 	for i := range infos {
 		info := &infos[i]
 		duration := formatDuration(info.DurationMs)
 		completedAt, _ := time.Parse(time.RFC3339, info.CompletedAt)
 		_, _ = fmt.Fprintf(
-			w, "%s\t%s\t%s\t%s\t%s\n",
+			w, "%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
 			info.ID,
+			info.WorkflowID,
+			info.Attempt,
+			info.ResumedFromID,
 			info.WorkflowName,
 			info.Status,
 			duration,

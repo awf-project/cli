@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"errors"
 	"sync"
 	"time"
 )
@@ -15,6 +16,8 @@ const (
 	StatusFailed    ExecutionStatus = "failed"
 	StatusCancelled ExecutionStatus = "cancelled"
 )
+
+var ErrInvalidHistoryAttempt = errors.New("invalid history attempt")
 
 func (s ExecutionStatus) String() string {
 	return string(s)
@@ -65,21 +68,100 @@ type LoopContext struct {
 // ExecutionContext holds the runtime state of a workflow execution.
 // Thread-safe for concurrent access during parallel execution.
 type ExecutionContext struct {
-	mu           sync.RWMutex // protects concurrent map access
-	WorkflowID   string
-	WorkflowName string
-	ParentRunID  string // non-empty when this run was spawned by a call_workflow step
-	Status       ExecutionStatus
-	CurrentStep  string
-	ExitCode     int // process exit code propagated from terminal steps (FR-004)
-	Inputs       map[string]any
-	States       map[string]StepState
-	Env          map[string]string
-	StartedAt    time.Time
-	UpdatedAt    time.Time
-	CompletedAt  time.Time
-	CurrentLoop  *LoopContext // current loop iteration context (nil when not in a loop)
-	CallStack    []string     // active workflow names for circular detection (F023)
+	mu                      sync.RWMutex // protects concurrent map access
+	WorkflowID              string
+	WorkflowName            string
+	ParentRunID             string // non-empty when this run was spawned by a call_workflow step
+	Status                  ExecutionStatus
+	CurrentStep             string
+	ExitCode                int // process exit code propagated from terminal steps (FR-004)
+	Inputs                  map[string]any
+	States                  map[string]StepState
+	Env                     map[string]string
+	StartedAt               time.Time
+	UpdatedAt               time.Time
+	CompletedAt             time.Time
+	CurrentLoop             *LoopContext // current loop iteration context (nil when not in a loop)
+	CallStack               []string     // active workflow names for circular detection (F023)
+	HistoryRecordID         string
+	HistoryAttempt          int
+	PreviousHistoryRecordID string
+	HistoryRecorded         bool
+	historyFinalizing       bool
+	completionAuditStarted  bool
+}
+
+func (c *ExecutionContext) BeginInitialHistoryAttempt(recordID string) error {
+	if recordID == "" {
+		return ErrInvalidHistoryAttempt
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.historyFinalizing {
+		return ErrInvalidHistoryAttempt
+	}
+	c.beginHistoryAttempt(recordID, "", 1)
+	return nil
+}
+
+func (c *ExecutionContext) BeginResumedHistoryAttempt(recordID, resumedFromID string, attempt int) error {
+	if recordID == "" || resumedFromID == "" || attempt < 2 {
+		return ErrInvalidHistoryAttempt
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.historyFinalizing {
+		return ErrInvalidHistoryAttempt
+	}
+	c.beginHistoryAttempt(recordID, resumedFromID, attempt)
+	return nil
+}
+
+func (c *ExecutionContext) GetHistoryAttempt() (recordID string, attempt int, resumedFromID string, recorded bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.HistoryRecordID, c.HistoryAttempt, c.PreviousHistoryRecordID, c.HistoryRecorded
+}
+
+func (c *ExecutionContext) TryBeginHistoryFinalization() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.HistoryRecordID == "" || c.HistoryAttempt < 1 || c.HistoryRecorded || c.historyFinalizing {
+		return false
+	}
+	c.historyFinalizing = true
+	return true
+}
+
+func (c *ExecutionContext) FinishHistoryFinalization(recorded bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.historyFinalizing {
+		return
+	}
+	c.HistoryRecorded = recorded
+	c.historyFinalizing = false
+}
+
+func (c *ExecutionContext) TryBeginCompletionAudit() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.HistoryRecordID == "" || c.HistoryAttempt < 1 || c.completionAuditStarted {
+		return false
+	}
+	c.completionAuditStarted = true
+	return true
+}
+
+func (c *ExecutionContext) beginHistoryAttempt(recordID, resumedFromID string, attempt int) {
+	c.HistoryRecordID = recordID
+	c.HistoryAttempt = attempt
+	c.PreviousHistoryRecordID = resumedFromID
+	c.HistoryRecorded = false
+	c.historyFinalizing = false
+	c.completionAuditStarted = false
 }
 
 // NewExecutionContext creates a new execution context.

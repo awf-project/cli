@@ -2,7 +2,9 @@ package workflow_test
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -10,6 +12,161 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestExecutionContext_BeginsInitialHistoryAttempt(t *testing.T) {
+	ctx := workflow.NewExecutionContext("stable-workflow-id", "workflow")
+
+	err := ctx.BeginInitialHistoryAttempt("record-1")
+	require.NoError(t, err)
+	recordID, attempt, resumedFromID, recorded := ctx.GetHistoryAttempt()
+	assert.Equal(t, "record-1", recordID)
+	assert.Equal(t, 1, attempt)
+	assert.Empty(t, resumedFromID)
+	assert.False(t, recorded)
+	assert.Equal(t, "stable-workflow-id", ctx.WorkflowID)
+
+	err = ctx.BeginInitialHistoryAttempt("")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, workflow.ErrInvalidHistoryAttempt)
+	assert.True(t, ctx.TryBeginHistoryFinalization(), "the initial attempt must permit its first finalization claim")
+	assert.True(t, ctx.TryBeginCompletionAudit(), "the initial attempt must permit its first audit claim")
+
+	err = ctx.BeginInitialHistoryAttempt("")
+	require.ErrorIs(t, err, workflow.ErrInvalidHistoryAttempt)
+	assert.False(t, ctx.TryBeginHistoryFinalization(), "rejected initialization must preserve the in-flight finalization claim")
+	assert.False(t, ctx.TryBeginCompletionAudit(), "rejected initialization must preserve the consumed audit claim")
+	recordID, attempt, resumedFromID, recorded = ctx.GetHistoryAttempt()
+	assert.Equal(t, "record-1", recordID)
+	assert.Equal(t, 1, attempt)
+	assert.Empty(t, resumedFromID)
+	assert.False(t, recorded)
+	assert.Equal(t, "stable-workflow-id", ctx.WorkflowID)
+}
+
+func TestExecutionContext_BeginsResumedHistoryAttempt(t *testing.T) {
+	tests := []struct {
+		name          string
+		recordID      string
+		resumedFromID string
+		attempt       int
+	}{
+		{name: "empty record ID", recordID: "", resumedFromID: "record-1", attempt: 2},
+		{name: "empty predecessor", recordID: "record-2", resumedFromID: "", attempt: 2},
+		{name: "ordinal below two", recordID: "record-2", resumedFromID: "record-1", attempt: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := workflow.NewExecutionContext("stable-workflow-id", "workflow")
+			require.NoError(t, ctx.BeginInitialHistoryAttempt("record-1"))
+
+			err := ctx.BeginResumedHistoryAttempt(tt.recordID, tt.resumedFromID, tt.attempt)
+			require.Error(t, err)
+			assert.True(t, errors.Is(err, workflow.ErrInvalidHistoryAttempt))
+			assert.True(t, ctx.TryBeginHistoryFinalization(), "the existing attempt must permit its first finalization claim")
+			assert.True(t, ctx.TryBeginCompletionAudit(), "the existing attempt must permit its first audit claim")
+
+			err = ctx.BeginResumedHistoryAttempt(tt.recordID, tt.resumedFromID, tt.attempt)
+			require.ErrorIs(t, err, workflow.ErrInvalidHistoryAttempt)
+			assert.False(t, ctx.TryBeginHistoryFinalization(), "rejected resumed initialization must preserve the in-flight finalization claim")
+			assert.False(t, ctx.TryBeginCompletionAudit(), "rejected resumed initialization must preserve the consumed audit claim")
+			recordID, attempt, resumedFromID, recorded := ctx.GetHistoryAttempt()
+			assert.Equal(t, "record-1", recordID)
+			assert.Equal(t, 1, attempt)
+			assert.Empty(t, resumedFromID)
+			assert.False(t, recorded)
+			assert.Equal(t, "stable-workflow-id", ctx.WorkflowID)
+		})
+	}
+
+	ctx := workflow.NewExecutionContext("stable-workflow-id", "workflow")
+	require.NoError(t, ctx.BeginInitialHistoryAttempt("record-1"))
+	require.NoError(t, ctx.BeginResumedHistoryAttempt("record-2", "record-1", 2))
+	recordID, attempt, resumedFromID, recorded := ctx.GetHistoryAttempt()
+	assert.Equal(t, "record-2", recordID)
+	assert.Equal(t, 2, attempt)
+	assert.Equal(t, "record-1", resumedFromID)
+	assert.False(t, recorded)
+	assert.Equal(t, "stable-workflow-id", ctx.WorkflowID)
+}
+
+func TestExecutionContext_LegacyJSONLeavesHistoryAttemptMetadataAtZeroValues(t *testing.T) {
+	const legacyContext = `{
+		"WorkflowID":"stable-workflow-id",
+		"WorkflowName":"legacy-workflow",
+		"Status":"cancelled",
+		"Inputs":{},
+		"States":{}
+	}`
+
+	var ctx workflow.ExecutionContext
+	require.NoError(t, json.Unmarshal([]byte(legacyContext), &ctx))
+
+	recordID, attempt, resumedFromID, recorded := ctx.GetHistoryAttempt()
+	assert.Equal(t, "stable-workflow-id", ctx.WorkflowID)
+	assert.Empty(t, recordID)
+	assert.Zero(t, attempt)
+	assert.Empty(t, resumedFromID)
+	assert.False(t, recorded)
+}
+
+func TestExecutionContext_HistoryFinalizationIsSingleFlight(t *testing.T) {
+	ctx := workflow.NewExecutionContext("stable-workflow-id", "workflow")
+	require.NoError(t, ctx.BeginInitialHistoryAttempt("record-1"))
+
+	const callers = 32
+	start := make(chan struct{})
+	var winners atomic.Int32
+	var wg sync.WaitGroup
+	for range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if ctx.TryBeginHistoryFinalization() {
+				winners.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	assert.Equal(t, int32(1), winners.Load())
+
+	err := ctx.BeginResumedHistoryAttempt("record-2", "record-1", 2)
+	require.ErrorIs(t, err, workflow.ErrInvalidHistoryAttempt)
+	recordID, attempt, resumedFromID, recorded := ctx.GetHistoryAttempt()
+	assert.Equal(t, "record-1", recordID)
+	assert.Equal(t, 1, attempt)
+	assert.Empty(t, resumedFromID)
+	assert.False(t, recorded)
+
+	assert.True(t, ctx.TryBeginCompletionAudit())
+	assert.False(t, ctx.TryBeginCompletionAudit())
+	ctx.FinishHistoryFinalization(false)
+	assert.True(t, ctx.TryBeginHistoryFinalization())
+	assert.False(t, ctx.TryBeginCompletionAudit())
+	ctx.FinishHistoryFinalization(true)
+	assert.False(t, ctx.TryBeginHistoryFinalization())
+	recordID, attempt, resumedFromID, recorded = ctx.GetHistoryAttempt()
+	assert.Equal(t, "record-1", recordID)
+	assert.Equal(t, 1, attempt)
+	assert.Empty(t, resumedFromID)
+	assert.True(t, recorded)
+
+	require.NoError(t, ctx.BeginResumedHistoryAttempt("record-2", "record-1", 2))
+	assert.True(t, ctx.TryBeginCompletionAudit())
+	assert.True(t, ctx.TryBeginHistoryFinalization())
+	recordID, attempt, resumedFromID, recorded = ctx.GetHistoryAttempt()
+	assert.Equal(t, "record-2", recordID)
+	assert.Equal(t, 2, attempt)
+	assert.Equal(t, "record-1", resumedFromID)
+	assert.False(t, recorded)
+
+	data, err := json.Marshal(ctx)
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "historyFinalizing")
+	assert.NotContains(t, string(data), "completionAuditStarted")
+}
 
 func TestExecutionStatusString(t *testing.T) {
 	statuses := []struct {
@@ -767,8 +924,8 @@ func TestStepState_ConversationFields_CompleteConversationMode(t *testing.T) {
 		Conversation: &workflow.ConversationState{
 			Turns: []workflow.Turn{
 				{Role: workflow.TurnRoleSystem, Content: "You are a code reviewer", Tokens: 50},
-				{Role: workflow.TurnRoleUser, Content: "Review this code...", Tokens: 500},
-				{Role: workflow.TurnRoleAssistant, Content: "I found these issues...", Tokens: 800},
+				{Role: workflow.TurnRoleUser, Content: "Review this code…", Tokens: 500},
+				{Role: workflow.TurnRoleAssistant, Content: "I found these issues…", Tokens: 800},
 				{Role: workflow.TurnRoleUser, Content: "Fix the issues", Tokens: 20},
 				{Role: workflow.TurnRoleAssistant, Content: "APPROVED", Tokens: 600},
 			},
