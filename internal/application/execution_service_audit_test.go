@@ -6,16 +6,409 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	domainerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type finalizationTestTrace struct {
+	calls               []string
+	terminalCheckpoints []*workflow.ExecutionContext
+	historyRecords      []*workflow.ExecutionRecord
+	auditEvents         []workflow.AuditEvent
+	domainEvents        []*pluginmodel.DomainEvent
+	hookCalls           map[string]int
+	checkpointErr       error
+	historyErr          error
+	auditErr            error
+	allContextsActive   bool
+}
+
+func newFinalizationTestTrace() *finalizationTestTrace {
+	return &finalizationTestTrace{hookCalls: make(map[string]int), allContextsActive: true}
+}
+
+func (t *finalizationTestTrace) recordContext(ctx context.Context) {
+	if ctx.Err() != nil {
+		t.allContextsActive = false
+	}
+}
+
+type finalizationTestStore struct {
+	trace  *finalizationTestTrace
+	states map[string]*workflow.ExecutionContext
+}
+
+func (s *finalizationTestStore) Save(ctx context.Context, state *workflow.ExecutionContext) error {
+	s.states[state.WorkflowID] = state
+	if !state.CompletedAt.IsZero() && (state.Status == workflow.StatusCompleted ||
+		state.Status == workflow.StatusFailed || state.Status == workflow.StatusCancelled) {
+		s.trace.calls = append(s.trace.calls, "checkpoint")
+		s.trace.terminalCheckpoints = append(s.trace.terminalCheckpoints, state)
+		s.trace.recordContext(ctx)
+		return s.trace.checkpointErr
+	}
+	return nil
+}
+
+func (s *finalizationTestStore) Load(_ context.Context, id string) (*workflow.ExecutionContext, error) {
+	return s.states[id], nil
+}
+
+func (s *finalizationTestStore) Delete(_ context.Context, id string) error {
+	delete(s.states, id)
+	return nil
+}
+
+func (s *finalizationTestStore) List(_ context.Context) ([]string, error) {
+	ids := make([]string, 0, len(s.states))
+	for id := range s.states {
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+type finalizationTestHistoryStore struct{ trace *finalizationTestTrace }
+
+func (s *finalizationTestHistoryStore) Record(ctx context.Context, record *workflow.ExecutionRecord) error {
+	s.trace.calls = append(s.trace.calls, "history")
+	s.trace.historyRecords = append(s.trace.historyRecords, record)
+	s.trace.recordContext(ctx)
+	return s.trace.historyErr
+}
+
+func (s *finalizationTestHistoryStore) List(context.Context, *workflow.HistoryFilter) ([]*workflow.ExecutionRecord, error) {
+	return s.trace.historyRecords, nil
+}
+
+func (*finalizationTestHistoryStore) GetStats(context.Context, *workflow.HistoryFilter) (*workflow.HistoryStats, error) {
+	return &workflow.HistoryStats{}, nil
+}
+
+func (*finalizationTestHistoryStore) Cleanup(context.Context, time.Duration) (int, error) {
+	return 0, nil
+}
+func (*finalizationTestHistoryStore) Close() error { return nil }
+
+type finalizationTestAuditWriter struct{ trace *finalizationTestTrace }
+
+func (w *finalizationTestAuditWriter) Write(ctx context.Context, event *workflow.AuditEvent) error {
+	w.trace.auditEvents = append(w.trace.auditEvents, *event)
+	if event.Event == workflow.EventWorkflowCompleted {
+		w.trace.calls = append(w.trace.calls, "audit")
+		w.trace.recordContext(ctx)
+		return w.trace.auditErr
+	}
+	return nil
+}
+
+func (*finalizationTestAuditWriter) Close() error { return nil }
+
+type finalizationTestEventPublisher struct{ trace *finalizationTestTrace }
+
+func (p *finalizationTestEventPublisher) Publish(ctx context.Context, event *pluginmodel.DomainEvent) error {
+	p.trace.domainEvents = append(p.trace.domainEvents, event)
+	if event.Type == workflow.EventWorkflowCompleted || event.Type == workflow.EventWorkflowFailed {
+		p.trace.calls = append(p.trace.calls, "event")
+		p.trace.recordContext(ctx)
+	}
+	return nil
+}
+
+func (*finalizationTestEventPublisher) Close() error { return nil }
+
+type finalizationTestExecutor struct{ trace *finalizationTestTrace }
+
+func (e *finalizationTestExecutor) Execute(_ context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
+	switch cmd.Program {
+	case "step-failure":
+		return &ports.CommandResult{ExitCode: 23, Stderr: "synthetic step failure"}, nil
+	case "cancel":
+		return nil, context.Canceled
+	case "deadline":
+		return nil, context.DeadlineExceeded
+	case "cancel-with-provider-error":
+		return nil, errors.New("synthetic provider shutdown error")
+	case "panic", "start-panic":
+		panic("CONFIDENTIAL_PANIC_CANARY")
+	case "start-failure":
+		return nil, errors.New("synthetic start-hook failure")
+	case "end-hook", "error-hook", "cancel-hook", "end-hook-failure":
+		e.trace.calls = append(e.trace.calls, "hook")
+		e.trace.hookCalls[cmd.Program]++
+		if cmd.Program == "end-hook-failure" {
+			return nil, errors.New("synthetic terminal-hook failure")
+		}
+	}
+	return &ports.CommandResult{}, nil
+}
+
+type finalizationTestLogger struct{ entries []string }
+
+func (*finalizationTestLogger) Debug(string, ...any) {}
+func (*finalizationTestLogger) Info(string, ...any)  {}
+func (l *finalizationTestLogger) Warn(message string, fields ...any) {
+	l.entries = append(l.entries, fmt.Sprint(append([]any{message}, fields...)...))
+}
+
+func (l *finalizationTestLogger) Error(message string, fields ...any) {
+	l.entries = append(l.entries, fmt.Sprint(append([]any{message}, fields...)...))
+}
+func (l *finalizationTestLogger) WithContext(map[string]any) ports.Logger { return l }
+
+type finalizationTestRig struct {
+	service *ExecutionService
+	store   *finalizationTestStore
+	trace   *finalizationTestTrace
+	logger  *finalizationTestLogger
+}
+
+func newFinalizationTestRig(t *testing.T, wf *workflow.Workflow, resume bool) *finalizationTestRig {
+	t.Helper()
+
+	trace := newFinalizationTestTrace()
+	store := &finalizationTestStore{trace: trace, states: make(map[string]*workflow.ExecutionContext)}
+	executor := &finalizationTestExecutor{trace: trace}
+	logger := &finalizationTestLogger{}
+	repository := testmocks.NewMockWorkflowRepository()
+	repository.AddWorkflow(wf.Name, wf)
+	wfSvc := NewWorkflowService(repository, store, executor, logger, testmocks.NewMockExpressionValidator())
+	historySvc := NewHistoryService(&finalizationTestHistoryStore{trace: trace}, logger)
+	service := NewExecutionService(
+		wfSvc,
+		executor,
+		nil,
+		store,
+		logger,
+		interpolation.NewTemplateResolver(),
+		historySvc,
+	)
+	service.SetAuditTrailWriter(&finalizationTestAuditWriter{trace: trace})
+	service.SetEventPublisher(&finalizationTestEventPublisher{trace: trace})
+
+	if resume {
+		execCtx := workflow.NewExecutionContext("b017-resume", wf.Name)
+		execCtx.Status = workflow.StatusFailed
+		execCtx.CurrentStep = wf.Initial
+		store.states[execCtx.WorkflowID] = execCtx
+	}
+
+	return &finalizationTestRig{service: service, store: store, trace: trace, logger: logger}
+}
+
+func finalizationTestWorkflow(command string, terminalStatus workflow.TerminalStatus, terminalCode int, startHook, endHook string) *workflow.Workflow {
+	steps := map[string]*workflow.Step{
+		"terminal": {
+			Name: "terminal", Type: workflow.StepTypeTerminal, Status: terminalStatus, ExitCode: terminalCode,
+		},
+	}
+	initial := "terminal"
+	if command != "" {
+		initial = "execute"
+		steps[initial] = &workflow.Step{
+			Name: initial, Type: workflow.StepTypeCommand, Command: command,
+			OnSuccess: "terminal",
+		}
+	}
+
+	wf := &workflow.Workflow{Name: "b017-finalization", Initial: initial, Steps: steps}
+	if startHook != "" {
+		wf.Hooks.WorkflowStart = workflow.Hook{{Command: startHook}}
+	}
+	wf.Hooks.WorkflowEnd = workflow.Hook{{Command: endHook}}
+	wf.Hooks.WorkflowError = workflow.Hook{{Command: "error-hook"}}
+	wf.Hooks.WorkflowCancel = workflow.Hook{{Command: "cancel-hook"}}
+	return wf
+}
+
+//nolint:gocognit // The lifecycle matrix keeps all terminal-path assertions in one discoverable regression test.
+func TestExecutionFinalizationCoversEveryTerminalOutcome(t *testing.T) {
+	type lifecycleCase struct {
+		name                          string
+		resume                        bool
+		command                       string
+		terminalStatus                workflow.TerminalStatus
+		terminalCode                  int
+		startHook                     string
+		wantStatus                    workflow.ExecutionStatus
+		wantExitCode                  int
+		wantErr                       error
+		wantErrText                   string
+		wantHook                      string
+		assertPanicLogConfidentiality bool
+		cancelBeforeRun               bool
+	}
+
+	tests := []lifecycleCase{
+		{name: "fresh success", wantStatus: workflow.StatusCompleted, wantHook: "end-hook"},
+		{name: "resumed success", resume: true, wantStatus: workflow.StatusCompleted, wantHook: "end-hook"},
+		{name: "fresh explicit failure", terminalStatus: workflow.TerminalFailure, terminalCode: 17, wantStatus: workflow.StatusFailed, wantExitCode: 17, wantErrText: "terminal failure", wantHook: "error-hook"},
+		{name: "resumed explicit failure", resume: true, terminalStatus: workflow.TerminalFailure, terminalCode: 17, wantStatus: workflow.StatusFailed, wantExitCode: 17, wantErrText: "terminal failure", wantHook: "error-hook"},
+		{name: "fresh step failure", command: "step-failure", wantStatus: workflow.StatusFailed, wantExitCode: 23, wantErrText: "synthetic step failure", wantHook: "error-hook"},
+		{name: "resumed step failure", resume: true, command: "step-failure", wantStatus: workflow.StatusFailed, wantExitCode: 23, wantErrText: "synthetic step failure", wantHook: "error-hook"},
+		{name: "cancellation", command: "cancel", wantStatus: workflow.StatusCancelled, wantExitCode: 3, wantErr: context.Canceled, wantErrText: context.Canceled.Error(), wantHook: "cancel-hook"},
+		{name: "context cancellation with provider error", command: "cancel-with-provider-error", wantStatus: workflow.StatusCancelled, wantExitCode: 3, wantErrText: "synthetic provider shutdown error", wantHook: "cancel-hook", cancelBeforeRun: true},
+		{name: "deadline timeout", command: "deadline", wantStatus: workflow.StatusCancelled, wantExitCode: 3, wantErr: context.DeadlineExceeded, wantErrText: context.DeadlineExceeded.Error(), wantHook: "cancel-hook"},
+		{name: "fresh workflow-start hook failure", startHook: "start-failure", wantStatus: workflow.StatusFailed, wantExitCode: 3, wantErrText: "synthetic start-hook failure", wantHook: "error-hook"},
+		{name: "resumed workflow-start hook failure", resume: true, startHook: "start-failure", wantStatus: workflow.StatusFailed, wantExitCode: 3, wantErrText: "synthetic start-hook failure", wantHook: "error-hook"},
+		{name: "fresh recovered panic", startHook: "start-panic", wantStatus: workflow.StatusFailed, wantExitCode: 3, wantErrText: "panic", wantHook: "error-hook", assertPanicLogConfidentiality: true},
+		{name: "resumed recovered panic", resume: true, startHook: "start-panic", wantStatus: workflow.StatusFailed, wantExitCode: 3, wantErrText: "panic", wantHook: "error-hook", assertPanicLogConfidentiality: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wf := finalizationTestWorkflow(tt.command, tt.terminalStatus, tt.terminalCode, tt.startHook, "end-hook")
+			rig := newFinalizationTestRig(t, wf, tt.resume)
+
+			var execCtx *workflow.ExecutionContext
+			var runErr error
+			var recovered any
+			runCtx := context.Background()
+			if tt.cancelBeforeRun {
+				cancelledCtx, cancel := context.WithCancel(runCtx)
+				cancel()
+				runCtx = cancelledCtx
+			}
+			func() {
+				defer func() { recovered = recover() }()
+				if tt.resume {
+					execCtx, runErr = rig.service.Resume(runCtx, "b017-resume", nil, "current")
+					return
+				}
+				execCtx, runErr = rig.service.RunWithWorkflowAndRunID(runCtx, wf, nil, "b017-fresh")
+			}()
+
+			require.Nil(t, recovered, "orchestration boundary must recover panics")
+			require.NotNil(t, execCtx)
+			assert.Equal(t, tt.wantStatus, execCtx.Status)
+			assert.Equal(t, tt.wantExitCode, execCtx.ExitCode)
+			assert.False(t, execCtx.CompletedAt.IsZero())
+			if tt.wantErrText == "" {
+				assert.NoError(t, runErr)
+			} else {
+				require.Error(t, runErr)
+				assert.Contains(t, runErr.Error(), tt.wantErrText)
+			}
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, runErr, tt.wantErr)
+			}
+			if tt.assertPanicLogConfidentiality {
+				for _, entry := range rig.logger.entries {
+					assert.NotContains(t, entry, "CONFIDENTIAL_PANIC_CANARY")
+				}
+			}
+
+			require.Len(t, rig.trace.terminalCheckpoints, 1)
+			require.Len(t, rig.trace.historyRecords, 1)
+			completedAudits := make([]workflow.AuditEvent, 0, 1)
+			for _, event := range rig.trace.auditEvents {
+				if event.Event == workflow.EventWorkflowCompleted {
+					completedAudits = append(completedAudits, event)
+				}
+			}
+			require.Len(t, completedAudits, 1)
+			terminalEvents := make([]*pluginmodel.DomainEvent, 0, 1)
+			for _, event := range rig.trace.domainEvents {
+				if event.Type == workflow.EventWorkflowCompleted || event.Type == workflow.EventWorkflowFailed {
+					terminalEvents = append(terminalEvents, event)
+				}
+			}
+			require.Len(t, terminalEvents, 1)
+
+			executionID := execCtx.WorkflowID
+			assert.Equal(t, executionID, rig.trace.historyRecords[0].ID)
+			assert.Equal(t, executionID, completedAudits[0].ExecutionID)
+			assert.Equal(t, executionID, terminalEvents[0].Metadata["workflow_id"])
+			assert.Equal(t, execCtx.ExitCode, rig.trace.historyRecords[0].ExitCode)
+			require.NotNil(t, completedAudits[0].ExitCode)
+			assert.Equal(t, execCtx.ExitCode, *completedAudits[0].ExitCode)
+			assert.Equal(t, []string{"checkpoint", "history", "audit", "event", "hook"}, rig.trace.calls)
+			assert.Equal(t, 1, rig.trace.hookCalls[tt.wantHook])
+			assert.True(t, rig.trace.allContextsActive, "terminal projections must use a non-cancelled context")
+		})
+	}
+
+	t.Run("pre-start failure creates no terminal lifecycle", func(t *testing.T) {
+		wf := finalizationTestWorkflow("", workflow.TerminalSuccess, 0, "", "end-hook")
+		wf.Inputs = []workflow.Input{{Name: "required", Type: "string", Required: true}}
+		rig := newFinalizationTestRig(t, wf, false)
+
+		execCtx, err := rig.service.RunWithWorkflowAndRunID(context.Background(), wf, nil, "b017-preflight")
+
+		require.Error(t, err)
+		assert.Nil(t, execCtx)
+		assert.Empty(t, rig.trace.auditEvents)
+		assert.Empty(t, rig.trace.historyRecords)
+		assert.Empty(t, rig.trace.terminalCheckpoints)
+	})
+
+	for _, projection := range []string{"checkpoint", "history", "audit"} {
+		t.Run(projection+" failure remains best effort", func(t *testing.T) {
+			wf := finalizationTestWorkflow("", workflow.TerminalSuccess, 0, "", "end-hook")
+			rig := newFinalizationTestRig(t, wf, false)
+			injectedErr := errors.New("synthetic " + projection + " failure")
+			switch projection {
+			case "checkpoint":
+				rig.trace.checkpointErr = injectedErr
+			case "history":
+				rig.trace.historyErr = injectedErr
+			case "audit":
+				rig.trace.auditErr = injectedErr
+			}
+
+			execCtx, err := rig.service.RunWithWorkflowAndRunID(context.Background(), wf, map[string]any{
+				"PASSWORD": "CONFIDENTIAL_PROJECTION_CANARY",
+			}, "b017-injection")
+
+			require.NoError(t, err)
+			require.NotNil(t, execCtx)
+			assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+			assert.Equal(t, 1, rig.trace.hookCalls["end-hook"])
+			assert.Equal(t, []string{"checkpoint", "history", "audit", "event", "hook"}, rig.trace.calls)
+			matchingLogs := 0
+			for _, entry := range rig.logger.entries {
+				if strings.Contains(entry, injectedErr.Error()) {
+					matchingLogs++
+				}
+				assert.NotContains(t, entry, "CONFIDENTIAL_PROJECTION_CANARY")
+			}
+			assert.Equal(t, 1, matchingLogs, "each projection failure must be logged exactly once")
+		})
+	}
+
+	t.Run("terminal hook failure is logged once without confidential values", func(t *testing.T) {
+		wf := finalizationTestWorkflow("", workflow.TerminalSuccess, 0, "", "end-hook-failure")
+		rig := newFinalizationTestRig(t, wf, false)
+
+		execCtx, err := rig.service.RunWithWorkflowAndRunID(context.Background(), wf, map[string]any{
+			"PASSWORD": "CONFIDENTIAL_INPUT_CANARY",
+		}, "b017-hook-log")
+
+		require.NoError(t, err)
+		require.NotNil(t, execCtx)
+		matchingLogs := 0
+		for _, entry := range rig.logger.entries {
+			if strings.Contains(entry, "synthetic terminal-hook failure") {
+				matchingLogs++
+				assert.Contains(t, entry, execCtx.WorkflowID)
+				assert.Contains(t, entry, execCtx.WorkflowName)
+			}
+			assert.NotContains(t, entry, "CONFIDENTIAL_INPUT_CANARY")
+			assert.NotContains(t, entry, "CONFIDENTIAL_PANIC_CANARY")
+		}
+		assert.Equal(t, 1, matchingLogs)
+		assert.Len(t, rig.trace.historyRecords, 1)
+	})
+}
 
 func TestNormalizeTerminalExitCode(t *testing.T) {
 	baseTime := time.Date(2026, time.October, 17, 12, 0, 0, 0, time.UTC)

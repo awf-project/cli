@@ -253,6 +253,30 @@ func TestNotifyOperationProvider_Execute_UnknownBackend(t *testing.T) {
 	assert.Contains(t, err.Error(), "backend \"email\" not available")
 }
 
+func TestNotifyProviderUnknownBackendListsAvailableBackendsDeterministically(t *testing.T) {
+	registrationOrders := [][]string{
+		{"desktop", "webhook"},
+		{"webhook", "desktop"},
+	}
+
+	for _, order := range registrationOrders {
+		provider := NewNotifyOperationProvider(&mockLogger{})
+		for _, name := range order {
+			require.NoError(t, provider.RegisterBackend(name, &mockBackendFunc{}))
+		}
+
+		result, err := provider.Execute(context.Background(), "notify.send", map[string]any{
+			"backend": "email",
+			"message": "test",
+		})
+
+		require.EqualError(t, err, `notify.send: backend "email" not available (available: [desktop webhook])`)
+		require.NotNil(t, result)
+		assert.False(t, result.Success)
+		assert.Empty(t, result.Outputs)
+	}
+}
+
 // --- Backend-Specific Validation Tests ---
 
 func TestNotifyOperationProvider_Execute_Webhook_MissingURL(t *testing.T) {

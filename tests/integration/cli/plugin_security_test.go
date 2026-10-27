@@ -30,8 +30,24 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 
-	// Normal test execution
-	os.Exit(m.Run())
+	// Isolate default audit persistence before any root command is constructed.
+	os.Exit(runIsolatedCLITests(m))
+}
+
+func runIsolatedCLITests(m *testing.M) int {
+	dataHome, err := os.MkdirTemp("", "awf-integration-cli-xdg-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "create CLI test data root:", err)
+		return 1
+	}
+	defer os.RemoveAll(dataHome)
+	for key, value := range map[string]string{"XDG_DATA_HOME": dataHome, "AWF_AUDIT_LOG": ""} {
+		if err := os.Setenv(key, value); err != nil {
+			fmt.Fprintln(os.Stderr, "isolate CLI tests:", err)
+			return 1
+		}
+	}
+	return m.Run()
 }
 
 // TestPluginSecurity_Integration_AutoMTLS tests successful plugin install and AutoMTLS connection

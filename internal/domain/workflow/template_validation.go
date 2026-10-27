@@ -1,9 +1,66 @@
 package workflow
 
 import (
+	"encoding/json"
 	"fmt"
+	"regexp"
+	"sort"
 	"strings"
 )
+
+var inputTemplatePattern = regexp.MustCompile(`\{\{\s*inputs\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
+
+// InputTemplateReference identifies a workflow input reference and whether its
+// complete template action can be replaced without evaluating an expression.
+type InputTemplateReference struct {
+	Name   string
+	Raw    string
+	Direct bool
+}
+
+// ExtractInputTemplateReferences centralizes the input-reference syntax used by
+// static application validation. Full reference validation remains the
+// responsibility of TemplateValidator and its configured TemplateAnalyzer.
+func ExtractInputTemplateReferences(template string) []InputTemplateReference {
+	matches := inputTemplatePattern.FindAllStringSubmatch(template, -1)
+	references := make([]InputTemplateReference, 0, len(matches))
+	for _, match := range matches {
+		references = append(references, InputTemplateReference{Name: match[1], Raw: match[0], Direct: true})
+	}
+	return references
+}
+
+// AnalyzeInputTemplateReferences extracts input references using the configured
+// template analyzer, including references embedded in supported expressions.
+func AnalyzeInputTemplateReferences(analyzer TemplateAnalyzer, template string) ([]InputTemplateReference, error) {
+	if analyzer == nil {
+		return ExtractInputTemplateReferences(template), nil
+	}
+
+	parsed, err := analyzer.ExtractReferences(template)
+	if err != nil {
+		return nil, err
+	}
+
+	var references []InputTemplateReference
+	for i := range parsed {
+		ref := &parsed[i]
+		if ref.Type != TypeInputs {
+			continue
+		}
+		expression := extractExpressionContent(ref.Raw)
+		if containsArithmeticOperator(ref.Path) || containsArithmeticOperator(expression) {
+			for _, name := range extractInputNamesFromExpr(expression) {
+				references = append(references, InputTemplateReference{Name: name, Raw: ref.Raw})
+			}
+			continue
+		}
+		references = append(references, InputTemplateReference{
+			Name: ref.Path, Raw: ref.Raw, Direct: strings.TrimSpace(expression) == "inputs."+ref.Path,
+		})
+	}
+	return references, nil
+}
 
 // TemplateValidator validates template interpolation references in workflows.
 type TemplateValidator struct {
@@ -81,11 +138,16 @@ func (v *TemplateValidator) Validate() *ValidationResult {
 		v.ValidateStep(step, false)
 	}
 
-	// Also validate steps not in execution order (might be unreachable but still validate)
-	for stepName, step := range v.workflow.Steps {
+	// Also validate steps outside the computed execution order.
+	remainingSteps := make([]string, 0)
+	for stepName := range v.workflow.Steps {
 		if _, inOrder := v.stepIndex[stepName]; !inOrder {
-			v.ValidateStep(step, false)
+			remainingSteps = append(remainingSteps, stepName)
 		}
+	}
+	sort.Strings(remainingSteps)
+	for _, stepName := range remainingSteps {
+		v.validateNamedStep(stepName, v.workflow.Steps[stepName], false)
 	}
 
 	// Validate workflow-level hooks
@@ -99,23 +161,23 @@ func (v *TemplateValidator) validateWorkflowHooks() {
 	hooks := v.workflow.Hooks
 
 	// WorkflowStart - not error hook
-	for _, action := range hooks.WorkflowStart {
-		v.validateHookAction(action, "hooks.workflow_start", false)
+	for i, action := range hooks.WorkflowStart {
+		v.validateHookAction(action, fmt.Sprintf("hooks.workflow_start[%d]", i), false)
 	}
 
 	// WorkflowEnd - not error hook
-	for _, action := range hooks.WorkflowEnd {
-		v.validateHookAction(action, "hooks.workflow_end", false)
+	for i, action := range hooks.WorkflowEnd {
+		v.validateHookAction(action, fmt.Sprintf("hooks.workflow_end[%d]", i), false)
 	}
 
 	// WorkflowError - IS error hook ({{error.*}} allowed)
-	for _, action := range hooks.WorkflowError {
-		v.validateHookAction(action, "hooks.workflow_error", true)
+	for i, action := range hooks.WorkflowError {
+		v.validateHookAction(action, fmt.Sprintf("hooks.workflow_error[%d]", i), true)
 	}
 
 	// WorkflowCancel - not error hook
-	for _, action := range hooks.WorkflowCancel {
-		v.validateHookAction(action, "hooks.workflow_cancel", false)
+	for i, action := range hooks.WorkflowCancel {
+		v.validateHookAction(action, fmt.Sprintf("hooks.workflow_cancel[%d]", i), false)
 	}
 }
 
@@ -137,9 +199,12 @@ func (v *TemplateValidator) ValidateStep(step *Step, isErrorHook bool) {
 	if step == nil {
 		return
 	}
+	v.validateNamedStep(step.Name, step, isErrorHook)
+}
 
-	stepPath := fmt.Sprintf("steps.%s", step.Name)
-	currentIdx := v.stepIndex[step.Name]
+func (v *TemplateValidator) validateNamedStep(stepName string, step *Step, isErrorHook bool) {
+	stepPath := appendPath("steps", stepName)
+	currentIdx := v.stepIndex[stepName]
 
 	// Validate Command field
 	if step.Command != "" {
@@ -150,6 +215,15 @@ func (v *TemplateValidator) ValidateStep(step *Step, isErrorHook bool) {
 	if step.Dir != "" {
 		v.ValidateTemplate(step.Dir, stepPath, "dir", currentIdx, isErrorHook)
 	}
+	if step.Operation != "" {
+		v.ValidateTemplate(step.Operation, stepPath, "operation", currentIdx, isErrorHook)
+	}
+	v.validateTemplateValue(step.OperationInputs, stepPath+".inputs", currentIdx, isErrorHook)
+	if step.Agent != nil {
+		v.ValidateTemplate(step.Agent.Provider, stepPath+".agent", "provider", currentIdx, isErrorHook)
+		v.ValidateTemplate(step.Agent.Prompt, stepPath+".agent", "prompt", currentIdx, isErrorHook)
+		v.validateTemplateValue(step.Agent.Options, stepPath+".agent.options", currentIdx, isErrorHook)
+	}
 
 	// Validate loop expressions
 	if step.Loop != nil {
@@ -157,14 +231,47 @@ func (v *TemplateValidator) ValidateStep(step *Step, isErrorHook bool) {
 	}
 
 	// Validate step hooks
-	for _, action := range step.Hooks.Pre {
-		hookPath := fmt.Sprintf("%s.hooks.pre", stepPath)
+	for i, action := range step.Hooks.Pre {
+		hookPath := fmt.Sprintf("%s.hooks.pre[%d]", stepPath, i)
 		v.validateHookAction(action, hookPath, false)
 	}
-	for _, action := range step.Hooks.Post {
-		hookPath := fmt.Sprintf("%s.hooks.post", stepPath)
+	for i, action := range step.Hooks.Post {
+		hookPath := fmt.Sprintf("%s.hooks.post[%d]", stepPath, i)
 		v.validateHookAction(action, hookPath, false)
 	}
+}
+
+func (v *TemplateValidator) validateTemplateValue(value any, path string, currentIdx int, isErrorHook bool) {
+	switch value := value.(type) {
+	case string:
+		v.ValidateTemplate(value, path, "value", currentIdx, isErrorHook)
+	case map[string]any:
+		keys := make([]string, 0, len(value))
+		for key := range value {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			v.validateTemplateValue(value[key], appendPath(path, key), currentIdx, isErrorHook)
+		}
+	case []any:
+		for i := range value {
+			v.validateTemplateValue(value[i], fmt.Sprintf("%s[%d]", path, i), currentIdx, isErrorHook)
+		}
+	}
+}
+
+func appendPath(path, segment string) string {
+	if isValidIdentifier(segment) {
+		return path + "." + segment
+	}
+	encoded, _ := json.Marshal(segment)
+	return path + "[" + string(encoded) + "]"
+}
+
+// AppendTemplateFieldPath appends a serialized map key to a diagnostic path.
+func AppendTemplateFieldPath(path, segment string) string {
+	return appendPath(path, segment)
 }
 
 // validateLoopExpressions validates template references in loop configuration fields.
@@ -202,14 +309,18 @@ func (v *TemplateValidator) validateLoopExpressions(step *Step, stepPath string,
 // stepName and fieldName provide context for error messages.
 // currentStepIndex is used to detect forward references.
 func (v *TemplateValidator) ValidateTemplate(template, stepName, fieldName string, currentStepIndex int, isErrorHook bool) {
+	path := stepName
+	if fieldName != "" && fieldName != "value" {
+		path += "." + fieldName
+	}
 	refs, err := v.analyzer.ExtractReferences(template)
 	if err != nil {
-		v.result.AddError(ErrUnknownReferenceType, stepName, fmt.Sprintf("failed to parse template: %v", err))
+		v.result.AddError(ErrUnknownReferenceType, path, fmt.Sprintf("failed to parse template: %v", err))
 		return
 	}
 
 	for i := range refs {
-		v.ValidateReference(&refs[i], stepName, fieldName, currentStepIndex, isErrorHook)
+		v.ValidateReference(&refs[i], path, fieldName, currentStepIndex, isErrorHook)
 	}
 }
 
@@ -274,7 +385,8 @@ func containsArithmeticOperator(path string) bool {
 
 // validateArithmeticExpressionInputs extracts and validates input references
 // from arithmetic expressions like "limit * inputs.threshold".
-// The expression format after parsing is: "firstVar operator inputs.secondVar..."
+// The expression format after parsing starts with an unprefixed variable and
+// may continue with prefixed input variables.
 // where the "inputs." prefix is parsed away from the first variable.
 func (v *TemplateValidator) validateArithmeticExpressionInputs(expr, stepName, fieldName string) {
 	// Extract input names from the expression
@@ -526,11 +638,11 @@ func (v *TemplateValidator) validateLoopRef(ref *TemplateReference, stepName, fi
 // Returns the ordered list of step names, or an error if a valid order cannot be computed.
 func ComputeExecutionOrder(steps map[string]*Step, initial string) ([]string, error) {
 	if len(steps) == 0 || initial == "" {
-		return nil, nil
+		return []string{}, nil
 	}
 
 	if _, ok := steps[initial]; !ok {
-		return nil, nil
+		return []string{}, nil
 	}
 
 	// BFS traversal from initial state to build execution order

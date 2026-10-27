@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"crypto/sha256"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -26,6 +28,7 @@ func TestBuildAuditWriter_DisabledWhenOffEnvVar(t *testing.T) {
 // TestBuildAuditWriter_DefaultPathWhenEmpty verifies that empty AWF_AUDIT_LOG uses XDG default path
 func TestBuildAuditWriter_DefaultPathWhenEmpty(t *testing.T) {
 	t.Setenv("AWF_AUDIT_LOG", "")
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
 
 	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 	require.NotNil(t, cleanup, "cleanup must always be provided")
@@ -63,6 +66,7 @@ func TestBuildAuditWriter_CustomPathWhenSet(t *testing.T) {
 func TestBuildAuditWriter_UnsetEnvVarUsesDefault(t *testing.T) {
 	// Ensure the env var is not set (t.Setenv handles cleanup automatically)
 	t.Setenv("AWF_AUDIT_LOG", "")
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
 
 	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 	require.NotNil(t, cleanup, "cleanup must always be provided")
@@ -88,6 +92,7 @@ func TestBuildAuditWriter_CleanupAlwaysProvided(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("AWF_AUDIT_LOG", tt.env)
+			t.Setenv("XDG_DATA_HOME", t.TempDir())
 
 			_, cleanup, _ := auditpkg.NewWriterFromEnv()
 
@@ -121,18 +126,53 @@ func TestBuildAuditWriter_NoErrorWhenDisabled(t *testing.T) {
 	assert.NoError(t, err, "should never return error when disabled with 'off'")
 }
 
-// TestBuildAuditWriter_RelativePathHandling verifies relative paths are handled correctly
-func TestBuildAuditWriter_RelativePathHandling(t *testing.T) {
+func TestBuildAuditWriterRelativePathIsIsolated(t *testing.T) {
 	relativePath := "relative/path/audit.jsonl"
+	originalWorkingDir, err := os.Getwd()
+	require.NoError(t, err)
+
+	repositoryArtifact, err := filepath.Abs(filepath.Join(originalWorkingDir, relativePath))
+	require.NoError(t, err)
+	artifactExisted, artifactDigest := auditArtifactState(t, repositoryArtifact)
+
+	temporaryWorkingDir := t.TempDir()
+	require.NoError(t, os.Chdir(temporaryWorkingDir))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(originalWorkingDir))
+	})
+
 	t.Setenv("AWF_AUDIT_LOG", relativePath)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
 
 	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 	require.NotNil(t, cleanup, "cleanup must be provided")
 	defer cleanup()
 
-	// Should accept relative paths (will be created relative to CWD or expanded)
 	assert.NotNil(t, writer, "writer must handle relative paths")
 	assert.NoError(t, err, "should not error for relative paths")
+
+	runtimeArtifact := filepath.Join(temporaryWorkingDir, relativePath)
+	_, statErr := os.Stat(runtimeArtifact)
+	require.NoError(t, statErr, "relative audit file must be created below the temporary working directory")
+	require.NotEqual(t, repositoryArtifact, runtimeArtifact)
+
+	artifactExistsAfter, artifactDigestAfter := auditArtifactState(t, repositoryArtifact)
+	require.Equal(t, artifactExisted, artifactExistsAfter, "repository artifact existence must remain unchanged")
+	if artifactExisted {
+		require.Equal(t, artifactDigest, artifactDigestAfter, "repository artifact content must remain unchanged")
+	}
+}
+
+func auditArtifactState(t *testing.T, path string) (bool, [sha256.Size]byte) {
+	t.Helper()
+
+	contents, err := os.ReadFile(path) //nolint:gosec // The path is derived from the test package working directory and a fixed fixture name.
+	if os.IsNotExist(err) {
+		return false, [sha256.Size]byte{}
+	}
+	require.NoError(t, err)
+
+	return true, sha256.Sum256(contents)
 }
 
 // TestBuildAuditWriter_AbsolutePathHandling verifies absolute paths are handled correctly
@@ -152,6 +192,7 @@ func TestBuildAuditWriter_AbsolutePathHandling(t *testing.T) {
 // TestBuildAuditWriter_DefaultPathStructure verifies default path uses XDG structure
 func TestBuildAuditWriter_DefaultPathStructure(t *testing.T) {
 	t.Setenv("AWF_AUDIT_LOG", "")
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
 
 	writer, cleanup, err := auditpkg.NewWriterFromEnv()
 	require.NotNil(t, cleanup, "cleanup must be provided")

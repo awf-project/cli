@@ -2,6 +2,7 @@ package operation_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/awf-project/cli/internal/domain/operation"
@@ -866,4 +867,86 @@ func TestValidateInputs_MultipleErrors(t *testing.T) {
 	assert.Contains(t, errMsg, "url", "error should mention url field")
 	assert.Contains(t, errMsg, "email", "error should mention email field")
 	assert.Contains(t, errMsg, "count", "error should mention count field")
+}
+
+func TestValidateInputsDetailed_ReturnsSortedRedactedFindingsWithoutMutation(t *testing.T) {
+	schema := &pluginmodel.OperationSchema{
+		Name: "test.operation",
+		Inputs: map[string]pluginmodel.InputSchema{
+			"z_token": {
+				Type:       pluginmodel.InputTypeString,
+				Required:   true,
+				Validation: "email",
+			},
+			"a_endpoint": {
+				Type:       pluginmodel.InputTypeString,
+				Required:   true,
+				Validation: "url",
+			},
+			"defaulted": {
+				Type:    pluginmodel.InputTypeString,
+				Default: "private-default",
+			},
+		},
+	}
+	inputs := map[string]any{
+		"z_token":    "super-secret-token",
+		"a_endpoint": "private-webhook-value",
+	}
+
+	findings, err := operation.ValidateInputsDetailed(schema, inputs)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, operation.ErrInvalidInputs)
+	require.Len(t, findings, 2)
+	assert.Equal(t, "a_endpoint", findings[0].Field)
+	assert.Contains(t, findings[0].Message, "a_endpoint")
+	assert.Equal(t, "z_token", findings[1].Field)
+	assert.Contains(t, findings[1].Message, "z_token")
+	assert.NotContains(t, fmt.Sprint(findings), "private-webhook-value")
+	assert.NotContains(t, fmt.Sprint(findings), "super-secret-token")
+	assert.NotContains(t, inputs, "defaulted")
+	assert.Equal(t, "private-default", schema.Inputs["defaulted"].Default)
+}
+
+func TestValidateInputsDetailed_SchemaWideFailuresHaveEmptyField(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema *pluginmodel.OperationSchema
+		inputs map[string]any
+	}{
+		{name: "nil schema", schema: nil, inputs: map[string]any{}},
+		{name: "nil inputs", schema: &pluginmodel.OperationSchema{}, inputs: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			findings, err := operation.ValidateInputsDetailed(tt.schema, tt.inputs)
+
+			require.Error(t, err)
+			assert.ErrorIs(t, err, operation.ErrInvalidInputs)
+			require.Len(t, findings, 1)
+			assert.Empty(t, findings[0].Field)
+		})
+	}
+}
+
+func TestValidateInputsDetailed_SharesLegacySemanticsWhileDefaultsRemainPrivate(t *testing.T) {
+	schema := &pluginmodel.OperationSchema{
+		Inputs: map[string]pluginmodel.InputSchema{
+			"required": {Type: pluginmodel.InputTypeString, Required: true},
+			"retries":  {Type: pluginmodel.InputTypeInteger, Default: 3},
+		},
+	}
+	detailedInputs := map[string]any{"required": "value"}
+	runtimeInputs := map[string]any{"required": "value"}
+
+	findings, detailedErr := operation.ValidateInputsDetailed(schema, detailedInputs)
+	runtimeErr := operation.ValidateInputs(schema, runtimeInputs)
+
+	require.NoError(t, detailedErr)
+	assert.Empty(t, findings)
+	assert.NotContains(t, detailedInputs, "retries")
+	require.NoError(t, runtimeErr)
+	assert.Equal(t, 3, runtimeInputs["retries"])
 }

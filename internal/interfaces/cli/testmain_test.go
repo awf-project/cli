@@ -29,7 +29,19 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	previousAuditLog, auditLogWasSet := os.LookupEnv("AWF_AUDIT_LOG")
+	if err := os.Unsetenv("AWF_AUDIT_LOG"); err != nil {
+		fmt.Fprintln(os.Stderr, "isolate audit path:", err)
+		_ = os.RemoveAll(dataHome)
+		os.Exit(1)
+	}
+
 	code := m.Run()
+	if auditLogWasSet {
+		_ = os.Setenv("AWF_AUDIT_LOG", previousAuditLog)
+	} else {
+		_ = os.Unsetenv("AWF_AUDIT_LOG")
+	}
 	verificationErr := error(nil)
 	if verifyAudit {
 		verificationErr = verifyRedirectedAudit(dataHome)

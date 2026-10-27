@@ -6,33 +6,28 @@ package cli_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
-	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestRunCommand_MistralVibeAgentWorkflow(t *testing.T) {
+func TestRunCommand_MistralVibeRejectsUnsupportedPreflight(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("test installs a POSIX shell fixture on PATH")
 	}
 
-	tmpDir := setupInitTestDir(t)
+	tmpDir := setupPreflightTestDir(t)
 	fakeBinDir := filepath.Join(tmpDir, "bin")
 	require.NoError(t, os.MkdirAll(fakeBinDir, 0o755))
 	installFakeMistralVibeBinary(t, fakeBinDir, `#!/bin/sh
 set -eu
-if [ "$1" != "--prompt" ] || [ "$2" != "Classify: release notes" ] || [ "$3" != "--agent" ] || [ "$4" != "default" ]; then
-  printf 'unexpected args: %s\n' "$*" >&2
-  exit 64
-fi
-printf 'approved from vibe\n'
+touch executed
+exit 64
 `)
 	t.Setenv("PATH", fakeBinDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
@@ -70,16 +65,13 @@ states:
 	})
 
 	err := cmd.Execute()
-	require.NoError(t, err)
-
-	state := loadOnlyExecutionState(t, tmpDir)
-	require.Equal(t, workflow.StatusCompleted, state.Status)
-	assert.Equal(t, "approved from vibe", state.States["analyze"].Output)
-	assert.Equal(t, "summary=approved from vibe", state.States["summarize"].Output)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not_ready")
+	assertNoPreflightStart(t, tmpDir)
 }
 
 func TestRunCommand_MistralVibeMissingBinary(t *testing.T) {
-	tmpDir := setupInitTestDir(t)
+	tmpDir := setupPreflightTestDir(t)
 	t.Setenv("PATH", t.TempDir())
 
 	workflowContent := `name: mistral-vibe-missing
@@ -104,8 +96,8 @@ states:
 
 	err := cmd.Execute()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "mistral_vibe execution failed")
-	assert.Contains(t, err.Error(), "executable file not found")
+	assert.Contains(t, err.Error(), "unavailable")
+	assertNoPreflightStart(t, tmpDir)
 }
 
 func installFakeMistralVibeBinary(t *testing.T, dir, script string) {
@@ -113,20 +105,4 @@ func installFakeMistralVibeBinary(t *testing.T, dir, script string) {
 
 	path := filepath.Join(dir, "vibe")
 	require.NoError(t, os.WriteFile(path, []byte(script), 0o755))
-}
-
-func loadOnlyExecutionState(t *testing.T, storageDir string) *workflow.ExecutionContext {
-	t.Helper()
-
-	matches, err := filepath.Glob(filepath.Join(storageDir, "states", "*.json"))
-	require.NoError(t, err)
-	require.Len(t, matches, 1)
-
-	data, err := os.ReadFile(matches[0])
-	require.NoError(t, err)
-
-	var state workflow.ExecutionContext
-	require.NoError(t, json.Unmarshal(data, &state))
-
-	return &state
 }

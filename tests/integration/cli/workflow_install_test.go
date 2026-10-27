@@ -603,10 +603,7 @@ func TestWorkflowRemove_SearchesGlobalFallback(t *testing.T) {
 	require.NoError(t, os.MkdirAll(globalPackDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(globalPackDir, "manifest.yaml"), []byte("name: speckit\n"), 0o644))
 
-	require.NoError(t, os.Setenv("XDG_DATA_HOME", xdgDataHome))
-	t.Cleanup(func() {
-		os.Unsetenv("XDG_DATA_HOME")
-	})
+	t.Setenv("XDG_DATA_HOME", xdgDataHome)
 
 	projDir := filepath.Join(tmpDir, "project")
 	require.NoError(t, os.Mkdir(projDir, 0o755))
@@ -630,6 +627,14 @@ func TestWorkflowRemove_SearchesGlobalFallback(t *testing.T) {
 
 	_, err = os.Stat(globalPackDir)
 	assert.True(t, os.IsNotExist(err), "pack directory should be removed from global")
+}
+
+func TestWorkflowRemoveRestoresXDGDataHome(t *testing.T) {
+	before, wasSet := os.LookupEnv("XDG_DATA_HOME")
+	t.Run("global fallback", TestWorkflowRemove_SearchesGlobalFallback)
+	after, isSet := os.LookupEnv("XDG_DATA_HOME")
+	assert.Equal(t, wasSet, isSet)
+	assert.Equal(t, before, after)
 }
 
 // TestWorkflowInstall_InvalidRepoFormat validates error on malformed owner/repo.

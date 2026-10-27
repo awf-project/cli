@@ -2,6 +2,8 @@ package audit
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,11 +16,16 @@ import (
 
 var _ ports.AuditTrailWriter = (*FileAuditTrailWriter)(nil)
 
-// posixPipeBuf is the POSIX PIPE_BUF limit guaranteeing atomic O_APPEND writes.
-const posixPipeBuf = 4096
+var (
+	ErrAuditRecordTooLarge = errors.New("audit record exceeds size limit")
+	ErrAuditWriterClosed   = errors.New("audit writer is closed")
+)
+
+// maxAuditRecordSize bounds the complete serialized JSONL record, including its newline.
+const maxAuditRecordSize = 4096
 
 // FileAuditTrailWriter appends JSONL audit entries to a local file.
-// O_APPEND + entries under 4KB guarantee atomic writes per POSIX PIPE_BUF semantics.
+// Each bounded record is appended in one Write, protected against concurrent Close.
 type FileAuditTrailWriter struct {
 	mu   sync.Mutex
 	file *os.File
@@ -41,16 +48,24 @@ func NewFileAuditTrailWriter(path string) (*FileAuditTrailWriter, error) {
 }
 
 // Write marshals event to JSONL and appends it to the audit file.
-// If the serialized entry exceeds posixPipeBuf bytes, input values are truncated
+// If the serialized entry exceeds maxAuditRecordSize bytes, input values are truncated
 // iteratively (longest first) until the entry fits, and InputsTruncated is set.
 func (w *FileAuditTrailWriter) Write(_ context.Context, event *workflow.AuditEvent) error {
-	line, err := marshalJSONL(event)
+	privateEvent, err := cloneAuditEvent(event)
 	if err != nil {
 		return fmt.Errorf("marshaling audit event: %w", err)
 	}
 
-	if len(line) > posixPipeBuf {
-		line, err = truncateInputs(event)
+	line, err := marshalJSONL(privateEvent)
+	if err != nil {
+		return fmt.Errorf("marshaling audit event: %w", err)
+	}
+
+	if len(line) > maxAuditRecordSize {
+		line, err = truncateInputs(privateEvent)
+		if errors.Is(err, ErrAuditRecordTooLarge) && privateEvent.Event == workflow.EventWorkflowCompleted {
+			line, err = truncateCompletionError(privateEvent)
+		}
 		if err != nil {
 			return fmt.Errorf("truncating audit event inputs: %w", err)
 		}
@@ -59,11 +74,35 @@ func (w *FileAuditTrailWriter) Write(_ context.Context, event *workflow.AuditEve
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	if w.file == nil {
+		return fmt.Errorf("writing audit event: %w", ErrAuditWriterClosed)
+	}
+
 	if _, err := w.file.Write(line); err != nil {
 		return fmt.Errorf("writing audit event: %w", err)
 	}
 
 	return nil
+}
+
+// cloneAuditEvent converts the event to its JSON representation and back so all
+// mutable input maps and nested values belong exclusively to this write.
+func cloneAuditEvent(event *workflow.AuditEvent) (*workflow.AuditEvent, error) {
+	if event == nil {
+		return nil, errors.New("audit event is nil")
+	}
+
+	data, err := event.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	var clone workflow.AuditEvent
+	if err := json.Unmarshal(data, &clone); err != nil {
+		return nil, fmt.Errorf("decode cloned audit event: %w", err)
+	}
+
+	return &clone, nil
 }
 
 // Close flushes and closes the underlying file. Safe to call multiple times.
@@ -90,56 +129,93 @@ func marshalJSONL(event *workflow.AuditEvent) ([]byte, error) {
 	return append(data, '\n'), nil
 }
 
-// truncateInputs reduces input values iteratively (longest first) until the
-// serialized entry fits within posixPipeBuf. Sets InputsTruncated on the event.
+// truncateInputs visits each input once in deterministic longest-first/key order.
+// It retains only replacements that reduce the complete serialized payload.
 func truncateInputs(event *workflow.AuditEvent) ([]byte, error) {
-	event.InputsTruncated = true
-
-	for {
-		line, err := marshalJSONL(event)
-		if err != nil {
-			return nil, err
-		}
-		if len(line) <= posixPipeBuf {
-			return line, nil
-		}
-
-		// No inputs left to truncate — emit the entry as-is (best effort).
-		if len(event.Inputs) == 0 {
-			return line, nil
-		}
-
-		// Replace the longest input value with the ellipsis placeholder.
-		longestKey := longestInputKey(event.Inputs)
-		event.Inputs[longestKey] = "…"
+	line, err := marshalJSONL(event)
+	if err != nil {
+		return nil, err
 	}
+
+	for _, key := range orderedInputKeys(event.Inputs) {
+		original := event.Inputs[key]
+		event.Inputs[key] = "…"
+		event.InputsTruncated = true
+
+		candidate, marshalErr := marshalJSONL(event)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		if len(candidate) >= len(line) {
+			event.Inputs[key] = original
+			continue
+		}
+
+		line = candidate
+		if len(line) <= maxAuditRecordSize {
+			return line, nil
+		}
+	}
+
+	return nil, fmt.Errorf("%w: serialized payload is %d bytes", ErrAuditRecordTooLarge, len(line))
 }
 
-// longestInputKey returns the key whose string representation of value is longest.
-func longestInputKey(inputs map[string]any) string {
+// orderedInputKeys returns keys by descending serialized value size, breaking
+// ties lexically so truncation produces stable records.
+func orderedInputKeys(inputs map[string]any) []string {
 	keys := make([]string, 0, len(inputs))
 	for k := range inputs {
 		keys = append(keys, k)
 	}
 
 	sort.Slice(keys, func(i, j int) bool {
-		li := valueLength(inputs[keys[i]])
-		lj := valueLength(inputs[keys[j]])
+		li := serializedValueLength(inputs[keys[i]])
+		lj := serializedValueLength(inputs[keys[j]])
 		if li != lj {
 			return li > lj
 		}
 		return keys[i] < keys[j]
 	})
 
-	return keys[0]
+	return keys
 }
 
-// valueLength returns a comparable length for an input value.
-func valueLength(v any) int {
-	switch val := v.(type) {
-	case string:
-		return len(val)
-	default:
+func serializedValueLength(value any) int {
+	data, err := json.Marshal(value)
+	if err != nil {
 		return 0
 	}
+	return len(data)
+}
+
+// truncateCompletionError preserves the terminal identity and outcome even when
+// an execution error alone would exceed the record budget. The marker makes the
+// loss of diagnostic detail explicit; the caller's original error is untouched.
+func truncateCompletionError(event *workflow.AuditEvent) ([]byte, error) {
+	const marker = "… [truncated]"
+	original := []rune(event.Error)
+	event.Error = marker
+	best, err := marshalJSONL(event)
+	if err != nil {
+		return nil, err
+	}
+	if len(best) > maxAuditRecordSize {
+		return nil, fmt.Errorf("%w: terminal identity exceeds record budget", ErrAuditRecordTooLarge)
+	}
+	low, high := 0, len(original)
+	for low <= high {
+		mid := low + (high-low)/2
+		event.Error = string(original[:mid]) + marker
+		candidate, marshalErr := marshalJSONL(event)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		if len(candidate) <= maxAuditRecordSize {
+			best = candidate
+			low = mid + 1
+		} else {
+			high = mid - 1
+		}
+	}
+	return best, nil
 }

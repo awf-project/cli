@@ -9,7 +9,6 @@ import (
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/infrastructure/analyzer"
 	"github.com/awf-project/cli/internal/infrastructure/expression"
-	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/skills"
 	"github.com/awf-project/cli/internal/infrastructure/store"
@@ -152,10 +151,15 @@ func buildFacade(cfg *Config) (facade ports.WorkflowFacade, cleanup func()) {
 	// forward references, unknown namespaces) so facade-routed `awf validate` keeps the
 	// full validation pipeline the legacy runValidate ran.
 	workflowSvc.SetTemplateAnalyzer(analyzer.NewInterpolationAnalyzer())
-	// Inject an OperationProvider so facade-routed validation runs the mcp_proxy.plugin_tools
-	// checks (UNKNOWN_PLUGIN/UNKNOWN_OPERATION/NAME_COLLISION). An empty composite returns no
-	// operations, matching the legacy runValidate wiring; service.go skips the check when nil.
-	workflowSvc.SetPluginOperationProvider(pluginmgr.NewCompositeOperationProvider())
+	// Validate builtins against the same schemas and notification defaults used by execution.
+	logger := ports.NopLogger{}
+	projectCfg, configErr := loadProjectConfig(logger)
+	if configErr != nil {
+		return nil, noop
+	}
+	workflowSvc.SetPluginOperationProvider(application.NewBuiltinOperationProvider(
+		logger, application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend},
+	))
 	workflowSvc.SetSkillRepository(skills.NewFilesystemSkillRepository(&cliLogger{silent: cfg.Quiet}))
 
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))

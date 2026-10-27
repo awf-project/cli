@@ -137,6 +137,34 @@ func (p *CodexProvider) Validate() error {
 	return nil
 }
 
+func (p *CodexProvider) Preflight(ctx context.Context, options map[string]any) error {
+	stdout, stderr, err := runProviderPreflight(ctx, p.executor, "codex", options, "login", "status")
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return &ProviderPreflightError{Provider: "codex", Reason: PreflightStatusMalformed, Cause: err}
+	}
+	if codexStatusUnsupported(stderr) {
+		return &ProviderPreflightError{Provider: "codex", Reason: PreflightStatusUnsupported, Cause: err}
+	}
+
+	// Codex CLI 0.163.0 exposes a stable, line-oriented login status. Match the
+	// complete trimmed line so account details or changed formats cannot be
+	// mistaken for authenticated readiness.
+	switch strings.TrimSpace(string(stdout)) {
+	case "Logged in using ChatGPT", "Logged in using an API key":
+		if err == nil {
+			return nil
+		}
+	case "Not logged in":
+		return &ProviderPreflightError{Provider: "codex", Reason: PreflightNotAuthenticated, Cause: err}
+	}
+	return &ProviderPreflightError{Provider: "codex", Reason: PreflightStatusMalformed, Cause: err}
+}
+
+func codexStatusUnsupported(stderr []byte) bool {
+	message := strings.ToLower(string(stderr))
+	return strings.Contains(message, "unrecognized subcommand") || strings.Contains(message, "unexpected argument")
+}
+
 func (p *CodexProvider) buildExecuteArgs(prompt string, options map[string]any) ([]string, error) {
 	args := []string{"exec", "--json", prompt}
 	args = appendCodexOptions(args, options)

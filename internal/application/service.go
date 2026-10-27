@@ -8,10 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
+	"sync"
 
 	apptools "github.com/awf-project/cli/internal/application/tools"
 	domerrors "github.com/awf-project/cli/internal/domain/errors"
+	"github.com/awf-project/cli/internal/domain/operation"
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
@@ -26,6 +30,9 @@ type WorkflowService struct {
 	packDiscoverer         ports.PackDiscoverer
 	opProvider             ports.OperationProvider
 	templateAnalyzer       workflow.TemplateAnalyzer
+	agentRegistry          ports.AgentRegistry
+	userInputReaderMu      sync.RWMutex
+	userInputReader        ports.UserInputReader
 	skillRepo              ports.SkillRepository
 	lastValidationWarnings []workflow.ValidationError
 }
@@ -67,6 +74,22 @@ func (s *WorkflowService) SetTemplateAnalyzer(a workflow.TemplateAnalyzer) {
 	s.templateAnalyzer = a
 }
 
+func (s *WorkflowService) SetAgentRegistry(registry ports.AgentRegistry) {
+	s.agentRegistry = registry
+}
+
+func (s *WorkflowService) SetUserInputReader(reader ports.UserInputReader) {
+	s.userInputReaderMu.Lock()
+	defer s.userInputReaderMu.Unlock()
+	s.userInputReader = reader
+}
+
+func (s *WorkflowService) getUserInputReader() ports.UserInputReader {
+	s.userInputReaderMu.RLock()
+	defer s.userInputReaderMu.RUnlock()
+	return s.userInputReader
+}
+
 func (s *WorkflowService) SetSkillRepository(repo ports.SkillRepository) {
 	s.skillRepo = repo
 }
@@ -104,7 +127,7 @@ func (s *WorkflowService) ListAllWorkflows(ctx context.Context) ([]workflow.Work
 	if s.packDiscoverer != nil {
 		packEntries, packErr := s.packDiscoverer.DiscoverWorkflows(ctx)
 		if packErr == nil {
-			entries = append(entries, packEntries...)
+			entries = slices.Concat(entries, packEntries)
 		}
 	}
 
@@ -135,6 +158,10 @@ func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) err
 	return s.ValidateLoadedWorkflow(ctx, wf, name, ports.ValidateOptions{})
 }
 
+func (s *WorkflowService) ValidateLoadedWorkflowWithInputs(ctx context.Context, wf *workflow.Workflow, name string, opts ports.ValidateOptions, inputs map[string]any) error {
+	return s.validateLoadedWorkflow(ctx, wf, name, opts, inputs, true)
+}
+
 // ValidateLoadedWorkflow runs the full validation pipeline (domain state/expression
 // validation, prompt files, plugin validators, MCP proxy) on an already-loaded workflow.
 // It is shared by ValidateWorkflow (load-then-validate) and the WorkflowFacade adapter,
@@ -144,6 +171,12 @@ func (s *WorkflowService) ValidateWorkflow(ctx context.Context, name string) err
 // opts controls the plugin-validator phase: SkipPlugins suppresses it entirely;
 // ValidatorTimeout > 0 bounds it with a context deadline.
 func (s *WorkflowService) ValidateLoadedWorkflow(ctx context.Context, wf *workflow.Workflow, name string, opts ports.ValidateOptions) error {
+	return s.validateLoadedWorkflow(ctx, wf, name, opts, nil, false)
+}
+
+func (s *WorkflowService) validateLoadedWorkflow(ctx context.Context, wf *workflow.Workflow, name string, opts ports.ValidateOptions, supplied map[string]any, requireInputs bool) error {
+	wf = cloneWorkflowForValidation(wf)
+
 	if s.validator != nil {
 		if err := wf.Validate(s.validator.Compile, nil); err != nil {
 			var stateRefErr *workflow.StateReferenceError
@@ -184,7 +217,619 @@ func (s *WorkflowService) ValidateLoadedWorkflow(ctx context.Context, wf *workfl
 		return err
 	}
 
-	return s.validateTemplateReferences(wf)
+	return errors.Join(
+		s.validateTemplateReferences(wf),
+		s.validateAgentInputAvailability(wf, supplied, requireInputs),
+		s.validateOperationInputs(wf, supplied, requireInputs),
+		s.validateAgentProviders(ctx, wf, supplied, requireInputs),
+	)
+}
+
+func (s *WorkflowService) validateAgentProviders(ctx context.Context, wf *workflow.Workflow, supplied map[string]any, requireInputs bool) error {
+	if s.agentRegistry == nil || wf == nil {
+		return nil
+	}
+
+	declared, available := validationInputs(wf, supplied)
+	stepNames := make([]string, 0, len(wf.Steps))
+	for stepName := range wf.Steps {
+		stepNames = append(stepNames, stepName)
+	}
+	sort.Strings(stepNames)
+
+	var failures []error
+	for _, stepName := range stepNames {
+		step := wf.Steps[stepName]
+		if step == nil || step.Agent == nil {
+			continue
+		}
+		failures = slices.Concat(failures, s.validateAgentProviderStep(
+			ctx, stepName, step.Agent, declared, available, requireInputs,
+		))
+	}
+
+	return joinErrors(failures)
+}
+
+func (s *WorkflowService) validateAgentProviderStep(ctx context.Context, stepName string, agent *workflow.AgentConfig,
+	declared map[string]bool, available map[string]any, requireInputs bool,
+) []error {
+	userInputReader := s.getUserInputReader()
+	var inputErr error
+	if agent.IsConversationMode() {
+		if userInputReader == nil {
+			inputErr = errors.New("conversation input reader is unavailable")
+		} else if checker, ok := userInputReader.(ports.UserInputPreflighter); ok {
+			inputErr = checker.PreflightInput(ctx)
+		}
+	}
+	providerName, deferred, err := resolveStaticString(
+		agent.Provider, declared, available, requireInputs, s.templateAnalyzer,
+	)
+	if err != nil {
+		return []error{err}
+	}
+	if deferred {
+		if inputErr != nil {
+			return []error{providerValidationError(agent.Provider, stepName, "interactive_input_required", inputErr)}
+		}
+		return nil
+	}
+
+	provider, err := s.agentRegistry.Get(providerName)
+	if err != nil || provider == nil {
+		return []error{providerValidationError(providerName, stepName, "unavailable", err)}
+	}
+	if err := provider.Validate(); err != nil {
+		return []error{providerValidationError(providerName, stepName, "unavailable", err)}
+	}
+	preflighter, ok := provider.(ports.AgentPreflighter)
+	if !ok {
+		return []error{providerValidationError(providerName, stepName, "preflight_unsupported", nil)}
+	}
+	resolvedOptions, deferred, missing, optionErrors := resolveStaticValue(
+		agent.Options, declared, available, requireInputs, s.templateAnalyzer,
+	)
+	if deferred || missing || len(optionErrors) > 0 {
+		if len(optionErrors) == 0 && inputErr != nil {
+			return []error{providerValidationError(providerName, stepName, "interactive_input_required", inputErr)}
+		}
+		return optionErrors
+	}
+	options, ok := resolvedOptions.(map[string]any)
+	if !ok && resolvedOptions != nil {
+		return nil
+	}
+	if err := preflighter.Preflight(ctx, options); err != nil {
+		return []error{providerValidationError(providerName, stepName, "not_ready", err)}
+	}
+	if inputErr != nil {
+		return []error{providerValidationError(providerName, stepName, "interactive_input_required", inputErr)}
+	}
+	return nil
+}
+
+func providerValidationError(provider, step, reason string, cause error) error {
+	return domerrors.NewStructuredError(
+		domerrors.ErrorCodeUserInputValidationFailed,
+		fmt.Sprintf("provider %q failed validation for step %q: %s", provider, step, reason),
+		map[string]any{"provider": provider, "step": step, "reason": reason},
+		cause,
+	)
+}
+
+func cloneWorkflowForValidation(wf *workflow.Workflow) *workflow.Workflow {
+	if wf == nil {
+		return nil
+	}
+	cloned := *wf
+	cloned.Steps = make(map[string]*workflow.Step, len(wf.Steps))
+	for name, step := range wf.Steps {
+		if step == nil {
+			cloned.Steps[name] = nil
+			continue
+		}
+		clonedStep := *step
+		if step.Agent != nil {
+			clonedAgent := *step.Agent
+			clonedAgent.Options = cloneStringMap(step.Agent.Options)
+			clonedStep.Agent = &clonedAgent
+		}
+		clonedStep.OperationInputs = cloneStringMap(step.OperationInputs)
+		cloned.Steps[name] = &clonedStep
+	}
+	return &cloned
+}
+
+func cloneStringMap(values map[string]any) map[string]any {
+	if values == nil {
+		return nil
+	}
+	cloned := make(map[string]any, len(values))
+	for key, value := range values {
+		cloned[key] = cloneValidationValue(value)
+	}
+	return cloned
+}
+
+func (s *WorkflowService) validateAgentInputAvailability(wf *workflow.Workflow, supplied map[string]any, requireInputs bool) error {
+	if wf == nil || !requireInputs {
+		return nil
+	}
+	declared, available := validationInputs(wf, supplied)
+	stepNames := make([]string, 0, len(wf.Steps))
+	for stepName := range wf.Steps {
+		stepNames = append(stepNames, stepName)
+	}
+	sort.Strings(stepNames)
+
+	var failures []error
+	for _, stepName := range stepNames {
+		step := wf.Steps[stepName]
+		if step == nil || step.Agent == nil {
+			continue
+		}
+		failures = slices.Concat(failures, missingInputErrors(step.Agent.Prompt,
+			operationFieldPath(stepName, "agent.prompt"), declared, available, s.templateAnalyzer))
+		failures = slices.Concat(failures, missingInputErrors(step.Agent.Provider,
+			operationFieldPath(stepName, "agent.provider"), declared, available, s.templateAnalyzer))
+		failures = slices.Concat(failures, missingInputValueErrors(step.Agent.Options,
+			operationFieldPath(stepName, "agent.options"), declared, available, s.templateAnalyzer))
+	}
+	return joinErrors(failures)
+}
+
+// walkValidationStrings visits executable strings in diagnostic order without
+// copying containers. Static resolution separately owns value reconstruction.
+func walkValidationStrings(value any, path string, visit func(string, string) []error) []error {
+	switch value := value.(type) {
+	case string:
+		return visit(value, path)
+	case map[string]any:
+		var failures []error
+		for _, key := range sortedValidationKeys(value) {
+			failures = slices.Concat(failures, walkValidationStrings(
+				value[key], workflow.AppendTemplateFieldPath(path, key), visit,
+			))
+		}
+		return failures
+	case []any:
+		var failures []error
+		for i := range value {
+			failures = slices.Concat(failures, walkValidationStrings(value[i], fmt.Sprintf("%s[%d]", path, i), visit))
+		}
+		return failures
+	default:
+		return nil
+	}
+}
+
+func sortedValidationKeys(values map[string]any) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func missingInputValueErrors(value any, path string, declared map[string]bool, available map[string]any,
+	analyzer workflow.TemplateAnalyzer,
+) []error {
+	return walkValidationStrings(value, path, func(value, path string) []error {
+		return missingInputErrors(value, path, declared, available, analyzer)
+	})
+}
+
+func undefinedInputValueErrors(value any, path string, declared map[string]bool,
+	analyzer workflow.TemplateAnalyzer,
+) []error {
+	return walkValidationStrings(value, path, func(value, path string) []error {
+		references, err := workflow.AnalyzeInputTemplateReferences(analyzer, value)
+		if err != nil {
+			return []error{fmt.Errorf("analyze template references at %s: %w", path, err)}
+		}
+		var failures []error
+		for _, ref := range references {
+			if declared[ref.Name] {
+				continue
+			}
+			failures = append(failures, workflow.ValidationError{
+				Level: workflow.ValidationLevelError, Code: workflow.ErrUndefinedInput,
+				Path: path, Message: fmt.Sprintf("undefined input %q", ref.Name),
+			})
+		}
+		return failures
+	})
+}
+
+func missingInputErrors(value, path string, declared map[string]bool, available map[string]any,
+	analyzer workflow.TemplateAnalyzer,
+) []error {
+	var failures []error
+	references, err := workflow.AnalyzeInputTemplateReferences(analyzer, value)
+	if err != nil {
+		return []error{fmt.Errorf("analyze template references at %s: %w", path, err)}
+	}
+	for _, ref := range references {
+		if !declared[ref.Name] {
+			continue
+		}
+		if _, ok := available[ref.Name]; !ok {
+			failures = append(failures, workflow.ValidationError{
+				Level: workflow.ValidationLevelError, Code: workflow.ErrUndefinedInput,
+				Path: path, Message: fmt.Sprintf("referenced input %q is missing", ref.Name),
+			})
+		}
+	}
+	return failures
+}
+
+func validationInputs(wf *workflow.Workflow, supplied map[string]any) (
+	declared map[string]bool,
+	available map[string]any,
+) {
+	available = make(map[string]any, len(wf.Inputs)+len(supplied))
+	declared = make(map[string]bool, len(wf.Inputs))
+	for _, input := range wf.Inputs {
+		declared[input.Name] = true
+		if input.Default != nil {
+			available[input.Name] = cloneValidationValue(input.Default)
+		}
+	}
+	for key, value := range supplied {
+		available[key] = cloneValidationValue(value)
+	}
+	return declared, available
+}
+
+func joinErrors(errs []error) error {
+	var joined error
+	for _, err := range errs {
+		joined = errors.Join(joined, err)
+	}
+	return joined
+}
+
+func (s *WorkflowService) validateOperationInputs(wf *workflow.Workflow, supplied map[string]any, requireInputs bool) error {
+	if s.opProvider == nil || wf == nil {
+		return nil
+	}
+
+	declared, available := validationInputs(wf, supplied)
+
+	stepNames := make([]string, 0, len(wf.Steps))
+	for stepName := range wf.Steps {
+		stepNames = append(stepNames, stepName)
+	}
+	sort.Strings(stepNames)
+
+	var failures []error
+	for _, stepName := range stepNames {
+		step := wf.Steps[stepName]
+		if step == nil || step.Type != workflow.StepTypeOperation || step.Operation == "" {
+			continue
+		}
+
+		failures = slices.Concat(failures, s.validateOperationStep(stepName, step, declared, available, requireInputs))
+	}
+	return joinErrors(failures)
+}
+
+func (s *WorkflowService) validateOperationStep(stepName string, step *workflow.Step,
+	declared map[string]bool, available map[string]any, requireInputs bool,
+) []error {
+	var failures []error
+	if requireInputs {
+		missingNameInputs := missingInputErrors(step.Operation,
+			operationFieldPath(stepName, "operation"), declared, available, s.templateAnalyzer)
+		if len(missingNameInputs) > 0 {
+			failures = slices.Concat(failures, missingNameInputs)
+			failures = slices.Concat(failures, undefinedInputValueErrors(
+				step.OperationInputs, operationFieldPath(stepName, "inputs"), declared, s.templateAnalyzer,
+			))
+			failures = slices.Concat(failures, missingInputValueErrors(
+				step.OperationInputs, operationFieldPath(stepName, "inputs"),
+				declared, available, s.templateAnalyzer,
+			))
+			return failures
+		}
+	}
+
+	operationName, deferred, refErr := resolveStaticString(
+		step.Operation, declared, available, requireInputs, s.templateAnalyzer,
+	)
+	if refErr != nil {
+		failures = append(failures, refErr)
+		return failures
+	}
+	if deferred {
+		return failures
+	}
+
+	schema, ok := s.opProvider.GetOperation(operationName)
+	if !ok {
+		cause := fmt.Errorf("%w: %s", operation.ErrOperationNotFound, operationName)
+		failures = append(failures, operationValidationError(operationName, stepName,
+			[]string{operationFieldPath(stepName, "operation")}, nil, cause))
+		return failures
+	}
+	if schema == nil {
+		cause := fmt.Errorf("%w: operation %s returned a nil schema", operation.ErrInvalidInputs, operationName)
+		failures = append(failures, operationValidationError(operationName, stepName,
+			[]string{operationFieldPath(stepName, "inputs")}, nil, cause))
+		return failures
+	}
+
+	resolved, deferredFields, missingFields, referenceErrors := resolveStaticOperationInputs(
+		step.OperationInputs, declared, available, requireInputs, s.templateAnalyzer,
+	)
+	failures = slices.Concat(failures, referenceErrors)
+	validationSchema := staticOperationSchema(schema, deferredFields, missingFields)
+
+	findings, validationErr := operation.ValidateInputsDetailed(validationSchema, resolved)
+	fieldPaths := operationFindingPaths(stepName, findings, missingFields)
+	if len(fieldPaths) > 0 {
+		if validationErr == nil {
+			validationErr = fmt.Errorf("%w: referenced workflow input is missing", operation.ErrInvalidInputs)
+		}
+		requiredFields := missingRequiredOperationFields(validationSchema, resolved)
+		failures = append(failures, operationValidationError(
+			operationName, stepName, fieldPaths, requiredFields, validationErr,
+		))
+	}
+	return failures
+}
+
+func staticOperationSchema(schema *pluginmodel.OperationSchema, deferred, missing map[string]bool) *pluginmodel.OperationSchema {
+	cloned := cloneOperationSchema(schema)
+	for field := range deferred {
+		delete(cloned.Inputs, field)
+	}
+	for field := range missing {
+		delete(cloned.Inputs, field)
+	}
+	return cloned
+}
+
+func operationFindingPaths(stepName string, findings []operation.InputValidationFinding, missing map[string]bool) []string {
+	fieldPaths := make([]string, 0, len(findings)+len(missing))
+	inputsPath := operationFieldPath(stepName, "inputs")
+	for field := range missing {
+		fieldPaths = append(fieldPaths, workflow.AppendTemplateFieldPath(inputsPath, field))
+	}
+	for _, finding := range findings {
+		if finding.Field == "" {
+			fieldPaths = append(fieldPaths, inputsPath)
+		} else {
+			fieldPaths = append(fieldPaths, workflow.AppendTemplateFieldPath(inputsPath, finding.Field))
+		}
+	}
+	sort.Strings(fieldPaths)
+	return slices.Compact(fieldPaths)
+}
+
+func resolveStaticOperationInputs(inputs map[string]any, declared map[string]bool, available map[string]any,
+	requireInputs bool, analyzer workflow.TemplateAnalyzer,
+) (
+	resolved map[string]any,
+	deferred map[string]bool,
+	missing map[string]bool,
+	referenceErrors []error,
+) {
+	resolved = make(map[string]any, len(inputs))
+	deferred = make(map[string]bool)
+	missing = make(map[string]bool)
+	for _, key := range sortedValidationKeys(inputs) {
+		value := inputs[key]
+		resolvedValue, valueDeferred, valueMissing, errs := resolveStaticValue(
+			value, declared, available, requireInputs, analyzer,
+		)
+		referenceErrors = slices.Concat(referenceErrors, errs)
+		if valueMissing {
+			missing[key] = true
+			continue
+		}
+		if valueDeferred {
+			deferred[key] = true
+			resolved[key] = cloneValidationValue(value)
+			continue
+		}
+		resolved[key] = resolvedValue
+	}
+	return resolved, deferred, missing, referenceErrors
+}
+
+func resolveStaticValue(value any, declared map[string]bool, available map[string]any, requireInputs bool,
+	analyzer workflow.TemplateAnalyzer,
+) (
+	resolved any,
+	deferred bool,
+	missing bool,
+	referenceErrors []error,
+) {
+	switch value := value.(type) {
+	case string:
+		resolved, deferred, err := resolveStaticString(value, declared, available, requireInputs, analyzer)
+		if err != nil {
+			return nil, false, false, []error{err}
+		}
+		missing := requireInputs && hasUnavailableInput(value, declared, available, analyzer)
+		return resolved, deferred, missing, nil
+	case map[string]any:
+		result := make(map[string]any, len(value))
+		var deferred, missing bool
+		var errs []error
+		for _, key := range sortedValidationKeys(value) {
+			resolved, nestedDeferred, nestedMissing, nestedErrs := resolveStaticValue(
+				value[key], declared, available, requireInputs, analyzer,
+			)
+			result[key] = resolved
+			deferred = deferred || nestedDeferred
+			missing = missing || nestedMissing
+			errs = slices.Concat(errs, nestedErrs)
+		}
+		return result, deferred, missing, errs
+	case []any:
+		result := make([]any, len(value))
+		var deferred, missing bool
+		var errs []error
+		for i := range value {
+			resolved, nestedDeferred, nestedMissing, nestedErrs := resolveStaticValue(
+				value[i], declared, available, requireInputs, analyzer,
+			)
+			result[i] = resolved
+			deferred = deferred || nestedDeferred
+			missing = missing || nestedMissing
+			errs = slices.Concat(errs, nestedErrs)
+		}
+		return result, deferred, missing, errs
+	default:
+		return value, false, false, nil
+	}
+}
+
+func resolveStaticString(value string, declared map[string]bool, available map[string]any, requireInputs bool,
+	analyzer workflow.TemplateAnalyzer,
+) (
+	resolved string,
+	deferred bool,
+	err error,
+) {
+	resolved = value
+	references, analyzeErr := workflow.AnalyzeInputTemplateReferences(analyzer, value)
+	if analyzeErr != nil {
+		return value[:0], false, fmt.Errorf("analyze template references: %w", analyzeErr)
+	}
+	for _, ref := range references {
+		name := ref.Name
+		if !declared[name] {
+			return value[:0], false, workflow.ValidationError{
+				Level:   workflow.ValidationLevelError,
+				Code:    workflow.ErrUndefinedInput,
+				Message: fmt.Sprintf("undefined input %q", name),
+			}
+		}
+		inputValue, ok := available[name]
+		if !ok {
+			if requireInputs {
+				continue
+			}
+			return value, true, nil
+		}
+		if ref.Direct {
+			resolved = strings.ReplaceAll(resolved, ref.Raw, fmt.Sprint(inputValue))
+		}
+	}
+	if strings.Contains(resolved, "{{") {
+		return resolved, true, nil
+	}
+	return resolved, false, nil
+}
+
+func hasUnavailableInput(value string, declared map[string]bool, available map[string]any,
+	analyzer workflow.TemplateAnalyzer,
+) bool {
+	references, err := workflow.AnalyzeInputTemplateReferences(analyzer, value)
+	if err != nil {
+		return false
+	}
+	for _, ref := range references {
+		if declared[ref.Name] {
+			if _, ok := available[ref.Name]; !ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func cloneValidationValue(value any) any {
+	switch value := value.(type) {
+	case map[string]any:
+		cloned := make(map[string]any, len(value))
+		for key, nested := range value {
+			cloned[key] = cloneValidationValue(nested)
+		}
+		return cloned
+	case []any:
+		cloned := make([]any, len(value))
+		for i := range value {
+			cloned[i] = cloneValidationValue(value[i])
+		}
+		return cloned
+	default:
+		return value
+	}
+}
+
+func cloneOperationSchema(schema *pluginmodel.OperationSchema) *pluginmodel.OperationSchema {
+	cloned := *schema
+	cloned.Inputs = make(map[string]pluginmodel.InputSchema, len(schema.Inputs))
+	for key, input := range schema.Inputs {
+		cloned.Inputs[key] = input
+	}
+	return &cloned
+}
+
+func missingRequiredOperationFields(schema *pluginmodel.OperationSchema, inputs map[string]any) []string {
+	var fields []string
+	for name, input := range schema.Inputs {
+		value, exists := inputs[name]
+		if input.Required && (!exists || value == nil || (input.Type == pluginmodel.InputTypeString && value == "")) {
+			fields = append(fields, name)
+		}
+	}
+	sort.Strings(fields)
+	return fields
+}
+
+func operationValidationError(
+	operationName, stepName string,
+	fieldPaths, requiredFields []string,
+	cause error,
+) error {
+	message := fmt.Sprintf("invalid inputs for operation %q in step %q", operationName, stepName)
+	if errors.Is(cause, operation.ErrOperationNotFound) {
+		message = fmt.Sprintf("operation %q not found in step %q", operationName, stepName)
+	} else if len(requiredFields) > 0 {
+		reasons := make([]string, len(requiredFields))
+		for i, field := range requiredFields {
+			reasons[i] = fmt.Sprintf("required field %q is missing or empty", field)
+			// Backend selection may be supplied by provider configuration at execution time.
+			if field != "backend" {
+				reasons[i] += fmt.Sprintf(" (%s is required)", field)
+			}
+		}
+		message += ": " + strings.Join(reasons, "; ")
+	}
+	return domerrors.NewStructuredError(domerrors.ErrorCodeUserInputValidationFailed,
+		message,
+		map[string]any{"operation": operationName, "step": stepName, "field_paths": fieldPaths}, cause)
+}
+
+func operationFieldPath(stepName, suffix string) string {
+	if workflowPathIdentifier(stepName) {
+		return "steps." + stepName + "." + suffix
+	}
+	encoded, _ := json.Marshal(stepName)
+	return "steps[" + string(encoded) + "]." + suffix
+}
+
+func workflowPathIdentifier(value string) bool {
+	if value == "" || !workflowPathIdentifierStart(value[0]) {
+		return false
+	}
+	for i := 1; i < len(value); i++ {
+		if char := value[i]; !workflowPathIdentifierStart(char) && (char < '0' || char > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+func workflowPathIdentifierStart(char byte) bool {
+	return (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z') || char == '_'
 }
 
 func (s *WorkflowService) validateSkillRefs(ctx context.Context, wf *workflow.Workflow) error {
@@ -385,10 +1030,10 @@ func (s *WorkflowService) validateMCPProxy(wf *workflow.Workflow) error {
 			continue
 		}
 
-		allErrs = append(allErrs, s.validateMCPProxyPluginTools(step, knownPlugins)...)
+		allErrs = slices.Concat(allErrs, s.validateMCPProxyPluginTools(step, knownPlugins))
 	}
 
-	return errors.Join(allErrs...)
+	return joinErrors(allErrs)
 }
 
 // buildKnownPluginSet returns a set of all plugin names registered in the OperationProvider.
@@ -399,6 +1044,9 @@ func (s *WorkflowService) buildKnownPluginSet() map[string]bool {
 	}
 	known := make(map[string]bool)
 	for _, op := range s.opProvider.ListOperations() {
+		if op == nil {
+			continue
+		}
 		if op.PluginName != "" {
 			known[op.PluginName] = true
 		}
@@ -455,7 +1103,7 @@ func (s *WorkflowService) validateMCPProxyPluginTools(step *workflow.Step, known
 			continue
 		}
 
-		errs = append(errs, s.validateMCPProxyExposedOps(step.Name, i, pt.Plugin, pt.Expose)...)
+		errs = slices.Concat(errs, s.validateMCPProxyExposedOps(step.Name, i, pt.Plugin, pt.Expose))
 	}
 	return errs
 }

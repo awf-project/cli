@@ -139,6 +139,14 @@ The execution history record and audit event receive the same normalized exit
 code when both writes succeed. This applies to new records only; existing
 `failure/0` entries are not migrated.
 
+### Lifecycle Invariant
+
+For every started execution attempt, AWF attempts one matching
+`workflow.completed` write. This applies to success, step or operation
+failure, cancellation, timeout, signal interruption, and recovered panic. The
+completion event is derived from the final execution result before it is written;
+an event with a non-empty error is therefore never serialized as `success`.
+
 ---
 
 ## Field Constraints
@@ -186,12 +194,13 @@ Keys matching these patterns have values masked as `"***"`:
 
 ### Entry Size (4KB Limit)
 
-- **Constraint**: Each serialized JSON entry MUST NOT exceed 4KB (4096 bytes)
-- **Rationale**: Guarantees atomic writes under POSIX `PIPE_BUF` without file locking
+- **Constraint**: Each serialized JSONL line, including its newline, must fit within 4KB (4096 bytes) to be written
+- **Rationale**: Keeps each record in one bounded append operation
 - **Truncation**: If an entry would exceed 4KB:
   1. Input values are truncated progressively (longest values first)
   2. `inputs_truncated: true` flag is added to the entry
-  3. The entry is still written (truncated state recorded for audit trail)
+  3. For completion events, an oversized error is shortened with an explicit `… [truncated]` suffix, preserving terminal identity, status, and exit code
+  4. If the remaining identity fields still exceed the limit, the writer returns an error without writing a partial entry
 
 **Truncation Example:**
 
@@ -230,9 +239,13 @@ Keys matching these patterns have values masked as `"***"`:
 
 ### Atomicity & Concurrency
 
-- Each entry is written as a single atomic operation (single `write()` syscall)
-- Multiple `awf` processes can append concurrently without file locking (POSIX `O_APPEND` semantics)
-- Entries are never partially written (guaranteed under 4KB on POSIX systems)
+- Each entry is serialized and written as one complete record while the writer
+  protects its append operation.
+- The file is opened with `O_APPEND`, allowing independent AWF processes to append
+  to the same trail without overwriting existing records.
+- Entries are bounded to 4 KiB. Completion errors are truncated when necessary
+  to preserve the terminal record; oversized identity fields are rejected.
+  Write failures are reported to the caller.
 
 ---
 

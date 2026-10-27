@@ -4,3 +4,17 @@
 {"ts":1792752852,"op":"assert","clause":"trigger('exercise_public_cli_contracts_through_root_command','',file)"}
 {"ts":1792752854,"op":"assert","clause":"rule('reuse_execution_service_step_resolution',architecture,'Always route failed sub-workflow transitions through ExecutionService.resolveNextStep.',medium,'implement')"}
 {"ts":1792752855,"op":"assert","clause":"trigger('reuse_execution_service_step_resolution','internal/application',directory)"}
+{"ts":1793055824,"op":"assert","clause":"rule(centralize_terminal_lifecycle_finalization, architecture, 'Always route fresh and resumed terminal execution through one panic-safe, idempotence-guarded finalizer.', high, implement)"}
+{"ts":1793055825,"op":"assert","clause":"trigger(centralize_terminal_lifecycle_finalization, '', project)"}
+{"ts":1793055825,"op":"assert","clause":"rule(validate_all_executable_workflow_templates, pitfall, 'Always traverse and validate executable templates in operation and agent fields during static workflow validation.', high, implement)"}
+{"ts":1793055825,"op":"assert","clause":"trigger(validate_all_executable_workflow_templates, '', project)"}
+{"ts":1793055826,"op":"assert","clause":"rule(preflight_all_production_agent_providers, architecture, 'Always implement context-aware non-interactive preflight for every production agent provider.', high, implement)"}
+{"ts":1793055826,"op":"assert","clause":"trigger(preflight_all_production_agent_providers, '', project)"}
+{"ts":1793055826,"op":"assert","clause":"rule(wire_validation_preflight_through_root_commands, architecture, 'Always run shared workflow validation and dependency-aware preflight through both production root-command execution paths.', high, implement)"}
+{"ts":1793055827,"op":"assert","clause":"trigger(wire_validation_preflight_through_root_commands, '', project)"}
+{"ts":1793055827,"op":"assert","clause":"rule(write_atomic_bounded_jsonl_records, pitfall, 'Always write each JSONL audit record as one bounded marshal-plus-newline payload in a single append operation, with explicit concurrent Write and Close behavior.', high, implement)"}
+{"ts":1793055827,"op":"assert","clause":"trigger(write_atomic_bounded_jsonl_records, '', project)"}
+{"ts":1793055827,"op":"assert","clause":"rule(sort_notification_backend_diagnostics, pitfall, 'Always sort registered notification backend names before constructing unknown-backend validation diagnostics.', medium, implement)"}
+{"ts":1793055828,"op":"assert","clause":"trigger(sort_notification_backend_diagnostics, '', project)"}
+{"ts":1793055828,"op":"assert","clause":"rule(test_audit_lifecycle_failure_paths, test, 'Always test audit persistence across timeout, recovered-panic, resume, and operating-system signal lifecycle paths using isolated storage.', high, implement)"}
+{"ts":1793055828,"op":"assert","clause":"trigger(test_audit_lifecycle_failure_paths, '', project)"}

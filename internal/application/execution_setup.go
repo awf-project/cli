@@ -10,6 +10,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/infrastructure/agents"
+	"github.com/awf-project/cli/internal/infrastructure/analyzer"
 	infraexpression "github.com/awf-project/cli/internal/infrastructure/expression"
 	"github.com/awf-project/cli/internal/infrastructure/github"
 	infrahttp "github.com/awf-project/cli/internal/infrastructure/http"
@@ -145,8 +146,8 @@ func WithRecorder(r ports.Recorder) SetupOption {
 }
 
 // WithRecorderFactory configures the factory used to create per-sub-run child
-// recorders for F106 sub-workflow transcript linkage. Without it, executeCallWorkflowStep
-// cannot open child transcript files and sub-workflow linkage is disabled.
+// recorders for F106 sub-workflow transcript linkage. The execution service needs
+// this factory to open and link child transcript files.
 func WithRecorderFactory(f ports.RecorderFactory) SetupOption {
 	return func(c *setupConfig) { c.recorderFactory = f }
 }
@@ -304,10 +305,14 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 	// Build the composite operation provider early so the F099 tool-proxy factory can
 	// capture it. The same provider is later passed to SetOperationProvider below.
 	compositeProvider := s.buildProviders(cfg)
+	wfSvc.SetPluginOperationProvider(compositeProvider)
+	wfSvc.SetTemplateAnalyzer(analyzer.NewInterpolationAnalyzer())
 
 	// Wire agent registry, tool proxy, and conversation manager when at least one agent is available.
 	// Order is mandatory per Architecture Rules: SetAgentRegistry → SetToolProxyService → SetConversationManager.
 	agentRegistry := agents.NewAgentRegistry()
+	wfSvc.SetAgentRegistry(agentRegistry)
+	wfSvc.SetUserInputReader(cfg.userInputReader)
 	if err := agentRegistry.RegisterDefaults(s.shellExecutor); err == nil {
 		execSvc.SetAgentRegistry(agentRegistry)
 
@@ -408,8 +413,8 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 
 // wireTranscriptRecording attaches the F106 transcript recorder, the per-sub-run
 // recorder factory, and the transcript directory to the execution service when
-// each is configured. Without the factory and directory, executeCallWorkflowStep's
-// child-recorder block is unreachable and sub-workflow linkage is disabled.
+// each is configured. The execution service creates linked child transcripts only
+// when both the factory and directory are available.
 func wireTranscriptRecording(execSvc *ExecutionService, cfg *setupConfig) {
 	if cfg.recorder != nil {
 		execSvc.SetRecorder(cfg.recorder)
@@ -420,6 +425,14 @@ func wireTranscriptRecording(execSvc *ExecutionService, cfg *setupConfig) {
 	if cfg.transcriptDir != "" {
 		execSvc.SetTranscriptDir(cfg.transcriptDir)
 	}
+}
+
+// NewBuiltinOperationProvider exposes the same builtin schemas and configured
+// notification defaults used during execution, without constructing execution,
+// audit, history, or agent services. Construction performs no operation calls.
+func NewBuiltinOperationProvider(logger ports.Logger, notifyConfig NotifyConfig) ports.OperationProvider {
+	setup := &ExecutionSetup{logger: logger}
+	return setup.buildProviders(&setupConfig{notifyConfig: notifyConfig})
 }
 
 // buildProviders assembles the composite operation provider from built-in and plugin-supplied
@@ -451,6 +464,14 @@ func (s *ExecutionSetup) buildProviders(cfg *setupConfig) ports.OperationProvide
 		_ = notifyProvider.RegisterBackend("webhook", webhookBackend) //nolint:errcheck // registration of built-in backends cannot fail
 		if cfg.notifyConfig.DefaultBackend != "" {
 			notifyProvider.SetDefaultBackend(cfg.notifyConfig.DefaultBackend)
+			// Keep the validation schema aligned with the configured runtime fallback.
+			// InputSchema is a map value, so update and assign the copy explicitly.
+			if schema, found := notifyProvider.GetOperation("notify.send"); found {
+				backend := schema.Inputs["backend"]
+				backend.Required = false
+				backend.Default = cfg.notifyConfig.DefaultBackend
+				schema.Inputs["backend"] = backend
+			}
 		}
 		providers = append(providers, notifyProvider)
 	}

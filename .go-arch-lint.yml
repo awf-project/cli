@@ -392,6 +392,7 @@ deps:
       - domain-transcript
       - application-tools
       - infra-agents
+      - infra-analyzer
       - infra-expression
       - infra-github
       - infra-http
@@ -781,6 +782,8 @@ deps:
       - infra-errors
     canUse:
       - go-stdlib
+      # StdinInputReader checks terminal availability without consuming input.
+      - go-term
       - color
       - progressbar
       - zap

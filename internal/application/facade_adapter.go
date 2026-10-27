@@ -88,6 +88,9 @@ func (a *Adapter) SetUserInputReader(r ports.UserInputReader) {
 	a.mu.Lock()
 	a.userInputReader = r
 	a.mu.Unlock()
+	if a.workflowSvc != nil {
+		a.workflowSvc.SetUserInputReader(r)
+	}
 }
 
 // SetRunRecorderFactory wires a per-run Recorder factory (HTTP/TUI). With it set, every
@@ -272,6 +275,13 @@ func (a *Adapter) Run(ctx context.Context, req ports.RunRequest) (ports.RunSessi
 			return nil, wrapIdentifierError(err)
 		}
 		wf = resolved
+	}
+	if wf != nil && a.workflowSvc != nil {
+		if err := a.workflowSvc.ValidateLoadedWorkflowWithInputs(
+			ctx, wf, req.Identifier, ports.ValidateOptions{}, req.Inputs,
+		); err != nil {
+			return nil, fmt.Errorf("validate workflow before run: %w", err)
+		}
 	}
 	id := uuid.New().String()
 	rec := a.recorderForRun(id)

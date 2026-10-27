@@ -341,6 +341,10 @@ notify:
 
 	workflowContent := `name: mixed-config
 version: "1.0.0"
+inputs:
+  - name: user_name
+    type: string
+    required: true
 states:
   initial: start
   start:
@@ -597,6 +601,10 @@ inputs:
 
 	workflowContent := `name: full-stack-wiring
 version: "1.0.0"
+inputs:
+  - name: workflow_name
+    type: string
+    required: true
 states:
   initial: start
   start:

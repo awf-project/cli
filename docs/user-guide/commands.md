@@ -141,6 +141,8 @@ $XDG_CONFIG_HOME/awf/
 
 Execute a workflow.
 
+Before execution, AWF checks supplied input references and required operation fields. Agent steps also check that the selected provider is available and ready for non-interactive use. A conversation step that needs user input requires an available input reader; CLI stdin must be connected to a terminal. Embedded callers can supply scripted input readers. Validation errors are reported before the workflow starts. Resuming a workflow applies the same checks to saved inputs merged with the supplied overrides before changing persisted execution state.
+
 > **⚠️ Security Warning:** This command executes arbitrary shell commands on your system. Only run workflows from trusted sources. Use `--dry-run` or `--interactive` to audit execution plans from untrusted workflows.
 
 ```bash
@@ -800,6 +802,9 @@ awf validate <workflow> [flags]
 - Terminal states exist
 - Template references valid
 - Input definitions valid
+- Required GitHub, HTTP, and notification operation fields, including statically resolvable input references
+- Agent provider availability and non-interactive readiness when the provider can be resolved
+- Interactive input requirements for conversation steps
 - Parallel strategy valid
 - Plugin validators (custom rules from enabled validator plugins, skipped with `--skip-plugins`)
 

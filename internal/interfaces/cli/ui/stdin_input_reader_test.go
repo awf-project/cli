@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,40 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestStdinInputReader_PreflightDoesNotConsumeInput(t *testing.T) {
+	reader := NewStdinInputReader(strings.NewReader("hello\n"), io.Discard)
+	require.NoError(t, reader.PreflightInput(context.Background()))
+	line, err := reader.ReadInput(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "hello", line)
+	assert.ErrorIs(t, reader.PreflightInput(context.Background()), io.EOF)
+}
+
+func TestStdinInputReader_PreflightRejectsUnavailableSources(t *testing.T) {
+	t.Run("empty scripted input", func(t *testing.T) {
+		reader := NewStdinInputReader(strings.NewReader(""), io.Discard)
+		assert.ErrorIs(t, reader.PreflightInput(context.Background()), io.EOF)
+	})
+	t.Run("open pipe never blocks preflight", func(t *testing.T) {
+		readEnd, writeEnd, err := os.Pipe()
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = readEnd.Close(); _ = writeEnd.Close() })
+		reader := NewStdinInputReader(readEnd, io.Discard)
+		assert.ErrorContains(t, reader.PreflightInput(context.Background()), "requires a terminal")
+	})
+	t.Run("closed file", func(t *testing.T) {
+		file, err := os.Open(os.DevNull)
+		require.NoError(t, err)
+		require.NoError(t, file.Close())
+		assert.ErrorContains(t, NewStdinInputReader(file, io.Discard).PreflightInput(context.Background()), "unavailable")
+	})
+	t.Run("cancelled context", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		assert.ErrorIs(t, NewStdinInputReader(strings.NewReader("ready"), io.Discard).PreflightInput(ctx), context.Canceled)
+	})
+}
 
 func TestStdinInputReader_ReadInput_HappyPath(t *testing.T) {
 	input := strings.NewReader("hello\n")

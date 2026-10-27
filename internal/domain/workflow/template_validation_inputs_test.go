@@ -147,3 +147,91 @@ func TestTemplateValidator_InputRefWithNoInputsDefined(t *testing.T) {
 	require.True(t, result.HasErrors())
 	assert.Equal(t, workflow.ErrUndefinedInput, result.Errors[0].Code)
 }
+
+func TestTemplateValidatorDetectsUndefinedInputsAcrossExecutableFields(t *testing.T) {
+	w := &workflow.Workflow{
+		Name:    "executable-fields",
+		Initial: "odd.step",
+		Steps: map[string]*workflow.Step{
+			"odd.step": {
+				Name:      "odd.step",
+				Type:      workflow.StepTypeCommand,
+				Command:   "echo {{inputs.command_value}}",
+				OnSuccess: "done",
+				Operation: "{{inputs.operation_name}}",
+				OperationInputs: map[string]any{
+					"payload": map[string]any{
+						"safe_key": []any{"{{inputs.list_value}}"},
+						"odd-key":  "{{inputs.map_value}}",
+					},
+				},
+				Agent: &workflow.AgentConfig{
+					Provider: "{{inputs.provider}}",
+					Prompt:   "{{inputs.prompt}}",
+					Options: map[string]any{
+						"z-key": "{{inputs.z_option}}",
+						"a_key": "{{inputs.a_option}}",
+					},
+				},
+				Hooks: workflow.StepHooks{Pre: workflow.Hook{
+					{Command: "echo {{inputs.step_hook}}"},
+				}},
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+			// These steps are deliberately unreachable and inserted out of lexical order.
+			// Their diagnostics must still be reported in lexical step/key order.
+			"zeta": {
+				Name:    "zeta",
+				Type:    workflow.StepTypeCommand,
+				Command: "echo {{inputs.zeta_value}}",
+			},
+			"alpha": {
+				Name: "alpha",
+				Type: workflow.StepTypeOperation,
+				OperationInputs: map[string]any{
+					"z-key": "{{inputs.z_map_value}}",
+					"a_key": []any{
+						"{{inputs.first_list_value}}",
+						"{{inputs.second_list_value}}",
+					},
+				},
+			},
+		},
+		Hooks: workflow.WorkflowHooks{WorkflowStart: workflow.Hook{
+			{Command: "echo {{inputs.workflow_hook}}"},
+		}},
+	}
+
+	result := workflow.NewTemplateValidator(w, newTestAnalyzer()).Validate()
+
+	require.Len(t, result.Errors, 14)
+	actual := make([]struct {
+		code workflow.ValidationCode
+		path string
+	}, 0, len(result.Errors))
+	for _, validationErr := range result.Errors {
+		actual = append(actual, struct {
+			code workflow.ValidationCode
+			path string
+		}{code: validationErr.Code, path: validationErr.Path})
+	}
+	assert.Equal(t, []struct {
+		code workflow.ValidationCode
+		path string
+	}{
+		{workflow.ErrUndefinedInput, `steps["odd.step"].command`},
+		{workflow.ErrUndefinedInput, `steps["odd.step"].operation`},
+		{workflow.ErrUndefinedInput, `steps["odd.step"].inputs.payload["odd-key"]`},
+		{workflow.ErrUndefinedInput, `steps["odd.step"].inputs.payload.safe_key[0]`},
+		{workflow.ErrUndefinedInput, `steps["odd.step"].agent.provider`},
+		{workflow.ErrUndefinedInput, `steps["odd.step"].agent.prompt`},
+		{workflow.ErrUndefinedInput, `steps["odd.step"].agent.options.a_key`},
+		{workflow.ErrUndefinedInput, `steps["odd.step"].agent.options["z-key"]`},
+		{workflow.ErrUndefinedInput, `steps["odd.step"].hooks.pre[0].command`},
+		{workflow.ErrUndefinedInput, `steps.alpha.inputs.a_key[0]`},
+		{workflow.ErrUndefinedInput, `steps.alpha.inputs.a_key[1]`},
+		{workflow.ErrUndefinedInput, `steps.alpha.inputs["z-key"]`},
+		{workflow.ErrUndefinedInput, `steps.zeta.command`},
+		{workflow.ErrUndefinedInput, `hooks.workflow_start[0].command`},
+	}, actual)
+}

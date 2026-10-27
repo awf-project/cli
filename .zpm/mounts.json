@@ -18,6 +18,30 @@
       "path": ".zpm/kb/feedback",
       "scope": "project",
       "mode": "rw"
+    },
+    {
+      "name": "feature_b017",
+      "path": ".zpm/kb/feature_b017",
+      "scope": "project",
+      "mode": "rw"
+    },
+    {
+      "name": "feature_b021",
+      "path": ".zpm/kb/feature_b021",
+      "scope": "project",
+      "mode": "rw"
+    },
+    {
+      "name": "feature_b020",
+      "path": ".zpm/kb/feature_b020",
+      "scope": "project",
+      "mode": "rw"
+    },
+    {
+      "name": "feature_b017_pr",
+      "path": ".zpm/kb/feature_b017_pr",
+      "scope": "project",
+      "mode": "rw"
     }
   ]
 }

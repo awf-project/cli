@@ -972,6 +972,7 @@ func runSingleStep(
 	if runFacade == nil {
 		return fmt.Errorf("failed to initialize execution facade for step")
 	}
+	configureFacadeInput(runFacade, cmd.InOrStdin(), cmd.OutOrStdout())
 	stepRunner, ok := runFacade.(ports.SingleStepRunner)
 	if !ok {
 		return fmt.Errorf("execution facade does not support single-step execution")
@@ -1172,6 +1173,7 @@ func runWorkflowViaFacade(
 	workflowName string,
 	inputs map[string]any,
 ) error {
+	configureFacadeInput(cfg.Facade, cmd.InOrStdin(), writer.Out())
 	session, err := cfg.Facade.Run(ctx, ports.RunRequest{
 		Identifier: workflowName,
 		Inputs:     inputs,
@@ -1255,4 +1257,12 @@ func isTerminal(r io.Reader) bool {
 		return term.IsTerminal(int(f.Fd())) //nolint:gosec // G115: file descriptor values are within int range on all supported platforms
 	}
 	return false
+}
+
+// configureFacadeInput preserves command-owned input for both preflight and the
+// session input bridge; embedded callers may provide scripted in-memory input.
+func configureFacadeInput(facade ports.WorkflowFacade, input io.Reader, output io.Writer) {
+	if configurable, ok := facade.(interface{ SetUserInputReader(ports.UserInputReader) }); ok {
+		configurable.SetUserInputReader(ui.NewStdinInputReader(input, output))
+	}
 }

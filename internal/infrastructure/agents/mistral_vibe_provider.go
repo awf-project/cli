@@ -121,6 +121,17 @@ func (p *MistralVibeProvider) Validate() error {
 	return nil
 }
 
+func (p *MistralVibeProvider) Preflight(ctx context.Context, options map[string]any) error {
+	_ = options
+	// Mistral Vibe exposes setup and prompt commands but no reliable
+	// non-interactive readiness probe. Avoid prompt execution and fail closed.
+	return &ProviderPreflightError{
+		Provider: "mistral_vibe",
+		Reason:   PreflightStatusUnsupported,
+		Cause:    unsupportedPreflightCause(ctx),
+	}
+}
+
 func (p *MistralVibeProvider) buildExecuteArgs(prompt string, options map[string]any) ([]string, error) {
 	return appendMistralVibeOptions([]string{"--prompt", prompt}, options)
 }

@@ -10,3 +10,10 @@ type UserInputReader interface {
 	// Returns error if the context is cancelled or an I/O error occurs.
 	ReadInput(ctx context.Context) (string, error)
 }
+
+// UserInputPreflighter optionally checks input availability without consuming a
+// message or blocking for user interaction. Injected readers without this
+// capability retain their existing contract.
+type UserInputPreflighter interface {
+	PreflightInput(ctx context.Context) error
+}
