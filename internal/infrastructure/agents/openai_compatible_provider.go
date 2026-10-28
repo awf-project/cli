@@ -105,7 +105,7 @@ type parsedOptions struct {
 
 func NewOpenAICompatibleProvider(opts ...OpenAICompatibleProviderOption) *OpenAICompatibleProvider {
 	p := &OpenAICompatibleProvider{
-		httpClient: httpx.NewClient(),
+		httpClient: httpx.NewClient(httpx.WithDoer(&http.Client{Timeout: 30 * time.Minute})),
 	}
 	for _, opt := range opts {
 		opt(p)
