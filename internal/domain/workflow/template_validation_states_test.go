@@ -537,3 +537,44 @@ func TestTemplateValidator_ParallelBranchRefBeforeCompletion(t *testing.T) {
 	require.True(t, result.HasErrors() || result.HasWarnings(),
 		"cross-referencing parallel branches should be flagged")
 }
+
+func TestTemplateValidator_LoopExecutionOrder(t *testing.T) {
+	for _, loopType := range []workflow.StepType{workflow.StepTypeForEach, workflow.StepTypeWhile} {
+		t.Run(string(loopType), func(t *testing.T) {
+			w := &workflow.Workflow{
+				Name: "loop-reference-test", Initial: "initialize",
+				Steps: map[string]*workflow.Step{
+					"initialize": {Name: "initialize", Type: workflow.StepTypeCommand, Command: "echo initialized", OnSuccess: "loop"},
+					"loop": {Name: "loop", Type: loopType, Loop: &workflow.LoopConfig{
+						Body: []string{"first", "second"}, OnComplete: "after",
+					}},
+					"first":  {Name: "first", Type: workflow.StepTypeCommand, Command: "echo {{states.initialize.Output}}", OnSuccess: "second"},
+					"second": {Name: "second", Type: workflow.StepTypeCommand, Command: "echo {{states.first.Output}}", OnSuccess: "loop"},
+					"after":  {Name: "after", Type: workflow.StepTypeCommand, Command: "echo {{states.initialize.Output}}", OnSuccess: "done"},
+					"done":   {Name: "done", Type: workflow.StepTypeTerminal, Status: workflow.TerminalSuccess},
+				},
+			}
+			result := workflow.NewTemplateValidator(w, newTestAnalyzer()).Validate()
+			require.False(t, result.HasErrors(), "loop references to prior steps must be valid: %v", result.Errors)
+			order, err := workflow.ComputeExecutionOrder(w.Steps, w.Initial)
+			require.NoError(t, err)
+			require.Equal(t, []string{"initialize", "loop", "first", "second", "after", "done"}, order)
+
+			w.Steps["first"].Command = "echo {{states.second.Output}}"
+			result = workflow.NewTemplateValidator(w, newTestAnalyzer()).Validate()
+			require.True(t, result.HasErrors(), "forward references within loop bodies must still fail")
+			assert.Equal(t, workflow.ErrForwardReference, result.Errors[0].Code)
+		})
+	}
+}
+
+func TestTemplateValidator_UnorderedStepDoesNotInventForwardReferences(t *testing.T) {
+	w := newLinearWorkflow()
+	w.Steps["orphan"] = &workflow.Step{
+		Name: "orphan", Type: workflow.StepTypeCommand,
+		Command: "echo {{states.step1.Output}} {{states.missing.Output}}",
+	}
+	result := workflow.NewTemplateValidator(w, newTestAnalyzer()).Validate()
+	require.Len(t, result.Errors, 1, "unknown references must still be checked without assuming execution order")
+	assert.Equal(t, workflow.ErrUndefinedStep, result.Errors[0].Code)
+}

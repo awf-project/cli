@@ -1,11 +1,16 @@
 //go:build integration && !windows
 
-// Feature: F102
 package acp_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -136,8 +141,40 @@ func TestACPServeJSONRPC_SessionCancel_ReturnsCancelledStopReason(t *testing.T) 
 		t.Skip("skipping integration test in short mode")
 	}
 
+	confidential := []string{
+		"PRIVATE_WORKFLOW_INPUT_T036",
+		"PRIVATE_COMMAND_OUTPUT_T036",
+		"PRIVATE_PROMPT_T036",
+		"PRIVATE_ENV_VALUE_T036",
+	}
+	t.Setenv("T036_PRIVATE_ENV", confidential[3])
+
+	// Use real temporary workflow files so the values traverse the same parser,
+	// interpolation, shell executor, and ACP JSON-RPC server as production traffic.
+	workflowsDir := t.TempDir()
+	trivial, err := os.ReadFile(filepath.Join(fixtureWorkflowsDir(t), "trivial.yaml"))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "trivial.yaml"), trivial, 0o600))
+	longRunning := fmt.Sprintf(`name: long-running
+version: "1.0.0"
+inputs:
+  - name: workflow_input
+    type: string
+    required: false
+states:
+  initial: run
+  run:
+    type: step
+    command: "printf '%%s\\n' '{{inputs.workflow_input}}'; printf '%%s\\n' '%s'; printf '%%s\\n' \"$T036_PRIVATE_ENV\"; sleep 30"
+    on_success: done
+    on_failure: done
+  done:
+    type: terminal
+`, confidential[1])
+	require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, "long-running.yaml"), []byte(longRunning), 0o600))
+
 	binaryPath := buildAWFBinary(t)
-	configPath := writeACPConfig(t, fixtureWorkflowsDir(t))
+	configPath := writeACPConfig(t, workflowsDir)
 	proc := startACPServeProcess(t, binaryPath, fmt.Sprintf("--config=%s", configPath))
 
 	proc.request(t, 1, sdk.AgentMethodInitialize, map[string]any{
@@ -156,22 +193,95 @@ func TestACPServeJSONRPC_SessionCancel_ReturnsCancelledStopReason(t *testing.T) 
 	result, _ := sessionResp.Result.(map[string]any)
 	sessionID := fmt.Sprintf("%v", result["sessionId"])
 
-	go func() {
-		time.Sleep(1 * time.Second)
-		proc.request(t, 4, sdk.AgentMethodSessionCancel, map[string]any{
-			"sessionId": sessionID,
-		})
-	}()
-
-	start := time.Now()
-	resp := proc.request(t, 3, sdk.AgentMethodSessionPrompt, map[string]any{
+	type asyncResult struct {
+		response jsonRPCResponse
+		err      error
+	}
+	cancelBound := 6 * time.Second
+	if deadline, ok := t.Deadline(); ok && time.Until(deadline) < cancelBound {
+		cancelBound = time.Until(deadline)
+	}
+	requestCtx, requestCancel := context.WithTimeout(context.Background(), cancelBound)
+	defer requestCancel()
+	promptResponse := make(chan asyncResult, 1)
+	idKey := jsonIntID(3)
+	waiter := make(chan jsonRPCResponse, 1)
+	proc.mu.Lock()
+	proc.waiters[idKey] = waiter
+	proc.mu.Unlock()
+	promptRequest := map[string]any{"jsonrpc": "2.0", "id": 3, "method": sdk.AgentMethodSessionPrompt, "params": map[string]any{
 		"sessionId": sessionID,
 		"prompt": []map[string]any{
-			{"type": "text", "text": "/long-running"},
+			{"type": "text", "text": "/long-running workflow_input=" + confidential[0] + " prompt=" + confidential[2]},
 		},
-	})
-	elapsed := time.Since(start)
+	}}
+	payload, err := json.Marshal(promptRequest)
+	require.NoError(t, err)
+	payload = append(payload, '\n')
+	_, err = proc.stdin.Write(payload)
+	require.NoError(t, err)
+	go func() {
+		select {
+		case response := <-waiter:
+			promptResponse <- asyncResult{response: response}
+		case <-requestCtx.Done():
+			proc.mu.Lock()
+			delete(proc.waiters, idKey)
+			proc.mu.Unlock()
+			promptResponse <- asyncResult{err: requestCtx.Err()}
+		}
+	}()
 
+	descendantContains := func(want string) bool {
+		output, err := exec.Command("ps", "-eo", "pid=,ppid=,args=").Output()
+		require.NoError(t, err, "inspect acp-serve descendants")
+		type process struct {
+			pid, parent string
+			args        string
+		}
+		var processes []process
+		for line := range strings.SplitSeq(string(output), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) >= 3 {
+				processes = append(processes, process{
+					pid: fields[0], parent: fields[1], args: strings.Join(fields[2:], " "),
+				})
+			}
+		}
+		descendants := map[string]bool{strconv.Itoa(proc.cmd.Process.Pid): true}
+		for range processes {
+			for i := range processes {
+				if descendants[processes[i].parent] {
+					descendants[processes[i].pid] = true
+				}
+			}
+		}
+		for i := range processes {
+			if descendants[processes[i].pid] && strings.Contains(processes[i].args, want) {
+				return true
+			}
+		}
+		return false
+	}
+	require.Eventually(t, func() bool { return descendantContains("sleep 30") },
+		acpRPCTimeout, 10*time.Millisecond,
+		"long-running command must be active before session/cancel")
+
+	start := time.Now()
+	cancelResp := proc.request(t, 4, sdk.AgentMethodSessionCancel, map[string]any{
+		"sessionId": sessionID,
+	})
+	require.Nil(t, cancelResp.Error, "session/cancel must succeed: %+v", cancelResp.Error)
+
+	var resp jsonRPCResponse
+	select {
+	case promptResult := <-promptResponse:
+		require.NoError(t, promptResult.err, "cancelled session/prompt request must complete")
+		resp = promptResult.response
+	case <-requestCtx.Done():
+		t.Fatalf("timed out waiting for cancelled session/prompt response after %s", cancelBound)
+	}
+	elapsed := time.Since(start)
 	assert.Nil(t, resp.Error, "cancelled session/prompt must not error: %+v", resp.Error)
 	assert.Less(t, elapsed, 6*time.Second, "cancel response must arrive within 6s (5s SIGTERM grace + 1s overhead per SC-004)")
 
@@ -181,6 +291,37 @@ func TestACPServeJSONRPC_SessionCancel_ReturnsCancelledStopReason(t *testing.T) 
 	stopReason, ok := result["stopReason"].(string)
 	assert.True(t, ok, "result must contain stopReason as string")
 	assert.Equal(t, "cancelled", stopReason, "stopReason must be 'cancelled'")
+	require.Eventually(t, func() bool { return !descendantContains("sleep 30") },
+		acpRPCTimeout, 10*time.Millisecond,
+		"cancelled command must exit before cleanup completes")
+	encodedResponse, err := json.Marshal(resp)
+	require.NoError(t, err)
+
+	cleanupResp := proc.request(t, 5, sdk.AgentMethodSessionPrompt, map[string]any{
+		"sessionId": sessionID,
+		"prompt": []map[string]any{
+			{"type": "text", "text": "/trivial"},
+		},
+	})
+	require.Nil(t, cleanupResp.Error,
+		"session must remain usable after cancelled workflow cleanup: %+v", cleanupResp.Error)
+	cleanupResult, ok := cleanupResp.Result.(map[string]any)
+	require.True(t, ok, "post-cancellation prompt result must be a JSON object")
+	assert.Equal(t, "end_turn", cleanupResult["stopReason"],
+		"a fresh workflow must complete after cancelled workflow cleanup")
+
+	// Error envelopes must not echo values that traversed supported ACP and workflow paths.
+	protocolErrors, err := json.Marshal([]*sdk.RequestError{
+		sessionResp.Error,
+		cancelResp.Error,
+		resp.Error,
+		cleanupResp.Error,
+	})
+	require.NoError(t, err)
+	for _, secret := range confidential {
+		assert.NotContains(t, string(encodedResponse), secret, "JSON-RPC response must not disclose confidential data")
+		assert.NotContains(t, string(protocolErrors), secret, "captured JSON-RPC errors must not disclose confidential data")
+	}
 }
 
 func TestACPServeJSONRPC_UnsupportedBlock_RejectsWithUSERACPUnsupportedBlock(t *testing.T) {

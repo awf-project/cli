@@ -13,7 +13,6 @@ import (
 // It performs security checks on workflows including:
 // - Detection of hardcoded secrets (API keys, passwords)
 // - Detection of command injection vulnerabilities
-// - Enforcement of timeout requirements
 type SecurityValidatorPlugin struct {
 	sdk.BasePlugin
 	secretPatterns []*regexp.Regexp
@@ -86,16 +85,6 @@ func (p *SecurityValidatorPlugin) ValidateStep(ctx context.Context, workflow sdk
 		}
 	}
 
-	// Check for missing timeout on commands
-	if step.Type == "command" && step.Timeout == 0 {
-		issues = append(issues, sdk.ValidationIssue{
-			Severity: sdk.SeverityWarning,
-			Message:  "Command step has no timeout; consider adding timeout to prevent runaway processes",
-			Step:     stepName,
-			Field:    "timeout",
-		})
-	}
-
 	return issues, nil
 }
 
@@ -140,7 +129,7 @@ func (p *SecurityValidatorPlugin) checkForDangerousCommands(stepName, command st
 func (p *SecurityValidatorPlugin) checkForCommandInjection(stepName, command string) *sdk.ValidationIssue {
 	// Check for unquoted variable interpolation patterns that could enable injection
 	if strings.Contains(command, "$") && !strings.Contains(command, "${{") {
-		// Allow {{...}} interpolation syntax, warn about shell variable expansion
+		// Allow AWF interpolation syntax, warn about shell variable expansion.
 		if strings.Count(command, "$") > strings.Count(command, "{{") {
 			return &sdk.ValidationIssue{
 				Severity: sdk.SeverityWarning,

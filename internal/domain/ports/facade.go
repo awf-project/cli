@@ -41,7 +41,8 @@ type ResumeRequest struct {
 	// RunID is the identifier of the run to resume (required).
 	RunID string
 	// InputOverrides replaces specific workflow input values for the resumed execution.
-	// A nil map means "no overrides; use the values stored with the original run".
+	// A nil map reuses persisted inputs. Values absent from older metadata-only
+	// checkpoints must be supplied again if required and without a default.
 	InputOverrides map[string]any
 	// FromStep names the step at which execution should restart.
 	// An empty string means "restart from the current/last persisted step".

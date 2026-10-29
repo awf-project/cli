@@ -24,6 +24,132 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestResumeCommand_RestoresInputsAndOutputsFromCheckpoint exercises the
+// resume contract using real run checkpoints, not seeded state.
+func TestResumeCommand_RestoresInputsAndOutputsFromCheckpoint(t *testing.T) {
+	for _, scenario := range []struct {
+		name  string
+		args  []string
+		label string
+	}{
+		{name: "current step", label: "PRIVATE_RESUME_DEFAULT"},
+		{name: "named step", args: []string{"--from=wait"}, label: "PRIVATE_RESUME_DEFAULT"},
+		{name: "input override", args: []string{"--input=label=OVERRIDDEN_LABEL"}, label: "OVERRIDDEN_LABEL"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			testResumeRestoresCheckpoint(t, scenario.args, scenario.label)
+		})
+	}
+}
+
+func testResumeRestoresCheckpoint(t *testing.T, resumeArgs []string, expectedLabel string) {
+	t.Helper()
+	env := newRootCommandTestEnvironment(t)
+	t.Setenv("AWF_MCP_PROXY_NO_PURGE", "1")
+	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
+	t.Setenv("AWF_AUDIT_LOG", auditPath)
+	ready, release, marker := filepath.Join(t.TempDir(), "ready"), filepath.Join(t.TempDir(), "release"), filepath.Join(t.TempDir(), "completed")
+	const privateInput = "PRIVATE_RESUME_INPUT"
+	env.writeWorkflow(t, "resume-replay", fmt.Sprintf(`name: resume-replay
+inputs:
+  - name: credential
+    type: string
+    required: true
+  - name: label
+    type: string
+    default: PRIVATE_RESUME_DEFAULT
+states:
+  initial: prepare
+  prepare:
+    type: command
+    command: test ! -f %s && touch %s && printf '%%s' '{{inputs.credential}}'
+    on_success: wait
+  wait:
+    type: command
+    command: touch %s; while [ ! -f %s ]; do sleep 0.01; done
+    on_success: verify
+  verify:
+    type: command
+    command: test '{{states.prepare.Output}}' = '{{inputs.credential}}' && test '{{inputs.label}}' = %s && touch %s
+    on_success: done
+  done:
+    type: terminal
+`, interpolation.ShellEscape(marker+"-prepared"), interpolation.ShellEscape(marker+"-prepared"), interpolation.ShellEscape(ready), interpolation.ShellEscape(release), interpolation.ShellEscape(expectedLabel), interpolation.ShellEscape(marker)))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	completed := startRootWorkflow(t, ctx, env, "resume-replay", "--input=credential="+privateInput)
+	require.Eventually(t, func() bool {
+		select {
+		case result := <-completed:
+			t.Fatalf("workflow stopped before reaching the interruption point: %v\n%s", result.err, result.output)
+		default:
+		}
+		return timeoutFileExists(ready)
+	}, 5*time.Second, 10*time.Millisecond)
+	cancel()
+	initial := receiveRootCommandOutcome(t, completed)
+	require.ErrorIs(t, initial.err, context.Canceled)
+	checkpoint := env.loadExecutionByWorkflowName(t, "resume-replay")
+	assertPersistedExecution(t, checkpoint, workflow.StatusCancelled)
+	require.Equal(t, privateInput, checkpoint.Inputs["credential"])
+	require.Equal(t, "PRIVATE_RESUME_DEFAULT", checkpoint.Inputs["label"])
+	prior, ok := checkpoint.GetStepState("prepare")
+	require.True(t, ok)
+	require.Equal(t, workflow.StatusCompleted, prior.Status)
+	require.Equal(t, privateInput, prior.Output)
+	statePath := filepath.Join(env.storageDir, "states", checkpoint.WorkflowID+".json")
+	before, err := os.ReadFile(statePath)
+	require.NoError(t, err)
+	require.Contains(t, string(before), privateInput)
+	stateInfo, statErr := os.Stat(statePath)
+	require.NoError(t, statErr)
+	assert.Equal(t, os.FileMode(0o600), stateInfo.Mode().Perm())
+
+	t.Run("invalid overrides leave checkpoint unchanged", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		output, resumeErr := env.executeArgs(t, ctx, "resume", checkpoint.WorkflowID, "--input=credential=")
+		require.Error(t, resumeErr, output)
+		assert.Contains(t, resumeErr.Error(), "credential")
+		assertFileBytesEqual(t, statePath, before)
+		assert.NoFileExists(t, marker)
+	})
+
+	t.Run("resume restores inputs and outputs without replay", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		require.NoError(t, os.WriteFile(release, nil, 0o600))
+		args := append([]string{"resume", checkpoint.WorkflowID}, resumeArgs...)
+		output, resumeErr := env.executeArgs(t, ctx, args...)
+		require.NoError(t, resumeErr, output)
+		assert.FileExists(t, marker)
+		resumed := env.loadExecutionByWorkflowName(t, "resume-replay")
+		assertPersistedExecution(t, resumed, workflow.StatusCompleted)
+		assert.Equal(t, checkpoint.HistoryAttempt+1, resumed.HistoryAttempt)
+		assert.Equal(t, checkpoint.HistoryRecordID, resumed.PreviousHistoryRecordID)
+		assert.Equal(t, privateInput, resumed.Inputs["credential"])
+		assert.Equal(t, expectedLabel, resumed.Inputs["label"])
+		rebuilt, found := resumed.GetStepState("prepare")
+		require.True(t, found)
+		assert.Equal(t, privateInput, rebuilt.Output)
+		assert.Equal(t, prior.StartedAt, rebuilt.StartedAt)
+		stateData, readErr := os.ReadFile(statePath)
+		require.NoError(t, readErr)
+		assert.Contains(t, string(stateData), privateInput)
+		auditData, readErr := os.ReadFile(auditPath)
+		require.NoError(t, readErr)
+		history, openErr := store.NewSQLiteHistoryStore(filepath.Join(env.storageDir, "history.db"))
+		require.NoError(t, openErr)
+		t.Cleanup(func() { require.NoError(t, history.Close()) })
+		records, listErr := history.List(context.Background(), &workflow.HistoryFilter{WorkflowID: checkpoint.WorkflowID})
+		require.NoError(t, listErr)
+		require.Len(t, records, 2)
+		historyData, marshalErr := json.Marshal(records)
+		require.NoError(t, marshalErr)
+		assertConfidentialValuesAbsent(t, string(auditData)+string(historyData), privateInput, "PRIVATE_RESUME_DEFAULT", expectedLabel)
+	})
+}
+
 func TestResumeCommand_PersistsChronologicalAttemptsAcrossRepeatedResumes(t *testing.T) {
 	root := setupInitTestDir(t)
 	storageDir := filepath.Join(root, "owned storage")

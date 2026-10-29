@@ -24,3 +24,18 @@
 {"ts":1793136648,"op":"assert","clause":"trigger(test_repeated_resume_lineage, 'tests/integration/cli/resume_test.go', file)"}
 {"ts":1793136648,"op":"assert","clause":"rule(verify_sqlite_history_replay_concurrency, 'test', 'Always test SQLite history replay idempotence, conflicting lineage detection, filtering, and multi-connection concurrency with a real database.', 'high', 'implement')"}
 {"ts":1793136648,"op":"assert","clause":"trigger(verify_sqlite_history_replay_concurrency, 'internal/infrastructure/store/sqlite_history_store.go', file)"}
+{"ts":1793278938,"op":"assert","clause":"rule(preserve_timeout_presence_semantics, architecture, 'Always distinguish omitted, explicit-zero, and positive timeout values across domain, YAML, templates, and execution policies; omission inherits while zero disables.', high, implement)"}
+{"ts":1793278938,"op":"assert","clause":"trigger(preserve_timeout_presence_semantics, '', project)"}
+{"ts":1793278938,"op":"assert","clause":"rule(reject_implicit_execution_timeout_defaults, pitfall, 'Never introduce implicit child, agent, HTTP, or plugin execution timeout defaults when the workflow omits a timeout.', high, implement)"}
+{"ts":1793278938,"op":"assert","clause":"trigger(reject_implicit_execution_timeout_defaults, '', project)"}
+{"ts":1793278939,"op":"assert","clause":"rule(centralize_timeout_template_merging, architecture, 'Always route every executable template expansion path through one presence-aware timeout inheritance and override rule.', high, implement)"}
+{"ts":1793278939,"op":"assert","clause":"trigger(centralize_timeout_template_merging, '', project)"}
+{"ts":1793278939,"op":"assert","clause":"rule(apply_positive_child_deadlines_consistently, architecture, 'Always apply the same positive-only child-context deadline policy across fresh, resumed, interactive, conversation, operation, custom-step, and agent execution.', high, implement)"}
+{"ts":1793278940,"op":"assert","clause":"trigger(apply_positive_child_deadlines_consistently, '', project)"}
+{"ts":1793278940,"op":"assert","clause":"rule(preserve_plugin_caller_context_ownership, architecture, 'Always bound plugin discovery independently while allowing plugin step execution to remain under the caller-owned context until completion.', high, implement)"}
+{"ts":1793278940,"op":"assert","clause":"trigger(preserve_plugin_caller_context_ownership, '', project)"}
+{"ts":1793278940,"op":"assert","clause":"rule(preserve_raw_yaml_timeout_presence, pitfall, 'Always preserve raw timeout presence during YAML mapping while accepting integer seconds and Go-duration syntax and rejecting invalid or negative values.', high, implement)"}
+{"ts":1793278941,"op":"assert","clause":"trigger(preserve_raw_yaml_timeout_presence, '', project)"}
+{"ts":1793278947,"op":"assert","clause":"rule('test_timeout_cancellation_lifecycle',test,'Always test exact timeout and cancellation behavior across public CLI, resume, hooks, audit, history, finalization, shell, Bash, HTTP, and plugin lifecycle paths.',high,'implement')"}
+{"ts":1793278948,"op":"assert","clause":"trigger('test_timeout_cancellation_lifecycle','',project)"}
+{"ts":1793302259,"op":"assert","clause":"rule(preserve_resume_contract_when_hardening_confidentiality, architecture, 'Confidentiality changes must preserve the established resume contract; validate a real interrupted run without resupplying inputs or replaying completed side effects before accepting persistence redaction.', high, 'user_resume_regression_20261029')"}

@@ -3,6 +3,7 @@ package pluginmgr
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 	"testing"
@@ -72,6 +73,7 @@ type streamTestDeliverer struct {
 	mu        sync.Mutex
 	callCount int
 	lastEvent *pluginmodel.DomainEvent
+	lastCtx   context.Context
 	response  []*pluginmodel.DomainEvent
 	err       error
 }
@@ -81,7 +83,14 @@ func (m *streamTestDeliverer) DeliverEvent(ctx context.Context, event *pluginmod
 	defer m.mu.Unlock()
 	m.callCount++
 	m.lastEvent = event
+	m.lastCtx = ctx
 	return m.response, m.err
+}
+
+func (m *streamTestDeliverer) getLastContext() context.Context {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.lastCtx
 }
 
 func (m *streamTestDeliverer) getCallCount() int {
@@ -99,6 +108,31 @@ func (n *noopLogger) Error(msg string, fields ...any)             {}
 func (n *noopLogger) WithContext(ctx map[string]any) ports.Logger { return n }
 
 var _ ports.Logger = (*noopLogger)(nil)
+
+type recordingLogger struct {
+	mu      sync.Mutex
+	entries []string
+}
+
+func (l *recordingLogger) append(msg string, fields ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.entries = append(l.entries, fmt.Sprint(append([]any{msg}, fields...)...))
+}
+
+func (l *recordingLogger) Debug(msg string, fields ...any) { l.append(msg, fields...) }
+func (l *recordingLogger) Info(msg string, fields ...any)  { l.append(msg, fields...) }
+func (l *recordingLogger) Warn(msg string, fields ...any)  { l.append(msg, fields...) }
+func (l *recordingLogger) Error(msg string, fields ...any) { l.append(msg, fields...) }
+func (l *recordingLogger) WithContext(map[string]any) ports.Logger {
+	return l
+}
+
+func (l *recordingLogger) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return fmt.Sprint(l.entries)
+}
 
 func TestNewStreamManager(t *testing.T) {
 	logger := &noopLogger{}
@@ -346,7 +380,9 @@ func TestClose_GoroutineCleanup(t *testing.T) {
 }
 
 func TestStreamDeliverer_DeliverEvent_FallbackOnSendTimeout(t *testing.T) {
-	sm := NewStreamManager(&noopLogger{})
+	logger := &recordingLogger{}
+	sm := NewStreamManager(logger)
+	sm.timeout = 25 * time.Millisecond
 	done := make(chan struct{})
 	defer close(done)
 	client := &blockingMockStreamEventsClient{done: done}
@@ -356,19 +392,37 @@ func TestStreamDeliverer_DeliverEvent_FallbackOnSendTimeout(t *testing.T) {
 	fallback := &streamTestDeliverer{}
 	deliverer := sm.GetDeliverer(pluginName, fallback)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
+	ctx := context.Background()
+	const confidentialPayloadMarker = "event-payload-must-not-leak"
 	event := &pluginmodel.DomainEvent{
 		ID:        "evt-timeout",
 		Type:      "test.event",
 		Timestamp: time.Now(),
+		Payload:   []byte(confidentialPayloadMarker),
 	}
 
-	_, err := deliverer.DeliverEvent(ctx, event)
+	started := time.Now()
+	result := make(chan error, 1)
+	go func() {
+		_, err := deliverer.DeliverEvent(ctx, event)
+		result <- err
+	}()
 
-	assert.NoError(t, err)
+	var err error
+	select {
+	case err = <-result:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("DeliverEvent did not fall back after the stream send timeout")
+	}
+
+	require.NoError(t, err)
+	assert.Less(t, time.Since(started), 500*time.Millisecond)
 	assert.Equal(t, 1, fallback.getCallCount())
 	assert.False(t, sm.HasStream(pluginName))
+	assert.Equal(t, ctx, fallback.getLastContext())
+	assert.NoError(t, ctx.Err())
+	assert.Contains(t, logger.String(), pluginName)
+	assert.NotContains(t, logger.String(), confidentialPayloadMarker)
 }
 
 func TestStreamDeliverer_ConcurrentSends(t *testing.T) {

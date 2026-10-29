@@ -438,7 +438,7 @@ When running with `--interactive`, you can choose at each step:
 
 ## awf resume
 
-Resume an interrupted workflow.
+Resume an interrupted workflow. Saved inputs and completed step results are restored automatically; `--input` overrides individual saved values. Checkpoints written by the metadata-only persistence implementation lack those values and may require inputs to be supplied again and prerequisite steps to be replayed.
 
 ```bash
 awf resume [workflow-id] [flags]

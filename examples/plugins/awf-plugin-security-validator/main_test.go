@@ -208,10 +208,9 @@ func TestSecurityValidatorPlugin_ValidateStep_DetectsDangerousCommands(t *testin
 	assert.True(t, foundDangerous, "should detect dangerous command")
 }
 
-// TestSecurityValidatorPlugin_ValidateStep_WarnsAboutMissingTimeout warns when timeout not set.
-func TestSecurityValidatorPlugin_ValidateStep_WarnsAboutMissingTimeout(t *testing.T) {
+func TestSecurityValidatorPlugin_ValidateStep_AllowsOmittedTimeout(t *testing.T) {
 	plugin := &SecurityValidatorPlugin{}
-	_ = plugin.Init(context.Background(), map[string]any{})
+	require.NoError(t, plugin.Init(context.Background(), map[string]any{}))
 
 	workflow := sdk.WorkflowDefinition{
 		Name:    "test-workflow",
@@ -220,7 +219,44 @@ func TestSecurityValidatorPlugin_ValidateStep_WarnsAboutMissingTimeout(t *testin
 			"step1": {
 				Type:    "command",
 				Command: "long-running-command",
-				Timeout: 0, // No timeout set
+			},
+		},
+	}
+
+	issues, err := plugin.ValidateStep(context.Background(), workflow, "step1")
+
+	require.NoError(t, err)
+	assert.Empty(t, issues)
+
+	const secret = "b021-sensitive-value"
+	workflow.Steps["step1"] = sdk.StepDefinition{
+		Type:    "command",
+		Command: "deploy password=" + secret,
+	}
+
+	issues, err = plugin.ValidateStep(context.Background(), workflow, "step1")
+
+	require.NoError(t, err)
+	require.Len(t, issues, 1)
+	assert.Equal(t, sdk.SeverityError, issues[0].Severity)
+	assert.Equal(t, "command", issues[0].Field)
+	assert.NotContains(t, issues[0].Message, secret)
+}
+
+// TestSecurityValidatorPlugin_ValidateStep_DetectsCommandInjection preserves the
+// shell-variable warning independently of timeout validation.
+func TestSecurityValidatorPlugin_ValidateStep_DetectsCommandInjection(t *testing.T) {
+	plugin := &SecurityValidatorPlugin{}
+	require.NoError(t, plugin.Init(context.Background(), map[string]any{}))
+
+	workflow := sdk.WorkflowDefinition{
+		Name:    "test-workflow",
+		Initial: "step1",
+		Steps: map[string]sdk.StepDefinition{
+			"step1": {
+				Type:    "command",
+				Command: "echo $UNTRUSTED_INPUT",
+				Timeout: 30,
 			},
 		},
 	}
@@ -230,7 +266,8 @@ func TestSecurityValidatorPlugin_ValidateStep_WarnsAboutMissingTimeout(t *testin
 	require.NoError(t, err)
 	require.Len(t, issues, 1)
 	assert.Equal(t, sdk.SeverityWarning, issues[0].Severity)
-	assert.Contains(t, issues[0].Message, "timeout")
+	assert.Equal(t, "command", issues[0].Field)
+	assert.Equal(t, "Command contains unquoted variable references; ensure values are properly escaped", issues[0].Message)
 }
 
 // TestSecurityValidatorPlugin_ValidateStep_AllowsCommandWithTimeout allows timeouts.
@@ -435,7 +472,17 @@ func TestIntegration_SecurityValidator_End2End(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, stepResp)
-	require.Greater(t, len(stepResp.Issues), 0)
+	require.NotEmpty(t, stepResp.Issues)
+
+	foundSecret := false
+	for _, issue := range stepResp.Issues {
+		assert.NotEqual(t, "timeout", issue.Field, "omitted timeout must not produce a validation issue")
+		if issue.Severity == pluginv1.Severity_SEVERITY_ERROR && issue.Field == "command" && strings.Contains(issue.Message, "secret") {
+			foundSecret = true
+			assert.NotContains(t, issue.Message, "secret123")
+		}
+	}
+	assert.True(t, foundSecret, "gRPC validation must retain the hardcoded-secret error")
 }
 
 // validatorServiceServerAdapter adapts the Validator interface to gRPC.

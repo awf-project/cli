@@ -65,7 +65,7 @@ func resolveListTimeout(logger ports.Logger) time.Duration {
 	d, err := time.ParseDuration(raw)
 	if err != nil || d <= 0 {
 		logger.Debug("invalid AWF_MCP_PROXY_LIST_TIMEOUT; using default",
-			"value", raw, "default", mcpListDefaultTimeout)
+			"default", mcpListDefaultTimeout)
 		return mcpListDefaultTimeout
 	}
 	return d
@@ -94,14 +94,14 @@ func purgeForCLI(ctx context.Context, exec ports.CommandExecutor, logger ports.L
 			"cli", cli, "timeout", timeout)
 		return
 	case err != nil:
-		logger.Debug("mcp purge: `mcp list` could not be executed", "cli", cli, "error", err)
+		logger.Debug("mcp purge: `mcp list` could not be executed", "cli", cli)
 		return
 	case result.ExitCode == exitCodeCommandNotFound:
 		logger.Debug("mcp purge: CLI not installed; nothing to purge", "cli", cli)
 		return
 	case result.ExitCode != 0:
 		logger.Debug("mcp purge: `mcp list` exited non-zero; skipping",
-			"cli", cli, "exit_code", result.ExitCode, "stderr", firstLine(result.Stderr))
+			"cli", cli, "exit_code", result.ExitCode)
 		return
 	}
 
@@ -118,18 +118,11 @@ func purgeForCLI(ctx context.Context, exec ports.CommandExecutor, logger ports.L
 		}()
 		if removeErr != nil {
 			logger.Debug("failed to remove orphan MCP registration",
-				"cli", cli, "name", name, "error", removeErr)
+				"cli", cli, "name", name)
 			continue
 		}
 		logger.Info("purged orphan MCP registration", "cli", cli, "name", name)
 	}
-}
-
-// firstLine returns the first non-empty line of s, trimmed. Used to keep stderr
-// snippets in logs to a single line instead of dumping multi-line CLI output.
-func firstLine(s string) string {
-	first, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
-	return strings.TrimSpace(first)
 }
 
 // parseGeminiMCPList extracts MCP server names matching mcpProxyNamePrefix from

@@ -571,18 +571,35 @@ func TestDryRunExecutor_Execute_CaptureConfig(t *testing.T) {
 	assert.Equal(t, "errors", fetchStep.Capture.Stderr)
 }
 
-func TestDryRunExecutor_Execute_TimeoutConfig(t *testing.T) {
-	// Test that timeout configuration is captured
+func TestDryRunExecutor_Execute_TimeoutPresence(t *testing.T) {
 	repo := newMockRepository()
-	repo.workflows["timeout"] = &workflow.Workflow{
-		Name:    "timeout",
-		Initial: "slow",
+	repo.workflows["timeout-presence"] = &workflow.Workflow{
+		Name:    "timeout-presence",
+		Initial: "omitted",
 		Steps: map[string]*workflow.Step{
-			"slow": {
-				Name:      "slow",
+			"omitted": {
+				Name:      "omitted",
 				Type:      workflow.StepTypeCommand,
-				Command:   "sleep 60",
-				Timeout:   30,
+				Command:   "true",
+				OnSuccess: "explicit-zero",
+			},
+			"explicit-zero": {
+				Name:       "explicit-zero",
+				Type:       workflow.StepTypeCommand,
+				Command:    "true",
+				TimeoutSet: true,
+				OnSuccess:  "positive",
+			},
+			"positive": {
+				Name:       "positive",
+				Type:       workflow.StepTypeAgent,
+				Timeout:    30,
+				TimeoutSet: true,
+				Agent: &workflow.AgentConfig{
+					Provider: "claude",
+					Prompt:   "inspect",
+					Timeout:  45,
+				},
 				OnSuccess: "done",
 			},
 			"done": {Name: "done", Type: workflow.StepTypeTerminal},
@@ -594,20 +611,22 @@ func TestDryRunExecutor_Execute_TimeoutConfig(t *testing.T) {
 	evaluator := mocks.NewMockExpressionEvaluator()
 	executor := application.NewDryRunExecutor(wfSvc, resolver, evaluator, &mockLogger{})
 
-	plan, err := executor.Execute(context.Background(), "timeout", nil)
+	plan, err := executor.Execute(context.Background(), "timeout-presence", nil)
 
 	require.NoError(t, err)
-	require.NotNil(t, plan)
-	// Find the slow step
-	var slowStep *workflow.DryRunStep
+	steps := make(map[string]workflow.DryRunStep, len(plan.Steps))
 	for i := range plan.Steps {
-		if plan.Steps[i].Name == "slow" {
-			slowStep = &plan.Steps[i]
-			break
-		}
+		steps[plan.Steps[i].Name] = plan.Steps[i]
 	}
-	require.NotNil(t, slowStep, "should have slow step")
-	assert.Equal(t, 30, slowStep.Timeout)
+
+	assert.Equal(t, 0, steps["omitted"].Timeout)
+	assert.False(t, steps["omitted"].TimeoutSet)
+	assert.Equal(t, 0, steps["explicit-zero"].Timeout)
+	assert.True(t, steps["explicit-zero"].TimeoutSet)
+	assert.Equal(t, 30, steps["positive"].Timeout)
+	assert.True(t, steps["positive"].TimeoutSet)
+	require.NotNil(t, steps["positive"].Agent)
+	assert.Equal(t, 45, steps["positive"].Agent.Timeout)
 }
 
 func TestDryRunExecutor_Execute_ContinueOnError(t *testing.T) {

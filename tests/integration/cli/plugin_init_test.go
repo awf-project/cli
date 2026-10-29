@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -124,8 +125,20 @@ func pluginInitIntegrationEnv(t *testing.T) []string {
 	pluginsDir := filepath.Join(home, ".local", "share", "awf", "plugins")
 	require.NoError(t, os.MkdirAll(pluginsDir, 0o755))
 
+	// Keep Go caches outside the isolated HOME: downloaded modules are read-only
+	// and cannot be removed by TempDir cleanup. Generated fixture builds have no
+	// repository metadata, so disable VCS stamping only for these subprocesses.
+	goEnvCommand := exec.CommandContext(context.Background(), "go", "env", "GOPATH", "GOMODCACHE", "GOCACHE")
+	goEnv, err := goEnvCommand.Output()
+	require.NoError(t, err)
+	paths := strings.Split(strings.TrimSpace(string(goEnv)), "\n")
+	require.Len(t, paths, 3)
 	return append(
 		os.Environ(),
+		"GOPATH="+paths[0],
+		"GOMODCACHE="+paths[1],
+		"GOCACHE="+paths[2],
+		"GOFLAGS="+strings.TrimSpace(os.Getenv("GOFLAGS")+" -mod=mod -buildvcs=false"),
 		"HOME="+home,
 		"XDG_CONFIG_HOME="+filepath.Join(root, "config"),
 		"XDG_DATA_HOME="+filepath.Join(root, "data"),

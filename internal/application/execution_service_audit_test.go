@@ -362,7 +362,7 @@ func TestExecutionFinalizationCoversEveryTerminalOutcome(t *testing.T) {
 		{name: "fresh step failure", command: "step-failure", wantStatus: workflow.StatusFailed, wantExitCode: 23, wantErrText: "synthetic step failure", wantHook: "error-hook"},
 		{name: "resumed step failure", resume: true, command: "step-failure", wantStatus: workflow.StatusFailed, wantExitCode: 23, wantErrText: "synthetic step failure", wantHook: "error-hook"},
 		{name: "cancellation", command: "cancel", wantStatus: workflow.StatusCancelled, wantExitCode: 3, wantErr: context.Canceled, wantErrText: context.Canceled.Error(), wantHook: "cancel-hook"},
-		{name: "context cancellation with provider error", command: "cancel-with-provider-error", wantStatus: workflow.StatusCancelled, wantExitCode: 3, wantErrText: "synthetic provider shutdown error", wantHook: "cancel-hook", cancelBeforeRun: true},
+		{name: "context cancellation with provider error", command: "cancel-with-provider-error", wantStatus: workflow.StatusCancelled, wantExitCode: 3, wantErrText: "context canceled", wantHook: "cancel-hook", cancelBeforeRun: true},
 		{name: "deadline timeout", command: "deadline", wantStatus: workflow.StatusCancelled, wantExitCode: 3, wantErr: context.DeadlineExceeded, wantErrText: context.DeadlineExceeded.Error(), wantHook: "cancel-hook"},
 		{name: "fresh workflow-start hook failure", startHook: "start-failure", wantStatus: workflow.StatusFailed, wantExitCode: 3, wantErrText: "synthetic start-hook failure", wantHook: "error-hook"},
 		{name: "resumed workflow-start hook failure", resume: true, startHook: "start-failure", wantStatus: workflow.StatusFailed, wantExitCode: 3, wantErrText: "synthetic start-hook failure", wantHook: "error-hook"},
@@ -433,7 +433,8 @@ func TestExecutionFinalizationCoversEveryTerminalOutcome(t *testing.T) {
 			executionID := execCtx.WorkflowID
 			assert.Equal(t, execCtx.HistoryRecordID, rig.trace.historyRecords[0].ID)
 			assert.Equal(t, executionID, rig.trace.historyRecords[0].WorkflowID)
-			assert.Equal(t, executionID, completedAudits[0].ExecutionID)
+			assert.Equal(t, execCtx.HistoryRecordID, completedAudits[0].ExecutionID)
+			assert.NotEqual(t, executionID, completedAudits[0].ExecutionID)
 			assert.Equal(t, executionID, terminalEvents[0].Metadata["workflow_id"])
 			assert.Equal(t, execCtx.ExitCode, rig.trace.historyRecords[0].ExitCode)
 			require.NotNil(t, completedAudits[0].ExitCode)
@@ -601,7 +602,7 @@ func TestExecutionService_DuplicateTerminationRecordsOnce(t *testing.T) {
 	assert.Equal(t, started.Add(3*time.Second), first.CompletedAt)
 	assert.Equal(t, int64(3000), first.DurationMs)
 	assert.Equal(t, 17, first.ExitCode)
-	assert.Equal(t, "deterministic failure", first.ErrorMessage, "tied timestamps must select the lexicographically first failed step")
+	assert.Equal(t, "step execution failed", first.ErrorMessage, "tied timestamps must select the lexicographically first failed step")
 	var completionAudits int
 	for _, event := range audits {
 		if event.Event == workflow.EventWorkflowCompleted {
@@ -1250,7 +1251,7 @@ func TestEmitAuditStartedWithMaskedSecrets(t *testing.T) {
 			},
 			expectedMasked: map[string]string{
 				"api_key": "***",
-				"env":     "prod",
+				"env":     "***",
 			},
 		},
 		{
@@ -1261,7 +1262,7 @@ func TestEmitAuditStartedWithMaskedSecrets(t *testing.T) {
 			},
 			expectedMasked: map[string]string{
 				"SECRET_TOKEN": "***",
-				"debug":        "true",
+				"debug":        "***",
 			},
 		},
 		{
@@ -1272,7 +1273,7 @@ func TestEmitAuditStartedWithMaskedSecrets(t *testing.T) {
 			},
 			expectedMasked: map[string]string{
 				"PASSWORD": "***",
-				"username": "alice",
+				"username": "***",
 			},
 		},
 	}
@@ -2185,26 +2186,33 @@ func TestRecordExecutionEndWriterFailureHandling(t *testing.T) {
 	}
 }
 
-// TestRecordExecutionEndContextCancellation tests behavior with cancelled context.
 func TestRecordExecutionEndContextCancellation(t *testing.T) {
-	mockWriter := testmocks.NewMockAuditTrailWriter()
+	trace := newFinalizationTestTrace()
+	store := &finalizationTestStore{trace: trace, states: make(map[string]*workflow.ExecutionContext)}
+	logger := &finalizationTestLogger{}
 	execSvc := &ExecutionService{
-		store:            testmocks.NewMockStateStore(),
-		auditTrailWriter: mockWriter,
+		store:      store,
+		historySvc: NewHistoryService(&finalizationTestHistoryStore{trace: trace}, logger),
+		logger:     logger,
 	}
+	execSvc.SetAuditTrailWriter(&finalizationTestAuditWriter{trace: trace})
+	execCtx := workflow.NewExecutionContext("cancelled-execution", "cancelled-workflow")
+	execCtx.Status = workflow.StatusCancelled
 
-	execCtx := workflow.NewExecutionContext("test-exec-id", "test-workflow")
-	execCtx.Status = workflow.StatusCompleted
-	execCtx.ExitCode = 0
-
-	// Create a cancelled context
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
+	execSvc.recordExecutionEnd(ctx, execCtx, context.Canceled, context.Canceled.Error())
 
-	// Should not panic even with cancelled context
-	assert.NotPanics(t, func() {
-		execSvc.recordExecutionEnd(ctx, execCtx, nil, "")
-	})
+	assert.ErrorIs(t, ctx.Err(), context.Canceled)
+	assert.True(t, trace.allContextsActive, "terminal persistence must use the non-cancelled cleanup context")
+	assert.Equal(t, workflow.StatusCancelled, execCtx.GetStatus())
+	assert.Equal(t, 3, execCtx.ExitCode)
+	assert.False(t, execCtx.GetCompletedAt().IsZero())
+	require.Len(t, trace.historyRecords, 1)
+	assert.Equal(t, workflow.StatusCancelled.String(), trace.historyRecords[0].Status)
+	assert.Equal(t, 3, trace.historyRecords[0].ExitCode)
+	require.Len(t, trace.auditEvents, 1)
+	assert.Equal(t, workflow.EventWorkflowCompleted, trace.auditEvents[0].Event)
 }
 
 // TestRecordExecutionEndIntegration tests the helper with multiple scenarios.
@@ -2276,6 +2284,22 @@ func TestRecordExecutionEndIntegration(t *testing.T) {
 				assert.NotNil(t, event.DurationMs)
 				assert.GreaterOrEqual(t, *event.DurationMs, int64(tt.duration.Milliseconds()-50))
 			}
+		})
+	}
+}
+
+func TestNormalizeTerminalExitCode_NegativeProcessStatus(t *testing.T) {
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		t.Run(cause.Error(), func(t *testing.T) {
+			execution := workflow.NewExecutionContext("cancelled-process", "workflow")
+			execution.Status = workflow.StatusCancelled
+			execution.ExitCode = -1 // os/exec has no OS exit code for a process killed by cancellation.
+			execution.CurrentStep = "work"
+			execution.SetStepState("work", workflow.StepState{
+				Status: workflow.StatusFailed, ExitCode: -1, CompletedAt: time.Now(),
+			})
+			normalizeTerminalExitCode(execution, cause)
+			assert.Equal(t, 3, execution.ExitCode)
 		})
 	}
 }

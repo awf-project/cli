@@ -3,6 +3,7 @@ package workflow
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	domerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/pkg/retry"
@@ -93,15 +94,16 @@ type Step struct {
 	Name            string
 	Type            StepType
 	Description     string
-	Command         string               // for command type
-	ScriptFile      string               // F064: external script file (XOR with Command)
-	Dir             string               // working directory for command execution
-	Operation       string               // F021: plugin operation name (e.g., "slack.send")
-	OperationInputs map[string]any       // F021: plugin operation input parameters
-	Branches        []string             // for parallel type
-	Strategy        string               // for parallel: all_succeed, any_succeed, best_effort
-	MaxConcurrent   int                  // for parallel: max concurrent branches
-	Timeout         int                  // seconds
+	Command         string         // for command type
+	ScriptFile      string         // F064: external script file (XOR with Command)
+	Dir             string         // working directory for command execution
+	Operation       string         // F021: plugin operation name (e.g., "slack.send")
+	OperationInputs map[string]any // F021: plugin operation input parameters
+	Branches        []string       // for parallel type
+	Strategy        string         // for parallel: all_succeed, any_succeed, best_effort
+	MaxConcurrent   int            // for parallel: max concurrent branches
+	Timeout         int            // seconds
+	TimeoutSet      bool
 	OnSuccess       string               // next state name (legacy, use Transitions)
 	OnFailure       string               // next state name (legacy, use Transitions)
 	Transitions     Transitions          // conditional transitions (takes precedence over OnSuccess/OnFailure)
@@ -245,4 +247,23 @@ func (s *Step) Validate(validator ExpressionCompiler, checker StepTypeChecker) e
 	}
 
 	return nil
+}
+
+// IsQualifiedStepType recognizes plugin-qualified names during parsing. Registration
+// is checked separately by the application after plugin discovery, before execution.
+func IsQualifiedStepType(name string) bool {
+	parts := strings.Split(name, ".")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return false
+	}
+	for _, part := range parts {
+		for _, char := range part {
+			switch {
+			case char >= 'a' && char <= 'z', char >= 'A' && char <= 'Z', char >= '0' && char <= '9', char == '_', char == '-':
+			default:
+				return false
+			}
+		}
+	}
+	return true
 }

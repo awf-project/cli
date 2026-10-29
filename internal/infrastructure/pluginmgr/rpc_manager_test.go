@@ -17,6 +17,7 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	domainerrors "github.com/awf-project/cli/internal/domain/errors"
@@ -534,8 +535,13 @@ func TestRPCPluginManager_Init_ConnectionTimeout(t *testing.T) {
 	parser := NewManifestParser()
 	loader := NewFileSystemLoader(parser)
 	manager := NewRPCPluginManager(loader)
-	// Don't set pluginsDir - let Init timeout trying to start process
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+
+	pluginDir := filepath.Join(t.TempDir(), "timeout-test")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o750))
+	binaryPath := filepath.Join(pluginDir, "awf-plugin-timeout-test")
+	require.NoError(t, os.WriteFile(binaryPath, []byte("#!/bin/sh\nexec sleep 3600\n"), 0o750))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 75*time.Millisecond)
 	defer cancel()
 
 	manager.mu.Lock()
@@ -545,16 +551,24 @@ func TestRPCPluginManager_Init_ConnectionTimeout(t *testing.T) {
 			Version: "1.0.0",
 		},
 		Status: pluginmodel.StatusLoaded,
-		Path:   "/nonexistent/path",
+		Path:   pluginDir,
 	}
 	manager.mu.Unlock()
 
-	// Try to init with very tight timeout
-	err := manager.Init(ctx, "timeout-test", nil)
+	const confidentialConfigMarker = "plugin-config-must-not-leak"
+	result := make(chan error, 1)
+	go func() {
+		result <- manager.Init(ctx, "timeout-test", map[string]any{"token": confidentialConfigMarker})
+	}()
 
-	// Should fail due to context timeout or process timeout
-	if err == nil {
-		t.Fatal("Init() error = nil, want error for timeout scenario")
+	select {
+	case err := <-result:
+		require.Error(t, err)
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.Contains(t, err.Error(), "timeout-test")
+		assert.NotContains(t, err.Error(), confidentialConfigMarker)
+	case <-time.After(500 * time.Millisecond):
+		t.Error("Init did not finish cleanup promptly after its connection context expired")
 	}
 }
 
@@ -1692,51 +1706,101 @@ func TestRPCPluginManager_Shutdown_LoaderRequired(t *testing.T) {
 // TestRPCPluginManager_ShutdownAll_UsesPerPluginDeadlines verifies timeout implementation.
 // FAILS: stub or incomplete implementation without proper timeout per plugin
 // PASSES: implementation uses context.WithTimeout(ctx, 5*time.Second) per plugin
+type deadlineObservation struct {
+	deadline time.Time
+	ok       bool
+}
+
+type deadlineObservingPluginClient struct {
+	observed chan<- deadlineObservation
+	release  <-chan struct{}
+}
+
+func (c *deadlineObservingPluginClient) GetInfo(context.Context, *pluginv1.GetInfoRequest, ...grpc.CallOption) (*pluginv1.GetInfoResponse, error) {
+	return &pluginv1.GetInfoResponse{}, nil
+}
+
+func (c *deadlineObservingPluginClient) Init(context.Context, *pluginv1.InitRequest, ...grpc.CallOption) (*pluginv1.InitResponse, error) {
+	return &pluginv1.InitResponse{}, nil
+}
+
+func (c *deadlineObservingPluginClient) Shutdown(ctx context.Context, _ *pluginv1.ShutdownRequest, _ ...grpc.CallOption) (*pluginv1.ShutdownResponse, error) {
+	deadline, ok := ctx.Deadline()
+	c.observed <- deadlineObservation{deadline: deadline, ok: ok}
+	select {
+	case <-c.release:
+		return &pluginv1.ShutdownResponse{}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 func TestRPCPluginManager_ShutdownAll_UsesPerPluginDeadlines(t *testing.T) {
 	parser := NewManifestParser()
 	loader := NewFileSystemLoader(parser)
 	manager := NewRPCPluginManager(loader)
-	manager.SetPluginsDir(fixturesPath)
-	ctx := context.Background()
 
-	// Load and init two plugins
-	if err := manager.Load(ctx, "valid-simple"); err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if err := manager.Load(ctx, "valid-full"); err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if err := manager.Init(ctx, "valid-simple", nil); err != nil {
-		t.Fatalf("Init() error = %v", err)
-	}
-	if err := manager.Init(ctx, "valid-full", nil); err != nil {
-		t.Fatalf("Init() error = %v", err)
-	}
-
-	// ShutdownAll should complete quickly even with 5s per-plugin timeout
-	// Real implementation must use context.WithTimeout(ctx, 5*time.Second) per plugin
-	start := time.Now()
-	err := manager.ShutdownAll(ctx)
-	elapsed := time.Since(start)
-
-	// Should complete relatively quickly (stub doesn't make RPC calls)
-	// If it takes close to 10s, the implementation is likely wrong
-	if elapsed > 2*time.Second {
-		t.Logf("ShutdownAll() took %v (may indicate incorrect timeout handling)", elapsed)
-	}
-
-	// Verify both plugins are stopped
-	for _, name := range []string{"valid-simple", "valid-full"} {
-		info, found := manager.Get(name)
-		if !found {
-			continue
+	observed := make(chan deadlineObservation, 2)
+	releases := []chan struct{}{make(chan struct{}), make(chan struct{})}
+	t.Cleanup(func() {
+		for _, release := range releases {
+			select {
+			case <-release:
+			default:
+				close(release)
+			}
 		}
-		if info.Status == pluginmodel.StatusRunning || info.Status == pluginmodel.StatusInitialized {
-			t.Errorf("Plugin %q still in state %q after ShutdownAll", name, info.Status)
+	})
+	for i, name := range []string{"plugin-a", "plugin-b"} {
+		manager.plugins[name] = &pluginmodel.PluginInfo{
+			Manifest: &pluginmodel.Manifest{Name: name, Version: "1.0.0"},
+			Status:   pluginmodel.StatusRunning,
 		}
+		manager.connections[name] = &pluginConnection{plugin: &deadlineObservingPluginClient{
+			observed: observed,
+			release:  releases[i],
+		}}
 	}
 
-	_ = err // Error expected during stub phase
+	result := make(chan error, 1)
+	go func() {
+		result <- manager.ShutdownAll(context.Background())
+	}()
+
+	var first deadlineObservation
+	select {
+	case first = <-observed:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("ShutdownAll did not invoke the first plugin")
+	}
+	require.True(t, first.ok)
+	firstRemaining := time.Until(first.deadline)
+	assert.Greater(t, firstRemaining, 4*time.Second)
+	assert.LessOrEqual(t, firstRemaining, 5*time.Second)
+
+	timer := time.NewTimer(40 * time.Millisecond)
+	defer timer.Stop()
+	<-timer.C
+	close(releases[0])
+	close(releases[1])
+
+	var second deadlineObservation
+	select {
+	case second = <-observed:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("ShutdownAll did not invoke the second plugin")
+	}
+	require.True(t, second.ok)
+	secondRemaining := time.Until(second.deadline)
+	assert.Greater(t, secondRemaining, 4*time.Second)
+	assert.LessOrEqual(t, secondRemaining, 5*time.Second)
+	assert.Greater(t, second.deadline.Sub(first.deadline), 30*time.Millisecond)
+	select {
+	case err := <-result:
+		require.NoError(t, err)
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("ShutdownAll did not finish after both plugins were released")
+	}
 }
 
 // TestRPCPluginManager_ShutdownAll_AccumulatesErrors verifies error handling.

@@ -105,10 +105,7 @@ func (s *TemplateService) expandStep(
 		step.Dir = expandedDir
 	}
 
-	// Timeout: workflow step takes precedence if non-zero
-	if step.Timeout == 0 && templateStep.Timeout > 0 {
-		step.Timeout = templateStep.Timeout
-	}
+	mergeTemplateTimeout(step, templateStep)
 
 	// Retry: workflow step takes precedence if set
 	if step.Retry == nil && templateStep.Retry != nil {
@@ -127,8 +124,7 @@ func (s *TemplateService) expandStep(
 
 	s.logger.Debug("expanded template",
 		"step", stepName,
-		"template", ref.TemplateName,
-		"command", expandedCmd)
+		"template", ref.TemplateName)
 
 	return nil
 }
@@ -249,10 +245,7 @@ func (s *TemplateService) ApplyTemplateFields(
 		step.Dir = expandedDir
 	}
 
-	// Timeout: workflow step takes precedence if non-zero
-	if step.Timeout == 0 && templateStep.Timeout > 0 {
-		step.Timeout = templateStep.Timeout
-	}
+	mergeTemplateTimeout(step, templateStep)
 
 	// Retry: merge field-by-field
 	if templateStep.Retry != nil {
@@ -294,6 +287,17 @@ func (s *TemplateService) ApplyTemplateFields(
 	step.TemplateRef = nil
 
 	return nil
+}
+
+// mergeTemplateTimeout preserves the distinction between an omitted timeout and
+// an explicit zero timeout. Only omission permits inheritance from the template.
+func mergeTemplateTimeout(step, templateStep *workflow.Step) {
+	if step.TimeoutSet || !templateStep.TimeoutSet {
+		return
+	}
+
+	step.Timeout = templateStep.Timeout
+	step.TimeoutSet = true
 }
 
 func (s *TemplateService) mergeParameters(

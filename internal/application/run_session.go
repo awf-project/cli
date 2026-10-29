@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 
@@ -33,6 +32,8 @@ type RunSession struct {
 	size             int
 	err              error
 	closed           bool
+	terminalRecorded bool
+	cancelReason     string
 	closeOnce        sync.Once
 	mu               sync.RWMutex
 	ctx              context.Context
@@ -126,21 +127,28 @@ func (s *RunSession) Close() error {
 	return nil
 }
 
-// CancelWithEvent emits a terminal cancellation event before closing the session.
-// It is used by interfaces that cancel a live facade run directly through the
-// session instead of waiting for the execution goroutine to return.
+// CancelWithEvent requests cancellation. The execution owner publishes the
+// terminal event and closes the stream after cleanup and persistence complete.
 func (s *RunSession) CancelWithEvent(reason string) error {
 	if reason == "" {
 		reason = "cancelled"
 	}
-	s.setErr(errors.New(reason))
-	s.appendEvent(ports.Event{
-		Kind:      ports.EventWorkflowFailed,
-		RunID:     s.id,
-		Timestamp: time.Now(),
-		Payload:   &ports.EnrichedTerminal{Error: reason},
-	})
-	return s.Close()
+	s.mu.Lock()
+	if s.closed || s.terminalRecorded {
+		s.mu.Unlock()
+		return nil
+	}
+	s.err = context.Canceled
+	s.cancelReason = reason
+	s.mu.Unlock()
+	s.cancel()
+	return nil
+}
+
+func (s *RunSession) cancellationReason() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cancelReason
 }
 
 // appendEvent writes ev to the events channel and appends to the replay buffer.
@@ -157,6 +165,12 @@ func (s *RunSession) appendEvent(ev ports.Event) { //nolint:gocritic // hugePara
 
 	if s.closed {
 		return
+	}
+	if ev.Kind == ports.EventWorkflowCompleted || ev.Kind == ports.EventWorkflowFailed {
+		if s.terminalRecorded {
+			return
+		}
+		s.terminalRecorded = true
 	}
 
 	if s.size < s.replayBufferSize {

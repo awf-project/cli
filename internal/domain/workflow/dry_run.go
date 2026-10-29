@@ -24,6 +24,7 @@ type DryRunStep struct {
 	Hooks           DryRunHooks
 	Transitions     []DryRunTransition
 	Timeout         int
+	TimeoutSet      bool
 	Retry           *DryRunRetry
 	Capture         *DryRunCapture
 	ContinueOnError bool

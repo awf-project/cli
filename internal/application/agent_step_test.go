@@ -19,7 +19,49 @@ import (
 )
 
 // Component: execution_service
-// Feature: 39 - Agent Step Type
+
+// deadlineObservingAgentProvider is a successful in-process provider used to
+// verify the context contract at the public ExecutionService entry point.
+// Unlike a mock callback, it retains exactly what execution handed to the
+// provider so the test can distinguish an absent deadline from a deadline that
+// merely has not expired yet.
+type deadlineObservingAgentProvider struct {
+	hasDeadline bool
+	deadline    time.Time
+	ctx         context.Context
+}
+
+func (p *deadlineObservingAgentProvider) Name() string { return "deadline-observer" }
+
+func (p *deadlineObservingAgentProvider) Validate() error { return nil }
+
+func (p *deadlineObservingAgentProvider) Execute(
+	ctx context.Context,
+	_ string,
+	_ map[string]any,
+	_ io.Writer,
+	_ io.Writer,
+) (*workflow.AgentResult, error) {
+	p.deadline, p.hasDeadline = ctx.Deadline()
+	p.ctx = ctx
+	return &workflow.AgentResult{
+		Provider:    p.Name(),
+		Output:      "completed without a local timeout",
+		StartedAt:   time.Now(),
+		CompletedAt: time.Now(),
+	}, nil
+}
+
+func (p *deadlineObservingAgentProvider) ExecuteConversation(
+	context.Context,
+	*workflow.ConversationState,
+	string,
+	map[string]any,
+	io.Writer,
+	io.Writer,
+) (*workflow.ConversationResult, error) {
+	return nil, errors.New("conversation mode is not used by this test provider")
+}
 
 // TestExecutionService_AgentStep_NoRegistryConfigured tests that agent steps fail
 // when no AgentRegistry is configured.
@@ -413,124 +455,83 @@ func TestExecutionService_AgentStep_InMixedWorkflow(t *testing.T) {
 // the step-level timeout configuration.
 // AC7: Timeout handling
 func TestExecutionService_AgentStep_StepTimeout(t *testing.T) {
-	repo := newMockRepository()
 	wf := &workflow.Workflow{
-		Name:    "agent-timeout",
-		Initial: "ask",
+		Name: "agent-timeout", Initial: "ask",
 		Steps: map[string]*workflow.Step{
-			"ask": {
-				Name:    "ask",
-				Type:    workflow.StepTypeAgent,
-				Timeout: 5, // 5 second timeout at step level
-				Agent: &workflow.AgentConfig{
-					Provider: "claude",
-					Prompt:   "Summarize this text",
-					Timeout:  10, // Agent-level timeout (should be overridden)
-				},
-				OnSuccess: "done",
-			},
-			"done": {
-				Name: "done",
-				Type: workflow.StepTypeTerminal,
-			},
+			"ask":  {Name: "ask", Type: workflow.StepTypeAgent, Timeout: 5, Agent: &workflow.AgentConfig{Provider: "deadline-observer", Prompt: "Summarize this text", Timeout: 10}, OnSuccess: "done"},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
 		},
 	}
-	repo.workflows["agent-timeout"] = wf
-
+	provider := &deadlineObservingAgentProvider{}
 	registry := mocks.NewMockAgentRegistry()
-	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
-		if prompt == "Summarize this text" {
-			return &workflow.AgentResult{
-				Provider:    "claude",
-				Output:      "Summary",
-				Response:    map[string]any{},
-				Tokens:      50,
-				Error:       nil,
-				StartedAt:   time.Now(),
-				CompletedAt: time.Now(),
-			}, nil
-		}
-		return &workflow.AgentResult{
-			Provider:    "claude",
-			Output:      "Agent response",
-			Tokens:      100,
-			StartedAt:   time.Now(),
-			CompletedAt: time.Now(),
-		}, nil
-	})
-	_ = registry.Register(claude)
-
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		newMockExecutor(),
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	require.NoError(t, registry.Register(provider))
+	execSvc, _ := NewTestHarness(t).WithWorkflow(wf.Name, wf).Build()
 	execSvc.SetAgentRegistry(registry)
+	startedAt := time.Now()
 
-	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "agent-timeout-run")
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "agent-timeout-run")
 
-	// Should succeed (mock doesn't actually timeout)
 	require.NoError(t, err)
-	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+	require.True(t, provider.hasDeadline)
+	assert.WithinDuration(t, startedAt.Add(5*time.Second), provider.deadline, 250*time.Millisecond)
+	require.ErrorIs(t, provider.ctx.Err(), context.Canceled)
 }
 
 // TestExecutionService_AgentStep_AgentTimeout tests that agent steps use
 // agent-level timeout when step timeout is not set.
 // AC7: Timeout handling
 func TestExecutionService_AgentStep_AgentTimeout(t *testing.T) {
+	wf := &workflow.Workflow{
+		Name: "agent-timeout", Initial: "ask",
+		Steps: map[string]*workflow.Step{
+			"ask":  {Name: "ask", Type: workflow.StepTypeAgent, Agent: &workflow.AgentConfig{Provider: "deadline-observer", Prompt: "Summarize this text", Timeout: 3}, OnSuccess: "done"},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+	provider := &deadlineObservingAgentProvider{}
+	registry := mocks.NewMockAgentRegistry()
+	require.NoError(t, registry.Register(provider))
+	execSvc, _ := NewTestHarness(t).WithWorkflow(wf.Name, wf).Build()
+	execSvc.SetAgentRegistry(registry)
+	startedAt := time.Now()
+
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "agent-timeout-run")
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+	require.True(t, provider.hasDeadline)
+	assert.WithinDuration(t, startedAt.Add(3*time.Second), provider.deadline, 250*time.Millisecond)
+	require.ErrorIs(t, provider.ctx.Err(), context.Canceled)
+}
+
+// TestExecutionService_AgentStep_NoConfiguredTimeout verifies
+// the complete public execution path leaves the provider context unbounded when
+// neither the step nor its AgentConfig specifies a timeout.
+func TestExecutionService_AgentStep_NoConfiguredTimeout(t *testing.T) {
 	repo := newMockRepository()
 	wf := &workflow.Workflow{
-		Name:    "agent-timeout",
+		Name:    "agent-no-timeout",
 		Initial: "ask",
 		Steps: map[string]*workflow.Step{
 			"ask": {
 				Name: "ask",
 				Type: workflow.StepTypeAgent,
-				// No step-level timeout
 				Agent: &workflow.AgentConfig{
-					Provider: "claude",
-					Prompt:   "Summarize this text",
-					Timeout:  3, // Agent-level timeout should be used
+					Provider: "deadline-observer",
+					Prompt:   "Complete successfully",
+					// Timeout is deliberately omitted: its zero value means no local deadline.
 				},
 				OnSuccess: "done",
 			},
-			"done": {
-				Name: "done",
-				Type: workflow.StepTypeTerminal,
-			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
 		},
 	}
-	repo.workflows["agent-timeout"] = wf
+	repo.workflows[wf.Name] = wf
 
+	provider := &deadlineObservingAgentProvider{}
 	registry := mocks.NewMockAgentRegistry()
-	claude := mocks.NewMockAgentProvider("claude")
-	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
-		if prompt == "Summarize this text" {
-			return &workflow.AgentResult{
-				Provider:    "claude",
-				Output:      "Summary",
-				Response:    map[string]any{},
-				Tokens:      50,
-				Error:       nil,
-				StartedAt:   time.Now(),
-				CompletedAt: time.Now(),
-			}, nil
-		}
-		return &workflow.AgentResult{
-			Provider:    "claude",
-			Output:      "Agent response",
-			Tokens:      100,
-			StartedAt:   time.Now(),
-			CompletedAt: time.Now(),
-		}, nil
-	})
-	_ = registry.Register(claude)
+	require.NoError(t, registry.Register(provider))
 
 	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
 	execSvc := application.NewExecutionService(
@@ -544,11 +545,14 @@ func TestExecutionService_AgentStep_AgentTimeout(t *testing.T) {
 	)
 	execSvc.SetAgentRegistry(registry)
 
-	ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "agent-timeout-run")
-
-	// Should succeed (mock doesn't actually timeout)
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "agent-no-timeout-run")
 	require.NoError(t, err)
-	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.False(t, provider.hasDeadline, "an omitted AgentConfig timeout must not add a provider deadline")
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+
+	state, ok := execCtx.GetStepState("ask")
+	require.True(t, ok, "successful agent execution must persist its step state")
+	assert.Equal(t, workflow.StatusCompleted, state.Status)
 }
 
 // TestExecutionService_AgentStep_ContextCancellation tests that agent steps

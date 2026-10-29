@@ -1,8 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +14,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/awf-project/cli/internal/domain/ports"
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 func newTestServer(t *testing.T) (*Server, *Bridge) {
@@ -107,29 +113,109 @@ func TestServer_OpenAPISpec_ValidatesAgainst31(t *testing.T) {
 }
 
 func TestServer_GracefulShutdown_Within30s_WithActiveSSE(t *testing.T) {
-	srv, _ := newTestServer(t)
-	ts := httptest.NewServer(srv.Handler())
-	defer ts.Close()
+	const (
+		executionID         = "active-sse-execution"
+		workflowInput       = "workflow-input-must-not-appear"
+		commandOutput       = "command-output-must-not-appear"
+		prompt              = "prompt-must-not-appear"
+		environment         = "environment-must-not-appear"
+		requestBody         = "request-body-must-not-appear"
+		secretHeader        = "authorization-must-not-appear"
+		pluginConfiguration = "plugin-config-must-not-appear"
+		token               = "token-must-not-appear"
+		confidentialMarker  = "credential-must-not-appear"
+	)
 
-	// Open an SSE connection to a non-existent execution (returns 404 immediately
-	// from Stream; the connection closes, so no goroutine stays open).
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet,
-		ts.URL+"/api/executions/no-such-id/events", http.NoBody)
+	session := newMockRunSession(executionID)
+	session.events <- ports.Event{Kind: ports.EventRunStarted, RunID: executionID}
+	lookup := newMockSessionLookup()
+	lookup.add(session)
+
+	shutdownTimeout := 100 * time.Millisecond
+	var logOutput bytes.Buffer
+	previousRequestLogger := chiMiddleware.DefaultLogger
+	chiMiddleware.DefaultLogger = chiMiddleware.RequestLogger(&chiMiddleware.DefaultLogFormatter{
+		Logger:  log.New(&logOutput, "", 0),
+		NoColor: true,
+	})
+	t.Cleanup(func() { chiMiddleware.DefaultLogger = previousRequestLogger })
+	srv := NewServer(NewBridge(), ":0", WithSessionRegistry(lookup), WithShutdownTimeout(shutdownTimeout))
+	ts := httptest.NewUnstartedServer(srv.Handler())
+	srv.httpSrv = ts.Config
+	ts.Start()
+
+	requestCtx, cancelRequest := context.WithCancel(context.Background())
+	t.Cleanup(cancelRequest)
+	req, err := http.NewRequestWithContext(requestCtx, http.MethodGet,
+		ts.URL+"/api/executions/"+executionID+"/events", strings.NewReader(requestBody))
 	require.NoError(t, err)
-	resp, err := http.DefaultClient.Do(req)
+	req.Header.Set("Authorization", secretHeader)
+	req.Header.Set("X-Workflow-Input", workflowInput)
+	req.Header.Set("X-Command-Output", commandOutput)
+	req.Header.Set("X-Prompt", prompt)
+	req.Header.Set("X-Environment", environment)
+	req.Header.Set("X-Plugin-Configuration", pluginConfiguration)
+	req.Header.Set("X-Token", token)
+	req.Header.Set("X-Credential", confidentialMarker)
+
+	resp, err := ts.Client().Do(req)
 	require.NoError(t, err)
-	resp.Body.Close()
+	t.Cleanup(func() {
+		resp.Body.Close()
+		ts.Close()
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	streamDone := make(chan error, 1)
+	go func() {
+		_, copyErr := io.Copy(io.Discard, resp.Body)
+		streamDone <- copyErr
+	}()
 
 	done := make(chan error, 1)
 	go func() {
 		done <- srv.Shutdown(context.Background())
 	}()
 
+	shutdownExceededBound := false
 	select {
 	case err := <-done:
-		assert.NoError(t, err, "Shutdown must complete without error")
-	case <-time.After(30 * time.Second):
-		t.Fatal("Shutdown did not complete within 30 seconds")
+		require.NoError(t, err, "shutdown must cancel the active stream and complete gracefully")
+	case <-time.After(5 * shutdownTimeout):
+		cancelRequest()
+		select {
+		case err := <-done:
+			require.ErrorIs(t, err, context.DeadlineExceeded,
+				"shutdown timeout must preserve context deadline sentinel identity")
+			shutdownExceededBound = true
+		case <-time.After(shutdownTimeout):
+			t.Fatal("shutdown remained blocked after the active SSE request was cancelled")
+		}
+	}
+
+	select {
+	case err := <-streamDone:
+		if shutdownExceededBound {
+			assert.ErrorIs(t, err, context.Canceled,
+				"the bounded failure path must cancel the active SSE request")
+		} else {
+			assert.NoError(t, err, "shutdown must close the active SSE response cleanly")
+		}
+	case <-time.After(shutdownTimeout):
+		t.Fatal("active SSE response remained open after shutdown completed")
+	}
+	diagnostics := logOutput.String()
+	require.NotEmpty(t, diagnostics, "the active SSE shutdown path must emit observable diagnostics")
+	assert.Contains(t, diagnostics, executionID,
+		"observable diagnostics must identify the SSE execution being shut down")
+	for _, secret := range []string{
+		workflowInput, commandOutput, prompt, environment, requestBody,
+		secretHeader, pluginConfiguration, token, confidentialMarker,
+	} {
+		assert.NotContains(t, diagnostics, secret,
+			"shutdown diagnostics must not disclose confidential request data")
+	}
+	if shutdownExceededBound {
+		t.Fatal("shutdown exceeded its configured bound with an active SSE stream")
 	}
 }
 

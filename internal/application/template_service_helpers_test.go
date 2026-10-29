@@ -583,10 +583,11 @@ func TestTemplateService_applyTemplateFields_HappyPath(t *testing.T) {
 	}
 
 	templateStep := &workflow.Step{
-		Name:    "template-step",
-		Type:    workflow.StepTypeCommand,
-		Command: "echo '{{parameters.message}}'",
-		Timeout: 30,
+		Name:       "template-step",
+		Type:       workflow.StepTypeCommand,
+		Command:    "echo '{{parameters.message}}'",
+		Timeout:    30,
+		TimeoutSet: true,
 	}
 
 	params := map[string]any{
@@ -903,28 +904,52 @@ func TestTemplateService_applyTemplateFields_NilParams(t *testing.T) {
 
 func TestTemplateService_applyTemplateFields_TimeoutMerging(t *testing.T) {
 	tests := []struct {
-		name            string
-		stepTimeout     int
-		templateTimeout int
-		expectedTimeout int
+		name               string
+		stepTimeout        int
+		stepTimeoutSet     bool
+		templateTimeout    int
+		templateTimeoutSet bool
+		expectedTimeout    int
+		expectedTimeoutSet bool
 	}{
 		{
-			name:            "step timeout takes precedence",
-			stepTimeout:     60,
+			name:               "omitted step timeout inherits explicit template timeout",
+			templateTimeout:    30,
+			templateTimeoutSet: true,
+			expectedTimeout:    30,
+			expectedTimeoutSet: true,
+		},
+		{
+			name:               "explicit zero suppresses template timeout",
+			stepTimeoutSet:     true,
+			templateTimeout:    30,
+			templateTimeoutSet: true,
+			expectedTimeoutSet: true,
+		},
+		{
+			name:               "positive step timeout overrides template timeout",
+			stepTimeout:        60,
+			stepTimeoutSet:     true,
+			templateTimeout:    30,
+			templateTimeoutSet: true,
+			expectedTimeout:    60,
+			expectedTimeoutSet: true,
+		},
+		{
+			name:               "omitted values preserve absent timeout intent",
+			expectedTimeoutSet: false,
+		},
+		{
+			name:               "unset step ignores stale positive value and inherits",
+			stepTimeout:        60,
+			templateTimeout:    30,
+			templateTimeoutSet: true,
+			expectedTimeout:    30,
+			expectedTimeoutSet: true,
+		},
+		{
+			name:            "unset template stale positive value is not inherited",
 			templateTimeout: 30,
-			expectedTimeout: 60,
-		},
-		{
-			name:            "uses template timeout when step is zero",
-			stepTimeout:     0,
-			templateTimeout: 45,
-			expectedTimeout: 45,
-		},
-		{
-			name:            "both zero is valid",
-			stepTimeout:     0,
-			templateTimeout: 0,
-			expectedTimeout: 0,
 		},
 	}
 
@@ -935,14 +960,16 @@ func TestTemplateService_applyTemplateFields_TimeoutMerging(t *testing.T) {
 			svc := application.NewTemplateService(repo, logger)
 
 			step := &workflow.Step{
-				Name:    "workflow-step",
-				Timeout: tt.stepTimeout,
+				Name:       "workflow-step",
+				Timeout:    tt.stepTimeout,
+				TimeoutSet: tt.stepTimeoutSet,
 			}
 			templateStep := &workflow.Step{
-				Name:    "template-step",
-				Type:    workflow.StepTypeCommand,
-				Command: "echo test",
-				Timeout: tt.templateTimeout,
+				Name:       "template-step",
+				Type:       workflow.StepTypeCommand,
+				Command:    "echo test",
+				Timeout:    tt.templateTimeout,
+				TimeoutSet: tt.templateTimeoutSet,
 			}
 			params := map[string]any{}
 
@@ -950,6 +977,8 @@ func TestTemplateService_applyTemplateFields_TimeoutMerging(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedTimeout, step.Timeout)
+			assert.Equal(t, tt.expectedTimeoutSet, step.TimeoutSet)
+			assert.Empty(t, logger.GetMessages())
 		})
 	}
 }

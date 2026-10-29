@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/awf-project/cli/internal/application"
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/testutil/mocks"
@@ -317,9 +318,9 @@ func TestExecutionService_ConversationStep_EmptyModeDefaultsToSingle(t *testing.
 	assert.Equal(t, "Task executed", state.Output)
 }
 
-// TestExecutionService_ConversationStep_MinimalConversationConfig tests
-// conversation execution with minimal (default) config values
-func TestExecutionService_ConversationStep_MinimalConversationConfig(t *testing.T) {
+// TestExecutionService_ConversationStep_WithoutConfiguredTimeout tests
+// conversation execution with minimal (default) config values and no local deadline.
+func TestExecutionService_ConversationStep_WithoutConfiguredTimeout(t *testing.T) {
 	wf := &workflow.Workflow{
 		Name:    "minimal-conv",
 		Initial: "chat",
@@ -348,6 +349,17 @@ func TestExecutionService_ConversationStep_MinimalConversationConfig(t *testing.
 
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
+	conversationHadDeadline := false
+	claude.SetConversationFunc(func(
+		ctx context.Context,
+		state *workflow.ConversationState,
+		_ string,
+		_ map[string]any,
+		_, _ io.Writer,
+	) (*workflow.ConversationResult, error) {
+		_, conversationHadDeadline = ctx.Deadline()
+		return &workflow.ConversationResult{Provider: "claude", State: state}, nil
+	})
 	_ = registry.Register(claude)
 
 	mockRegistry := mocks.NewMockAgentRegistry()
@@ -363,6 +375,7 @@ func TestExecutionService_ConversationStep_MinimalConversationConfig(t *testing.
 	// F051: T009 - executeConversationStep is now implemented
 	require.NoError(t, err)
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
+	assert.False(t, conversationHadDeadline)
 
 	// Verify minimal conversation config works
 	state, exists := ctx.GetStepState("chat")
@@ -491,68 +504,48 @@ func TestExecutionService_ConversationStep_WithOnFailureTransition(t *testing.T)
 // TestExecutionService_ConversationStep_ContextCancellation tests that
 // conversation execution respects context cancellation
 func TestExecutionService_ConversationStep_ContextCancellation(t *testing.T) {
-	repo := newMockRepository()
 	wf := &workflow.Workflow{
-		Name:    "conv-cancel",
-		Initial: "chat",
+		Name: "conv-cancel", Initial: "chat",
 		Steps: map[string]*workflow.Step{
-			"chat": {
-				Name: "chat",
-				Type: workflow.StepTypeAgent,
-				Agent: &workflow.AgentConfig{
-					Provider:     "claude",
-					Mode:         "conversation",
-					Conversation: &workflow.ConversationConfig{},
-				},
-				OnSuccess: "done",
-			},
-			"done": {
-				Name: "done",
-				Type: workflow.StepTypeTerminal,
-			},
+			"chat": {Name: "chat", Type: workflow.StepTypeAgent, Agent: &workflow.AgentConfig{Provider: "claude", Mode: "conversation", Conversation: &workflow.ConversationConfig{}}, OnSuccess: "done"},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
 		},
 	}
-	repo.workflows["conv-cancel"] = wf
-
 	registry := mocks.NewMockAgentRegistry()
 	claude := mocks.NewMockAgentProvider("claude")
-	_ = registry.Register(claude)
-
-	mockRegistry := mocks.NewMockAgentRegistry()
-	mockRegistry.Register(claude)
-	convMgr := application.NewConversationManager(&mockLogger{}, newMockResolver(), mockRegistry)
+	observed := make(chan context.Context, 1)
+	claude.SetConversationFunc(func(ctx context.Context, state *workflow.ConversationState, _ string, _ map[string]any, _, _ io.Writer) (*workflow.ConversationResult, error) {
+		observed <- ctx
+		<-ctx.Done()
+		return &workflow.ConversationResult{Provider: "claude", State: state}, ctx.Err()
+	})
+	require.NoError(t, registry.Register(claude))
+	convMgr := application.NewConversationManager(&mockLogger{}, newMockResolver(), registry)
 	convMgr.SetUserInputReader(mocks.NewMockUserInputReader(""))
-
-	wfSvc := application.NewWorkflowService(repo, newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
-	execSvc := application.NewExecutionService(
-		wfSvc,
-		newMockExecutor(),
-		newMockParallelExecutor(),
-		newMockStateStore(),
-		&mockLogger{},
-		newMockResolver(),
-		nil,
-	)
+	execSvc, _ := NewTestHarness(t).WithWorkflow(wf.Name, wf).Build()
 	execSvc.SetAgentRegistry(registry)
 	execSvc.SetConversationManager(convMgr)
+	parent, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	result := make(chan error, 1)
+	go func() {
+		_, err := execSvc.RunWithWorkflowAndRunID(parent, wf, nil, "conv-cancel-run")
+		result <- err
+	}()
 
-	// Create cancelled context
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Immediately cancel
-
-	execCtx, err := execSvc.RunWithWorkflowAndRunID(ctx, wf, nil, "conv-cancel-run")
-
-	// F051: T009 - executeConversationStep is now implemented and respects context cancellation
-	require.Error(t, err)
-	// Should detect context cancellation
-	assert.True(t,
-		errors.Is(err, context.Canceled) ||
-			errors.Is(err, context.DeadlineExceeded),
-		"expected context error, got: %v", err)
-	// Status should be Cancelled when context is cancelled
-	assert.True(t,
-		execCtx.Status == workflow.StatusFailed || execCtx.Status == workflow.StatusCancelled,
-		"expected Failed or Cancelled status, got: %v", execCtx.Status)
+	providerCtx := <-observed
+	_, hasDeadline := providerCtx.Deadline()
+	assert.False(t, hasDeadline)
+	cancel()
+	err := <-result
+	require.ErrorIs(t, err, context.Canceled)
+	assert.False(t, errors.Is(err, context.DeadlineExceeded))
+	var structuredErr *domainerrors.StructuredError
+	if errors.As(err, &structuredErr) {
+		assert.NotContains(t, structuredErr.Details, "timeout_owner")
+		assert.NotContains(t, structuredErr.Details, "timeout_seconds")
+	}
+	require.ErrorIs(t, providerCtx.Err(), context.Canceled)
 }
 
 // TestExecutionService_ConversationStep_InterpolationContextAccess tests that

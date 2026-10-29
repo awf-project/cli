@@ -91,6 +91,10 @@ func TestResumeCommand_Help(t *testing.T) {
 	assert.Contains(t, output, "Resume")
 	assert.Contains(t, output, "--list")
 	assert.Contains(t, output, "--input")
+	assert.Contains(t, output, "Checkpoints retain inputs and step outputs")
+	assert.Contains(t, output, "overrides saved inputs")
+	assert.Contains(t, output, "replay selected steps")
+	assert.Contains(t, output, "external side effects")
 }
 
 func TestResumeCommand_NoArgsNoListFlag(t *testing.T) {

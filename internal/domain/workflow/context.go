@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"errors"
+	"maps"
 	"sync"
 	"time"
 )
@@ -328,4 +329,37 @@ func (c *ExecutionContext) CallStackDepth() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return len(c.CallStack)
+}
+
+// PersistenceSnapshot retains the inputs and step results needed to resume without
+// replaying completed work. It is private execution state, not an audit or telemetry
+// payload; stores must protect it with owner-only permissions.
+// Maps and call-stack storage are copied under the lock. Nested values are retained
+// as-is, matching GetInputs and GetAllStepStates; callers must not mutate them.
+// Error diagnostics remain sanitized before they can reach execution history.
+func (c *ExecutionContext) PersistenceSnapshot() *ExecutionContext {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	snapshot := &ExecutionContext{
+		WorkflowID: c.WorkflowID, WorkflowName: c.WorkflowName, ParentRunID: c.ParentRunID,
+		Status: c.Status, CurrentStep: c.CurrentStep, ExitCode: c.ExitCode,
+		Inputs: maps.Clone(c.Inputs), Env: maps.Clone(c.Env), States: make(map[string]StepState, len(c.States)),
+		CurrentLoop: c.CurrentLoop,
+		StartedAt:   c.StartedAt, UpdatedAt: c.UpdatedAt, CompletedAt: c.CompletedAt,
+		CallStack:       append([]string(nil), c.CallStack...),
+		HistoryRecordID: c.HistoryRecordID, HistoryAttempt: c.HistoryAttempt,
+		PreviousHistoryRecordID: c.PreviousHistoryRecordID, HistoryRecorded: c.HistoryRecorded,
+	}
+	for name := range c.States {
+		state := c.States[name]
+		// Error strings may contain provider payloads. Persist only known lifecycle causes.
+		switch state.Error {
+		case "", "context canceled", "context deadline exceeded", "execution timed out":
+		default:
+			state.Error = "step execution failed"
+		}
+		state.DisplayOutput = ""
+		snapshot.States[name] = state
+	}
+	return snapshot
 }

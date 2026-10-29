@@ -2,14 +2,66 @@ package notify
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
+	"github.com/awf-project/cli/pkg/httpx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type webhookDeadlineObservation struct {
+	deadline time.Time
+	ok       bool
+}
+
+type blockingWebhookDoer struct {
+	observed chan<- webhookDeadlineObservation
+	release  <-chan struct{}
+}
+
+type deadlineExceededWebhookDoer struct {
+	observed chan<- webhookDeadlineObservation
+}
+
+func (d *blockingWebhookDoer) Do(req *http.Request) (*http.Response, error) {
+	deadline, ok := req.Context().Deadline()
+	d.observed <- webhookDeadlineObservation{deadline: deadline, ok: ok}
+
+	select {
+	case <-req.Context().Done():
+		return nil, req.Context().Err()
+	case <-d.release:
+		return nil, errors.New("test HTTP doer released")
+	}
+}
+
+func (d *deadlineExceededWebhookDoer) Do(req *http.Request) (*http.Response, error) {
+	deadline, ok := req.Context().Deadline()
+	d.observed <- webhookDeadlineObservation{deadline: deadline, ok: ok}
+
+	return nil, context.DeadlineExceeded
+}
+
+// injectWebhookDoer replaces only the doer on the constructor-created client.
+// httpx deliberately keeps that field private; this test-only seam preserves the
+// timeout configured by newWebhookBackend while observing its request context.
+func injectWebhookDoer(t *testing.T, client *httpx.Client, doer httpx.HTTPDoer) {
+	t.Helper()
+
+	doerField := reflect.ValueOf(client).Elem().FieldByName("doer")
+	require.True(t, doerField.IsValid(), "httpx.Client must retain its HTTP doer")
+	require.True(t, doerField.CanAddr(), "httpx.Client HTTP doer must be addressable")
+
+	//nolint:gosec // Controlled test-only reflection swaps the private HTTP doer without changing its timeout.
+	reflect.NewAt(doerField.Type(), unsafe.Pointer(doerField.UnsafeAddr())).Elem().Set(reflect.ValueOf(doer))
+}
 
 // --- Interface compliance tests ---
 
@@ -521,35 +573,89 @@ func TestWebhookBackend_Send_InvalidWebhookURL(t *testing.T) {
 }
 
 func TestWebhookBackend_Send_HTTPTimeoutEnforced(t *testing.T) {
-	// Test that the 10-second timeout from NFR-001 is enforced
-	// Create mock HTTP server that delays response for 15 seconds
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(15 * time.Second)
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer mockServer.Close()
+	const deliveryTimeout = 10 * time.Second
 
+	observed := make(chan webhookDeadlineObservation, 1)
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
 	backend := newWebhookBackend()
+	injectWebhookDoer(t, backend.client, &blockingWebhookDoer{observed: observed, release: release})
 
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	secretValues := []string{
+		"workflow-input-secret",
+		"command-output-secret",
+		"prompt-secret",
+		"environment-secret",
+		"request-body-secret",
+		"header-secret",
+		"plugin-config-secret",
+		"credential-secret",
+	}
 	payload := NotificationPayload{
-		Message: "Test message",
+		Title:   secretValues[0],
+		Message: strings.Join(secretValues[1:], " "),
 		Metadata: map[string]string{
-			"webhook_url": mockServer.URL,
+			"webhook_url": "https://webhook.invalid/delivery",
 		},
 	}
 
-	start := time.Now()
-	result, err := backend.Send(ctx, payload)
-	elapsed := time.Since(start)
+	type sendResult struct {
+		result *BackendResult
+		err    error
+	}
+	completed := make(chan sendResult, 1)
+	go func() {
+		result, err := backend.Send(ctx, payload)
+		completed <- sendResult{result: result, err: err}
+	}()
 
-	// Given: server that delays response > 10 seconds
-	// When: Send is called
-	// Then: should timeout around 10 seconds (NFR-001)
-	assert.Error(t, err, "should timeout")
-	assert.Nil(t, result)
-	assert.Less(t, elapsed, 12*time.Second, "should timeout within 12 seconds")
-	assert.Greater(t, elapsed, 8*time.Second, "should wait at least 8 seconds")
+	var observation webhookDeadlineObservation
+	select {
+	case observation = <-observed:
+	case <-time.After(time.Second):
+		t.Fatal("webhook request did not reach the HTTP doer")
+	}
+
+	require.True(t, observation.ok, "webhook delivery must carry a technical deadline")
+	remaining := time.Until(observation.deadline)
+	assert.Greater(t, remaining, 9*time.Second)
+	assert.LessOrEqual(t, remaining, deliveryTimeout)
+
+	cancel()
+
+	select {
+	case outcome := <-completed:
+		assert.Nil(t, outcome.result)
+		require.Error(t, outcome.err)
+		assert.ErrorIs(t, outcome.err, context.Canceled)
+		assert.Contains(t, outcome.err.Error(), "webhook")
+		for _, secret := range secretValues {
+			assert.NotContains(t, outcome.err.Error(), secret)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("webhook send did not stop after its parent context was canceled")
+	}
+
+	deadlineObserved := make(chan webhookDeadlineObservation, 1)
+	deadlineBackend := newWebhookBackend()
+	injectWebhookDoer(t, deadlineBackend.client, &deadlineExceededWebhookDoer{observed: deadlineObserved})
+
+	result, err := deadlineBackend.Send(context.Background(), payload)
+	require.Nil(t, result)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Contains(t, err.Error(), "webhook")
+	for _, secret := range secretValues {
+		assert.NotContains(t, err.Error(), secret)
+	}
+
+	deadlineObservation := <-deadlineObserved
+	require.True(t, deadlineObservation.ok, "deadline-expiry delivery must carry a technical deadline")
+	deadlineRemaining := time.Until(deadlineObservation.deadline)
+	assert.Greater(t, deadlineRemaining, 9*time.Second)
+	assert.LessOrEqual(t, deadlineRemaining, deliveryTimeout)
 }
 
 func TestWebhookBackend_Send_UnreachableWebhook(t *testing.T) {

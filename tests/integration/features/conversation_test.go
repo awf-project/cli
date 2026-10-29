@@ -721,74 +721,46 @@ func TestExecuteConversationStep_DelegatesToConversationManager(t *testing.T) {
 	assertConversationFacadeExecution(t, err)
 }
 
-func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
-	// Skip in CI: Requires real Claude API provider
-	testhelpers.SkipInCI(t)
+func TestAllConversationFixtures_RejectUnavailableProvidersBeforeExecution(t *testing.T) {
+	// Deliberately unavailable CLIs keep this fixture/preflight contract local and
+	// deterministic. Execution scenarios are covered by the conversation suites.
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("AWF_MCP_PROXY_NO_PURGE", "1")
 
 	fixtures := []struct {
-		name            string
-		workflow        string
-		input           map[string]string
-		shouldPass      bool
-		expectedStop    string // "max_turns", "condition", or ""
-		stepName        string // Step name to check for conversation state
-		wantErrContains string // substring expected in the error message
+		name     string
+		workflow string
+		input    map[string]string
 	}{
 		{
-			name:            "simple_conversation",
-			workflow:        "conversation-simple",
-			input:           map[string]string{"task": "hello"},
-			shouldPass:      true,
-			expectedStop:    "condition",
-			stepName:        "review",
-			wantErrContains: "agent",
+			name:     "simple_conversation",
+			workflow: "conversation-simple",
+			input:    map[string]string{"task": "hello"},
 		},
 		{
-			name:            "multiturn_conversation",
-			workflow:        "conversation-multiturn",
-			input:           map[string]string{"initial_request": "test"},
-			shouldPass:      true,
-			expectedStop:    "max_turns",
-			stepName:        "first_turn",
-			wantErrContains: "agent",
+			name:     "multiturn_conversation",
+			workflow: "conversation-multiturn",
+			input:    map[string]string{"initial_request": "test"},
 		},
 		{
-			name:            "context_window_management",
-			workflow:        "conversation-window",
-			input:           map[string]string{"task": "review"},
-			shouldPass:      true,
-			expectedStop:    "condition",
-			stepName:        "review",
-			wantErrContains: "agent",
+			name:     "context_window_management",
+			workflow: "conversation-window",
+			input:    map[string]string{"task": "review"},
 		},
 		{
-			name:            "max_turns_limit",
-			workflow:        "conversation-max-turns",
-			input:           map[string]string{"task": "iterate"},
-			shouldPass:      true,
-			expectedStop:    "max_turns",
-			stepName:        "single_turn",
-			wantErrContains: "agent",
+			name:     "max_turns_limit",
+			workflow: "conversation-max-turns",
+			input:    map[string]string{"task": "iterate"},
 		},
 		{
-			name:         "parallel_conversations",
-			workflow:     "conversation-parallel",
-			input:        map[string]string{"task": "test"},
-			shouldPass:   false,
-			expectedStop: "",
-			stepName:     "parallel_conversations",
-			// This fixture includes Gemini. Claude/Codex may be configured locally while
-			// Gemini is unavailable, so the expected contract is a facade terminal failure.
-			wantErrContains: "workflow reached terminal failure state",
+			name:     "parallel_conversations",
+			workflow: "conversation-parallel",
+			input:    map[string]string{"task": "test"},
 		},
 		{
-			name:            "error_handling",
-			workflow:        "conversation-error",
-			input:           map[string]string{"task": "test errors"},
-			shouldPass:      false, // Expected to fail at handle_failure step
-			expectedStop:    "",
-			stepName:        "conversation_with_retry",
-			wantErrContains: "agent",
+			name:     "error_handling",
+			workflow: "conversation-error",
+			input:    map[string]string{"task": "test errors"},
 		},
 	}
 
@@ -819,16 +791,11 @@ func TestAllConversationFixtures_ExecuteSuccessfully(t *testing.T) {
 			err := cmd.Execute()
 			_ = buf.String()
 
-			if tc.shouldPass {
-				assertConversationFacadeExecution(t, err)
-				return
-			}
-
-			require.Error(t, err, "Workflow %s should fail", tc.workflow)
-			if tc.wantErrContains != "" {
-				assert.Contains(t, err.Error(), tc.wantErrContains,
-					"Workflow %s should fail with expected error", tc.workflow)
-			}
+			require.Error(t, err, "Workflow %s must reject unavailable providers", tc.workflow)
+			assert.Contains(t, err.Error(), "validate workflow before run:")
+			assert.Contains(t, err.Error(), "provider")
+			assert.NotContains(t, err.Error(), "unknown step type")
+			assert.NotContains(t, err.Error(), "conversation manager not configured")
 		})
 	}
 }

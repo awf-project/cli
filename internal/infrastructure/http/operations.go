@@ -34,8 +34,7 @@ func AllOperations() []pluginmodel.OperationSchema {
 				"timeout": {
 					Type:        pluginmodel.InputTypeInteger,
 					Required:    false,
-					Description: "Request timeout in seconds (default: 30)",
-					Default:     30,
+					Description: "Optional request timeout in seconds (must be positive when provided)",
 				},
 				"retryable_status_codes": {
 					Type:        pluginmodel.InputTypeArray,

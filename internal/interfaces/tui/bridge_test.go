@@ -2,8 +2,11 @@ package tui_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,6 +14,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/interfaces/tui"
+	"github.com/awf-project/cli/internal/testutil/builders"
 )
 
 // --- mock implementations of Bridge interfaces ---
@@ -438,16 +442,84 @@ func TestBridge_RunWorkflowViaFacade_WithoutFacade_ReturnsErrMsg(t *testing.T) {
 
 func TestBridge_RunWorkflowViaFacade_RespectsCancellation(t *testing.T) {
 	bridge := tui.NewBridge(newMockWorkflowLister("wf-1"), newMockHistoryProvider())
-	bridge.SetFacade(newMockFacade())
+	harness := builders.NewCancellationHarness("wf-1")
+	adapter, executor, logger := harness.Adapter, harness.Executor, harness.Logger
+	bridge.SetFacade(adapter)
+	const (
+		secretInput  = "input-must-not-appear"
+		secretPrompt = "prompt-must-not-appear"
+		secretToken  = "token-must-not-appear"
+	)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	msg := bridge.RunWorkflowViaFacade(ctx, "wf-1", map[string]any{
+		"operation_id": "tui-cancel",
+		"input":        secretInput,
+		"prompt":       secretPrompt,
+		"token":        secretToken,
+	})()
+	started, ok := msg.(tui.ExecutionStartedMsg)
+	require.True(t, ok, "expected ExecutionStartedMsg from the public bridge, got %T", msg)
+	require.NotNil(t, started.Session)
+	select {
+	case <-executor.Started:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for the real adapter to enter active command execution")
+	}
 	cancel()
 
-	msg := bridge.RunWorkflowViaFacade(ctx, "wf-1", nil)()
+	select {
+	case err := <-executor.Canceled:
+		assert.ErrorIs(t, err, context.Canceled,
+			"TUI parent cancellation must reach active application work")
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for TUI cancellation to reach active application work")
+	}
 
-	errMsg, ok := msg.(tui.ErrMsg)
-	require.True(t, ok, "expected ErrMsg on cancelled context, got %T", msg)
-	assert.Error(t, errMsg.Err)
+	terminalEvents := make([]ports.Event, 0, 1)
+	cleanupDeadline := time.NewTimer(time.Second)
+	defer cleanupDeadline.Stop()
+eventLoop:
+	for {
+		select {
+		case event, open := <-started.Session.Events():
+			if !open {
+				break eventLoop
+			}
+			if event.Kind == ports.EventWorkflowCompleted || event.Kind == ports.EventWorkflowFailed {
+				terminalEvents = append(terminalEvents, event)
+			}
+		case <-cleanupDeadline.C:
+			t.Fatal("timed out waiting for TUI cancellation cleanup to close the event stream")
+		}
+	}
+	require.Len(t, terminalEvents, 1, "TUI cancellation cleanup must publish exactly one terminal outcome")
+	assert.Equal(t, ports.EventWorkflowFailed, terminalEvents[0].Kind)
+	assert.Equal(t, started.Session.ID(), terminalEvents[0].RunID,
+		"terminal diagnostics must identify the cancelled operation")
+	terminal, ok := terminalEvents[0].Payload.(*ports.EnrichedTerminal)
+	require.True(t, ok, "cancellation terminal event must carry EnrichedTerminal diagnostics")
+	assert.Equal(t, "step wait-for-cancel: context canceled", terminal.Error)
+
+	diagnostic, err := json.Marshal(terminalEvents[0])
+	require.NoError(t, err)
+	text := string(diagnostic)
+	assert.Contains(t, text, started.Session.ID())
+	for _, forbidden := range []string{secretInput, secretPrompt, secretToken} {
+		assert.NotContains(t, text, forbidden, "terminal diagnostics must not disclose workflow inputs")
+	}
+	assert.NotContains(t, strings.ToLower(text), "authorization")
+
+	capturedDiagnostics := text + "\n" + logger.Snapshot()
+	assert.NotEmpty(t, logger.Snapshot(), "the real cancellation path must emit observable logs")
+	for _, forbidden := range []string{
+		secretInput, secretPrompt, secretToken,
+		"inputs", "prompt", "environment", "request", "header", "plugin", "authorization", "credential",
+	} {
+		assert.NotContains(t, strings.ToLower(capturedDiagnostics), strings.ToLower(forbidden),
+			"captured errors and logs must not disclose workflow or secret data")
+	}
 }
 
 func TestBridge_RunWorkflowViaFacade_FacadeRunError_ReturnsErrMsg(t *testing.T) {

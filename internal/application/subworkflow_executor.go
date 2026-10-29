@@ -143,17 +143,13 @@ func (s *ExecutionService) executeCallWorkflowStep(
 	}
 
 	// 6. Apply timeout
-	// Prefer step-level timeout (from YAML timeout: field) over config.Timeout
-	subCtx := ctx
+	// Prefer step-level timeout (from YAML timeout: field) over config.Timeout.
 	timeout := step.Timeout
 	if timeout <= 0 {
-		timeout = config.GetTimeout()
+		timeout = config.Timeout
 	}
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		subCtx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
-		defer cancel()
-	}
+	subCtx, cancel, _ := deriveExecutionContext(ctx, timeout)
+	defer cancel()
 
 	// Execute pre-hooks
 	if err := s.hookExecutor.ExecuteHooks(subCtx, step.Hooks.Pre, intCtx, false); err != nil {

@@ -10,6 +10,7 @@ import (
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
+	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -869,10 +870,10 @@ func TestExecuteCallWorkflowStep_Timeout(t *testing.T) {
 					Timeout:  1, // 1 second timeout
 				},
 				OnSuccess: "done",
-				OnFailure: "error",
+				OnFailure: "timeout_handled",
 			},
-			"done":  {Name: "done", Type: workflow.StepTypeTerminal},
-			"error": {Name: "error", Type: workflow.StepTypeTerminal},
+			"done":            {Name: "done", Type: workflow.StepTypeTerminal},
+			"timeout_handled": {Name: "timeout_handled", Type: workflow.StepTypeTerminal},
 		},
 	}
 
@@ -885,20 +886,25 @@ func TestExecuteCallWorkflowStep_Timeout(t *testing.T) {
 		WithExecutor(slowExecutor).
 		Build()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	result, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "timeout-parent-run")
 
-	_, err := execSvc.RunWithWorkflowAndRunID(ctx, parentWf, nil, "timeout-parent-run")
-	// Should timeout or error
-	if err != nil {
-		assert.True(t, errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled),
-			"expected timeout error, got: %v", err)
-	}
+	// The child deadline is a local failure: the parent's configured failure
+	// transition must run rather than treating it as cancellation of the parent.
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, workflow.StatusCompleted, result.Status)
+	assert.Equal(t, "timeout_handled", result.CurrentStep)
+	require.ErrorIs(t, slowExecutor.lastError, context.DeadlineExceeded)
+	callState, exists := result.GetStepState("call")
+	require.True(t, exists)
+	assert.Equal(t, workflow.StatusFailed, callState.Status)
+	assert.Contains(t, callState.Error, context.DeadlineExceeded.Error())
 }
 
 // slowMockExecutor simulates slow command execution
 type slowMockExecutor struct {
-	delay time.Duration
+	delay     time.Duration
+	lastError error
 }
 
 func (m *slowMockExecutor) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
@@ -906,8 +912,85 @@ func (m *slowMockExecutor) Execute(ctx context.Context, cmd *ports.Command) (*po
 	case <-time.After(m.delay):
 		return &ports.CommandResult{ExitCode: 0, Stdout: "done"}, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		m.lastError = ctx.Err()
+		return nil, m.lastError
 	}
+}
+
+type deadlineObservingCommandExecutor struct {
+	hasDeadline bool
+	deadline    time.Time
+}
+
+func (e *deadlineObservingCommandExecutor) Execute(ctx context.Context, _ *ports.Command) (*ports.CommandResult, error) {
+	e.deadline, e.hasDeadline = ctx.Deadline()
+	return &ports.CommandResult{ExitCode: 0, Stdout: "done"}, nil
+}
+
+func TestExecuteCallWorkflowStep_CompletesWithoutConfiguredTimeout(t *testing.T) {
+	parentWf, childWf := createParentChildWorkflows("unlimited-parent", "unlimited-child")
+	observer := &deadlineObservingCommandExecutor{}
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow(parentWf.Name, parentWf).
+		WithWorkflow(childWf.Name, childWf).
+		WithExecutor(observer).
+		Build()
+
+	result, err := execSvc.RunWithWorkflowAndRunID(
+		context.Background(), parentWf, map[string]any{"parent_input": "value"}, "unlimited-parent-run",
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, result.Status)
+	assert.False(t, observer.hasDeadline)
+}
+
+func TestExecuteCallWorkflowStep_ExplicitZeroDisablesInheritedTimeout(t *testing.T) {
+	parentWf, childWf := createParentChildWorkflows("explicit-zero-parent", "explicit-zero-child")
+	parentWf.Steps["call_child"].TimeoutSet = true
+	parentWf.Steps["call_child"].Timeout = 0
+	parentWf.Steps["call_child"].TemplateRef = &workflow.WorkflowTemplateRef{TemplateName: "limited-call"}
+	templateRepo := testmocks.NewMockTemplateRepository()
+	templateRepo.AddTemplate("limited-call", &workflow.Template{
+		Name: "limited-call",
+		States: map[string]*workflow.Step{
+			"call_child": {
+				Name: "call_child", Type: workflow.StepTypeCallWorkflow, Timeout: 30, TimeoutSet: true,
+			},
+		},
+	})
+	observer := &deadlineObservingCommandExecutor{}
+	execSvc, _ := NewTestHarness(t).
+		WithWorkflow(parentWf.Name, parentWf).
+		WithWorkflow(childWf.Name, childWf).
+		WithExecutor(observer).
+		Build()
+	execSvc.SetTemplateService(application.NewTemplateService(templateRepo, testmocks.NewMockLogger()))
+
+	result, err := execSvc.RunWithWorkflowAndRunID(
+		context.Background(), parentWf, map[string]any{"parent_input": "value"}, "explicit-zero-parent-run",
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, result.Status)
+	assert.False(t, observer.hasDeadline)
+
+	// Explicit zero removes the template timeout but must retain, rather than
+	// detach from, a deadline already imposed by the calling workflow.
+	observer.hasDeadline = false
+	observer.deadline = time.Time{}
+	parentCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	parentDeadline, _ := parentCtx.Deadline()
+
+	result, err = execSvc.RunWithWorkflowAndRunID(
+		parentCtx, parentWf, map[string]any{"parent_input": "value"}, "explicit-zero-parent-deadline-run",
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, result.Status)
+	require.True(t, observer.hasDeadline)
+	assert.WithinDuration(t, parentDeadline, observer.deadline, 50*time.Millisecond)
 }
 
 func TestExecuteCallWorkflowStep_MissingCallWorkflowConfig(t *testing.T) {
@@ -1419,78 +1502,50 @@ func TestExecuteCallWorkflowStep_TimeoutZero_InheritsParentContext(t *testing.T)
 }
 
 func TestExecuteCallWorkflowStep_NestedTimeouts_MostRestrictiveWins(t *testing.T) {
-	// Innermost child with slow operation
 	innerChild := &workflow.Workflow{
 		Name:    "inner-child",
-		Initial: "slow",
+		Initial: "work",
 		Steps: map[string]*workflow.Step{
-			"slow": {
-				Name:      "slow",
-				Type:      workflow.StepTypeCommand,
-				Command:   "sleep 30",
-				OnSuccess: "done",
-			},
+			"work": {Name: "work", Type: workflow.StepTypeCommand, Command: "observe deadline", OnSuccess: "done"},
 			"done": {Name: "done", Type: workflow.StepTypeTerminal},
 		},
 	}
-
-	// Middle workflow with 5s timeout
 	middleChild := &workflow.Workflow{
 		Name:    "middle-child",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
 			"call": {
-				Name: "call",
-				Type: workflow.StepTypeCallWorkflow,
-				CallWorkflow: &workflow.CallWorkflowConfig{
-					Workflow: "inner-child",
-					Timeout:  5, // 5 seconds
-				},
-				OnSuccess: "done",
+				Name: "call", Type: workflow.StepTypeCallWorkflow, Timeout: 10, TimeoutSet: true,
+				CallWorkflow: &workflow.CallWorkflowConfig{Workflow: innerChild.Name, Timeout: 20}, OnSuccess: "done",
 			},
 			"done": {Name: "done", Type: workflow.StepTypeTerminal},
 		},
 	}
-
-	// Outer workflow with 10s timeout
 	outerParent := &workflow.Workflow{
 		Name:    "outer-parent",
 		Initial: "call",
 		Steps: map[string]*workflow.Step{
 			"call": {
-				Name: "call",
-				Type: workflow.StepTypeCallWorkflow,
-				CallWorkflow: &workflow.CallWorkflowConfig{
-					Workflow: "middle-child",
-					Timeout:  10, // 10 seconds
-				},
-				OnSuccess: "done",
+				Name: "call", Type: workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{Workflow: middleChild.Name, Timeout: 30}, OnSuccess: "done",
 			},
 			"done": {Name: "done", Type: workflow.StepTypeTerminal},
 		},
 	}
-
-	slowExecutor := &slowMockExecutor{delay: 30 * time.Second}
-
+	observer := &deadlineObservingCommandExecutor{}
 	execSvc, _ := NewTestHarness(t).
-		WithWorkflow("inner-child", innerChild).
-		WithWorkflow("middle-child", middleChild).
-		WithWorkflow("outer-parent", outerParent).
-		WithExecutor(slowExecutor).
+		WithWorkflow(innerChild.Name, innerChild).
+		WithWorkflow(middleChild.Name, middleChild).
+		WithWorkflow(outerParent.Name, outerParent).
+		WithExecutor(observer).
 		Build()
+	startedAt := time.Now()
+	result, err := execSvc.RunWithWorkflowAndRunID(context.Background(), outerParent, nil, "outer-parent-run")
 
-	// Parent context with 1s timeout - most restrictive
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	start := time.Now()
-	_, err := execSvc.RunWithWorkflowAndRunID(ctx, outerParent, nil, "outer-parent-run")
-	elapsed := time.Since(start)
-
-	require.Error(t, err)
-	// Should timeout in ~1s (parent context), not 5s or 10s
-	assert.Less(t, elapsed, 3*time.Second,
-		"should timeout from most restrictive context (~1s), not wait for nested timeouts")
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, result.Status)
+	require.True(t, observer.hasDeadline)
+	assert.WithinDuration(t, startedAt.Add(10*time.Second), observer.deadline, 250*time.Millisecond)
 }
 
 func TestExecuteCallWorkflowStep_MaxNestingExactlyAtLimit(t *testing.T) {

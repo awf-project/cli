@@ -122,8 +122,12 @@ func TestExecutePluginOperation_Timeout(t *testing.T) {
 			ctx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "timeout-test-run")
 
 			if tt.expectTimeout && !tt.continueOnErr && tt.onFailure == "" {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "context deadline exceeded")
+				require.ErrorIs(t, err, context.DeadlineExceeded)
+				assert.False(t, errors.Is(err, context.Canceled))
+				var structuredErr *domainerrors.StructuredError
+				require.ErrorAs(t, err, &structuredErr)
+				assert.Equal(t, domainerrors.ErrorCodeExecutionCommandTimeout, structuredErr.Code)
+				assert.Equal(t, map[string]any{"timeout_owner": "step", "timeout_seconds": tt.timeout}, structuredErr.Details)
 			} else {
 				require.NoError(t, err)
 			}
@@ -135,7 +139,11 @@ func TestExecutePluginOperation_Timeout(t *testing.T) {
 				state, exists := ctx.States["operation"]
 				require.True(t, exists)
 				assert.Equal(t, workflow.StatusFailed, state.Status)
-				assert.Contains(t, state.Error, "context deadline exceeded")
+				require.NotNil(t, provider.lastContext)
+				require.ErrorIs(t, provider.lastContext.Err(), context.DeadlineExceeded)
+			} else {
+				require.NotNil(t, provider.lastContext)
+				require.ErrorIs(t, provider.lastContext.Err(), context.Canceled)
 			}
 		})
 	}
@@ -207,9 +215,16 @@ func TestExecutePluginOperation_ContextCancellation(t *testing.T) {
 
 			execCtx, err := execSvc.RunWithWorkflowAndRunID(ctx, wf, nil, "cancel-test-run")
 
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.expectedErrMessage)
+			require.ErrorIs(t, err, context.Canceled)
+			assert.False(t, errors.Is(err, context.DeadlineExceeded))
+			var structuredErr *domainerrors.StructuredError
+			if errors.As(err, &structuredErr) {
+				assert.NotContains(t, structuredErr.Details, "timeout_owner")
+				assert.NotContains(t, structuredErr.Details, "timeout_seconds")
+			}
 			assert.Equal(t, tt.expectedStatus, execCtx.Status)
+			require.NotNil(t, provider.lastContext)
+			require.ErrorIs(t, provider.lastContext.Err(), context.Canceled)
 
 			// Verify step state set to StatusFailed on cancellation
 			state, exists := execCtx.States["operation"]
@@ -897,7 +912,8 @@ func TestExecutePluginOperation_StepStateRecording(t *testing.T) {
 // mockOperationProviderWithDelay simulates slow operations for timeout testing.
 type mockOperationProviderWithDelay struct {
 	*mockOperationProvider
-	delay time.Duration
+	delay       time.Duration
+	lastContext context.Context
 }
 
 func newMockOperationProviderWithDelay(delay time.Duration) *mockOperationProviderWithDelay {
@@ -912,6 +928,7 @@ func (m *mockOperationProviderWithDelay) Execute(
 	name string,
 	inputs map[string]any,
 ) (*pluginmodel.OperationResult, error) {
+	m.lastContext = ctx
 	// Simulate delay
 	select {
 	case <-time.After(m.delay):

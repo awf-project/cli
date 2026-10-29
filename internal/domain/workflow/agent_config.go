@@ -6,9 +6,6 @@ import (
 	"time"
 )
 
-// DefaultAgentTimeout is the default timeout in seconds for agent execution.
-const DefaultAgentTimeout = 300
-
 // OutputFormat represents the format for agent output post-processing.
 type OutputFormat string
 
@@ -30,10 +27,10 @@ type AgentConfig struct {
 	Prompt       string              `yaml:"prompt"`         // prompt template with {{inputs.*}} and {{states.*}} (single mode) or first user message (conversation mode)
 	PromptFile   string              `yaml:"prompt_file"`    // path to external prompt template file (mutually exclusive with Prompt)
 	Options      map[string]any      `yaml:"options"`        // provider-specific options (model, temperature, max_tokens, etc.)
-	Timeout      int                 `yaml:"timeout"`        // seconds, 0 = use DefaultAgentTimeout
+	Timeout      int                 `yaml:"timeout"`        // seconds, 0 = no local timeout
 	Mode         string              `yaml:"mode"`           // execution mode: "single" (default) or "conversation"
 	SystemPrompt string              `yaml:"system_prompt"`  // system prompt preserved across conversation (conversation mode only)
-	Role         string              `yaml:"role,omitempty"` // role name or path resolved at execution time; may contain {{...}} templates
+	Role         string              `yaml:"role,omitempty"` // role name or path resolved at execution time; may contain template expressions
 	Conversation *ConversationConfig `yaml:"conversation"`   // conversation-specific configuration (conversation mode only)
 	OutputFormat OutputFormat        `yaml:"output_format"`  // output post-processing: json (strip fences + validate), text (strip fences only), or empty (no processing)
 }
@@ -113,15 +110,6 @@ func (c *AgentConfig) Validate(validator ExpressionCompiler) error {
 
 func containsPathTraversal(s string) bool {
 	return strings.Contains(s, "..")
-}
-
-// GetTimeout returns the effective timeout as a time.Duration.
-// Returns DefaultAgentTimeout seconds if not explicitly set.
-func (c *AgentConfig) GetTimeout() time.Duration {
-	if c.Timeout > 0 {
-		return time.Duration(c.Timeout) * time.Second
-	}
-	return DefaultAgentTimeout * time.Second
 }
 
 // IsConversationMode returns true if the agent is configured for conversation mode.

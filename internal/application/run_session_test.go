@@ -376,3 +376,30 @@ func TestRunSession_StatusSnapshot(t *testing.T) {
 		assert.Equal(t, ports.RunStateCompleted, snap.Status)
 	})
 }
+
+func TestRunSession_ConcurrentTerminalEventsAreEmittedOnce(t *testing.T) {
+	session := newRunSession(context.Background(), "concurrent-cancel", 16)
+	var workers sync.WaitGroup
+	workers.Add(2)
+	start := make(chan struct{})
+	go func() {
+		defer workers.Done()
+		<-start
+		session.appendEvent(ports.Event{Kind: ports.EventWorkflowFailed, RunID: session.ID()})
+	}()
+	go func() {
+		defer workers.Done()
+		<-start
+		_ = session.CancelWithEvent("cancelled")
+	}()
+	close(start)
+	workers.Wait()
+	require.NoError(t, session.Close())
+	var terminal []ports.Event
+	for event := range session.Events() {
+		terminal = append(terminal, event)
+	}
+	require.Len(t, terminal, 1)
+	assert.Equal(t, ports.EventWorkflowFailed, terminal[0].Kind)
+	require.Len(t, session.ReplayFromSeq(0), 1, "replay must also retain exactly one terminal event")
+}

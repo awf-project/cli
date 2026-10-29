@@ -12,7 +12,11 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc" // grpc.CallOption for mock interface
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+type callerContextKey struct{}
 
 // TestNewGRPCStepTypeAdapter_HappyPath tests successful construction with valid timeout.
 func TestNewGRPCStepTypeAdapter_HappyPath(t *testing.T) {
@@ -23,7 +27,7 @@ func TestNewGRPCStepTypeAdapter_HappyPath(t *testing.T) {
 
 	require.NotNil(t, adapter)
 	assert.Equal(t, "test-plugin", adapter.pluginName)
-	assert.Equal(t, 3*time.Second, adapter.timeout)
+	assert.Equal(t, 3*time.Second, adapter.discoveryTimeout)
 	assert.Equal(t, mockClient, adapter.client)
 }
 
@@ -44,7 +48,7 @@ func TestNewGRPCStepTypeAdapter_DefaultTimeout(t *testing.T) {
 			adapter := newGRPCStepTypeAdapter(mockClient, "plugin", tt.timeout, nil)
 
 			require.NotNil(t, adapter)
-			assert.Equal(t, defaultStepTypeTimeout, adapter.timeout)
+			assert.Equal(t, defaultStepTypeDiscoveryTimeout, adapter.discoveryTimeout)
 		})
 	}
 }
@@ -164,6 +168,27 @@ func TestListAndCache_ClientError(t *testing.T) {
 	assert.False(t, adapter.HasStepType("any-type"))
 }
 
+func TestListAndCache_UsesBoundedDiscoveryContext(t *testing.T) {
+	mockClient := new(MockStepTypeServiceClient)
+	discoveryErr := assert.AnError
+	var discoveryCtx context.Context
+
+	mockClient.On("ListStepTypes", mock.MatchedBy(func(ctx context.Context) bool {
+		discoveryCtx = ctx
+		deadline, ok := ctx.Deadline()
+		return ok && time.Until(deadline) > 0 && time.Until(deadline) <= time.Second
+	}), &pluginv1.ListStepTypesRequest{}).Return(nil, discoveryErr)
+
+	adapter := newGRPCStepTypeAdapter(mockClient, "test-plugin", time.Second, nil)
+	err := adapter.listAndCache(context.Background(), make(map[string]bool))
+
+	require.ErrorIs(t, err, discoveryErr)
+	require.NotNil(t, discoveryCtx)
+	assert.ErrorIs(t, discoveryCtx.Err(), context.Canceled)
+	assert.False(t, adapter.HasStepType("test-plugin.any-type"))
+	mockClient.AssertExpectations(t)
+}
+
 // TestHasStepType_CachedLookup tests O(1) cached lookup with qualified names.
 func TestHasStepType_CachedLookup(t *testing.T) {
 	mockClient := new(MockStepTypeServiceClient)
@@ -229,6 +254,82 @@ func TestExecuteStep_HappyPath(t *testing.T) {
 	assert.Equal(t, "Request completed", result.Output)
 	assert.Equal(t, int(0), result.ExitCode)
 	assert.Equal(t, "success", result.Data["status"])
+}
+
+func TestExecuteStep_UsesCallerContext(t *testing.T) {
+	mockClient := new(MockStepTypeServiceClient)
+	callerCtx := context.WithValue(context.Background(), callerContextKey{}, "caller")
+
+	mockClient.On("ExecuteStep", mock.MatchedBy(func(ctx context.Context) bool {
+		_, hasDeadline := ctx.Deadline()
+		return ctx == callerCtx && !hasDeadline
+	}), mock.Anything).Return(&pluginv1.ExecuteStepResponse{Output: "completed"}, nil)
+
+	adapter := newGRPCStepTypeAdapter(mockClient, "test-plugin", time.Nanosecond, nil)
+	result, err := adapter.ExecuteStep(callerCtx, ports.StepExecuteRequest{
+		StepName: "test-step",
+		StepType: "test-plugin.http-request",
+		Config:   map[string]any{},
+		Inputs:   map[string]any{},
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "completed", result.Output)
+	mockClient.AssertExpectations(t)
+}
+
+func TestExecuteStep_PreservesDeadlineAndCancellation(t *testing.T) {
+	tests := []struct {
+		name       string
+		newContext func(t *testing.T) context.Context
+		rpcErr     error
+		wantErr    error
+	}{
+		{
+			name: "caller cancellation",
+			newContext: func(t *testing.T) context.Context {
+				t.Helper()
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			rpcErr:  status.Error(codes.Canceled, "context canceled"),
+			wantErr: context.Canceled,
+		},
+		{
+			name: "caller deadline",
+			newContext: func(t *testing.T) context.Context {
+				t.Helper()
+				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+				t.Cleanup(cancel)
+				return ctx
+			},
+			rpcErr:  status.Error(codes.DeadlineExceeded, "context deadline exceeded"),
+			wantErr: context.DeadlineExceeded,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockClient := new(MockStepTypeServiceClient)
+			callerCtx := tt.newContext(t)
+			mockClient.On("ExecuteStep", mock.MatchedBy(func(ctx context.Context) bool {
+				return ctx == callerCtx
+			}), mock.Anything).Return(nil, tt.rpcErr)
+
+			adapter := newGRPCStepTypeAdapter(mockClient, "test-plugin", time.Second, nil)
+			result, err := adapter.ExecuteStep(callerCtx, ports.StepExecuteRequest{
+				StepName: "test-step",
+				StepType: "test-plugin.http-request",
+				Config:   map[string]any{},
+				Inputs:   map[string]any{},
+			})
+
+			assert.ErrorIs(t, err, tt.wantErr)
+			assert.Equal(t, ports.StepExecuteResult{}, result)
+			mockClient.AssertExpectations(t)
+		})
+	}
 }
 
 // TestExecuteStep_ClientError tests handling of step execution errors.

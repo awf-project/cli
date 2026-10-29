@@ -3,6 +3,13 @@ package builtins_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -10,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/infrastructure/executor"
 	"github.com/awf-project/cli/internal/infrastructure/tools/builtins"
 	"github.com/awf-project/cli/internal/testutil/mocks"
 )
@@ -161,49 +169,125 @@ func TestBash_NoExecutor_ReturnsIsError(t *testing.T) {
 		"error text should mention missing executor")
 }
 
-// ctxCapturingExecutor is a test-only executor that captures the context it receives.
-type ctxCapturingExecutor struct {
-	capturedCtx context.Context
-	result      *ports.CommandResult
+type contextObservingExecutor struct {
+	delegate ports.CommandExecutor
+	contexts chan context.Context
 }
 
-func (e *ctxCapturingExecutor) Execute(ctx context.Context, _ *ports.Command) (*ports.CommandResult, error) {
-	e.capturedCtx = ctx
-	if e.result != nil {
-		return e.result, nil
+func (e *contextObservingExecutor) Execute(ctx context.Context, command *ports.Command) (*ports.CommandResult, error) {
+	select {
+	case e.contexts <- ctx:
+	default:
 	}
-	return &ports.CommandResult{Stdout: "", Stderr: "", ExitCode: 0}, nil
+	return e.delegate.Execute(ctx, command)
 }
 
-// TestBash_TimeoutSeconds_WrapsContext verifies that Bash honors the
-// timeout_seconds parameter by wrapping ctx with context.WithTimeout before
-// calling Execute. The captured context must have a deadline approximately
-// equal to now + timeout_seconds (tolerance: 500ms).
+func TestBash_WithoutTimeoutUsesCallerContext(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("process-group lifecycle assertions require POSIX signals")
+	}
+
+	privateValues := []string{
+		"PRIVATE_BASH_CANCELLATION_COMMAND",
+		"PRIVATE_TOOL_OUTPUT",
+		"PRIVATE_PROMPT",
+		"PRIVATE_REQUEST_BODY",
+		"PRIVATE_AUTHORIZATION_HEADER",
+		"PRIVATE_PLUGIN_CONFIGURATION",
+		"PRIVATE_TOKEN",
+		"PRIVATE_CREDENTIAL",
+	}
+	tmpDir := t.TempDir()
+	readyPath := filepath.Join(tmpDir, "ready")
+	pidPath := filepath.Join(tmpDir, "child.pid")
+	observingExec := &contextObservingExecutor{
+		delegate: executor.NewShellExecutor(),
+		contexts: make(chan context.Context, 1),
+	}
+	provider := builtins.NewProvider(builtins.WithExecutor(observingExec))
+	callerCtx, cancel := context.WithCancel(context.WithValue(context.Background(), bashContextKey{}, "operation-123"))
+	defer cancel()
+
+	resultCh := make(chan bashExecution, 1)
+	go func() {
+		result, err := provider.CallTool(callerCtx, "Bash", map[string]any{
+			"command": bashBlockingCommand(privateValues, pidPath, readyPath),
+		})
+		resultCh <- bashExecution{result: result, err: err}
+	}()
+
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(readyPath)
+		return err == nil
+	}, 2*time.Second, 10*time.Millisecond, "child process did not reach the synchronized blocker")
+
+	observedCtx := <-observingExec.contexts
+	require.Same(t, callerCtx, observedCtx)
+	_, hasDeadline := observedCtx.Deadline()
+	assert.False(t, hasDeadline)
+	assert.Equal(t, "operation-123", observedCtx.Value(bashContextKey{}))
+
+	childPID := readBashChildPID(t, pidPath)
+	cancel()
+
+	execution := awaitBashExecution(t, resultCh)
+	require.Error(t, execution.err)
+	assert.ErrorIs(t, execution.err, context.Canceled)
+	assert.Nil(t, execution.result)
+	for _, sensitive := range privateValues {
+		assert.NotContains(t, execution.err.Error(), sensitive)
+	}
+	assertBashChildTerminated(t, childPID)
+}
+
+type bashContextKey struct{}
+
 func TestBash_TimeoutSeconds_WrapsContext(t *testing.T) {
-	const timeoutSecs = 1
-
-	capturingExec := &ctxCapturingExecutor{
-		result: &ports.CommandResult{Stdout: "ok", Stderr: "", ExitCode: 0},
+	if runtime.GOOS == "windows" {
+		t.Skip("process-group lifecycle assertions require POSIX signals")
 	}
 
-	provider := builtins.NewProvider(builtins.WithExecutor(capturingExec))
-
+	const timeoutSecs = 1
+	privateValues := []string{
+		"PRIVATE_BASH_TIMEOUT_COMMAND",
+		"PRIVATE_TOOL_OUTPUT",
+		"PRIVATE_PROMPT",
+		"PRIVATE_REQUEST_BODY",
+		"PRIVATE_AUTHORIZATION_HEADER",
+		"PRIVATE_PLUGIN_CONFIGURATION",
+		"PRIVATE_TOKEN",
+		"PRIVATE_CREDENTIAL",
+	}
+	tmpDir := t.TempDir()
+	readyPath := filepath.Join(tmpDir, "ready")
+	pidPath := filepath.Join(tmpDir, "child.pid")
+	observingExec := &contextObservingExecutor{
+		delegate: executor.NewShellExecutor(),
+		contexts: make(chan context.Context, 1),
+	}
+	provider := builtins.NewProvider(builtins.WithExecutor(observingExec))
+	callerCtx := context.WithValue(context.Background(), bashContextKey{}, "operation-456")
 	before := time.Now()
-	_, err := provider.CallTool(context.Background(), "Bash", map[string]any{
-		"command":         "true",
-		"timeout_seconds": timeoutSecs,
-	})
-	require.NoError(t, err, "CallTool should succeed with timeout_seconds")
-	after := time.Now()
+	resultCh := make(chan bashExecution, 1)
+	go func() {
+		result, err := provider.CallTool(callerCtx, "Bash", map[string]any{
+			"command":         bashBlockingCommand(privateValues, pidPath, readyPath),
+			"timeout_seconds": timeoutSecs,
+		})
+		resultCh <- bashExecution{result: result, err: err}
+	}()
 
-	require.NotNil(t, capturingExec.capturedCtx, "executor must have been called")
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(readyPath)
+		return err == nil
+	}, 2*time.Second, 10*time.Millisecond, "child process did not reach the synchronized blocker")
 
-	deadline, ok := capturingExec.capturedCtx.Deadline()
+	observedCtx := <-observingExec.contexts
+	assert.Equal(t, "operation-456", observedCtx.Value(bashContextKey{}))
+	deadline, ok := observedCtx.Deadline()
 	require.True(t, ok, "context must have a deadline when timeout_seconds is set")
-
-	// Deadline must be in the future relative to the call start, and within now+timeout+tolerance.
 	expectedMin := before.Add(time.Duration(timeoutSecs) * time.Second)
-	expectedMax := after.Add(time.Duration(timeoutSecs)*time.Second + 500*time.Millisecond)
+	expectedMax := before.Add(time.Duration(timeoutSecs)*time.Second + 500*time.Millisecond)
 
 	assert.True(t, deadline.After(before),
 		"deadline must be after call start; got deadline=%v, before=%v", deadline, before)
@@ -211,4 +295,60 @@ func TestBash_TimeoutSeconds_WrapsContext(t *testing.T) {
 		"deadline must be before now+timeout+tolerance; got deadline=%v, expectedMax=%v", deadline, expectedMax)
 	assert.True(t, !deadline.Before(expectedMin),
 		"deadline must be at least now+timeout; got deadline=%v, expectedMin=%v", deadline, expectedMin)
+
+	childPID := readBashChildPID(t, pidPath)
+	execution := awaitBashExecution(t, resultCh)
+	require.Error(t, execution.err)
+	assert.ErrorIs(t, execution.err, context.DeadlineExceeded)
+	assert.Nil(t, execution.result)
+	for _, sensitive := range privateValues {
+		assert.NotContains(t, execution.err.Error(), sensitive)
+	}
+	assertBashChildTerminated(t, childPID)
+}
+
+type bashExecution struct {
+	result *ports.ToolResult
+	err    error
+}
+
+func bashBlockingCommand(privateValues []string, pidPath, readyPath string) string {
+	quotedValues := make([]string, 0, len(privateValues))
+	for _, value := range privateValues {
+		quotedValues = append(quotedValues, fmt.Sprintf("%q", value))
+	}
+	return fmt.Sprintf(
+		"printf '%%s' %s >/dev/null; sleep 30 & child=$!; printf '%%s' \"$child\" > %q; touch %q; wait \"$child\"",
+		strings.Join(quotedValues, " "),
+		pidPath,
+		readyPath,
+	)
+}
+
+func readBashChildPID(t *testing.T, pidPath string) int {
+	t.Helper()
+	pidBytes, err := os.ReadFile(pidPath)
+	require.NoError(t, err)
+	childPID, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+	require.NoError(t, err)
+	return childPID
+}
+
+func awaitBashExecution(t *testing.T, resultCh <-chan bashExecution) bashExecution {
+	t.Helper()
+	select {
+	case execution := <-resultCh:
+		return execution
+	case <-time.After(2 * time.Second):
+		t.Fatal("Bash command did not return after context termination")
+		return bashExecution{}
+	}
+}
+
+func assertBashChildTerminated(t *testing.T, childPID int) {
+	t.Helper()
+	assert.Eventually(t, func() bool {
+		err := syscall.Kill(childPID, 0)
+		return errors.Is(err, syscall.ESRCH)
+	}, time.Second, 10*time.Millisecond, "descendant process %d survived context termination", childPID)
 }

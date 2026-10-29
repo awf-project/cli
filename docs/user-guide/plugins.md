@@ -34,7 +34,7 @@ AWF includes a built-in HTTP operation provider that enables declarative REST AP
 
 **Key features:**
 - 4 HTTP methods: GET, POST, PUT, DELETE
-- Configurable timeout (default 30 seconds)
+- Optional explicit timeout; omission does not add an operation deadline
 - Response capture: status code, body, headers
 - Template interpolation in URL, headers, and body
 - Retryable status codes for transient failures (429, 502, 503, etc.)
@@ -63,7 +63,7 @@ fetch_user:
 | `method` | string | Yes | HTTP method: `GET`, `POST`, `PUT`, `DELETE` |
 | `headers` | object | No | Custom headers as key-value pairs |
 | `body` | string | No | Request body (for POST/PUT) |
-| `timeout` | integer | No | Request timeout in seconds (default: 30) |
+| `timeout` | integer | No | Optional request timeout in seconds; when provided, it must be positive |
 | `retryable_status_codes` | array | No | Status codes triggering retries (e.g., `[429, 502, 503]`) |
 
 ### Operation Outputs

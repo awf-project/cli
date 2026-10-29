@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -237,23 +239,40 @@ func TestAddOpenCodeMCPServer_ConcurrentSafety(t *testing.T) {
 	assert.True(t, os.IsNotExist(statErr), "opencode.json must be deleted after all cleanups on a from-scratch file")
 }
 
-// TestAcquireWorkspaceLock verifies the extracted helper acquires and releases
-// the advisory flock correctly. The release function must close the file, which
-// releases the lock so a second acquisition on the same path succeeds.
+// TestAcquireWorkspaceLock verifies that a contended advisory flock times out at
+// its documented bound, then leaves no lock behind once the original owner
+// releases it. A successful subsequent acquisition proves the timeout cleanup
+// does not retain the lock file descriptor.
 func TestAcquireWorkspaceLock_AcquireAndRelease(t *testing.T) {
 	lockPath := filepath.Join(t.TempDir(), "test.lock")
+	assert.Equal(t, 5*time.Second, workspaceLockTimeout)
 
-	_, release1, err := acquireWorkspaceLock(lockPath)
-	require.NoError(t, err, "first acquireWorkspaceLock must succeed")
-	require.NotNil(t, release1)
+	held, err := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0o600)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = held.Close() })
+	require.NoError(t, syscall.Flock(int(held.Fd()), syscall.LOCK_EX)) //nolint:gosec // controlled test descriptor
 
-	// Release must not panic and must allow a second acquisition.
-	release1()
+	// Keep the owner lock held for the complete call. This deterministically
+	// exercises the helper's bounded contention path rather than racing a
+	// concurrent release against the attempted acquisition.
+	startedAt := time.Now()
+	_, timedOutRelease, timeoutErr := acquireWorkspaceLock(lockPath)
+	elapsed := time.Since(startedAt)
+	require.Nil(t, timedOutRelease, "a timed-out acquisition must not return a release function")
+	require.EqualError(t, timeoutErr, "timed out acquiring lock after 5s")
+	assert.GreaterOrEqual(t, elapsed, workspaceLockTimeout, "contended acquisition must wait through its timeout")
+	assert.Less(t, elapsed, workspaceLockTimeout+time.Second, "contended acquisition must remain bounded")
 
+	require.NoError(t, held.Close())
 	_, release2, err := acquireWorkspaceLock(lockPath)
-	require.NoError(t, err, "second acquireWorkspaceLock after release must succeed")
+	require.NoError(t, err, "acquisition after timeout cleanup and owner release must succeed")
 	require.NotNil(t, release2)
 	release2()
+
+	_, release3, err := acquireWorkspaceLock(lockPath)
+	require.NoError(t, err, "release callback must unlock the workspace for later callers")
+	require.NotNil(t, release3)
+	release3()
 }
 
 // writeJSON marshals v and writes it to path, failing the test on any error.

@@ -75,12 +75,12 @@ func (r *AgentRegistry) Has(name string) bool {
 // CommandExecutor (Gemini); attempting to use mcp_proxy with such a provider
 // will fail at step startup with a clear error rather than a nil-pointer panic.
 // OpenCode MCP proxy uses workspace file config and does not require a CommandExecutor.
-func (r *AgentRegistry) RegisterDefaults(cmdExec ports.CommandExecutor) error {
+func (r *AgentRegistry) RegisterDefaults(cmdExec ports.CommandExecutor, openAIOpts ...OpenAICompatibleProviderOption) error {
 	defaults := []ports.AgentProvider{
 		NewClaudeProvider(),
 		NewCodexProvider(),
 		NewGeminiProviderWithOptions(WithGeminiCommandExecutor(cmdExec)),
-		NewOpenAICompatibleProvider(),
+		NewOpenAICompatibleProvider(openAIOpts...),
 		NewOpenCodeProvider(),
 		NewCopilotProvider(),
 		NewMistralVibeProvider(),

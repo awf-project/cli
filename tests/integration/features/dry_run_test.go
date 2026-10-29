@@ -1,6 +1,5 @@
 //go:build integration
 
-// Feature: F019
 package features_test
 
 import (
@@ -293,6 +292,194 @@ func TestDryRun_WithTimeout_ShowsTimeoutValue_Integration(t *testing.T) {
 
 	// Verify timeout is displayed
 	assert.Contains(t, output, "Timeout:")
+}
+
+// TestDryRun_TimeoutPresence_Integration verifies that the public dry-run
+// command preserves omitted, explicit-zero, and positive timeout intent.
+// The sentinels ensure adding timeout metadata does not expose unrelated
+// workflow data in the timeout projection.
+func TestDryRun_TimeoutPresence_Integration(t *testing.T) {
+	workflowDir := t.TempDir()
+	t.Setenv("AWF_WORKFLOWS_PATH", workflowDir)
+
+	const (
+		inputSecret   = "timeout-input-secret-9b773"
+		envSecret     = "timeout-env-secret-6d451"
+		commandSecret = "timeout-command-secret-31aa2"
+		promptSecret  = "timeout-prompt-secret-829cf"
+		optionSecret  = "timeout-option-secret-c4e10"
+	)
+	const workflowYAML = `name: timeout-presence
+version: "1.0.0"
+inputs:
+  - name: api_key
+    type: string
+    default: timeout-input-secret-9b773
+env:
+  - TIMEOUT_TEST_SECRET=timeout-env-secret-6d451
+states:
+  initial: omitted
+  omitted:
+    type: step
+    command: echo timeout-command-secret-31aa2
+    on_success: explicit_zero
+  explicit_zero:
+    type: step
+    command: echo zero
+    timeout: 0s
+    on_success: configured
+  configured:
+    type: step
+    command: echo configured
+    timeout: 45s
+    on_success: agent
+  agent:
+    type: agent
+    provider: claude
+    prompt: timeout-prompt-secret-829cf
+    options:
+      api_key: timeout-option-secret-c4e10
+    timeout: 30s
+    on_success: done
+  done:
+    type: terminal
+`
+	require.NoError(t, os.WriteFile(filepath.Join(workflowDir, "timeout-presence.yaml"), []byte(workflowYAML), 0o600))
+
+	cmd := cli.NewRootCommand()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"run", "timeout-presence", "--dry-run", "--format", "json", "--storage", t.TempDir()})
+
+	require.NoError(t, cmd.Execute())
+	output := buf.String()
+
+	var plan workflow.DryRunPlan
+	require.NoError(t, json.Unmarshal([]byte(output), &plan))
+
+	steps := make(map[string]workflow.DryRunStep, len(plan.Steps))
+	for _, step := range plan.Steps {
+		steps[step.Name] = step
+	}
+
+	assert.Equal(t, 0, steps["omitted"].Timeout)
+	assert.False(t, steps["omitted"].TimeoutSet)
+	assert.Equal(t, 0, steps["explicit_zero"].Timeout)
+	assert.True(t, steps["explicit_zero"].TimeoutSet)
+	assert.Equal(t, 45, steps["configured"].Timeout)
+	assert.True(t, steps["configured"].TimeoutSet)
+	require.NotNil(t, steps["agent"].Agent)
+	assert.Equal(t, 30, steps["agent"].Agent.Timeout)
+
+	timeoutProjection := make(map[string]any, len(steps))
+	for name, step := range steps {
+		projection := map[string]any{
+			"timeout":     step.Timeout,
+			"timeout_set": step.TimeoutSet,
+		}
+		if step.Agent != nil {
+			projection["agent_timeout"] = step.Agent.Timeout
+		}
+		timeoutProjection[name] = projection
+	}
+	timeoutOutput, err := json.Marshal(timeoutProjection)
+	require.NoError(t, err)
+
+	for _, sensitive := range []string{inputSecret, envSecret, commandSecret, promptSecret, optionSecret} {
+		assert.NotContains(t, string(timeoutOutput), sensitive, "timeout projection must contain only timeout metadata")
+	}
+}
+
+// TestDryRun_TemplateTimeoutInheritance_Integration verifies that the public
+// YAML workflow-loading and template-expansion path preserves timeout intent.
+func TestDryRun_TemplateTimeoutInheritance_Integration(t *testing.T) {
+	workflowDir := t.TempDir()
+	storageDir := t.TempDir()
+	templateDir := filepath.Join(storageDir, "templates")
+	t.Setenv("AWF_WORKFLOWS_PATH", workflowDir)
+
+	require.NoError(t, os.MkdirAll(templateDir, 0o700))
+
+	const baseTemplateYAML = `name: base-timeout
+states:
+  initial: base-timeout
+  base-timeout:
+    type: command
+    command: echo base
+    timeout: 30s
+`
+	const nestedTemplateYAML = `name: nested-timeout
+states:
+  initial: nested-timeout
+  nested-timeout:
+    type: command
+    use_template: base-timeout
+`
+	const workflowYAML = `name: template-timeout-inheritance
+states:
+  initial: omitted
+  omitted:
+    type: command
+    command: echo placeholder
+    use_template: base-timeout
+    on_success: explicit_zero
+  explicit_zero:
+    type: command
+    command: echo placeholder
+    use_template: base-timeout
+    timeout: 0s
+    on_success: overridden
+  overridden:
+    type: command
+    command: echo placeholder
+    use_template: base-timeout
+    timeout: 60s
+    on_success: nested
+  nested:
+    type: command
+    command: echo placeholder
+    use_template: nested-timeout
+    on_success: done
+  done:
+    type: terminal
+`
+	require.NoError(t, os.WriteFile(filepath.Join(templateDir, "base-timeout.yaml"), []byte(baseTemplateYAML), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(templateDir, "nested-timeout.yaml"), []byte(nestedTemplateYAML), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowDir, "template-timeout-inheritance.yaml"), []byte(workflowYAML), 0o600))
+
+	cmd := cli.NewRootCommand()
+	buf := new(bytes.Buffer)
+	cmd.SetOut(buf)
+	cmd.SetErr(buf)
+	cmd.SetArgs([]string{"run", "template-timeout-inheritance", "--dry-run", "--format", "json", "--storage", storageDir})
+
+	require.NoError(t, cmd.Execute())
+
+	var plan workflow.DryRunPlan
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &plan))
+
+	steps := make(map[string]workflow.DryRunStep, len(plan.Steps))
+	for _, step := range plan.Steps {
+		steps[step.Name] = step
+	}
+
+	for _, tt := range []struct {
+		name    string
+		timeout int
+	}{
+		{name: "omitted", timeout: 30},
+		{name: "explicit_zero", timeout: 0},
+		{name: "overridden", timeout: 60},
+		{name: "nested", timeout: 30},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			step, ok := steps[tt.name]
+			require.True(t, ok, "expanded workflow must include %q", tt.name)
+			assert.Equal(t, tt.timeout, step.Timeout)
+			assert.True(t, step.TimeoutSet)
+		})
+	}
 }
 
 func TestDryRun_ShowsTransitions_Integration(t *testing.T) {

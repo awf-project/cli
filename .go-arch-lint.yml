@@ -802,6 +802,7 @@ deps:
       - testify
   testutil-builders:
     mayDependOn:
+      - infra-transcript
       - domain-workflow
       - domain-ports
       - domain-plugin

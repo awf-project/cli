@@ -95,7 +95,7 @@ my_step:
 | `command` | string | - | Shell command to execute (mutually exclusive with `script_file`); supports [local-before-global resolution](#local-before-global-resolution) for AWF path variables |
 | `script_file` | string | - | Path to external shell script file (mutually exclusive with `command`); supports [local-before-global resolution](#local-before-global-resolution) |
 | `dir` | string | cwd | Working directory (supports interpolation and [local-before-global resolution](#local-before-global-resolution)) |
-| `timeout` | int or string | 0 | Execution timeout — integer seconds (`30`) or Go duration string (`"1m30s"`, `"500ms"`). 0 = no timeout |
+| `timeout` | int or string | omitted | Optional execution timeout — integer seconds (`30`) or Go duration string (`"1m30s"`, `"500ms"`). Omitted or `0` means no local timeout; a positive value creates a deadline. |
 | `on_success` | string | - | Next state on success (exit code 0) |
 | `on_failure` | string or object | - | Next state on failure — string (named terminal ref) or inline object (see [Inline Error Shorthand](#inline-error-shorthand)) |
 | `continue_on_error` | bool | false | Always follow `on_success` regardless of exit code |
@@ -105,6 +105,7 @@ my_step:
 > **Timeout syntax:** The `timeout` field accepts either an integer (seconds) or a Go duration string.
 > Examples: `30` (30 seconds), `"1m30s"` (90 seconds), `"500ms"` (half second), `"2h"` (2 hours).
 > Duration strings support: `ns`, `us`/`µs`, `ms`, `s`, `m`, `h`.
+> Omitted timeouts do not add a deadline. When a step inherits a template timeout, set `timeout: 0` to disable that inherited local limit. An existing parent deadline or user cancellation remains authoritative.
 
 ### Shell Execution
 
@@ -465,7 +466,7 @@ For **automated cross-step session resume** (no stdin loop), use `mode: single` 
 | `conversation` | object | No | Session tracking sub-struct. Presence opts the step into session tracking (marker flag); contents: see [Session Tracking](#session-tracking) |
 | `skills` | array | No | Skill references for agent context injection — name-based (e.g., `go-conventions`) or path-based (e.g., `path: ./custom/audit`); see [Agent Skills](agent-steps.md#agent-skills) |
 | `options` | map | No | Provider-specific options (varies by provider — see [Agent Steps](agent-steps.md) for each provider's supported options) |
-| `timeout` | int or string | No | Execution timeout — integer seconds (`30`) or Go duration string (`"1m30s"`, `"500ms"`). 0 = no timeout |
+| `timeout` | int or string | No | Optional execution timeout — integer seconds (`30`) or Go duration string (`"1m30s"`, `"500ms"`). Omitted or `0` means no local timeout. |
 | `on_success` | string | No | Next state on success |
 | `on_failure` | string or object | No | Next state on failure — string (named terminal ref) or inline object (see [Inline Error Shorthand](#inline-error-shorthand)) |
 | `retry` | object | No | Retry configuration (same as step retry) |
@@ -937,7 +938,7 @@ AWF includes a built-in HTTP operation provider for declarative REST API calls. 
 | `method` | string | Yes | HTTP method: `GET`, `POST`, `PUT`, `DELETE` (case-insensitive) |
 | `headers` | object | No | Custom headers as key-value pairs |
 | `body` | string | No | Request body (for POST/PUT) |
-| `timeout` | integer | No | Per-request timeout in seconds (default: 30) |
+| `timeout` | integer | No | Optional per-request timeout in seconds. Omission does not add an operation deadline; when provided, the value must be positive. |
 | `retryable_status_codes` | array | No | Status codes that signal retryable failures (e.g., `[429, 502, 503]`) |
 
 **Outputs:** `status_code`, `body`, `headers`, `body_truncated`
@@ -1056,7 +1057,7 @@ run_query:
 | `config` | map | Step-type-specific configuration (passed to plugin as-is) |
 | `on_success` | string | Next state on exit code 0 |
 | `on_failure` | string or object | Next state on non-zero exit code — string ref or [inline object](#inline-error-shorthand) |
-| `timeout` | int or string | Execution timeout passed to the plugin |
+| `timeout` | int or string | Optional positive execution timeout passed to the plugin; omission uses the caller's context without an adapter-owned task deadline |
 | `retry` | object | Retry configuration (same as standard step retry) |
 | `transitions` | array | Conditional routing by exit code (see [Conditional Transitions](#conditional-transitions)) |
 | `pre_hook` | object | Command to run before the plugin step |
@@ -1425,7 +1426,7 @@ analyze_code:
 | `workflow` | string | - | Name of the workflow to invoke |
 | `inputs` | map | - | Input mappings (parent var → child input) |
 | `outputs` | map | - | Output mappings (child output → parent var) |
-| `timeout` | int | 0 | Sub-workflow timeout in seconds (0 = inherit) |
+| `timeout` | int | 0 | Optional sub-workflow timeout in seconds. Omitted or `0` uses the caller's context without adding a default child deadline. |
 
 ### Child Workflow Definition
 

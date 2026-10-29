@@ -94,6 +94,7 @@ type OutputWriterPair struct {
 type SetupOption func(*setupConfig)
 
 type setupConfig struct {
+	httpClientOptions      []httpx.Option
 	notifyConfig           NotifyConfig
 	pluginChecker          PluginStateChecker
 	pluginProviders        PluginProviders
@@ -113,6 +114,11 @@ type setupConfig struct {
 	agentRoleRepo          ports.AgentRoleRepository
 	toolProxyCLIExec       ports.CLIExecutor
 	displayRendererFactory func(stepID string) display.EventRenderer
+}
+
+// WithExecutionHTTPClientOptions configures the HTTP clients used by operations and agents.
+func WithExecutionHTTPClientOptions(opts ...httpx.Option) SetupOption {
+	return func(c *setupConfig) { c.httpClientOptions = append(c.httpClientOptions, opts...) }
 }
 
 // WithNotifyConfig configures notification backend defaults.
@@ -313,7 +319,7 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 	agentRegistry := agents.NewAgentRegistry()
 	wfSvc.SetAgentRegistry(agentRegistry)
 	wfSvc.SetUserInputReader(cfg.userInputReader)
-	if err := agentRegistry.RegisterDefaults(s.shellExecutor); err == nil {
+	if err := agentRegistry.RegisterDefaults(s.shellExecutor, agents.WithHTTPClient(httpx.NewClient(cfg.httpClientOptions...))); err == nil {
 		execSvc.SetAgentRegistry(agentRegistry)
 
 		// Wire F099 MCP tool proxy when CLIExecutor is provided. The factory is built here
@@ -375,6 +381,7 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 		wfSvc.SetValidatorProvider(cfg.pluginProviders.Validators)
 	}
 	if cfg.pluginProviders.StepTypes != nil {
+		wfSvc.SetStepTypeProvider(cfg.pluginProviders.StepTypes)
 		execSvc.SetStepTypeProvider(cfg.pluginProviders.StepTypes)
 	}
 
@@ -477,7 +484,7 @@ func (s *ExecutionSetup) buildProviders(cfg *setupConfig) ports.OperationProvide
 	}
 
 	if isEnabled("http") {
-		httpClient := httpx.NewClient()
+		httpClient := httpx.NewClient(cfg.httpClientOptions...)
 		providers = append(providers, infrahttp.NewHTTPOperationProvider(httpClient, s.logger))
 	}
 

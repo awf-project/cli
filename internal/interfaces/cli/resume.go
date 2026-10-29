@@ -28,11 +28,14 @@ func newResumeCommand(cfg *Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "resume [workflow-id]",
 		Short: "Resume an interrupted workflow",
-		Long: `Resume a workflow execution from where it left off.
+		Long: `Resume an interrupted workflow from a selected step.
 
 The workflow-id is the unique identifier shown when running a workflow.
 Use --list to see all resumable workflows.
-Input overrides can be provided to change input values on resume.
+Checkpoints retain inputs and step outputs; --input key=value overrides saved inputs.
+Older metadata-only checkpoints require missing inputs to be supplied again.
+Use --from <step-name> to replay selected steps when needed.
+Replayed steps execute again, including any external side effects.
 
 Examples:
   awf resume --list
@@ -40,7 +43,7 @@ Examples:
   awf resume abc123-def456 --input max_tokens=5000
   awf resume abc123-def456 --from current
   awf resume abc123-def456 --from previous
-  awf resume abc123-def456 --from validate`,
+  awf resume abc123-def456 --input project=my-project --from validate`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if listFlag {
@@ -61,7 +64,7 @@ Examples:
 	}
 
 	cmd.Flags().BoolVarP(&listFlag, "list", "l", false, "List resumable workflows")
-	cmd.Flags().StringArrayVarP(&inputFlags, "input", "i", nil, "Override input parameter (key=value)")
+	cmd.Flags().StringArrayVarP(&inputFlags, "input", "i", nil, "Override an input parameter (key=value)")
 	cmd.Flags().StringVarP(&outputMode, "output", "o", "silent", "Output mode: silent, streaming, buffered")
 	cmd.Flags().String("from", "current", "Step to resume from: current (default), previous, or <step-name>")
 
@@ -236,7 +239,10 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 
 	repo := NewWorkflowRepository()
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
-	shellExecutor := executor.NewShellExecutor()
+	var shellExecutor ports.CommandExecutor = executor.NewShellExecutor()
+	if cfg.CommandExecutor != nil {
+		shellExecutor = cfg.CommandExecutor
+	}
 	silentOutput := cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatTable
 	logger := &cliLogger{
 		formatter: formatter,
@@ -293,6 +299,7 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 		)
 	}
 
+	setupOpts = append(setupOpts, cfg.ExecutionSetupOptions...)
 	setupResult, buildErr := application.NewExecutionSetup(repo, stateStore, shellExecutor, logger, setupOpts...).Build(ctx)
 	if buildErr != nil {
 		if auditCleanup != nil {
@@ -336,7 +343,8 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 // code via categorizeError, mirroring the legacy path's result handling.
 //
 // inputOverrides and fromStep come from the --input and --from CLI flags respectively.
-// A nil inputOverrides map means "no overrides; use the values stored with the original run".
+// A nil inputOverrides map reuses saved inputs. Older metadata-only checkpoints
+// require missing required inputs to be supplied again.
 // An empty fromStep means "resume from the current/last persisted step" (the facade default).
 func runResumeViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWriter, formatter *ui.Formatter, workflowID string, inputOverrides map[string]any, fromStep string) error {
 	ctx, cancel := context.WithCancel(cmd.Context())

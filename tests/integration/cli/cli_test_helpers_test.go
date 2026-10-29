@@ -4,12 +4,103 @@ package cli_test
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/interfaces/cli"
+	"github.com/stretchr/testify/require"
 )
+
+type rootCommandTestEnvironment struct {
+	workflowDir string
+	storageDir  string
+	xdgDataDir  string
+	options     []cli.RootOption
+}
+
+func newRootCommandTestEnvironment(t *testing.T) rootCommandTestEnvironment {
+	t.Helper()
+
+	root := t.TempDir()
+	env := rootCommandTestEnvironment{
+		workflowDir: filepath.Join(root, "workflows"),
+		storageDir:  filepath.Join(root, "storage"),
+		xdgDataDir:  filepath.Join(root, "xdg-data"),
+	}
+	require.NoError(t, os.MkdirAll(env.workflowDir, 0o700))
+	t.Setenv("AWF_WORKFLOWS_PATH", env.workflowDir)
+	t.Setenv("XDG_DATA_HOME", env.xdgDataDir)
+	t.Setenv("AWF_CONFIG_PATH", "")
+	t.Setenv("AWF_AUDIT_LOG", "off")
+	return env
+}
+
+func (e rootCommandTestEnvironment) writeWorkflow(t *testing.T, name, source string) string {
+	t.Helper()
+	path := filepath.Join(e.workflowDir, name+".yaml")
+	require.NoError(t, os.WriteFile(path, []byte(source), 0o600))
+	return path
+}
+
+func (e rootCommandTestEnvironment) execute(
+	t *testing.T,
+	ctx context.Context,
+	workflowName string,
+) (string, error) {
+	return e.executeWithRunFlags(t, ctx, workflowName)
+}
+
+// executeWithRunFlags runs a workflow through the public CLI entry point with
+// optional run-command flags. It keeps lifecycle tests on the same real wiring
+// path while allowing individual scenarios to configure optional adapters.
+func (e rootCommandTestEnvironment) executeWithRunFlags(
+	t *testing.T,
+	ctx context.Context,
+	workflowName string,
+	runFlags ...string,
+) (string, error) {
+	t.Helper()
+	args := []string{"run", workflowName, "--skip-plugins"}
+	args = append(args, runFlags...)
+	return e.executeArgs(t, ctx, args...)
+}
+
+// executeArgs constructs a fresh public root command for each run or resume.
+func (e rootCommandTestEnvironment) executeArgs(t *testing.T, ctx context.Context, args ...string) (string, error) {
+	t.Helper()
+	cmd := cli.NewRootCommand(e.options...)
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	rootArgs := []string{"--storage", e.storageDir, "--no-color"}
+	rootArgs = append(rootArgs, args...)
+	cmd.SetArgs(rootArgs)
+	err := cmd.ExecuteContext(ctx)
+	return output.String(), err
+}
+
+func (e rootCommandTestEnvironment) loadExecutionByWorkflowName(
+	t *testing.T,
+	name string,
+) *workflow.ExecutionContext {
+	t.Helper()
+	stateStore := store.NewJSONStore(filepath.Join(e.storageDir, "states"))
+	ids, err := stateStore.List(context.Background())
+	require.NoError(t, err)
+	for _, id := range ids {
+		execution, loadErr := stateStore.Load(context.Background(), id)
+		require.NoError(t, loadErr)
+		if execution.WorkflowName == name {
+			return execution
+		}
+	}
+	t.Fatalf("persisted execution for workflow %q not found", name)
+	return nil
+}
 
 // setupTestDir creates a temporary directory for test isolation.
 // Use this when you need a clean directory for XDG_CONFIG_HOME or similar.

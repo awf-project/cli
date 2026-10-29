@@ -24,6 +24,10 @@ import (
 func TestMain(m *testing.M) {
 	// Self-hosting: if AWF_PLUGIN env is set, this process becomes the test plugin
 	if os.Getenv("AWF_PLUGIN") != "" {
+		if os.Getenv("AWF_TIMEOUT_FIXTURE_DIR") != "" {
+			serveTimeoutPlugin()
+			return
+		}
 		// Serve test plugin - should implement gRPC handshake
 		// For now, this demonstrates the pattern; actual plugin serving
 		// would use go-plugin framework

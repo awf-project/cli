@@ -14,14 +14,18 @@ package features_test
 //   SC-006: Orphaned started entry when no completed event is written
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/awf-project/cli/internal/interfaces/cli"
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -208,6 +212,7 @@ type completionScenario struct {
 	name                   string
 	workflow               *workflow.Workflow
 	executor               ports.CommandExecutor
+	resolver               interpolation.Resolver
 	contextTimeout         time.Duration
 	expectedHistory        string
 	expectedAudit          string
@@ -218,6 +223,9 @@ type completionScenario struct {
 	expectedAuditError     string
 	expectedTruncatedError bool
 	expectedHistoryError   string
+	inputs                 map[string]any
+	confidentialValues     []string
+	panicPayload           string
 }
 
 func TestAuditLifecyclePersistsExactlyOneCompletionForEveryStartedExecution(t *testing.T) {
@@ -253,7 +261,7 @@ func TestAuditLifecyclePersistsExactlyOneCompletionForEveryStartedExecution(t *t
 			expectedError:         true,
 			expectedReturnedError: "step run: exit code 7",
 			expectedAuditError:    "step run: exit code 7",
-			expectedHistoryError:  "exit code 7",
+			expectedHistoryError:  "step execution failed",
 		},
 		{
 			name: "uncategorized application failure",
@@ -311,28 +319,83 @@ func TestAuditLifecyclePersistsExactlyOneCompletionForEveryStartedExecution(t *t
 			expectedAuditError:   "step run: context deadline exceeded",
 			expectedHistoryError: "context deadline exceeded",
 		},
-		{
-			name:     "recovered panic",
-			workflow: commandWorkflow("recovered-panic", workflow.WorkflowHooks{}),
-			executor: commandExecutorFunc(func(context.Context, *ports.Command) (*ports.CommandResult, error) {
-				panicValues := []string{"CONFIDENTIAL_PANIC_CANARY"}
-				return nil, errors.New(panicValues[len(panicValues)])
-			}),
-			expectedHistory:    "failed",
-			expectedAudit:      "failure",
-			expectedExitCode:   3,
-			expectedError:      true,
-			expectedAuditError: "workflow execution panic",
-		},
 	}
 
 	for i := range tests {
 		scenario := &tests[i]
-		for _, mode := range []string{"run", "resume"} {
-			t.Run(scenario.name+"/"+mode, func(t *testing.T) {
-				testPersistedCompletion(t, scenario, mode == "resume")
-			})
+		t.Run(scenario.name, func(t *testing.T) {
+			testPersistedCompletion(t, scenario, false, nil)
+		})
+	}
+}
+
+func TestAuditLifecyclePersistsResumedExecution(t *testing.T) {
+	testPersistedCompletion(t, &completionScenario{
+		name:             "resumed-successful-completion",
+		workflow:         terminalWorkflow("resumed-successful-completion", workflow.TerminalSuccess, 0),
+		executor:         commandExecutorFunc(successfulCommand),
+		expectedHistory:  "completed",
+		expectedAudit:    "success",
+		expectedExitCode: 0,
+	}, true, nil)
+}
+
+func TestAuditLifecyclePersistsRecoveredPanicForFreshAndResumedExecution(t *testing.T) {
+	const (
+		environmentKey   = "AUDIT_TRAIL_ENV_CANARY"
+		environmentValue = "CONFIDENTIAL_ENVIRONMENT_VALUE"
+		commandOutput    = "CONFIDENTIAL_COMMAND_OUTPUT"
+	)
+
+	confidentialValues := []string{
+		"CONFIDENTIAL_PANIC_CANARY",
+		"CONFIDENTIAL_WORKFLOW_INPUT",
+		commandOutput,
+		environmentValue,
+		"CONFIDENTIAL_TOKEN",
+		"CONFIDENTIAL_SECRET",
+	}
+	for _, resume := range []bool{false, true} {
+		mode := "fresh"
+		if resume {
+			mode = "resumed"
 		}
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv(environmentKey, environmentValue)
+			var preparedCommand string
+			testPersistedCompletion(t, &completionScenario{
+				name:     "recovered-panic-" + mode,
+				workflow: panicAfterCommandWorkflow("recovered-panic-"+mode, environmentKey),
+				resolver: interpolation.NewTemplateResolver(),
+				executor: commandExecutorFunc(func(_ context.Context, command *ports.Command) (*ports.CommandResult, error) {
+					switch command.Program {
+					case "emit " + environmentValue:
+						preparedCommand = command.Program
+						return &ports.CommandResult{Stdout: commandOutput, ExitCode: 0}, nil
+					case "panic":
+						panicValues := []string{"CONFIDENTIAL_PANIC_CANARY"}
+						return nil, errors.New(panicValues[len(panicValues)])
+					default:
+						return nil, fmt.Errorf("unexpected command %q", command.Program)
+					}
+				}),
+				expectedHistory:    "failed",
+				expectedAudit:      "failure",
+				expectedExitCode:   3,
+				expectedError:      true,
+				expectedAuditError: "workflow execution panic",
+				panicPayload:       "CONFIDENTIAL_PANIC_CANARY",
+				inputs: map[string]any{
+					"workflow_input": "CONFIDENTIAL_WORKFLOW_INPUT",
+					"token":          "CONFIDENTIAL_TOKEN",
+					"secret":         "CONFIDENTIAL_SECRET",
+				},
+				confidentialValues: confidentialValues,
+			}, resume, func(t *testing.T) {
+				require.Equal(t, "emit "+environmentValue, preparedCommand,
+					"the preceding command must receive the OS environment canary through interpolation")
+			})
+		})
 	}
 }
 
@@ -451,7 +514,7 @@ func TestLoopFailurePersistsConsistentOutcome(t *testing.T) {
 			auditReader, err := os.Open(auditPath)
 			require.NoError(t, err)
 			require.NoError(t, auditReader.Close())
-			completions := findAuditCompletions(parseAuditLines(t, auditPath), runID)
+			completions := findAuditCompletions(parseAuditLines(t, auditPath), execCtx.HistoryRecordID)
 			require.Len(t, completions, 1)
 			require.NotNil(t, completions[0].ExitCode)
 			assert.Equal(t, tt.wantAudit, completions[0].Status)
@@ -490,7 +553,27 @@ func persistedLoopWorkflow(handled bool) *workflow.Workflow {
 	}
 }
 
-func testPersistedCompletion(t *testing.T, scenario *completionScenario, resume bool) {
+type completionFixture struct {
+	dir, auditPath, historyPath, runID string
+	auditWriter                        *audit.FileAuditTrailWriter
+	historyWriter                      *store.SQLiteHistoryStore
+	stateStore                         *store.JSONStore
+	logger                             *mocks.MockLogger
+	resolver                           interpolation.Resolver
+	service                            *application.ExecutionService
+	started                            chan struct{}
+}
+
+type persistedCompletion struct {
+	context, saved                      *workflow.ExecutionContext
+	record                              *workflow.ExecutionRecord
+	events                              []workflow.AuditEvent
+	auditText, statePath, resumedFromID string
+	runErr                              error
+	logs                                []mocks.LogMessage
+}
+
+func newCompletionFixture(t *testing.T, scenario *completionScenario) *completionFixture {
 	t.Helper()
 	tempDir := t.TempDir()
 	auditPath := filepath.Join(tempDir, "audit.jsonl")
@@ -515,28 +598,127 @@ func testPersistedCompletion(t *testing.T, scenario *completionScenario, resume 
 		})
 	}
 	stateStore := store.NewJSONStore(filepath.Join(tempDir, "states"))
+	logger := mocks.NewMockLogger()
 	repo := mocks.NewMockWorkflowRepository()
 	repo.AddWorkflow(scenario.workflow.Name, scenario.workflow)
-	workflowService := application.NewWorkflowService(repo, stateStore, executor, ports.NopLogger{}, nil)
-	service := application.NewExecutionService(
-		workflowService, executor, nil, stateStore, ports.NopLogger{}, passthroughResolver{},
-		application.NewHistoryService(historyWriter, ports.NopLogger{}),
-	)
-	service.SetAuditTrailWriter(auditWriter)
-
-	execute := func(ctx context.Context) (*workflow.ExecutionContext, error) {
-		return runWorkflow(ctx, service, scenario.workflow, runID)
+	resolver := scenario.resolver
+	if resolver == nil {
+		resolver = passthroughResolver{}
 	}
+	workflowService := application.NewWorkflowService(repo, stateStore, executor, logger, nil)
+	service := application.NewExecutionService(
+		workflowService, executor, nil, stateStore, logger, resolver,
+		application.NewHistoryService(historyWriter, logger),
+	)
+
+	return &completionFixture{
+		dir: tempDir, auditPath: auditPath, historyPath: historyPath, runID: runID,
+		auditWriter: auditWriter, historyWriter: historyWriter, stateStore: stateStore,
+		logger: logger, resolver: resolver, service: service, started: started,
+	}
+}
+
+func (f *completionFixture) seedResumedAttempt(t *testing.T, scenario *completionScenario) string {
+	t.Helper()
+	stateStore, logger, resolver, runID := f.stateStore, f.logger, f.resolver, f.runID
+	var resumedFromID string
+	const seedStep = "seed-cancellation"
+	seedStarted := make(chan struct{})
+	seedExecutor := commandExecutorFunc(func(ctx context.Context, _ *ports.Command) (*ports.CommandResult, error) {
+		close(seedStarted)
+		<-ctx.Done()
+		return nil, ctx.Err()
+	})
+	seedWorkflow := commandWorkflow(scenario.workflow.Name, workflow.WorkflowHooks{})
+	seedWorkflow.Initial = seedStep
+	seedWorkflow.Steps = map[string]*workflow.Step{
+		seedStep: {
+			Name:    seedStep,
+			Type:    workflow.StepTypeCommand,
+			Command: "await cancellation",
+		},
+	}
+	seedRepo := mocks.NewMockWorkflowRepository()
+	seedRepo.AddWorkflow(seedWorkflow.Name, seedWorkflow)
+	seedWorkflowService := application.NewWorkflowService(seedRepo, stateStore, seedExecutor, logger, nil)
+	seedService := application.NewExecutionService(
+		seedWorkflowService, seedExecutor, nil, stateStore, logger, resolver,
+		application.NewHistoryService(f.historyWriter, logger),
+	)
+	cancelled, cancelErr := executeCompletionScenario(t, func(ctx context.Context) (*workflow.ExecutionContext, error) {
+		return seedService.RunWithWorkflowAndRunID(ctx, seedWorkflow, scenario.inputs, runID)
+	}, seedStarted, 0)
+	require.ErrorIs(t, cancelErr, context.Canceled)
+	require.Equal(t, workflow.StatusCancelled, cancelled.GetStatus())
+	var attempt int
+	var recorded bool
+	resumedFromID, attempt, _, recorded = cancelled.GetHistoryAttempt()
+	require.NotEmpty(t, resumedFromID)
+	require.Equal(t, 1, attempt)
+	require.True(t, recorded)
+	cancelled.CurrentStep = scenario.workflow.Initial
+	cancelled.ExitCode = 0
+	cancelled.States = make(map[string]workflow.StepState)
+	require.NoError(t, stateStore.Save(context.Background(), cancelled))
+	return resumedFromID
+}
+
+func (f *completionFixture) reopen(t *testing.T, execCtx *workflow.ExecutionContext) *persistedCompletion {
+	t.Helper()
+	reopenedStateStore := store.NewJSONStore(filepath.Join(f.dir, "states"))
+	saved, loadErr := reopenedStateStore.Load(context.Background(), f.runID)
+	require.NoError(t, loadErr)
+	require.NotNil(t, saved)
+
+	require.NoError(t, f.auditWriter.Close())
+	require.NoError(t, f.historyWriter.Close())
+
+	historyReader, err := store.NewSQLiteHistoryStore(f.historyPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, historyReader.Close()) })
+	records, err := historyReader.List(context.Background(), &workflow.HistoryFilter{Limit: 100})
+	require.NoError(t, err)
+	require.NoError(t, historyReader.Close())
+
+	attemptID, _, _, _ := execCtx.GetHistoryAttempt()
+	persistedAudit, err := os.ReadFile(f.auditPath)
+	require.NoError(t, err)
+	return &persistedCompletion{
+		context: execCtx, saved: saved, record: findHistoryRecord(t, records, attemptID),
+		events: parseAuditLines(t, f.auditPath), auditText: string(persistedAudit),
+		statePath: filepath.Join(f.dir, "states", f.runID+".json"),
+	}
+}
+
+func testPersistedCompletion(t *testing.T, scenario *completionScenario, resume bool, assertBeforePersistence func(*testing.T)) {
+	t.Helper()
+	fixture := newCompletionFixture(t, scenario)
+	execute := func(ctx context.Context) (*workflow.ExecutionContext, error) {
+		return fixture.service.RunWithWorkflowAndRunID(ctx, scenario.workflow, scenario.inputs, fixture.runID)
+	}
+	var resumedFromID string
 	if resume {
-		saved := workflow.NewExecutionContext(runID, scenario.workflow.Name)
-		saved.CurrentStep = scenario.workflow.Initial
-		saved.SetStatus(workflow.StatusCancelled)
-		require.NoError(t, stateStore.Save(context.Background(), saved))
+		resumedFromID = fixture.seedResumedAttempt(t, scenario)
 		execute = func(ctx context.Context) (*workflow.ExecutionContext, error) {
-			return service.Resume(ctx, runID, nil, "current")
+			return fixture.service.Resume(ctx, fixture.runID, scenario.inputs, "current")
 		}
 	}
-	execCtx, runErr := executeCompletionScenario(t, execute, started, scenario.contextTimeout)
+	fixture.service.SetAuditTrailWriter(fixture.auditWriter)
+	execCtx, runErr := executeCompletionScenario(t, execute, fixture.started, scenario.contextTimeout)
+	if assertBeforePersistence != nil {
+		assertBeforePersistence(t)
+	}
+	assertCompletionOutcome(t, scenario, execCtx, runErr)
+	result := fixture.reopen(t, execCtx)
+	result.runErr, result.resumedFromID = runErr, resumedFromID
+	result.logs = fixture.logger.GetMessages()
+	assertCompletionStateAndHistory(t, scenario, result)
+	assertCompletionAudit(t, scenario, result)
+	assertCompletionConfidentiality(t, scenario, result)
+}
+
+func assertCompletionOutcome(t *testing.T, scenario *completionScenario, execCtx *workflow.ExecutionContext, runErr error) {
+	t.Helper()
 	if scenario.expectedError {
 		require.Error(t, runErr)
 		if scenario.expectedReturnedError != "" {
@@ -547,34 +729,43 @@ func testPersistedCompletion(t *testing.T, scenario *completionScenario, resume 
 	}
 	require.NotNil(t, execCtx)
 	assert.Equal(t, scenario.expectedHistory, execCtx.GetStatus().String())
-	saved, loadErr := stateStore.Load(context.Background(), runID)
-	require.NoError(t, loadErr)
-	require.NotNil(t, saved)
+}
+
+func assertCompletionStateAndHistory(t *testing.T, scenario *completionScenario, result *persistedCompletion) {
+	t.Helper()
+	saved, execCtx, runErr := result.saved, result.context, result.runErr
 	assert.Equal(t, scenario.expectedExitCode, saved.ExitCode)
 	assert.Equal(t, scenario.expectedHistory, saved.GetStatus().String())
 	assert.False(t, saved.GetCompletedAt().IsZero())
-	if started != nil {
+	if scenario.expectedCause != nil {
 		require.ErrorIs(t, runErr, scenario.expectedCause)
 	}
-	require.NoError(t, auditWriter.Close())
-	require.NoError(t, historyWriter.Close())
-
-	historyReader, err := store.NewSQLiteHistoryStore(historyPath)
-	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, historyReader.Close()) })
-	records, err := historyReader.List(context.Background(), &workflow.HistoryFilter{Limit: 100})
-	require.NoError(t, err)
-	require.NoError(t, historyReader.Close())
-
-	record := findHistoryRecord(t, records, runID)
+	attemptID, attempt, _, _ := execCtx.GetHistoryAttempt()
+	require.NotEmpty(t, attemptID)
+	require.Positive(t, attempt)
+	if result.resumedFromID != "" {
+		assert.Equal(t, 2, attempt)
+		assert.Equal(t, result.resumedFromID, execCtx.PreviousHistoryRecordID)
+	}
+	record := result.record
 	assert.Equal(t, scenario.expectedHistory, record.Status)
 	assert.Equal(t, scenario.expectedExitCode, record.ExitCode)
 	assert.Equal(t, scenario.expectedHistoryError, record.ErrorMessage)
-	events := parseAuditLines(t, auditPath)
-	startedEvents := findAuditEvents(events, runID, workflow.EventWorkflowStarted)
+}
+
+func assertCompletionAudit(t *testing.T, scenario *completionScenario, result *persistedCompletion) {
+	t.Helper()
+
+	events := result.events
+	attemptID, _, _, _ := result.context.GetHistoryAttempt()
+	record := result.record
+	startedEvents := findAuditEvents(events, attemptID, workflow.EventWorkflowStarted)
 	require.Len(t, startedEvents, 1, "each execution must be started exactly once")
-	completions := findAuditCompletions(events, runID)
+	completions := findAuditCompletions(events, attemptID)
 	require.Len(t, completions, 1, "each execution must be finalized exactly once")
+	require.Len(t, events, 2, "the attempt must persist only its ordered lifecycle pair")
+	assert.Equal(t, workflow.EventWorkflowStarted, events[0].Event)
+	assert.Equal(t, workflow.EventWorkflowCompleted, events[1].Event)
 	event := &completions[0]
 	assert.Equal(t, startedEvents[0].ExecutionID, event.ExecutionID)
 	assert.Equal(t, record.ID, event.ExecutionID)
@@ -594,8 +785,32 @@ func testPersistedCompletion(t *testing.T, scenario *completionScenario, resume 
 	if scenario.expectedCause != nil {
 		assert.Contains(t, record.ErrorMessage, scenario.expectedCause.Error())
 	}
-	assert.NotContains(t, event.Error, "CONFIDENTIAL_PANIC_CANARY")
-	assert.NotContains(t, record.ErrorMessage, "CONFIDENTIAL_PANIC_CANARY")
+}
+
+func assertCompletionConfidentiality(t *testing.T, scenario *completionScenario, result *persistedCompletion) {
+	t.Helper()
+	saved, record, runErr := result.saved, result.record, result.runErr
+	// Private checkpoints retain resume data; diagnostic projections remain redacted.
+	stateInfo, err := os.Stat(result.statePath)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), stateInfo.Mode().Perm())
+	if scenario.inputs != nil {
+		assert.Equal(t, scenario.inputs, saved.Inputs, "inputs must survive checkpoint persistence")
+	}
+	if scenario.panicPayload != "" {
+		privateState, marshalErr := json.Marshal(saved)
+		require.NoError(t, marshalErr)
+		assert.NotContains(t, string(privateState), scenario.panicPayload, "panic payload must never be persisted")
+	}
+	persistedEvidence := strings.Join([]string{
+		result.auditText,
+		fmt.Sprint(record),
+		fmt.Sprint(runErr),
+		fmt.Sprint(result.logs),
+	}, "\n")
+	for _, confidentialValue := range scenario.confidentialValues {
+		assert.NotContains(t, persistedEvidence, confidentialValue)
+	}
 }
 
 func executeCompletionScenario(
@@ -688,6 +903,23 @@ func commandWorkflow(name string, hooks workflow.WorkflowHooks) *workflow.Workfl
 	}
 }
 
+func panicAfterCommandWorkflow(name, environmentKey string) *workflow.Workflow {
+	return &workflow.Workflow{
+		Name:    name,
+		Initial: "prepare",
+		Steps: map[string]*workflow.Step{
+			"prepare": {
+				Name:      "prepare",
+				Type:      workflow.StepTypeCommand,
+				Command:   "emit {{env." + environmentKey + "}}",
+				OnSuccess: "panic",
+			},
+			"panic": {Name: "panic", Type: workflow.StepTypeCommand, Command: "panic"},
+			"done":  {Name: "done", Type: workflow.StepTypeTerminal, Status: workflow.TerminalSuccess},
+		},
+	}
+}
+
 func runWorkflow(
 	ctx context.Context,
 	service *application.ExecutionService,
@@ -725,4 +957,157 @@ func findAuditEvents(events []workflow.AuditEvent, executionID, eventType string
 		}
 	}
 	return matches
+}
+
+// TestAuditTrail_PersistsTimeoutAndCancellationLifecycle correlates reopened
+// JSON state, SQLite history and audit pairs for fresh and resumed attempts.
+func TestAuditTrail_PersistsTimeoutAndCancellationLifecycle(t *testing.T) {
+	for _, resume := range []bool{false, true} {
+		for _, local := range []bool{false, true} {
+			t.Run(fmt.Sprintf("resume-%t-local-%t", resume, local), func(t *testing.T) {
+				testRootLifecyclePersistence(t, resume, local)
+			})
+		}
+	}
+}
+
+func testRootLifecyclePersistence(t *testing.T, resume, local bool) {
+	t.Helper()
+	root := t.TempDir()
+	workflowDir := filepath.Join(root, "workflows")
+	storageDir := filepath.Join(root, "storage")
+	auditPath := filepath.Join(root, "audit.jsonl")
+	require.NoError(t, os.MkdirAll(workflowDir, 0o700))
+	t.Setenv("AWF_WORKFLOWS_PATH", workflowDir)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "xdg"))
+	t.Setenv("AWF_CONFIG_PATH", "")
+	t.Setenv("AWF_AUDIT_LOG", auditPath)
+	t.Setenv("AWF_MCP_PROXY_NO_PURGE", "1")
+	const inputCanary = "PRIVATE_LIFECYCLE_INPUT"
+	const outputCanary = "PRIVATE_LIFECYCLE_OUTPUT"
+	const environmentCanary = "PRIVATE_LIFECYCLE_ENV"
+	t.Setenv("PRIVATE_ENV", environmentCanary)
+	timeout := ""
+	if local {
+		timeout = "    timeout: 1\n"
+	}
+	source := "name: lifecycle\ninputs:\n  - name: credential\n    type: string\n    required: true\nstates:\n  initial: work\n  work:\n    type: command\n    command: controlled command\n    prompt: PRIVATE_LIFECYCLE_PROMPT\n" + timeout + "    on_success: done\n  done:\n    type: terminal\n"
+	require.NoError(t, os.WriteFile(filepath.Join(workflowDir, "lifecycle.yaml"), []byte(source), 0o600))
+
+	var id string
+	stateStore := store.NewJSONStore(filepath.Join(storageDir, "states"))
+	if resume {
+		_, err := runRootLifecycleAttempt(t, storageDir, local, true, "")
+		require.ErrorIs(t, err, context.Canceled)
+		ids, listErr := stateStore.List(context.Background())
+		require.NoError(t, listErr)
+		require.Len(t, ids, 1)
+		id = ids[0]
+	}
+	output, runErr := runRootLifecycleAttempt(t, storageDir, local, false, id)
+	cause := context.Canceled
+	if local {
+		cause = context.DeadlineExceeded
+	}
+	require.ErrorIs(t, runErr, cause)
+	ids, err := stateStore.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, ids, 1)
+	// Reopen every durable projection after the command has released its writers.
+	saved, err := store.NewJSONStore(filepath.Join(storageDir, "states")).Load(context.Background(), ids[0])
+	require.NoError(t, err)
+	require.Equal(t, inputCanary, saved.Inputs["credential"])
+	require.Equal(t, workflow.StatusCancelled, saved.Status)
+	require.Equal(t, 3, saved.ExitCode)
+	attemptID, attempt, previous, recorded := saved.GetHistoryAttempt()
+	require.True(t, recorded)
+	require.NotEmpty(t, attemptID)
+	if resume {
+		require.Equal(t, 2, attempt)
+		require.NotEmpty(t, previous)
+	} else {
+		require.Equal(t, 1, attempt)
+	}
+	history, err := store.NewSQLiteHistoryStore(filepath.Join(storageDir, "history.db"))
+	require.NoError(t, err)
+	records, err := history.List(context.Background(), &workflow.HistoryFilter{Limit: 100})
+	require.NoError(t, err)
+	require.NoError(t, history.Close())
+	record := findHistoryRecord(t, records, attemptID)
+	require.Equal(t, "cancelled", record.Status)
+	require.Equal(t, 3, record.ExitCode)
+	require.Contains(t, record.ErrorMessage, cause.Error())
+	events := parseAuditLines(t, auditPath)
+	started := findAuditEvents(events, attemptID, workflow.EventWorkflowStarted)
+	completed := findAuditCompletions(events, attemptID)
+	require.Len(t, started, 1)
+	require.Len(t, completed, 1)
+	require.Equal(t, "failure", completed[0].Status)
+	require.Equal(t, 3, *completed[0].ExitCode)
+	require.Contains(t, completed[0].Error, cause.Error())
+	require.True(t, !completed[0].Timestamp.Before(started[0].Timestamp))
+	if local {
+		require.Contains(t, completed[0].Error, "timeout_owner: step")
+		require.Contains(t, completed[0].Error, "timeout_seconds: 1")
+	} else {
+		require.NotContains(t, completed[0].Error, "timeout_owner")
+	}
+	stateBytes, err := os.ReadFile(filepath.Join(storageDir, "states", ids[0]+".json"))
+	require.NoError(t, err)
+	auditBytes, err := os.ReadFile(auditPath)
+	require.NoError(t, err)
+	require.Contains(t, string(stateBytes), inputCanary)
+	evidence := string(auditBytes) + fmt.Sprint(records) + output + fmt.Sprint(runErr)
+	for _, canary := range []string{inputCanary, outputCanary, environmentCanary, "PRIVATE_LIFECYCLE_PROMPT"} {
+		require.NotContains(t, evidence, canary)
+	}
+}
+
+func runRootLifecycleAttempt(t *testing.T, storageDir string, local, seed bool, id string) (string, error) {
+	t.Helper()
+	const inputCanary = "PRIVATE_LIFECYCLE_INPUT"
+	const outputCanary = "PRIVATE_LIFECYCLE_OUTPUT"
+	started := make(chan struct{})
+	finished := make(chan struct{})
+	command := commandExecutorFunc(func(ctx context.Context, _ *ports.Command) (*ports.CommandResult, error) {
+		close(started)
+		defer close(finished)
+		<-ctx.Done()
+		return &ports.CommandResult{Stdout: outputCanary, Stderr: outputCanary, ExitCode: -1}, ctx.Err()
+	})
+	cmd := cli.NewRootCommand(cli.WithCommandExecutor(command))
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&output)
+	args := []string{"--storage", storageDir, "--no-color", "run", "lifecycle", "--skip-plugins", "--input", "credential=" + inputCanary}
+	if id != "" {
+		args = []string{"--storage", storageDir, "--no-color", "resume", id, "--from", "work", "--input", "credential=" + inputCanary}
+	}
+	cmd.SetArgs(args)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- cmd.ExecuteContext(ctx) }()
+	select {
+	case <-started:
+	case err := <-done:
+		t.Fatalf("root never started command: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("command did not start")
+	}
+	if !local || seed {
+		cancel()
+	}
+	var err error
+	select {
+	case err = <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("root did not finish")
+	}
+	select {
+	case <-finished:
+	default:
+		t.Fatal("executor outlived root")
+	}
+	return output.String(), err
 }
