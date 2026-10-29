@@ -41,7 +41,7 @@ func NewStartedEvent(execCtx *ExecutionContext, maskedInputs map[string]any, use
 	return AuditEvent{
 		SchemaVersion: auditSchemaVersion,
 		Event:         EventWorkflowStarted,
-		ExecutionID:   execCtx.WorkflowID,
+		ExecutionID:   auditExecutionID(execCtx),
 		Timestamp:     execCtx.StartedAt,
 		User:          user,
 		WorkflowName:  execCtx.WorkflowName,
@@ -65,7 +65,7 @@ func NewCompletedEvent(execCtx *ExecutionContext, user, errorMsg string) AuditEv
 	return AuditEvent{
 		SchemaVersion: auditSchemaVersion,
 		Event:         EventWorkflowCompleted,
-		ExecutionID:   execCtx.WorkflowID,
+		ExecutionID:   auditExecutionID(execCtx),
 		Timestamp:     execCtx.CompletedAt,
 		User:          user,
 		WorkflowName:  execCtx.WorkflowName,
@@ -74,6 +74,14 @@ func NewCompletedEvent(execCtx *ExecutionContext, user, errorMsg string) AuditEv
 		DurationMs:    &durationMs,
 		Error:         errorMsg,
 	}
+}
+
+func auditExecutionID(execCtx *ExecutionContext) string {
+	recordID, _, _, _ := execCtx.GetHistoryAttempt()
+	if recordID != "" {
+		return recordID
+	}
+	return execCtx.WorkflowID
 }
 
 // MarshalJSON produces ordered JSON with millisecond timestamp precision.

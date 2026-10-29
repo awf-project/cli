@@ -233,6 +233,27 @@ func TestInitCommand(t *testing.T) {
 	})
 }
 
+func TestInitCommand_GeneratedWorkflowUsesUnlimitedTimeoutByDefault(t *testing.T) {
+	tmpDir := setupInitTestDir(t)
+
+	cmd := cli.NewRootCommand()
+	cmd.SetArgs([]string{"init"})
+	require.NoError(t, cmd.Execute())
+
+	content, err := os.ReadFile(filepath.Join(tmpDir, ".awf", "workflows", "example.yaml"))
+	require.NoError(t, err)
+
+	var generated struct {
+		States map[string]yaml.Node `yaml:"states"`
+	}
+	require.NoError(t, yaml.Unmarshal(content, &generated))
+	greet := generated.States["greet"]
+	require.NotZero(t, greet.Kind)
+	for i := 0; i+1 < len(greet.Content); i += 2 {
+		assert.NotEqual(t, "timeout", greet.Content[i].Value)
+	}
+}
+
 // TestInitCommand_HelpText_GlobalFlag tests that the init command help text
 // properly documents the --global flag (T008 of F044 US4).
 // This ensures users can discover and understand the --global flag functionality

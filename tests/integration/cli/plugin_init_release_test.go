@@ -130,20 +130,7 @@ func buildPluginInitReleasePackagingAWF(t *testing.T, ctx context.Context) strin
 
 func pluginInitReleasePackagingEnv(t *testing.T) []string {
 	t.Helper()
-
-	root := t.TempDir()
-	home := filepath.Join(root, "home")
-	pluginsDir := filepath.Join(home, ".local", "share", "awf", "plugins")
-	require.NoError(t, os.MkdirAll(pluginsDir, 0o755))
-
-	return append(
-		os.Environ(),
-		"HOME="+home,
-		"XDG_CONFIG_HOME="+filepath.Join(root, "config"),
-		"XDG_DATA_HOME="+filepath.Join(root, "data"),
-		"XDG_STATE_HOME="+filepath.Join(root, "state"),
-		"AWF_PLUGINS_PATH="+pluginsDir,
-	)
+	return pluginInitIntegrationEnv(t)
 }
 
 func pluginInitReleasePackagingRepoRoot(t *testing.T) string {

@@ -12,7 +12,7 @@ Workflow inputs may contain secrets (API keys, passwords, tokens). The audit tra
 
 ## Decision
 
-The application layer (`ExecutionService`) masks inputs before constructing `AuditEvent`, using an inlined prefix-check function (mirroring `SecretMasker.IsSecretKey()` logic). The `AuditTrailWriter` port accepts pre-sanitized `AuditEvent` structs with no knowledge of secrets.
+The application layer (`ExecutionService`) masks inputs before constructing `AuditEvent`, masking every input value regardless of key spelling. The `AuditTrailWriter` port accepts pre-sanitized `AuditEvent` structs with no knowledge of secrets.
 
 Alternatives rejected:
 - **Approach B (masking callback in port)** — introduces a masking interface for one consumer, violating Minimal Abstraction. Port complexity grows without benefit.
@@ -26,4 +26,4 @@ Alternatives rejected:
 - Masking testable in application-layer unit tests without infrastructure dependencies.
 
 ### Negative
-- Application layer contains masking logic (a few lines) rather than delegating to the infrastructure `SecretMasker`. If masking patterns change, both `masker.go` and `execution_service.go` must be updated.
+- Application layer contains masking logic (a few lines) rather than delegating to the infrastructure `SecretMasker`. Audit masking applies to all input values; log/event metadata continues to use its existing secret-key policy.

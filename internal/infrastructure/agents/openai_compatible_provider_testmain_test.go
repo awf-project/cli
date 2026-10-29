@@ -9,7 +9,11 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/awf-project/cli/pkg/httpx"
 )
+
+var openAICompatibleTestTransport http.RoundTripper
 
 // testToMockTransport redirects all HTTP requests from test base_url values
 // to the single mock server. Matches on req.URL.Host (hostname:port) so that
@@ -60,7 +64,7 @@ func TestMain(m *testing.M) {
 	go server.Serve(listener) //nolint:errcheck // background test server
 
 	original := http.DefaultTransport
-	http.DefaultTransport = &testToMockTransport{
+	openAICompatibleTestTransport = &testToMockTransport{
 		hostMap: map[string]string{
 			"localhost:11434":    mockAddr,
 			"localhost:8000":     mockAddr,
@@ -69,6 +73,7 @@ func TestMain(m *testing.M) {
 		},
 		base: original,
 	}
+	http.DefaultTransport = openAICompatibleTestTransport
 
 	os.Setenv("OPENAI_BASE_URL", "http://"+mockAddr+"/v1") //nolint:errcheck // test env setup
 	os.Setenv("OPENAI_MODEL", "test-model")                //nolint:errcheck // test env setup
@@ -76,6 +81,15 @@ func TestMain(m *testing.M) {
 	exitCode := m.Run()
 	server.Close()
 	os.Exit(exitCode)
+}
+
+// newTestOpenAICompatibleProvider injects the package test transport explicitly.
+// The production httpx client intentionally owns a deadline-free transport and
+// therefore no longer inherits the mutable net/http global transport.
+func newTestOpenAICompatibleProvider() *OpenAICompatibleProvider {
+	return NewOpenAICompatibleProvider(WithHTTPClient(httpx.NewClient(
+		httpx.WithDoer(&http.Client{Transport: openAICompatibleTestTransport}),
+	)))
 }
 
 func mockChatCompletionsHandler(w http.ResponseWriter, _ *http.Request) {

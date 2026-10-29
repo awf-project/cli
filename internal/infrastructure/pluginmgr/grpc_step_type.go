@@ -3,6 +3,7 @@ package pluginmgr
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,31 +12,31 @@ import (
 	pluginv1 "github.com/awf-project/cli/proto/plugin/v1"
 )
 
-const defaultStepTypeTimeout = 5 * time.Second
+const defaultStepTypeDiscoveryTimeout = 5 * time.Second
 
 // grpcStepTypeAdapter implements ports.StepTypeProvider for a single plugin connection.
 // Step type names are cached at Init() via ListStepTypes(); HasStepType() is O(1).
 // First-registered-wins on name conflict; subsequent registrations log a warning.
 type grpcStepTypeAdapter struct {
-	client     pluginv1.StepTypeServiceClient
-	pluginName string
-	timeout    time.Duration
-	logger     ports.Logger
-	cache      map[string]bool
+	client           pluginv1.StepTypeServiceClient
+	pluginName       string
+	discoveryTimeout time.Duration
+	logger           ports.Logger
+	cache            map[string]bool
 }
 
 var _ ports.StepTypeProvider = (*grpcStepTypeAdapter)(nil)
 
-func newGRPCStepTypeAdapter(client pluginv1.StepTypeServiceClient, pluginName string, timeout time.Duration, logger ports.Logger) *grpcStepTypeAdapter {
-	if timeout <= 0 {
-		timeout = defaultStepTypeTimeout
+func newGRPCStepTypeAdapter(client pluginv1.StepTypeServiceClient, pluginName string, discoveryTimeout time.Duration, logger ports.Logger) *grpcStepTypeAdapter {
+	if discoveryTimeout <= 0 {
+		discoveryTimeout = defaultStepTypeDiscoveryTimeout
 	}
 	return &grpcStepTypeAdapter{
-		client:     client,
-		pluginName: pluginName,
-		timeout:    timeout,
-		logger:     logger,
-		cache:      make(map[string]bool),
+		client:           client,
+		pluginName:       pluginName,
+		discoveryTimeout: discoveryTimeout,
+		logger:           logger,
+		cache:            make(map[string]bool),
 	}
 }
 
@@ -58,10 +59,10 @@ func (a *grpcStepTypeAdapter) rawName(qualified string) string {
 // with "<pluginName>." to prevent cross-plugin collisions. Conflicts are resolved
 // first-registered-wins with a warning logged per duplicate.
 func (a *grpcStepTypeAdapter) listAndCache(ctx context.Context, existing map[string]bool) error {
-	ctx, cancel := context.WithTimeout(ctx, a.timeout)
+	discoveryCtx, cancel := context.WithTimeout(ctx, a.discoveryTimeout)
 	defer cancel()
 
-	resp, err := a.client.ListStepTypes(ctx, &pluginv1.ListStepTypesRequest{})
+	resp, err := a.client.ListStepTypes(discoveryCtx, &pluginv1.ListStepTypesRequest{})
 	if err != nil {
 		return fmt.Errorf("list step types: %w", err)
 	}
@@ -121,9 +122,6 @@ func (a *grpcStepTypeAdapter) ExecuteStep(ctx context.Context, req ports.StepExe
 		return ports.StepExecuteResult{}, fmt.Errorf("marshal inputs: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, a.timeout)
-	defer cancel()
-
 	// Strip plugin prefix before sending to gRPC — plugin expects its raw short name
 	resp, err := a.client.ExecuteStep(ctx, &pluginv1.ExecuteStepRequest{
 		StepName: req.StepName,
@@ -132,6 +130,9 @@ func (a *grpcStepTypeAdapter) ExecuteStep(ctx context.Context, req ports.StepExe
 		Inputs:   inputsJSON,
 	})
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ports.StepExecuteResult{}, fmt.Errorf("execute step: %w", errors.Join(err, ctxErr))
+		}
 		return ports.StepExecuteResult{}, fmt.Errorf("execute step: %w", err)
 	}
 

@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,11 +10,6 @@ import (
 // Feature: 39
 // Extracted from: agent_config_test.go
 // Tests: 10 configuration validation tests
-
-func TestAgentConstants(t *testing.T) {
-	assert.Equal(t, 300, DefaultAgentTimeout)
-	assert.Greater(t, DefaultAgentTimeout, 0)
-}
 
 func TestAgentConfig_Validate(t *testing.T) {
 	tests := []struct {
@@ -46,7 +40,7 @@ func TestAgentConfig_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid config with zero timeout (uses default)",
+			name: "valid config with zero timeout",
 			config: AgentConfig{
 				Provider: "gemini",
 				Prompt:   "Test prompt",
@@ -223,61 +217,6 @@ func TestAgentConfig_Validate_PromptVariants(t *testing.T) {
 	}
 }
 
-func TestAgentConfig_GetTimeout(t *testing.T) {
-	tests := []struct {
-		name     string
-		timeout  int
-		expected time.Duration
-	}{
-		{
-			name:     "zero returns default",
-			timeout:  0,
-			expected: DefaultAgentTimeout * time.Second,
-		},
-		{
-			name:     "positive returns configured value",
-			timeout:  60,
-			expected: 60 * time.Second,
-		},
-		{
-			name:     "large positive value",
-			timeout:  3600,
-			expected: 3600 * time.Second,
-		},
-		{
-			name:     "exactly default value",
-			timeout:  DefaultAgentTimeout,
-			expected: DefaultAgentTimeout * time.Second,
-		},
-		{
-			name:     "one second",
-			timeout:  1,
-			expected: 1 * time.Second,
-		},
-		{
-			name:     "negative returns default",
-			timeout:  -1,
-			expected: DefaultAgentTimeout * time.Second,
-		},
-		{
-			name:     "large negative returns default",
-			timeout:  -1000,
-			expected: DefaultAgentTimeout * time.Second,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := AgentConfig{
-				Provider: "claude",
-				Prompt:   "Test",
-				Timeout:  tt.timeout,
-			}
-			assert.Equal(t, tt.expected, config.GetTimeout())
-		})
-	}
-}
-
 func TestAgentConfig_Options(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -359,44 +298,11 @@ Focus on: {{inputs.focus_areas}}`,
 	assert.Equal(t, "claude", config.Provider)
 	assert.Contains(t, config.Prompt, "{{inputs.code_path}}")
 	assert.Len(t, config.Options, 4)
-	assert.Equal(t, 180*time.Second, config.GetTimeout())
+	assert.Equal(t, 180, config.Timeout)
 
 	// Check individual options
 	assert.Equal(t, "claude-sonnet-4-20250514", config.Options["model"])
 	assert.Equal(t, 4096, config.Options["max_tokens"])
-}
-
-func TestAgentConfig_TimeoutBoundaries(t *testing.T) {
-	tests := []struct {
-		name            string
-		timeout         int
-		expectedTimeout time.Duration
-		wantErr         bool
-	}{
-		{"minimum valid (1)", 1, 1 * time.Second, false},
-		{"zero (uses default)", 0, DefaultAgentTimeout * time.Second, false},
-		{"large timeout (1 hour)", 3600, 3600 * time.Second, false},
-		{"very large timeout (1 day)", 86400, 86400 * time.Second, false},
-		{"negative (-1)", -1, DefaultAgentTimeout * time.Second, true},
-		{"large negative", -9999, DefaultAgentTimeout * time.Second, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := AgentConfig{
-				Provider: "claude",
-				Prompt:   "Test",
-				Timeout:  tt.timeout,
-			}
-			err := config.Validate(nil)
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.expectedTimeout, config.GetTimeout())
-			}
-		})
-	}
 }
 
 func TestAgentConfig_PromptTemplateVariations(t *testing.T) {

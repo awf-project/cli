@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"net/http"
 	"sync"
@@ -79,6 +78,8 @@ type Server struct {
 	httpSrv         *http.Server
 	shutdownTimeout time.Duration
 	sseWG           sync.WaitGroup
+	sseStop         chan struct{}
+	stopOnce        sync.Once
 	facade          ports.WorkflowFacade
 	reader          ports.WorkflowReader
 	sessions        SessionLookup
@@ -89,6 +90,7 @@ type Server struct {
 func NewServer(bridge *Bridge, addr string, opts ...Option) *Server {
 	s := &Server{
 		bridge:          bridge,
+		sseStop:         make(chan struct{}),
 		shutdownTimeout: 30 * time.Second,
 	}
 	for _, opt := range opts {
@@ -114,6 +116,7 @@ func NewServer(bridge *Bridge, addr string, opts ...Option) *Server {
 	}
 	RegisterExecutionRoutes(s.api, execHandlers)
 	sseHandler := NewSSEHandler(bridge, &s.sseWG)
+	sseHandler.shutdown = s.sseStop
 	if s.sessions != nil {
 		sseHandler.SetSessionLookup(s.sessions)
 	}
@@ -146,23 +149,24 @@ func (s *Server) Start(ctx context.Context) error {
 	return nil
 }
 
-// sseWaitTimeout is the maximum time Shutdown will block for SSE goroutines to drain after
-// the HTTP server has stopped accepting new connections. A misbehaving long-running SSE
-// consumer must not hold up the process indefinitely; 10 s is generous for real clients
-// that honor the server-close signal, and short enough to be tolerable in CI.
-const sseWaitTimeout = 10 * time.Second
-
-// Shutdown gracefully stops the HTTP server within shutdownTimeout and waits for active
-// SSE goroutines with a bounded deadline.
-//
-// Ordering:
-//  1. httpSrv.Shutdown closes the listener and drains open connections (within shutdownTimeout).
-//  2. sseWG.Wait races against sseWaitTimeout. If SSE goroutines do not drain in time, a
-//     warning is logged and Shutdown returns — it does not block forever.
+// Shutdown stops active SSE streams before draining HTTP connections. Both
+// HTTP drain and SSE cleanup share the caller-bounded shutdown deadline.
 func (s *Server) Shutdown(ctx context.Context) error {
 	shutdownCtx, cancel := context.WithTimeout(ctx, s.shutdownTimeout)
 	defer cancel()
-	err := s.httpSrv.Shutdown(shutdownCtx)
+	s.stopOnce.Do(func() { close(s.sseStop) })
+	// Reserve part of the existing shutdown budget to interrupt blocked writes
+	// and join stream handlers after graceful draining expires.
+	graceCtx := shutdownCtx
+	graceCancel := func() {}
+	if deadline, ok := shutdownCtx.Deadline(); ok {
+		graceCtx, graceCancel = context.WithDeadline(shutdownCtx, deadline.Add(-time.Until(deadline)/4))
+	}
+	defer graceCancel()
+	err := s.httpSrv.Shutdown(graceCtx)
+	if err != nil {
+		_ = s.httpSrv.Close()
+	}
 
 	// Drain SSE goroutines with a hard cap so a misbehaving consumer cannot block shutdown.
 	done := make(chan struct{})
@@ -173,9 +177,8 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	select {
 	case <-done:
 		// All SSE goroutines finished cleanly.
-	case <-time.After(sseWaitTimeout):
-		slog.Warn("SSE goroutines did not drain within deadline; forcing shutdown",
-			slog.Duration("timeout", sseWaitTimeout))
+	case <-shutdownCtx.Done():
+		return fmt.Errorf("SSE shutdown: %w", shutdownCtx.Err())
 	}
 
 	if err != nil {

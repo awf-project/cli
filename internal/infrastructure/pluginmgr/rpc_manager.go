@@ -165,6 +165,14 @@ func NewRPCPluginManager(loader *FileSystemLoader) *RPCPluginManager {
 // Uses goroutine+buffered channel+select pattern for timeout enforcement (consistent with B008).
 // ctx cancellation kills the client immediately (used when Init ctx times out).
 func (m *RPCPluginManager) connectWithTimeout(ctx context.Context, client *goplugin.Client) (*pluginConnection, error) {
+	return m.connectWithTimeoutAndCancel(ctx, client, func() {})
+}
+
+func (m *RPCPluginManager) connectWithTimeoutAndCancel(
+	ctx context.Context,
+	client *goplugin.Client,
+	processCancel context.CancelFunc,
+) (*pluginConnection, error) {
 	if client == nil {
 		return nil, nil
 	}
@@ -209,9 +217,11 @@ func (m *RPCPluginManager) connectWithTimeout(ctx context.Context, client *goplu
 
 		return conn, nil
 	case <-ctx.Done():
+		processCancel()
 		client.Kill()
 		return nil, fmt.Errorf("plugin connection canceled: %w", ctx.Err())
 	case <-time.After(5 * time.Second):
+		processCancel()
 		client.Kill()
 		return nil, fmt.Errorf("plugin connection timeout: exceeded 5s deadline")
 	}
@@ -520,7 +530,7 @@ func (m *RPCPluginManager) startPluginProcess(ctx context.Context, name, binaryP
 
 	client := goplugin.NewClient(clientCfg)
 
-	conn, err := m.connectWithTimeout(ctx, client)
+	conn, err := m.connectWithTimeoutAndCancel(ctx, client, processCancel)
 	if err != nil {
 		processCancel()
 		return nil, nil, WrapRPCManagerError("init", name, fmt.Errorf("failed to establish gRPC connection: %w", err))
@@ -925,7 +935,13 @@ func (m *RPCPluginManager) stepTypeClient(logger ports.Logger) []*grpcStepTypeAd
 			continue
 		}
 
+		// Init already queried these names under its bounded discovery context.
+		// Copy the result into the execution adapter; a fresh empty cache makes
+		// every plugin type unreachable despite successful discovery.
 		adapter := newGRPCStepTypeAdapter(conn.stepType, pluginName, 0, logger)
+		for _, name := range info.StepTypes {
+			adapter.cache[name] = true
+		}
 		adapters = append(adapters, adapter)
 	}
 

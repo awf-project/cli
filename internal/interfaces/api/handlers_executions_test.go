@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/testutil/builders"
 	"github.com/awf-project/cli/internal/testutil/facadetest"
 )
 
@@ -272,26 +275,100 @@ func TestExecutionHandler_Get_NotFound_Returns404(t *testing.T) {
 // --- Cancel tests ---
 
 func TestExecutionHandler_Cancel_PropagatesContextCancellation(t *testing.T) {
-	bridge := NewBridge()
-	id, exec := seedExecution(bridge, "test-workflow")
+	harness := builders.NewCancellationHarness("test-workflow")
+	adapter, executor, logger := harness.Adapter, harness.Executor, harness.Logger
+	api, bridge, registry := newFacadeExecutionHandlerAPI(t, adapter)
+	const (
+		secretInput  = "input-must-not-appear"
+		secretPrompt = "prompt-must-not-appear"
+		secretToken  = "token-must-not-appear"
+	)
 
-	handler := NewExecutionHandlers(bridge)
-	_, api := humatest.New(t)
-	RegisterExecutionRoutes(api, handler)
+	runResp := api.Post("/api/workflows/local/test-workflow/run", struct {
+		Inputs map[string]any `json:"inputs"`
+	}{Inputs: map[string]any{
+		"operation_id": "cancel-propagation",
+		"input":        secretInput,
+		"prompt":       secretPrompt,
+		"token":        secretToken,
+	}})
+	require.Equal(t, 202, runResp.Code)
 
-	// Verify context is not yet cancelled.
+	var runResult struct {
+		Body struct {
+			ExecutionID string `json:"execution_id"`
+		} `json:"body"`
+	}
+	require.NoError(t, json.NewDecoder(runResp.Body).Decode(&runResult))
+	require.NotEmpty(t, runResult.Body.ExecutionID)
+	exec, ok := bridge.GetExecution(runResult.Body.ExecutionID)
+	require.True(t, ok)
 	assert.NoError(t, exec.Ctx.Err(), "context must not be cancelled before cancel handler")
+	select {
+	case <-executor.Started:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for the real adapter to enter active command execution")
+	}
 
-	resp := api.Delete("/api/executions/"+id, struct {
+	resp := api.Delete("/api/executions/"+runResult.Body.ExecutionID, struct {
 		ID string `path:"id"`
-	}{ID: id})
+	}{ID: runResult.Body.ExecutionID})
 
-	// Assert 204 No Content (idempotent).
 	require.Equal(t, 204, resp.Code, "Cancel must return 204 No Content")
-
-	// Verify context is now cancelled.
-	assert.Error(t, exec.Ctx.Err(), "context must be cancelled after cancel handler")
 	assert.ErrorIs(t, exec.Ctx.Err(), context.Canceled)
+	select {
+	case err := <-executor.Canceled:
+		assert.ErrorIs(t, err, context.Canceled,
+			"DELETE must cancel the context owned by active application work")
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for cancellation to reach active application work")
+	}
+
+	session, ok := registry.Get(runResult.Body.ExecutionID)
+	require.True(t, ok, "the tracked execution must retain its session for terminal diagnostics")
+	terminalEvents := make([]ports.Event, 0, 1)
+	cleanupDeadline := time.NewTimer(time.Second)
+	defer cleanupDeadline.Stop()
+eventLoop:
+	for {
+		select {
+		case event, open := <-session.Events():
+			if !open {
+				break eventLoop
+			}
+			if event.Kind == ports.EventWorkflowCompleted || event.Kind == ports.EventWorkflowFailed {
+				terminalEvents = append(terminalEvents, event)
+			}
+		case <-cleanupDeadline.C:
+			t.Fatal("timed out waiting for cancellation cleanup to close the event stream")
+		}
+	}
+	require.Len(t, terminalEvents, 1, "cancellation cleanup must publish exactly one terminal outcome")
+	assert.Equal(t, ports.EventWorkflowFailed, terminalEvents[0].Kind)
+	assert.Equal(t, runResult.Body.ExecutionID, terminalEvents[0].RunID,
+		"terminal diagnostics must identify the cancelled operation")
+	terminal, ok := terminalEvents[0].Payload.(*ports.EnrichedTerminal)
+	require.True(t, ok, "cancellation terminal event must carry EnrichedTerminal diagnostics")
+	assert.Equal(t, "cancelled", terminal.Error)
+
+	diagnostic, err := json.Marshal(terminalEvents[0])
+	require.NoError(t, err)
+	text := string(diagnostic)
+	assert.Contains(t, text, runResult.Body.ExecutionID)
+	for _, forbidden := range []string{secretInput, secretPrompt, secretToken, "operation-awaiting-input"} {
+		assert.NotContains(t, text, forbidden, "terminal diagnostics must not disclose request data")
+	}
+	assert.NotContains(t, strings.ToLower(text), "authorization")
+
+	capturedDiagnostics := text + "\n" + logger.Snapshot()
+	assert.NotEmpty(t, logger.Snapshot(), "the real cancellation path must emit observable logs")
+	for _, forbidden := range []string{
+		secretInput, secretPrompt, secretToken,
+		"inputs", "prompt", "environment", "request", "header", "plugin", "authorization", "credential",
+	} {
+		assert.NotContains(t, strings.ToLower(capturedDiagnostics), strings.ToLower(forbidden),
+			"captured errors and logs must not disclose request or secret data")
+	}
 }
 
 func TestExecutionHandler_Cancel_Idempotent_TwoDELETEsBothReturn204(t *testing.T) {

@@ -78,15 +78,16 @@ func (b *Bridge) ListExecutions() []*ActiveExecution {
 // application.SessionRegistry (A4 / R5). The entry is keyed by the session's own ID()
 // so that GET /api/executions/{id} and SessionRegistry.Get(execID) resolve the same key.
 //
-// Cancel is wired to session.Close() (idempotent) so DELETE /api/executions/{id} tears
-// down the facade session; Bridge.Shutdown also invokes Cancel on every tracked entry.
+// Cancel requests cancellation through CancelWithEvent when available. The facade
+// publishes its terminal event after execution cleanup; legacy sessions use Close.
+// Bridge.Shutdown also invokes Cancel on every tracked entry.
 //
 // Ctx is a dedicated cancelable context for this ActiveExecution entry. The facade owns
 // the real execution goroutine and its session context; this Ctx is intentionally
 // decoupled from it (ports.RunSession does not expose its internal context). Cancel calls
-// both session.Close() (to stop execution) and the context cancel function (so that
+// both session cancellation and the context cancel function (so that
 // ae.Ctx.Err() returns context.Canceled after Cancel() — required by M7 contract).
-// Done is pre-closed since the facade — not the Bridge — owns the completion signal.
+// The facade owns the execution completion signal.
 func (b *Bridge) TrackFacadeSession(session ports.RunSession, workflowName string) *ActiveExecution {
 	ctx, cancelCtx := context.WithCancel(context.Background()) //nolint:gocritic // cancelCtx is captured in ae.Cancel and called by Delete/Shutdown; intentionally not deferred here
 	ae := &ActiveExecution{

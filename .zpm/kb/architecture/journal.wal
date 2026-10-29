@@ -16,3 +16,71 @@
 {"ts":1792755925,"op":"assert","clause":"arch_decision('dec_subworkflow_failure_transition_order', 'sub-workflow failure routing', 'resolve ordered transitions before legacy error routing for both execution errors and failed child results', 'keeps call-workflow failures consistent with state-machine transition semantics and allows conditional recovery paths', 'bug_388_b019_unresolved_configuration_input_inte')"}
 {"ts":1792755925,"op":"retractall","clause":"arch_convention('conv_cli_test_filesystem_isolation', _, _, _)"}
 {"ts":1792755925,"op":"assert","clause":"arch_convention('conv_cli_test_filesystem_isolation', 'CLI test fixtures', 'isolate package-wide XDG data in TestMain and opt in to project configuration with AWF_CONFIG_PATH while keeping generic test directories config-neutral', 'bug_388_b019_unresolved_configuration_input_inte')"}
+{"ts":1793292057,"op":"retractall","clause":"arch_decision('dec_timeout_presence', _, _, _, _, _)"}
+{"ts":1793292057,"op":"assert","clause":"arch_decision('dec_timeout_presence', 'workflow timeout semantics', 'represent timeout presence separately from its integer duration', 'an omitted value and explicit zero have distinct inheritance behavior, so a zero value alone cannot preserve the user intent', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292058,"op":"retractall","clause":"arch_decision('dec_application_deadline_ownership', _, _, _, _)"}
+{"ts":1793292058,"op":"assert","clause":"arch_decision('dec_application_deadline_ownership', 'execution deadline ownership', 'derive positive execution deadlines in the application layer and otherwise pass the parent context unchanged', 'this applies one policy across execution paths while preserving caller cancellation and avoiding hidden adapter task budgets', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292058,"op":"retractall","clause":"arch_decision('dec_technical_deadlines', _, _, _, _, _, _, _)"}
+{"ts":1793292058,"op":"assert","clause":"arch_decision('dec_technical_deadlines', 'deadline scope', 'retain named deadlines for technical control-plane and setup work while removing implicit execution budgets', 'discovery, connection setup, locks, shutdown and delivery need bounded resource use without limiting user-requested execution', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292058,"op":"retractall","clause":"arch_decision('dec_audit_confidentiality_and_finalization', _, _, _, _, _, _, _)"}
+{"ts":1793292058,"op":"assert","clause":"arch_decision('dec_audit_confidentiality_and_finalization', 'terminal audit lifecycle', 'mask every audit input value and finalize terminal state, history, and audit work on a cancellation-detached context', 'ordinary input names cannot prove their values are non-secret, and terminal evidence must survive cancellation', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292058,"op":"retractall","clause":"arch_convention('conv_timeout_presence_mapping', _, _, _)"}
+{"ts":1793292058,"op":"assert","clause":"arch_convention('conv_timeout_presence_mapping', 'workflow configuration mapping', 'preserve raw timeout-field presence at the YAML boundary; explicit zero disables template inheritance while omission permits it', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292059,"op":"retractall","clause":"arch_convention('conv_execution_context_propagation', _, _, _)"}
+{"ts":1793292059,"op":"assert","clause":"arch_convention('conv_execution_context_propagation', 'application execution paths', 'route every execution mode through the shared positive-only deadline derivation policy and always release derived contexts', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292059,"op":"retractall","clause":"arch_decision('dec_context_error_identity', _, _, _, _)"}
+{"ts":1793292059,"op":"assert","clause":"arch_decision('dec_context_error_identity', 'execution error contract', 'preserve parent cancellation and deadline sentinel identity while annotating only locally owned timeout expiry', 'callers need errors.Is compatibility and diagnostics must distinguish a configured step timeout from inherited cancellation', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292059,"op":"retractall","clause":"arch_convention('conv_external_error_redaction', _, _, _)"}
+{"ts":1793292059,"op":"assert","clause":"arch_convention('conv_external_error_redaction', 'external transport diagnostics', 'redact external-operation error text at subsystem boundaries while retaining the wrapped cause for errors.Is and errors.As', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292060,"op":"retractall","clause":"arch_convention('conv_adapter_context_ownership', _, _, _)"}
+{"ts":1793292060,"op":"assert","clause":"arch_convention('conv_adapter_context_ownership', 'infrastructure execution adapters', 'consume the caller context for execution; do not add adapter-owned total request or plugin execution deadlines', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292060,"op":"retractall","clause":"arch_convention('conv_cancellation_terminalization', _, _, _, _, _)"}
+{"ts":1793292060,"op":"assert","clause":"arch_convention('conv_cancellation_terminalization', 'terminal workflow persistence and audit', 'use a cancellation-detached context only for terminal checkpoint, history, and audit finalization after execution has ended', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292064,"op":"retractall","clause":"arch_component(_,_,_,'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292065,"op":"retractall","clause":"arch_port(_,_,'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292065,"op":"retractall","clause":"arch_decision(_,_,_,_,'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292066,"op":"retractall","clause":"arch_convention(_,_,_,'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292066,"op":"retractall","clause":"arch_adr(_,_,'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292067,"op":"retractall","clause":"arch_feature('bug_393_b021_optional_execution_timeouts_impose_',_,_)"}
+{"ts":1793292067,"op":"retractall","clause":"arch_component('application', _, _, _)"}
+{"ts":1793292067,"op":"assert","clause":"arch_component('application', application, '', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292068,"op":"retractall","clause":"arch_component('ports', _, _, _)"}
+{"ts":1793292068,"op":"assert","clause":"arch_component('ports', domain, '', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292068,"op":"retractall","clause":"arch_port('facade', _, _)"}
+{"ts":1793292068,"op":"assert","clause":"arch_port('facade', domain, 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292069,"op":"retractall","clause":"arch_component('workflow', _, _, _)"}
+{"ts":1793292069,"op":"assert","clause":"arch_component('workflow', domain, '', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292069,"op":"retractall","clause":"arch_component('agents', _, _, _)"}
+{"ts":1793292069,"op":"assert","clause":"arch_component('agents', infrastructure, '', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292070,"op":"retractall","clause":"arch_component('http', _, _, _)"}
+{"ts":1793292070,"op":"assert","clause":"arch_component('http', infrastructure, '', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292070,"op":"retractall","clause":"arch_component('otel', _, _, _)"}
+{"ts":1793292070,"op":"assert","clause":"arch_component('otel', infrastructure, '', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292071,"op":"retractall","clause":"arch_component('pluginmgr', _, _, _)"}
+{"ts":1793292071,"op":"assert","clause":"arch_component('pluginmgr', infrastructure, '', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292071,"op":"retractall","clause":"arch_component('repository', _, _, _)"}
+{"ts":1793292071,"op":"assert","clause":"arch_component('repository', infrastructure, '', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292072,"op":"retractall","clause":"arch_component('api', _, _, _)"}
+{"ts":1793292072,"op":"assert","clause":"arch_component('api', interfaces, '', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292072,"op":"retractall","clause":"arch_component('cli', _, _, _)"}
+{"ts":1793292072,"op":"assert","clause":"arch_component('cli', interfaces, '', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292073,"op":"retractall","clause":"arch_decision('dec_timeout_presence', _, _, _, _, _)"}
+{"ts":1793292073,"op":"assert","clause":"arch_decision('dec_timeout_presence', 'workflow timeout semantics', 'represent timeout presence separately from its integer duration', 'an omitted value and explicit zero have distinct inheritance behavior, so a zero value alone cannot preserve the user intent', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292073,"op":"retractall","clause":"arch_decision('dec_application_deadline_ownership', _, _, _, _)"}
+{"ts":1793292073,"op":"assert","clause":"arch_decision('dec_application_deadline_ownership', 'execution deadline ownership', 'derive positive execution deadlines in the application layer and otherwise pass the parent context unchanged', 'this applies one policy across execution paths while preserving caller cancellation and avoiding hidden adapter task budgets', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292074,"op":"retractall","clause":"arch_decision('dec_technical_deadlines', _, _, _, _, _, _, _)"}
+{"ts":1793292074,"op":"assert","clause":"arch_decision('dec_technical_deadlines', 'deadline scope', 'retain named deadlines for technical control-plane and setup work while removing implicit execution budgets', 'discovery, connection setup, locks, shutdown and delivery need bounded resource use without limiting user-requested execution', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292074,"op":"retractall","clause":"arch_decision('dec_context_error_identity', _, _, _, _)"}
+{"ts":1793292074,"op":"assert","clause":"arch_decision('dec_context_error_identity', 'execution error contract', 'preserve parent cancellation and deadline sentinel identity while annotating only locally owned timeout expiry', 'callers need errors.Is compatibility and diagnostics must distinguish a configured step timeout from inherited cancellation', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292075,"op":"retractall","clause":"arch_decision('dec_audit_confidentiality_and_finalization', _, _, _, _, _, _, _)"}
+{"ts":1793292075,"op":"assert","clause":"arch_decision('dec_audit_confidentiality_and_finalization', 'terminal audit lifecycle', 'mask every audit input value and finalize terminal state, history, and audit work on a cancellation-detached context', 'ordinary input names cannot prove their values are non-secret, and terminal evidence must survive cancellation', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292075,"op":"retractall","clause":"arch_convention('conv_timeout_presence_mapping', _, _, _)"}
+{"ts":1793292075,"op":"assert","clause":"arch_convention('conv_timeout_presence_mapping', 'workflow configuration mapping', 'preserve raw timeout-field presence at the YAML boundary; explicit zero disables template inheritance while omission permits it', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292076,"op":"retractall","clause":"arch_convention('conv_execution_context_propagation', _, _, _)"}
+{"ts":1793292076,"op":"assert","clause":"arch_convention('conv_execution_context_propagation', 'application execution paths', 'route every execution mode through the shared positive-only deadline derivation policy and always release derived contexts', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292076,"op":"retractall","clause":"arch_convention('conv_adapter_context_ownership', _, _, _)"}
+{"ts":1793292076,"op":"assert","clause":"arch_convention('conv_adapter_context_ownership', 'infrastructure execution adapters', 'consume the caller context for execution; do not add adapter-owned total request or plugin execution deadlines', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292077,"op":"retractall","clause":"arch_convention('conv_external_error_redaction', _, _, _)"}
+{"ts":1793292077,"op":"assert","clause":"arch_convention('conv_external_error_redaction', 'external transport diagnostics', 'redact external-operation error text at subsystem boundaries while retaining the wrapped cause for errors.Is and errors.As', 'bug_393_b021_optional_execution_timeouts_impose_')"}
+{"ts":1793292077,"op":"retractall","clause":"arch_convention('conv_cancellation_terminalization', _, _, _, _, _)"}
+{"ts":1793292077,"op":"assert","clause":"arch_convention('conv_cancellation_terminalization', 'terminal workflow persistence and audit', 'use a cancellation-detached context only for terminal checkpoint, history, and audit finalization after execution has ended', 'bug_393_b021_optional_execution_timeouts_impose_')"}

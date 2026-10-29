@@ -4,9 +4,17 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
+)
+
+// Connection setup follows Go's standard transport bounds. These limits end
+// when TCP and TLS setup complete; they never budget response generation or reading.
+const (
+	defaultDialTimeout         = 30 * time.Second
+	defaultTLSHandshakeTimeout = 10 * time.Second
 )
 
 // HTTPDoer abstracts HTTP request execution for testing.
@@ -15,7 +23,8 @@ type HTTPDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// Client wraps HTTP operations with configurable timeout and convenience methods.
+// Client wraps HTTP operations with an optional caller-selected timeout and
+// convenience methods.
 type Client struct {
 	doer    HTTPDoer
 	timeout time.Duration
@@ -31,19 +40,33 @@ func WithDoer(doer HTTPDoer) Option {
 	}
 }
 
-// WithTimeout sets the default timeout for requests.
+// WithDoerDecorator wraps the constructed transport without replacing its timeout policy.
+// The decorator is useful for request instrumentation and must preserve cancellation.
+func WithDoerDecorator(decorate func(HTTPDoer) HTTPDoer) Option {
+	return func(c *Client) {
+		if decorate != nil {
+			c.doer = decorate(c.doer)
+		}
+	}
+}
+
+// WithTimeout sets a request timeout when timeout is positive. A shorter parent
+// context deadline remains authoritative through normal context composition.
 func WithTimeout(timeout time.Duration) Option {
 	return func(c *Client) {
-		c.timeout = timeout
+		if timeout > 0 {
+			c.timeout = timeout
+		}
 	}
 }
 
 // NewClient creates a new HTTP client with options.
-// Default: *http.Client with 30s timeout.
+// By default, total request lifetime is controlled by the caller's context.
+// TCP connection establishment is bounded to 30 seconds and TLS negotiation to
+// 10 seconds. These setup limits do not bound response headers or body reading.
 func NewClient(opts ...Option) *Client {
 	c := &Client{
-		doer:    &http.Client{Timeout: 30 * time.Second},
-		timeout: 30 * time.Second,
+		doer: &http.Client{Transport: newExecutionTransport()},
 	}
 
 	for _, opt := range opts {
@@ -53,12 +76,30 @@ func NewClient(opts ...Option) *Client {
 	return c
 }
 
+func newConnectionDialer() *net.Dialer {
+	return &net.Dialer{Timeout: defaultDialTimeout, KeepAlive: 30 * time.Second}
+}
+
+func newExecutionTransport() *http.Transport {
+	dialer := newConnectionDialer()
+
+	return &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           dialer.DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   defaultTLSHandshakeTimeout,
+		ExpectContinueTimeout: time.Second,
+	}
+}
+
 // Do executes an HTTP request with the given parameters.
-// Creates a request with context, applies timeout when no deadline exists,
+// Creates a request with context, applies any explicit client timeout,
 // applies headers, executes via doer, reads response via ReadBody.
 // Returns Response or error.
 func (c *Client) Do(ctx context.Context, method, url string, headers map[string]string, body string, maxBodyBytes int64) (*Response, error) {
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline && c.timeout > 0 {
+	if c.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, c.timeout)
 		defer cancel()
@@ -71,7 +112,7 @@ func (c *Client) Do(ctx context.Context, method, url string, headers map[string]
 
 	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+		return nil, fmt.Errorf("failed to create HTTP request: %w", RedactError(err))
 	}
 
 	for key, value := range headers {
@@ -80,13 +121,13 @@ func (c *Client) Do(ctx context.Context, method, url string, headers map[string]
 
 	httpResp, err := c.doer.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("HTTP request failed: %w", err)
+		return nil, fmt.Errorf("HTTP request failed: %w", RedactError(err))
 	}
 	defer httpResp.Body.Close()
 
 	bodyStr, truncated, err := ReadBody(httpResp.Body, maxBodyBytes)
 	if err != nil {
-		return nil, err
+		return nil, RedactError(err)
 	}
 
 	respHeaders := make(map[string]string)

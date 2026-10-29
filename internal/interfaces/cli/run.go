@@ -221,7 +221,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	}
 
 	// Setup context with signal handling
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 	cleanup := setupSignalHandler(ctx, cancel, func() {
 		if cfg.OutputFormat != ui.FormatJSON && cfg.OutputFormat != ui.FormatTable {
@@ -233,7 +233,10 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	// Initialize dependencies
 	repo, workflowName := newWorkflowRepositoryForIdentifier(workflowName)
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
-	shellExecutor := executor.NewShellExecutor()
+	var shellExecutor ports.CommandExecutor = executor.NewShellExecutor()
+	if cfg.CommandExecutor != nil {
+		shellExecutor = cfg.CommandExecutor
+	}
 	// Table and JSON formats should be silent (structured output only)
 	silentOutput := cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatTable
 	logger := &cliLogger{
@@ -411,6 +414,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 		setupOpts = append(setupOpts, application.WithOutputWriters(stdoutWriter, stderrWriter))
 	}
 
+	setupOpts = append(setupOpts, cfg.ExecutionSetupOptions...)
 	setupResult, err := application.NewExecutionSetup(repo, stateStore, shellExecutor, logger, setupOpts...).Build(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to initialize execution: %w", err)
@@ -544,7 +548,7 @@ func runInteractive(cmd *cobra.Command, cfg *Config, workflowName string, inputF
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
 	// Setup context with signal handling so Ctrl+C aborts a parked prompt gracefully.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 	signalCleanup := setupSignalHandler(ctx, cancel, nil)
 	defer signalCleanup()
@@ -878,7 +882,7 @@ func runSingleStep(
 	})
 
 	// Setup context with signal handling
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 	cleanup := setupSignalHandler(ctx, cancel, func() {
 		formatter.Warning("\nReceived interrupt signal, cancelling...")
@@ -888,7 +892,10 @@ func runSingleStep(
 	// Initialize dependencies
 	repo, workflowName := newWorkflowRepositoryForIdentifier(workflowName)
 	stateStore := store.NewJSONStore(cfg.StoragePath + "/states")
-	shellExecutor := executor.NewShellExecutor()
+	var shellExecutor ports.CommandExecutor = executor.NewShellExecutor()
+	if cfg.CommandExecutor != nil {
+		shellExecutor = cfg.CommandExecutor
+	}
 	logger := &cliLogger{
 		formatter: formatter,
 		verbose:   cfg.Verbose,
@@ -960,6 +967,7 @@ func runSingleStep(
 		}
 	}
 
+	stepSetupOpts = append(stepSetupOpts, cfg.ExecutionSetupOptions...)
 	stepSetupResult, err := application.NewExecutionSetup(repo, stateStore, shellExecutor, logger, stepSetupOpts...).Build(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to initialize execution: %w", err)

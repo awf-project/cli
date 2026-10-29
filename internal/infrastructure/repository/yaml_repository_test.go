@@ -1,9 +1,11 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	domerrors "github.com/awf-project/cli/internal/domain/errors"
@@ -338,36 +340,81 @@ func TestYAMLRepository_Load_WithDir(t *testing.T) {
 	}
 }
 
-func TestYAMLRepository_Timeout(t *testing.T) {
-	repo := NewYAMLRepository(fixturesPath)
+func loadTimeoutPresenceWorkflow(t *testing.T) (*workflow.Workflow, string, []byte) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "timeout-presence.yaml")
+	source := []byte(`name: timeout-presence
+states:
+  initial: omitted
+  omitted:
+    type: step
+    command: "true"
+    on_success: done
+  explicit_zero:
+    type: step
+    command: "true"
+    timeout: 0
+    on_success: done
+  integer_seconds:
+    type: step
+    command: "true"
+    timeout: 15
+    on_success: done
+  go_duration:
+    type: step
+    command: "true"
+    timeout: 2m30s
+    on_success: done
+  done:
+    type: terminal
+`)
+	if err := os.WriteFile(path, source, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
 
-	wf, err := repo.Load(context.Background(), "valid-full")
+	wf, err := NewYAMLRepository(dir).Load(context.Background(), "timeout-presence")
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	validate, ok := wf.GetStep("validate")
-	if !ok {
-		t.Fatal("validate step not found")
-	}
+	return wf, path, source
+}
 
-	// 5s should be parsed as 5 seconds
-	if validate.Timeout != 5 {
-		t.Errorf("validate.Timeout = %d, want 5", validate.Timeout)
+func TestYAMLRepository_Timeout(t *testing.T) {
+	wf, _, _ := loadTimeoutPresenceWorkflow(t)
+	tests := []struct {
+		name    string
+		want    int
+		wantSet bool
+	}{
+		{name: "omitted", want: 0, wantSet: false},
+		{name: "explicit_zero", want: 0, wantSet: true},
+		{name: "integer_seconds", want: 15, wantSet: true},
+		{name: "go_duration", want: 150, wantSet: true},
 	}
-
-	extract, ok := wf.GetStep("extract")
-	if !ok {
-		t.Fatal("extract step not found")
-	}
-
-	// 30s should be parsed as 30 seconds
-	if extract.Timeout != 30 {
-		t.Errorf("extract.Timeout = %d, want 30", extract.Timeout)
+	for _, tt := range tests {
+		step, ok := wf.GetStep(tt.name)
+		if !ok {
+			t.Fatalf("step %q not found", tt.name)
+		}
+		if step.Timeout != tt.want || step.TimeoutSet != tt.wantSet {
+			t.Errorf("step %q timeout = (%d, %t), want (%d, %t)", tt.name, step.Timeout, step.TimeoutSet, tt.want, tt.wantSet)
+		}
 	}
 }
 
-// Integration test to ensure repository implements the port interface
+func TestYAMLRepository_LoadDoesNotRewriteWorkflow(t *testing.T) {
+	_, path, source := loadTimeoutPresenceWorkflow(t)
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !bytes.Equal(after, source) {
+		t.Errorf("Load() changed source bytes\ngot:  %q\nwant: %q", after, source)
+	}
+}
+
 func TestYAMLRepository_ImplementsInterface(t *testing.T) {
 	repo := NewYAMLRepository(fixturesPath)
 

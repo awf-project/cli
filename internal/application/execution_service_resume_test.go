@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/awf-project/cli/internal/application"
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
@@ -71,6 +72,28 @@ type observingCommandExecutor struct {
 	commands []string
 	observed []*workflow.ExecutionContext
 	err      error
+}
+
+type resumeDeadlineObservingExecutor struct {
+	remaining   []time.Duration
+	contexts    []context.Context
+	err         error
+	waitForDone bool
+}
+
+func (e *resumeDeadlineObservingExecutor) Execute(ctx context.Context, _ *ports.Command) (*ports.CommandResult, error) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		e.remaining = append(e.remaining, 0)
+	} else {
+		e.remaining = append(e.remaining, time.Until(deadline))
+	}
+	e.contexts = append(e.contexts, ctx)
+	if e.waitForDone {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	return nil, e.err
 }
 
 func (e *observingCommandExecutor) Execute(_ context.Context, command *ports.Command) (*ports.CommandResult, error) {
@@ -161,6 +184,36 @@ func attemptTestWorkflow(command string) *workflow.Workflow {
 			"run":  {Name: "run", Type: workflow.StepTypeCommand, Command: command, OnSuccess: "done"},
 			"done": {Name: "done", Type: workflow.StepTypeTerminal},
 		},
+	}
+}
+
+func TestExecutionService_ResumeRejectsInvalidInputsBeforeAllocation(t *testing.T) {
+	tests := []struct {
+		name   string
+		inputs map[string]any
+	}{
+		{name: "missing required input"},
+		{name: "invalid input type", inputs: map[string]any{"count": "not-an-integer"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wf := attemptTestWorkflow("must not execute")
+			wf.Inputs = []workflow.Input{{Name: "count", Type: "integer", Required: true}}
+			state := workflow.NewExecutionContext("stable-run", wf.Name)
+			state.Status, state.CurrentStep = workflow.StatusFailed, "run"
+			store := &attemptStateStore{state: state}
+			before := cloneAttemptContext(state)
+			executor := &observingCommandExecutor{store: store}
+			service := newAttemptExecutionService(wf, store, executor, nil)
+
+			resumed, err := service.Resume(context.Background(), state.WorkflowID, tt.inputs, "current")
+
+			require.ErrorContains(t, err, "input validation failed")
+			assert.Nil(t, resumed)
+			assert.Zero(t, executor.calls)
+			assert.Empty(t, store.saves, "rejected input must not allocate or persist another attempt")
+			assert.Equal(t, before, store.state)
+		})
 	}
 }
 
@@ -312,6 +365,62 @@ func TestExecutionService_ResumedAttemptsKeepStableWorkflowIdentity(t *testing.T
 	require.NotNil(t, store.state)
 	assert.Equal(t, priorDurable.HistoryRecordID, store.state.HistoryRecordID)
 	assert.Equal(t, priorDurable.HistoryAttempt, store.state.HistoryAttempt)
+}
+
+func TestExecutionService_ResumePreservesTimeoutSemantics(t *testing.T) {
+	t.Run("fresh and resumed local expiry have the same structured timeout", func(t *testing.T) {
+		const timeoutSeconds = 1
+		store := &attemptStateStore{}
+		executor := &resumeDeadlineObservingExecutor{waitForDone: true}
+		wf := attemptTestWorkflow("observe deadline")
+		wf.Steps["run"].Timeout = timeoutSeconds
+		svc := newAttemptExecutionService(wf, store, executor, nil)
+
+		initialCtx, initialErr := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "stable-timeout-run")
+		require.NotNil(t, initialCtx)
+		assertResumeLocalTimeout(t, initialErr, timeoutSeconds)
+
+		resumedCtx, resumedErr := svc.Resume(context.Background(), "stable-timeout-run", nil, "current")
+		require.NotNil(t, resumedCtx)
+		assertResumeLocalTimeout(t, resumedErr, timeoutSeconds)
+		require.Len(t, executor.remaining, 2)
+		for _, remaining := range executor.remaining {
+			assert.InDelta(t, float64(timeoutSeconds), remaining.Seconds(), 0.25)
+		}
+	})
+
+	t.Run("fresh and resumed caller cancellation preserve cancellation identity", func(t *testing.T) {
+		wf := attemptTestWorkflow("observe cancellation")
+		freshExecutor := &resumeDeadlineObservingExecutor{waitForDone: true}
+		freshSvc := newAttemptExecutionService(wf, &attemptStateStore{}, freshExecutor, nil)
+		freshParent, freshCancel := context.WithCancel(context.Background())
+		freshCancel()
+		_, freshErr := freshSvc.RunWithWorkflowAndRunID(freshParent, wf, nil, "fresh-cancel-run")
+		require.ErrorIs(t, freshErr, context.Canceled)
+		assert.False(t, errors.Is(freshErr, context.DeadlineExceeded))
+
+		store := &attemptStateStore{}
+		executor := &resumeDeadlineObservingExecutor{err: errors.New("seed attempt")}
+		svc := newAttemptExecutionService(wf, store, executor, nil)
+		_, seedErr := svc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "resume-cancel-run")
+		require.Error(t, seedErr)
+		executor.err = nil
+		executor.waitForDone = true
+		resumedParent, resumedCancel := context.WithCancel(context.Background())
+		resumedCancel()
+		_, resumedErr := svc.Resume(resumedParent, "resume-cancel-run", nil, "current")
+		require.ErrorIs(t, resumedErr, context.Canceled)
+		assert.False(t, errors.Is(resumedErr, context.DeadlineExceeded))
+	})
+}
+
+func assertResumeLocalTimeout(t *testing.T, err error, timeoutSeconds int) {
+	t.Helper()
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	var structuredErr *domainerrors.StructuredError
+	require.ErrorAs(t, err, &structuredErr)
+	assert.Equal(t, domainerrors.ErrorCodeExecutionCommandTimeout, structuredErr.Code)
+	assert.Equal(t, map[string]any{"timeout_owner": "step", "timeout_seconds": timeoutSeconds}, structuredErr.Details)
 }
 
 func TestExecutionService_ResumeNormalizesLegacyAttemptFromHistory(t *testing.T) {

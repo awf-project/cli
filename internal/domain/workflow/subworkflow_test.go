@@ -9,13 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSubWorkflowConstants(t *testing.T) {
-	assert.Equal(t, 300, DefaultSubWorkflowTimeout)
-	assert.Equal(t, 10, MaxCallStackDepth)
-	assert.Greater(t, DefaultSubWorkflowTimeout, 0)
-	assert.Greater(t, MaxCallStackDepth, 0)
-}
-
 func TestCallWorkflowConfig_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -28,7 +21,6 @@ func TestCallWorkflowConfig_Validate(t *testing.T) {
 			config: CallWorkflowConfig{
 				Workflow: "child-workflow",
 			},
-			wantErr: false,
 		},
 		{
 			name: "valid config with all fields",
@@ -43,15 +35,13 @@ func TestCallWorkflowConfig_Validate(t *testing.T) {
 				},
 				Timeout: 120,
 			},
-			wantErr: false,
 		},
 		{
 			name: "valid config with zero timeout",
 			config: CallWorkflowConfig{
 				Workflow: "quick-job",
-				Timeout:  0, // inherits from step
+				Timeout:  0,
 			},
-			wantErr: false,
 		},
 		{
 			name: "valid config with empty inputs",
@@ -59,7 +49,6 @@ func TestCallWorkflowConfig_Validate(t *testing.T) {
 				Workflow: "standalone-workflow",
 				Inputs:   map[string]string{},
 			},
-			wantErr: false,
 		},
 		{
 			name: "valid config with empty outputs",
@@ -67,7 +56,6 @@ func TestCallWorkflowConfig_Validate(t *testing.T) {
 				Workflow: "fire-and-forget",
 				Outputs:  map[string]string{},
 			},
-			wantErr: false,
 		},
 		{
 			name: "valid config with nil inputs and outputs",
@@ -76,25 +64,20 @@ func TestCallWorkflowConfig_Validate(t *testing.T) {
 				Inputs:   nil,
 				Outputs:  nil,
 			},
-			wantErr: false,
 		},
 		{
 			name: "missing workflow name",
 			config: CallWorkflowConfig{
-				Inputs: map[string]string{
-					"file": "test.txt",
-				},
+				Inputs: map[string]string{"file": "test.txt"},
 			},
 			wantErr: true,
-			errMsg:  "workflow name is required",
+			errMsg:  "workflow name is required for call_workflow steps",
 		},
 		{
-			name: "empty workflow name",
-			config: CallWorkflowConfig{
-				Workflow: "",
-			},
+			name:    "empty workflow name",
+			config:  CallWorkflowConfig{},
 			wantErr: true,
-			errMsg:  "workflow name is required",
+			errMsg:  "workflow name is required for call_workflow steps",
 		},
 		{
 			name: "negative timeout",
@@ -120,10 +103,7 @@ func TestCallWorkflowConfig_Validate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.Validate()
 			if tt.wantErr {
-				require.Error(t, err)
-				if tt.errMsg != "" {
-					assert.Contains(t, err.Error(), tt.errMsg)
-				}
+				require.EqualError(t, err, tt.errMsg)
 			} else {
 				require.NoError(t, err)
 			}
@@ -165,47 +145,26 @@ func TestCallWorkflowConfig_Validate_WorkflowNameVariants(t *testing.T) {
 	}
 }
 
-func TestCallWorkflowConfig_GetTimeout(t *testing.T) {
+func TestCallWorkflowConfig_TimeoutSemantics(t *testing.T) {
 	tests := []struct {
 		name     string
 		timeout  int
 		expected int
 	}{
 		{
-			name:     "zero returns default",
+			name:     "zero remains unlimited",
 			timeout:  0,
-			expected: DefaultSubWorkflowTimeout,
+			expected: 0,
 		},
 		{
-			name:     "positive returns configured value",
+			name:     "positive remains configured limit",
 			timeout:  60,
 			expected: 60,
 		},
-		{
-			name:     "large positive value",
-			timeout:  3600,
-			expected: 3600,
-		},
-		{
-			name:     "exactly default value",
-			timeout:  DefaultSubWorkflowTimeout,
-			expected: DefaultSubWorkflowTimeout,
-		},
-		{
-			name:     "one second",
-			timeout:  1,
-			expected: 1,
-		},
-		{
-			name:     "negative returns default",
-			timeout:  -1,
-			expected: DefaultSubWorkflowTimeout,
-		},
-		{
-			name:     "large negative returns default",
-			timeout:  -1000,
-			expected: DefaultSubWorkflowTimeout,
-		},
+		{name: "large positive value", timeout: 3600, expected: 3600},
+		{name: "one second", timeout: 1, expected: 1},
+		{name: "negative remains unchanged", timeout: -1, expected: -1},
+		{name: "large negative remains unchanged", timeout: -1000, expected: -1000},
 	}
 
 	for _, tt := range tests {
@@ -214,7 +173,7 @@ func TestCallWorkflowConfig_GetTimeout(t *testing.T) {
 				Workflow: "test-workflow",
 				Timeout:  tt.timeout,
 			}
-			assert.Equal(t, tt.expected, config.GetTimeout())
+			assert.Equal(t, tt.expected, config.Timeout)
 		})
 	}
 }
@@ -550,7 +509,7 @@ func TestCallWorkflowConfig_CompleteExample(t *testing.T) {
 	assert.Equal(t, "analyze-single-file", config.Workflow)
 	assert.Len(t, config.Inputs, 3)
 	assert.Len(t, config.Outputs, 2)
-	assert.Equal(t, 120, config.GetTimeout())
+	assert.Equal(t, 120, config.Timeout)
 
 	// Check individual mappings
 	assert.Equal(t, "{{loop.item}}", config.Inputs["file_path"])
@@ -600,31 +559,27 @@ func TestSubWorkflowResult_FailedExecution(t *testing.T) {
 
 func TestCallWorkflowConfig_TimeoutBoundaries(t *testing.T) {
 	tests := []struct {
-		name            string
-		timeout         int
-		expectedTimeout int
-		wantErr         bool
+		name      string
+		timeout   int
+		wantError string
 	}{
-		{"minimum valid (1)", 1, 1, false},
-		{"zero (uses default)", 0, DefaultSubWorkflowTimeout, false},
-		{"large timeout (1 hour)", 3600, 3600, false},
-		{"very large timeout (1 day)", 86400, 86400, false},
-		{"negative (-1)", -1, DefaultSubWorkflowTimeout, true},
+		{name: "minimum integer is rejected", timeout: -int(^uint(0)>>1) - 1, wantError: "timeout must be non-negative"},
+		{name: "zero remains unlimited", timeout: 0},
+		{name: "one second remains configured", timeout: 1},
+		{name: "maximum integer is preserved", timeout: int(^uint(0) >> 1)},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := CallWorkflowConfig{
-				Workflow: "test",
-				Timeout:  tt.timeout,
-			}
+			config := CallWorkflowConfig{Workflow: "child-workflow", Timeout: tt.timeout}
 			err := config.Validate()
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.expectedTimeout, config.GetTimeout())
+			if tt.wantError != "" {
+				require.EqualError(t, err, tt.wantError)
+				return
 			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.timeout, config.Timeout)
 		})
 	}
 }

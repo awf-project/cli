@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,18 +18,22 @@ type purgeLogCapture struct {
 	debugCalls []string
 	infoCalls  []string
 	warnCalls  []string
+	entries    []any
 }
 
-func (l *purgeLogCapture) Debug(msg string, _ ...any) {
+func (l *purgeLogCapture) Debug(msg string, fields ...any) {
 	l.debugCalls = append(l.debugCalls, msg)
+	l.entries = append(l.entries, msg, fields)
 }
 
-func (l *purgeLogCapture) Info(msg string, _ ...any) {
+func (l *purgeLogCapture) Info(msg string, fields ...any) {
 	l.infoCalls = append(l.infoCalls, msg)
+	l.entries = append(l.entries, msg, fields)
 }
 
-func (l *purgeLogCapture) Warn(msg string, _ ...any) {
+func (l *purgeLogCapture) Warn(msg string, fields ...any) {
 	l.warnCalls = append(l.warnCalls, msg)
+	l.entries = append(l.entries, msg, fields)
 }
 
 func (l *purgeLogCapture) Error(_ string, _ ...any)                  {}
@@ -162,24 +167,97 @@ func TestResolveListTimeout(t *testing.T) {
 // timeout (context deadline) is surfaced at WARN — distinct from "not installed" —
 // and does not trigger any remove, since the CLI is installed but unresponsive.
 func TestPurgeOrphanMCPRegistrations_TimeoutLogsWarn(t *testing.T) {
-	// Mirror the shell executor, which wraps ctx.Err() as "command execution: %w".
-	timeoutErr := fmt.Errorf("command execution: %w", context.DeadlineExceeded)
-	exec := &purgeTrackingExecutor{
-		responseFor: map[int]purgeResponse{
-			0: {err: timeoutErr}, // gemini mcp list times out
-			1: {err: timeoutErr}, // opencode mcp list times out
-		},
+	const timeout = 25 * time.Millisecond
+	t.Setenv(mcpListTimeoutEnv, timeout.String())
+
+	type contextObservation struct {
+		program    string
+		deadline   time.Time
+		boundedFor time.Duration
+		err        error
 	}
+	confidential := []string{
+		"workflow-input-secret",
+		"command-output-secret",
+		"prompt-secret",
+		"environment-secret",
+		"request-body-secret",
+		"authorization-header-secret",
+		"plugin-config-secret",
+		"credential-token-secret",
+	}
+	sensitiveError := strings.Join(confidential, " ")
+	observations := make([]contextObservation, 0, 2)
+	exec := commandExecutorFunc(func(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
+		deadline, ok := ctx.Deadline()
+		require.True(t, ok, "maintenance list command must have a bounded context")
+		boundedFor := time.Until(deadline)
+		<-ctx.Done()
+		observations = append(observations, contextObservation{
+			program:    cmd.Program,
+			deadline:   deadline,
+			boundedFor: boundedFor,
+			err:        ctx.Err(),
+		})
+		return nil, fmt.Errorf("%s: %w", sensitiveError, ctx.Err())
+	})
 	log := &purgeLogCapture{}
 
 	err := PurgeOrphanMCPRegistrations(context.Background(), exec, log)
 
 	require.NoError(t, err, "timeout must not propagate as an error")
+	require.Len(t, observations, 2)
+	assert.Equal(t, []string{"gemini mcp list", "opencode mcp list"}, []string{
+		observations[0].program,
+		observations[1].program,
+	})
+	for _, observation := range observations {
+		assert.ErrorIs(t, observation.err, context.DeadlineExceeded)
+		assert.False(t, observation.deadline.IsZero())
+		assert.Positive(t, observation.boundedFor)
+		assert.LessOrEqual(t, observation.boundedFor, timeout)
+	}
 	assert.Len(t, log.warnCalls, 2, "each timed-out CLI must log exactly one warning")
 	assert.Empty(t, log.infoCalls, "no orphan should be purged on timeout")
-	for _, prog := range exec.commandPrograms() {
-		assert.NotContains(t, prog, "remove", "remove must not run when list times out")
+
+	logged := fmt.Sprint(log.entries)
+	assert.Contains(t, logged, "gemini")
+	assert.Contains(t, logged, "opencode")
+	assert.Contains(t, logged, timeout.String())
+	for _, secret := range confidential {
+		assert.NotContains(t, logged, secret)
 	}
+
+	t.Run("caller cancellation preserves sentinel and confidentiality", func(t *testing.T) {
+		parent, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		observedErrors := make([]error, 0, 2)
+		cancelExec := commandExecutorFunc(func(ctx context.Context, _ *ports.Command) (*ports.CommandResult, error) {
+			<-ctx.Done()
+			observedErrors = append(observedErrors, ctx.Err())
+			return nil, fmt.Errorf("%s: %w", sensitiveError, ctx.Err())
+		})
+		cancelLog := &purgeLogCapture{}
+
+		purgeErr := PurgeOrphanMCPRegistrations(parent, cancelExec, cancelLog)
+
+		require.NoError(t, purgeErr, "best-effort purge must not propagate caller cancellation")
+		require.Len(t, observedErrors, 2)
+		for _, observedErr := range observedErrors {
+			assert.ErrorIs(t, observedErr, context.Canceled)
+		}
+		captured := fmt.Sprint(cancelLog.entries)
+		for _, secret := range confidential {
+			assert.NotContains(t, captured, secret)
+		}
+	})
+}
+
+type commandExecutorFunc func(context.Context, *ports.Command) (*ports.CommandResult, error)
+
+func (f commandExecutorFunc) Execute(ctx context.Context, cmd *ports.Command) (*ports.CommandResult, error) {
+	return f(ctx, cmd)
 }
 
 // TestPurgeOrphanMCPRegistrations_NotInstalledIsQuiet verifies that an exit code

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,42 +20,40 @@ import (
 // contention between sibling AWF processes; a longer wait risks stalling workflows.
 const workspaceLockTimeout = 5 * time.Second
 
-// acquireWorkspaceLock opens (or creates) the lock file at lockPath, starts a
-// goroutine to acquire LOCK_EX via syscall.Flock, and waits up to
-// workspaceLockTimeout for success. On success it returns the open *os.File and a
-// release function that closes the file (which releases the advisory lock). The
-// caller is responsible for calling release (typically via defer) before returning.
-//
-// Returns a non-nil error if the lock file cannot be opened, the flock call fails,
-// or the timeout expires.
+// acquireWorkspaceLock acquires an advisory lock without a blocked goroutine.
+// A timed-out waiter closes its own descriptor only after its last nonblocking
+// attempt has returned, so no syscall can retain or race that descriptor.
 func acquireWorkspaceLock(lockPath string) (lf *os.File, release func(), err error) {
-	lf, openErr := os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0o600)
-	if openErr != nil {
-		return nil, nil, fmt.Errorf("open lock file: %w", openErr)
+	lf, err = os.OpenFile(lockPath, os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open lock file: %w", err)
 	}
-
-	flockDone := make(chan error, 1)
-	go func() {
-		flockDone <- syscall.Flock(int(lf.Fd()), syscall.LOCK_EX) //nolint:gosec // G115: file descriptor values are within int range on all supported platforms
-	}()
-
-	lockTimeout := time.NewTimer(workspaceLockTimeout)
-	defer lockTimeout.Stop()
-	select {
-	case ferr := <-flockDone:
-		if ferr != nil {
-			_ = lf.Close()
-			return nil, nil, fmt.Errorf("acquire lock: %w", ferr)
-		}
-	case <-lockTimeout.C:
+	if err = waitForWorkspaceLock(lf); err != nil {
 		_ = lf.Close()
-		return nil, nil, fmt.Errorf("timed out acquiring lock after %s", workspaceLockTimeout)
+		return nil, nil, err
 	}
+	return lf, func() { _ = lf.Close() }, nil
+}
 
-	release = func() {
-		_ = lf.Close() //nolint:errcheck // lock file close; advisory lock released on fd close
+func waitForWorkspaceLock(file *os.File) error {
+	timer := time.NewTimer(workspaceLockTimeout)
+	defer timer.Stop()
+	retry := time.NewTicker(10 * time.Millisecond)
+	defer retry.Stop()
+	for {
+		err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) //nolint:gosec // G115: file descriptor values are within int range on supported platforms
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EINTR) {
+			return fmt.Errorf("acquire lock: %w", err)
+		}
+		select {
+		case <-timer.C:
+			return fmt.Errorf("timed out acquiring lock after %s", workspaceLockTimeout)
+		case <-retry.C:
+		}
 	}
-	return lf, release, nil
 }
 
 // opencodeLockPath returns a per-workspace flock target rooted in os.TempDir() so

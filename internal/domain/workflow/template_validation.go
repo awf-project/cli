@@ -204,7 +204,12 @@ func (v *TemplateValidator) ValidateStep(step *Step, isErrorHook bool) {
 
 func (v *TemplateValidator) validateNamedStep(stepName string, step *Step, isErrorHook bool) {
 	stepPath := appendPath("steps", stepName)
-	currentIdx := v.stepIndex[stepName]
+	currentIdx, inOrder := v.stepIndex[stepName]
+	if !inOrder {
+		// A step outside the traversal has no known execution position.
+		// Still validate its references, without inventing a position of zero.
+		currentIdx = -1
+	}
 
 	// Validate Command field
 	if step.Command != "" {
@@ -671,6 +676,16 @@ func ComputeExecutionOrder(steps map[string]*Step, initial string) ([]string, er
 			for _, branch := range step.Branches {
 				EnqueueIfNotVisited(&queue, visited, branch)
 			}
+		}
+
+		// Loop bodies execute before the completion target. Include both so their
+		// templates receive real execution positions instead of being treated as
+		// unreachable steps. Declared body order also preserves intra-body checks.
+		if step.Loop != nil {
+			for _, bodyStep := range step.Loop.Body {
+				EnqueueIfNotVisited(&queue, visited, bodyStep)
+			}
+			EnqueueIfNotVisited(&queue, visited, step.Loop.OnComplete)
 		}
 
 		// Add successors to queue (handle cycles gracefully)

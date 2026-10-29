@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -24,19 +25,19 @@ type mockLogger struct {
 }
 
 func (m *mockLogger) Debug(msg string, fields ...any) {
-	m.messages = append(m.messages, msg)
+	m.messages = append(m.messages, fmt.Sprint(append([]any{msg}, fields...)...))
 }
 
 func (m *mockLogger) Info(msg string, fields ...any) {
-	m.messages = append(m.messages, msg)
+	m.messages = append(m.messages, fmt.Sprint(append([]any{msg}, fields...)...))
 }
 
 func (m *mockLogger) Warn(msg string, fields ...any) {
-	m.messages = append(m.messages, msg)
+	m.messages = append(m.messages, fmt.Sprint(append([]any{msg}, fields...)...))
 }
 
 func (m *mockLogger) Error(msg string, fields ...any) {
-	m.messages = append(m.messages, msg)
+	m.messages = append(m.messages, fmt.Sprint(append([]any{msg}, fields...)...))
 }
 
 func (m *mockLogger) WithContext(ctx map[string]any) ports.Logger {
@@ -54,6 +55,19 @@ type mockHTTPDoer struct {
 func (m *mockHTTPDoer) Do(req *http.Request) (*http.Response, error) {
 	m.requests = append(m.requests, req)
 	return m.response, m.err
+}
+
+type contextObservingHTTPDoer struct {
+	requestContexts chan<- context.Context
+}
+
+func (d *contextObservingHTTPDoer) Do(req *http.Request) (*http.Response, error) {
+	d.requestContexts <- req.Context()
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader("ok")),
+	}, nil
 }
 
 // --- Interface compliance tests ---
@@ -155,7 +169,7 @@ func TestHTTPOperationProvider_GetOperation_ValidatesSchema(t *testing.T) {
 	timeoutInput := op.Inputs["timeout"]
 	assert.False(t, timeoutInput.Required, "timeout should be optional")
 	assert.Equal(t, pluginmodel.InputTypeInteger, timeoutInput.Type)
-	assert.Equal(t, 30, timeoutInput.Default, "default timeout should be 30 seconds")
+	assert.Nil(t, timeoutInput.Default, "timeout should not have a default")
 
 	retryableInput := op.Inputs["retryable_status_codes"]
 	assert.False(t, retryableInput.Required, "retryable_status_codes should be optional")
@@ -578,57 +592,59 @@ func TestHTTPOperationProvider_Execute_ConnectionError(t *testing.T) {
 	}
 }
 
-func TestHTTPOperationProvider_Execute_TimeoutError(t *testing.T) {
-	// GIVEN: Server delays 2s, operation timeout is 1s
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(2 * time.Second)
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	provider := newTestProvider()
-	inputs := map[string]any{
-		"url":     server.URL,
-		"method":  "GET",
-		"timeout": 1, // 1 second — shorter than server's 2s delay
-	}
-
-	// WHEN: Execute with timeout shorter than server delay
-	result, err := provider.Execute(context.Background(), "http.request", inputs)
-
-	// THEN: Fails with timeout error
-	if err == nil {
-		assert.False(t, result.Success, "should fail on timeout")
-		assert.Contains(t, result.Error, "timeout", "error should mention timeout")
-	} else {
-		assert.Contains(t, err.Error(), "timeout", "error should mention timeout")
-	}
-}
-
 func TestHTTPOperationProvider_Execute_ContextCancellation(t *testing.T) {
+	const (
+		secretToken = "secret-token-value"
+		secretBody  = "secret-request-body"
+		secretQuery = "secret-api-key"
+		secretReply = "secret-response-body"
+	)
+	started := make(chan struct{})
+	releaseHandler := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(100 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
+		close(started)
+		select {
+		case <-r.Context().Done():
+		case <-releaseHandler:
+		}
+		_, _ = w.Write([]byte(secretReply))
 	}))
 	defer server.Close()
 
-	provider := newTestProvider()
+	logger := &mockLogger{}
+	client := httpx.NewClient(httpx.WithTimeout(0))
+	provider := NewHTTPOperationProvider(client, logger)
 	inputs := map[string]any{
-		"url":    server.URL,
-		"method": "GET",
+		"url":    server.URL + "/private?api_key=" + secretQuery,
+		"method": "POST",
+		"headers": map[string]any{
+			"Authorization": "Bearer " + secretToken,
+		},
+		"body": secretBody,
 	}
 
-	// Create context that's already cancelled
 	ctx, cancel := context.WithCancel(context.Background())
+	type outcome struct {
+		result *pluginmodel.OperationResult
+		err    error
+	}
+	completed := make(chan outcome, 1)
+	go func() {
+		result, err := provider.Execute(ctx, "http.request", inputs)
+		completed <- outcome{result: result, err: err}
+	}()
+
+	requireProviderSignal(t, started, "HTTP handler did not start")
 	cancel()
+	got := receiveProviderOutcome(t, completed)
+	close(releaseHandler)
 
-	result, err := provider.Execute(ctx, "http.request", inputs)
-
-	// Should fail due to cancelled context
-	if err == nil {
-		assert.False(t, result.Success, "should fail when context is cancelled")
-	} else {
-		assert.True(t, errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "context canceled"))
+	assert.Nil(t, got.result)
+	require.Error(t, got.err)
+	assert.ErrorIs(t, got.err, context.Canceled)
+	captured := got.err.Error() + strings.Join(logger.messages, "\n")
+	for _, secret := range []string{secretToken, secretBody, secretQuery, secretReply} {
+		assert.NotContains(t, captured, secret)
 	}
 }
 
@@ -739,46 +755,161 @@ func TestHTTPOperationProvider_Execute_NoRetryableCodesSpecified(t *testing.T) {
 // --- Execute tests - Timeout configuration ---
 
 func TestHTTPOperationProvider_Execute_CustomTimeout(t *testing.T) {
-	// This test verifies timeout input is respected
-	// We test that a longer timeout allows a delayed server response to succeed
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Delay less than the configured timeout
-		time.Sleep(100 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	provider := newTestProvider()
-	inputs := map[string]any{
-		"url":     server.URL,
-		"method":  "GET",
-		"timeout": 5, // 5 seconds - long enough for the 100ms delay
+	tests := []struct {
+		name          string
+		parentTimeout time.Duration
+		inputTimeout  int
+		maxElapsed    time.Duration
+	}{
+		{name: "explicit timeout", inputTimeout: 1, maxElapsed: 2 * time.Second},
+		{name: "shorter parent deadline wins", parentTimeout: 50 * time.Millisecond, inputTimeout: 5, maxElapsed: time.Second},
 	}
 
-	result, err := provider.Execute(context.Background(), "http.request", inputs)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				<-r.Context().Done()
+			}))
+			defer server.Close()
 
-	require.NoError(t, err)
-	assert.True(t, result.Success, "should succeed with sufficient timeout")
+			provider := NewHTTPOperationProvider(httpx.NewClient(httpx.WithTimeout(0)), &mockLogger{})
+			ctx := context.Background()
+			if tt.parentTimeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tt.parentTimeout)
+				defer cancel()
+			}
+			started := time.Now()
+			result, err := provider.Execute(ctx, "http.request", map[string]any{
+				"url": server.URL, "method": "GET", "timeout": tt.inputTimeout,
+			})
+
+			assert.Nil(t, result)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, context.DeadlineExceeded)
+			assert.Less(t, time.Since(started), tt.maxElapsed)
+		})
+	}
+
+	t.Run("successful request cancels child context", func(t *testing.T) {
+		requestContexts := make(chan context.Context, 1)
+		provider := NewHTTPOperationProvider(
+			httpx.NewClient(httpx.WithTimeout(0), httpx.WithDoer(&contextObservingHTTPDoer{requestContexts: requestContexts})),
+			&mockLogger{},
+		)
+
+		result, err := provider.Execute(context.Background(), "http.request", map[string]any{
+			"url":     "http://example.invalid/success",
+			"method":  "GET",
+			"timeout": 5,
+		})
+
+		require.NoError(t, err)
+		require.True(t, result.Success)
+		requestCtx := receiveProviderRequestContext(t, requestContexts)
+		requireProviderSignal(t, requestCtx.Done(), "explicit-timeout child context was not cancelled after success")
+		assert.ErrorIs(t, requestCtx.Err(), context.Canceled)
+	})
 }
 
-func TestHTTPOperationProvider_Execute_DefaultTimeout(t *testing.T) {
+func TestHTTPOperationProvider_Execute_TimeoutRange(t *testing.T) {
+	const maxTimeoutSeconds = int64(^uint64(0)>>1) / int64(time.Second)
+
+	for _, timeout := range []any{int(maxTimeoutSeconds), float64(maxTimeoutSeconds)} {
+		t.Run(fmt.Sprintf("largest representable second count %T", timeout), func(t *testing.T) {
+			requestContexts := make(chan context.Context, 1)
+			provider := NewHTTPOperationProvider(
+				httpx.NewClient(httpx.WithTimeout(0), httpx.WithDoer(&contextObservingHTTPDoer{requestContexts: requestContexts})),
+				&mockLogger{},
+			)
+
+			result, err := provider.Execute(context.Background(), "http.request", map[string]any{
+				"url": "http://example.invalid/success", "method": "GET", "timeout": timeout,
+			})
+
+			require.NoError(t, err)
+			require.True(t, result.Success)
+			requestCtx := receiveProviderRequestContext(t, requestContexts)
+			deadline, ok := requestCtx.Deadline()
+			require.True(t, ok)
+			assert.Greater(t, time.Until(deadline), 0*time.Second)
+		})
+	}
+
+	for _, timeout := range []any{int(maxTimeoutSeconds + 1), float64(maxTimeoutSeconds + 1), 1.5} {
+		t.Run(fmt.Sprintf("unsupported value %T %v", timeout, timeout), func(t *testing.T) {
+			provider := newTestProvider()
+
+			result, err := provider.Execute(context.Background(), "http.request", map[string]any{
+				"url": "http://example.invalid/secret", "method": "GET", "timeout": timeout,
+			})
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			assert.False(t, result.Success)
+			assert.Equal(t, "http.request: timeout must be a positive integer within the supported range", result.Error)
+			assert.NotContains(t, result.Error, "secret")
+		})
+	}
+}
+
+func TestHTTPOperationProvider_Execute_WithoutConfiguredTimeout(t *testing.T) {
+	deadlineObserved := make(chan bool, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, hasDeadline := r.Context().Deadline()
+		deadlineObserved <- hasDeadline
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	provider := newTestProvider()
+	provider := NewHTTPOperationProvider(httpx.NewClient(httpx.WithTimeout(0)), &mockLogger{})
 	inputs := map[string]any{
 		"url":    server.URL,
 		"method": "GET",
-		// No timeout specified - should use default 30s
 	}
 
 	result, err := provider.Execute(context.Background(), "http.request", inputs)
 
 	require.NoError(t, err)
 	assert.True(t, result.Success)
-	// Default timeout behavior is tested in httputil package
+	select {
+	case hasDeadline := <-deadlineObserved:
+		assert.False(t, hasDeadline)
+	case <-time.After(2 * time.Second):
+		t.Fatal("HTTP handler did not report request deadline")
+	}
+}
+
+func requireProviderSignal(t *testing.T, signal <-chan struct{}, failureMessage string) {
+	t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(2 * time.Second):
+		t.Fatal(failureMessage)
+	}
+}
+
+func receiveProviderOutcome[T any](t *testing.T, outcomes <-chan T) T {
+	t.Helper()
+	select {
+	case outcome := <-outcomes:
+		return outcome
+	case <-time.After(2 * time.Second):
+		t.Fatal("HTTP operation did not return after cancellation")
+		var zero T
+		return zero
+	}
+}
+
+func receiveProviderRequestContext(t *testing.T, contexts <-chan context.Context) context.Context {
+	t.Helper()
+	select {
+	case requestCtx := <-contexts:
+		return requestCtx
+	case <-time.After(2 * time.Second):
+		t.Fatal("HTTP transport did not receive a request context")
+		return nil
+	}
 }
 
 // --- Helper functions ---

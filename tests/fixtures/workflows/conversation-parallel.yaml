@@ -64,11 +64,11 @@ states:
     prompt: |
       Synthesize these research findings:
 
-      Claude findings: {{states.claude_convo.output}}
+      Claude findings: {{states.claude_convo.Output}}
 
-      Gemini findings: {{states.gemini_convo.output}}
+      Gemini findings: {{states.gemini_convo.Output}}
 
-      Codex findings: {{states.codex_convo.output}}
+      Codex findings: {{states.codex_convo.Output}}
     options:
       model: haiku
     conversation: {}

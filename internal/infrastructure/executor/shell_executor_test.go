@@ -3,8 +3,15 @@ package executor
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -113,42 +120,199 @@ func TestShellExecutor_Execute_NonZeroExitCode(t *testing.T) {
 	}
 }
 
-func TestShellExecutor_Execute_ContextTimeout(t *testing.T) {
-	executor := NewShellExecutor()
-	cmd := ports.Command{Program: "sleep 10"}
+func TestShellExecutor_Execute_WithoutDeadline(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell synchronization fixture requires POSIX named pipes")
+	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-
-	start := time.Now()
-	result, err := executor.Execute(ctx, &cmd)
-	elapsed := time.Since(start)
-
-	assert.Less(t, elapsed, 3*time.Second)
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.NotNil(t, result)
-}
-
-func TestShellExecutor_Execute_ContextCancellation(t *testing.T) {
-	executor := NewShellExecutor()
-	cmd := ports.Command{Program: "sleep 10"}
+	tmpDir := t.TempDir()
+	fifoPath := filepath.Join(tmpDir, "release")
+	readyPath := filepath.Join(tmpDir, "ready")
+	require.NoError(t, syscall.Mkfifo(fifoPath, 0o600))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	_, hasDeadline := ctx.Deadline()
+	require.False(t, hasDeadline)
 
-	// cancel after 500ms
+	resultCh := make(chan shellExecution, 1)
 	go func() {
-		time.Sleep(500 * time.Millisecond)
+		result, err := NewShellExecutor().Execute(ctx, &ports.Command{
+			Program: fmt.Sprintf("touch %q; read release < %q; printf completed", readyPath, fifoPath),
+		})
+		resultCh <- shellExecution{result: result, err: err}
+	}()
+	completed := false
+	t.Cleanup(func() {
 		cancel()
+		if completed {
+			return
+		}
+		select {
+		case <-resultCh:
+		case <-time.After(2 * time.Second):
+			t.Errorf("executor did not stop during cleanup")
+		}
+	})
+
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(readyPath)
+		return err == nil
+	}, time.Second, 10*time.Millisecond)
+
+	require.NoError(t, releaseFIFO(ctx, fifoPath, time.Second))
+
+	var execution shellExecution
+	select {
+	case execution = <-resultCh:
+		completed = true
+	case <-time.After(2 * time.Second):
+		t.Fatal("executor did not return after the FIFO was released")
+	}
+	require.NoError(t, execution.err)
+	require.NotNil(t, execution.result)
+	assert.Equal(t, "completed", execution.result.Stdout)
+	_, hasDeadline = ctx.Deadline()
+	assert.False(t, hasDeadline)
+}
+
+func releaseFIFO(ctx context.Context, path string, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		fd, err := syscall.Open(path, syscall.O_WRONLY|syscall.O_NONBLOCK, 0)
+		if err == nil {
+			return syscall.Close(fd)
+		}
+		if !errors.Is(err, syscall.ENXIO) {
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			return fmt.Errorf("timed out releasing FIFO %q", path)
+		case <-ticker.C:
+		}
+	}
+}
+
+func TestShellExecutor_Execute_ContextTimeout(t *testing.T) {
+	testShellExecutorContextTermination(t, true)
+}
+
+func TestShellExecutor_Execute_ContextCancellation(t *testing.T) {
+	testShellExecutorContextTermination(t, false)
+}
+
+type shellExecution struct {
+	result *ports.CommandResult
+	err    error
+}
+
+func testShellExecutorContextTermination(t *testing.T, useTimeout bool) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("process-group lifecycle assertions require POSIX signals")
+	}
+
+	const (
+		privateCommandValue = "PRIVATE_COMMAND_VALUE"
+		privateEnvValue     = "PRIVATE_ENVIRONMENT_VALUE"
+		privateOutputValue  = "PRIVATE_TOOL_OUTPUT"
+		privatePromptValue  = "PRIVATE_PROMPT"
+		privateRequestValue = "PRIVATE_REQUEST_BODY"
+		privateHeaderValue  = "PRIVATE_AUTHORIZATION_HEADER"
+		privatePluginValue  = "PRIVATE_PLUGIN_CONFIGURATION"
+		privateTokenValue   = "PRIVATE_TOKEN"
+		privateCredential   = "PRIVATE_CREDENTIAL"
+	)
+	tmpDir := t.TempDir()
+	readyPath := filepath.Join(tmpDir, "ready")
+	pidPath := filepath.Join(tmpDir, "child.pid")
+	cmd := &ports.Command{
+		Program: fmt.Sprintf(
+			"printf '%%s' %q \"$SECRET_EXECUTOR_VALUE\" \"$SECRET_PROMPT\" \"$SECRET_REQUEST\" \"$SECRET_HEADER\" \"$SECRET_PLUGIN\" \"$SECRET_TOKEN\" \"$SECRET_CREDENTIAL\" >/dev/null; printf %q; sleep 30 & child=$!; printf '%%s' \"$child\" > %q; touch %q; wait \"$child\"",
+			privateCommandValue,
+			privateOutputValue,
+			pidPath,
+			readyPath,
+		),
+		Env: map[string]string{
+			"SECRET_EXECUTOR_VALUE": privateEnvValue,
+			"SECRET_PROMPT":         privatePromptValue,
+			"SECRET_REQUEST":        privateRequestValue,
+			"SECRET_HEADER":         privateHeaderValue,
+			"SECRET_PLUGIN":         privatePluginValue,
+			"SECRET_TOKEN":          privateTokenValue,
+			"SECRET_CREDENTIAL":     privateCredential,
+		},
+	}
+
+	var (
+		ctx     context.Context
+		cancel  context.CancelFunc
+		wantErr error
+	)
+	if useTimeout {
+		ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+		wantErr = context.DeadlineExceeded
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+		wantErr = context.Canceled
+	}
+	defer cancel()
+
+	resultCh := make(chan shellExecution, 1)
+	go func() {
+		result, err := NewShellExecutor().Execute(ctx, cmd)
+		resultCh <- shellExecution{result: result, err: err}
 	}()
 
-	start := time.Now()
-	result, err := executor.Execute(ctx, &cmd)
-	elapsed := time.Since(start)
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(readyPath)
+		return err == nil
+	}, 2*time.Second, 10*time.Millisecond, "child process did not reach the synchronized blocker")
 
-	assert.Less(t, elapsed, 2*time.Second)
-	assert.ErrorIs(t, err, context.Canceled)
-	assert.NotNil(t, result)
+	pidBytes, err := os.ReadFile(pidPath)
+	require.NoError(t, err)
+	childPID, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+	require.NoError(t, err)
+	if !useTimeout {
+		cancel()
+	}
+
+	var execution shellExecution
+	select {
+	case execution = <-resultCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("executor did not return after context termination")
+	}
+
+	require.Error(t, execution.err)
+	assert.ErrorIs(t, execution.err, wantErr)
+	assert.NotNil(t, execution.result)
+	for _, sensitive := range []string{
+		privateCommandValue,
+		privateEnvValue,
+		privateOutputValue,
+		privatePromptValue,
+		privateRequestValue,
+		privateHeaderValue,
+		privatePluginValue,
+		privateTokenValue,
+		privateCredential,
+	} {
+		assert.NotContains(t, execution.err.Error(), sensitive)
+	}
+	assert.Eventually(t, func() bool {
+		err := syscall.Kill(childPID, 0)
+		return errors.Is(err, syscall.ESRCH)
+	}, time.Second, 10*time.Millisecond, "descendant process %d survived context termination", childPID)
 }
 
 func TestShellExecutor_Execute_WorkingDirectory(t *testing.T) {

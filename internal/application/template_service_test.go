@@ -38,10 +38,11 @@ func newAIAnalyzeTemplate() *workflow.Template {
 		},
 		States: map[string]*workflow.Step{
 			"analyze": {
-				Name:    "analyze",
-				Type:    workflow.StepTypeCommand,
-				Command: "{{parameters.model}} -c '{{parameters.prompt}}'",
-				Timeout: 120,
+				Name:       "analyze",
+				Type:       workflow.StepTypeCommand,
+				Command:    "{{parameters.model}} -c '{{parameters.prompt}}'",
+				Timeout:    120,
+				TimeoutSet: true,
 				Capture: &workflow.CaptureConfig{
 					Stdout: "analysis",
 				},
@@ -783,10 +784,11 @@ func TestTemplateService_ExpandWorkflow_InheritsTimeout(t *testing.T) {
 		Parameters: []workflow.TemplateParam{},
 		States: map[string]*workflow.Step{
 			"run": {
-				Name:    "run",
-				Type:    workflow.StepTypeCommand,
-				Command: "long-running",
-				Timeout: 300,
+				Name:       "run",
+				Type:       workflow.StepTypeCommand,
+				Command:    "long-running",
+				Timeout:    300,
+				TimeoutSet: true,
 			},
 		},
 	}
@@ -861,6 +863,127 @@ func TestTemplateService_ExpandWorkflow_StepTimeoutOverridesTemplate(t *testing.
 
 	// Step timeout should be preserved
 	assert.Equal(t, 60, wf.Steps["step"].Timeout)
+}
+
+func TestTemplateService_ExpandWorkflow_TimeoutInheritance(t *testing.T) {
+	tests := []struct {
+		name               string
+		stepTimeout        int
+		stepTimeoutSet     bool
+		templateTimeout    int
+		templateTimeoutSet bool
+		nested             bool
+		expectedTimeout    int
+		expectedTimeoutSet bool
+	}{
+		{
+			name:               "omitted step timeout inherits explicit template timeout",
+			templateTimeout:    30,
+			templateTimeoutSet: true,
+			expectedTimeout:    30,
+			expectedTimeoutSet: true,
+		},
+		{
+			name:               "explicit zero suppresses template timeout",
+			stepTimeoutSet:     true,
+			templateTimeout:    30,
+			templateTimeoutSet: true,
+			expectedTimeoutSet: true,
+		},
+		{
+			name:               "positive step timeout overrides template timeout",
+			stepTimeout:        60,
+			stepTimeoutSet:     true,
+			templateTimeout:    30,
+			templateTimeoutSet: true,
+			expectedTimeout:    60,
+			expectedTimeoutSet: true,
+		},
+		{
+			name:               "nested template preserves inherited timeout presence",
+			templateTimeout:    30,
+			templateTimeoutSet: true,
+			nested:             true,
+			expectedTimeout:    30,
+			expectedTimeoutSet: true,
+		},
+		{
+			name:               "unset step ignores stale positive value and inherits",
+			stepTimeout:        60,
+			templateTimeout:    30,
+			templateTimeoutSet: true,
+			expectedTimeout:    30,
+			expectedTimeoutSet: true,
+		},
+		{
+			name:            "unset template stale positive value is not inherited",
+			templateTimeout: 30,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := mocks.NewMockTemplateRepository()
+			const sensitiveCommand = "echo prompt=input environment=secret-value"
+			inner := &workflow.Template{
+				Name: "inner-timeout",
+				States: map[string]*workflow.Step{
+					"run": {
+						Name:       "run",
+						Type:       workflow.StepTypeCommand,
+						Command:    sensitiveCommand,
+						Timeout:    tt.templateTimeout,
+						TimeoutSet: tt.templateTimeoutSet,
+					},
+				},
+			}
+			repo.AddTemplate(inner.Name, inner)
+
+			templateName := inner.Name
+			if tt.nested {
+				outer := &workflow.Template{
+					Name: "outer-timeout",
+					States: map[string]*workflow.Step{
+						"run": {
+							Name: "run",
+							TemplateRef: &workflow.WorkflowTemplateRef{
+								TemplateName: inner.Name,
+							},
+						},
+					},
+				}
+				repo.AddTemplate(outer.Name, outer)
+				templateName = outer.Name
+			}
+
+			logger := mocks.NewMockLogger()
+			svc := application.NewTemplateService(repo, logger)
+			wf := &workflow.Workflow{
+				Name:    "timeout-inheritance",
+				Initial: "run",
+				Steps: map[string]*workflow.Step{
+					"run": {
+						Name:       "run",
+						Timeout:    tt.stepTimeout,
+						TimeoutSet: tt.stepTimeoutSet,
+						TemplateRef: &workflow.WorkflowTemplateRef{
+							TemplateName: templateName,
+						},
+					},
+				},
+			}
+
+			err := svc.ExpandWorkflow(context.Background(), wf)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedTimeout, wf.Steps["run"].Timeout)
+			assert.Equal(t, tt.expectedTimeoutSet, wf.Steps["run"].TimeoutSet)
+			for _, message := range logger.GetMessages() {
+				assert.NotContains(t, message.Msg, sensitiveCommand)
+				assert.NotContains(t, message.Fields, sensitiveCommand)
+			}
+		})
+	}
 }
 
 func TestTemplateService_ExpandWorkflow_NilWorkflow(t *testing.T) {

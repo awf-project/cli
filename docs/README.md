@@ -12,7 +12,7 @@ Welcome to the AWF (AI Workflow Framework CLI) documentation.
 |---------|-------------|
 | [Getting Started](getting-started/) | Installation and first steps |
 | [User Guide](user-guide/) | Commands, workflow syntax, templates |
-| [Reference](reference/) | Exit codes, error codes, interpolation, validation, loops |
+| [Reference](reference/) | Exit codes, error codes, interpolation, validation, timeouts, loops |
 | [Development](development/) | Architecture, contributing, testing |
 
 ## Getting Started
@@ -67,6 +67,7 @@ Technical reference documentation:
 - [Error Codes](reference/error-codes.md) - Structured error taxonomy and lookup guide
 - [Variable Interpolation](reference/interpolation.md) - Template variables and syntax
 - [Input Validation](reference/validation.md) - Validation rules for workflow inputs
+- [Timeouts](reference/timeouts.md) - Optional execution deadlines, inheritance, and cancellation semantics
 - [Loop Reference](reference/loop.md) - Loop control flow and transitions
 - [Audit Trail Schema](reference/audit-trail-schema.md) - Workflow start/completion audit log JSONL format
 - [Transcript Schema](reference/transcript-schema.md) - Canonical agent exchange transcript (full execution lifecycle in JSONL)

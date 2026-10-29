@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"math"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -163,7 +164,15 @@ func mapStep(filePath, name string, y *yamlStep) (*workflow.Step, error) {
 		if parseErr != nil {
 			return nil, NewParseError(filePath, "states."+name+".timeout", "invalid duration: "+y.Timeout)
 		}
-		step.Timeout = int(d.Seconds())
+		if d < 0 {
+			return nil, NewParseError(filePath, "states."+name+".timeout", "timeout must be non-negative")
+		}
+		step.TimeoutSet = true
+		if step.Type == workflow.StepTypeAgent && step.Agent != nil {
+			step.Agent.Timeout = int(d.Seconds())
+		} else if step.Type != workflow.StepTypeAgent {
+			step.Timeout = int(d.Seconds())
+		}
 	}
 
 	// Parse skill references
@@ -203,6 +212,9 @@ func parseStepType(s string) (workflow.StepType, error) {
 	case "agent":
 		return workflow.StepTypeAgent, nil
 	default:
+		if workflow.IsQualifiedStepType(s) {
+			return workflow.StepType(s), nil
+		}
 		return "", NewParseError("", "", "unknown step type: "+s)
 	}
 }
@@ -210,7 +222,8 @@ func parseStepType(s string) (workflow.StepType, error) {
 // mapRetry converts yamlRetry to domain RetryConfig.
 func mapRetry(y *yamlRetry) (*workflow.RetryConfig, error) {
 	if y == nil {
-		return nil, nil
+		var absentRetry *workflow.RetryConfig
+		return absentRetry, nil
 	}
 
 	initialDelayMs := 0
@@ -391,8 +404,12 @@ func parseDuration(s string) (time.Duration, error) {
 	}
 
 	// Try as plain integer (seconds)
-	secs, atoiErr := strconv.Atoi(s)
-	if atoiErr == nil {
+	secs, integerErr := strconv.ParseInt(s, 10, 64)
+	if integerErr == nil {
+		const nanosecondsPerSecond = int64(time.Second)
+		if secs > math.MaxInt64/nanosecondsPerSecond || secs < math.MinInt64/nanosecondsPerSecond {
+			return 0, fmt.Errorf("integer seconds %q exceed time.Duration range", s)
+		}
 		return time.Duration(secs) * time.Second, nil
 	}
 
@@ -500,7 +517,8 @@ func mapAgentConfigFlat(y *yamlStep) *workflow.AgentConfig {
 // Returns nil when the input is nil (no mcp_proxy block in YAML).
 func mapMCPProxy(y *yamlMCPProxy) (*workflow.MCPProxyConfig, error) {
 	if y == nil {
-		return nil, nil
+		var absentProxy *workflow.MCPProxyConfig
+		return absentProxy, nil
 	}
 
 	// Determine InterceptBuiltins value.
@@ -546,7 +564,8 @@ func mapConversationConfig(y *yamlConversationConfig) *workflow.ConversationConf
 // Each element is either a string (name-based) or map[string]any with a "path" key (path-based).
 func mapSkillRefs(skills []any) ([]workflow.SkillReference, error) {
 	if len(skills) == 0 {
-		return nil, nil
+		var noSkillRefs []workflow.SkillReference
+		return noSkillRefs, nil
 	}
 	refs := make([]workflow.SkillReference, 0, len(skills))
 	for i, elem := range skills {
@@ -577,7 +596,8 @@ func mapSkillRefs(skills []any) ([]workflow.SkillReference, error) {
 // Accepts a named terminal reference (string) or an inline error object (map).
 func normalizeOnFailure(filePath, stepName string, onFailure any) (string, error) {
 	if onFailure == nil {
-		return "", nil
+		const noFailureTarget = ""
+		return noFailureTarget, nil
 	}
 
 	if s, ok := onFailure.(string); ok {

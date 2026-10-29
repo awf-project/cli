@@ -19,56 +19,48 @@ import (
 func TestSetupSignalHandler_HappyPath_SIGINTCancelsContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	callbackCalled := false
-	onSignal := func() {
-		callbackCalled = true
-	}
-
-	cleanup := setupSignalHandler(ctx, cancel, onSignal)
+	callbackCalled := make(chan struct{})
+	cleanup := setupSignalHandler(ctx, cancel, func() { close(callbackCalled) })
 	defer cleanup()
 
-	// Send SIGINT signal to current process
 	err := syscall.Kill(os.Getpid(), syscall.SIGINT)
 	require.NoError(t, err, "failed to send SIGINT")
 
-	// Wait for signal handling
 	select {
 	case <-ctx.Done():
-		// Context was cancelled - expected
 	case <-time.After(1 * time.Second):
 		t.Fatal("context was not cancelled within timeout")
 	}
 
-	assert.True(t, callbackCalled, "onSignal callback should have been called")
+	select {
+	case <-callbackCalled:
+	default:
+		t.Fatal("onSignal callback was not called before cancellation")
+	}
 	assert.ErrorIs(t, ctx.Err(), context.Canceled, "context should be cancelled")
 }
 
 func TestSetupSignalHandler_HappyPath_SIGTERMCancelsContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	callbackCalled := false
-	onSignal := func() {
-		callbackCalled = true
-	}
-
-	cleanup := setupSignalHandler(ctx, cancel, onSignal)
+	callbackCalled := make(chan struct{})
+	cleanup := setupSignalHandler(ctx, cancel, func() { close(callbackCalled) })
 	defer cleanup()
 
-	// Send SIGTERM signal
 	err := syscall.Kill(os.Getpid(), syscall.SIGTERM)
 	require.NoError(t, err, "failed to send SIGTERM")
 
-	// Wait for signal handling
 	select {
 	case <-ctx.Done():
-		// Context was cancelled - expected
 	case <-time.After(1 * time.Second):
 		t.Fatal("context was not cancelled within timeout")
 	}
 
-	assert.True(t, callbackCalled, "onSignal callback should have been called")
+	select {
+	case <-callbackCalled:
+	default:
+		t.Fatal("onSignal callback was not called before cancellation")
+	}
 	assert.ErrorIs(t, ctx.Err(), context.Canceled, "context should be cancelled")
 }
 

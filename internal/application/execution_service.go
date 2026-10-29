@@ -20,6 +20,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/transcript"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/pkg/display"
+	"github.com/awf-project/cli/pkg/httpx"
 	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/awf-project/cli/pkg/output"
 	"github.com/awf-project/cli/pkg/retry"
@@ -144,7 +145,7 @@ func (s *ExecutionService) finalizeAttemptHistory(
 		// optional history projection is disabled. Keep resume non-blocking and
 		// omit history diagnostics in this mode, as there is no history record to
 		// claim or retry.
-		if err := s.store.Save(ctx, execCtx); err != nil {
+		if err := s.store.Save(ctx, execCtx.PersistenceSnapshot()); err != nil {
 			s.logger.Debug("terminal snapshot save failed while history disabled",
 				"workflow_id", execCtx.WorkflowID,
 				"history_record_id", recordID,
@@ -155,7 +156,7 @@ func (s *ExecutionService) finalizeAttemptHistory(
 		return nil
 	}
 
-	if err := s.store.Save(ctx, execCtx); err != nil {
+	if err := s.store.Save(ctx, execCtx.PersistenceSnapshot()); err != nil {
 		execCtx.FinishHistoryFinalization(false)
 		s.warnHistoryPersistenceFailure(execCtx, recordID, attempt)
 		return fmt.Errorf("persist terminal history snapshot: %w", err)
@@ -169,7 +170,7 @@ func (s *ExecutionService) finalizeAttemptHistory(
 	}
 
 	execCtx.FinishHistoryFinalization(true)
-	if err := s.store.Save(ctx, execCtx); err != nil {
+	if err := s.store.Save(ctx, execCtx.PersistenceSnapshot()); err != nil {
 		s.logger.Warn("history recorded marker save failed",
 			"workflow_id", execCtx.WorkflowID,
 			"history_record_id", recordID,
@@ -205,7 +206,7 @@ func buildExecutionRecord(execCtx *workflow.ExecutionContext, recordID string, a
 
 	var selectedName string
 	var selectedState workflow.StepState
-	for stepName, state := range execCtx.GetAllStepStates() { //nolint:gocritic // rangeValCopy: selecting from a thread-safe snapshot requires value semantics
+	for stepName, state := range execCtx.PersistenceSnapshot().GetAllStepStates() { //nolint:gocritic // rangeValCopy: selecting from a thread-safe snapshot requires value semantics
 		if state.Error == "" {
 			continue
 		}
@@ -216,6 +217,9 @@ func buildExecutionRecord(execCtx *workflow.ExecutionContext, recordID string, a
 		}
 	}
 	record.ErrorMessage = selectedState.Error
+	if selectedState.Error == "execution timed out" {
+		record.ErrorMessage += ": " + context.DeadlineExceeded.Error()
+	}
 	return record
 }
 
@@ -277,6 +281,12 @@ func (s *ExecutionService) executeStartedAttempt(ctx context.Context, wf *workfl
 		result.err = run()
 		if result.err != nil {
 			result.errorMessage = result.err.Error()
+			var structuredErr *domainerrors.StructuredError
+			if errors.As(result.err, &structuredErr) && structuredErr != nil {
+				if seconds, ok := structuredErr.Details["timeout_seconds"]; ok {
+					result.errorMessage = fmt.Sprintf("%s: %s (timeout_owner: step, timeout_seconds: %v)", result.errorMessage, context.DeadlineExceeded.Error(), seconds)
+				}
+			}
 		}
 		return result
 	}()
@@ -506,16 +516,12 @@ func (s *ExecutionService) emitAuditStarted(ctx context.Context, execCtx *workfl
 		return
 	}
 
-	// Build masked copy of inputs: secret keys replaced with "***"
+	// Audit retains input names only: values can contain credentials even under ordinary keys.
 	var maskedInputs map[string]any
 	if len(inputs) > 0 {
 		maskedInputs = make(map[string]any, len(inputs))
-		for k, v := range inputs {
-			if isSecretInputKey(k) {
-				maskedInputs[k] = "***"
-			} else {
-				maskedInputs[k] = v
-			}
+		for k := range inputs {
+			maskedInputs[k] = "***"
 		}
 	}
 
@@ -872,7 +878,7 @@ func (s *ExecutionService) prepareInitialHistoryAttempt(ctx context.Context, exe
 }
 
 func (s *ExecutionService) persistHistoryAttemptAllocation(ctx context.Context, execCtx *workflow.ExecutionContext) error {
-	if err := s.store.Save(ctx, execCtx); err != nil {
+	if err := s.store.Save(ctx, execCtx.PersistenceSnapshot()); err != nil {
 		return fmt.Errorf("persist history attempt allocation: %w", err)
 	}
 	return nil
@@ -1017,6 +1023,7 @@ func (s *ExecutionService) executeStep(
 
 	// T008: Execute command (with retry if configured)
 	result, attempt, execErr := s.executeStepCommand(stepCtx, step, cmd)
+	execErr = classifyExecutionContextError(ctx, stepCtx, step.Timeout, execErr)
 
 	// T008: Record step state (timing, output, attempt)
 	state := s.recordStepResult(step, startTime, result, attempt)
@@ -1047,7 +1054,7 @@ func (s *ExecutionService) resolveNextStep(
 // checkpoint saves the current execution state.
 // Failures are logged but not fatal - execution continues.
 func (s *ExecutionService) checkpoint(ctx context.Context, execCtx *workflow.ExecutionContext) {
-	if err := s.store.Save(ctx, execCtx); err != nil {
+	if err := s.store.Save(ctx, execCtx.PersistenceSnapshot()); err != nil {
 		s.logger.Warn("checkpoint failed", "workflow_id", execCtx.WorkflowID, "error", err)
 	}
 }
@@ -1121,19 +1128,20 @@ func (s *ExecutionService) recordExecutionEnd(
 	}
 	// Persist the final outcome after normalization, including when execution was
 	// cancelled. Earlier step checkpoints may still contain a zero exit code.
-	s.checkpoint(context.WithoutCancel(ctx), execCtx)
-	s.recordHistory(context.WithoutCancel(ctx), execCtx)
-	s.emitAuditCompleted(ctx, execCtx, errorMsg)
+	cleanupCtx := context.WithoutCancel(ctx)
+	s.checkpoint(cleanupCtx, execCtx)
+	s.recordHistory(cleanupCtx, execCtx)
+	s.emitAuditCompleted(cleanupCtx, execCtx, errorMsg)
 }
 
 func normalizeTerminalExitCode(execCtx *workflow.ExecutionContext, completionErr error) {
-	if execCtx.ExitCode != 0 || execCtx.GetStatus() == workflow.StatusCompleted {
+	if execCtx.ExitCode > 0 || execCtx.GetStatus() == workflow.StatusCompleted {
 		return
 	}
 
 	currentStep := execCtx.GetCurrentStep()
 	if currentState, ok := execCtx.GetStepState(currentStep); ok &&
-		currentState.Status == workflow.StatusFailed && currentState.ExitCode != 0 {
+		currentState.Status == workflow.StatusFailed && currentState.ExitCode > 0 {
 		execCtx.ExitCode = currentState.ExitCode
 		return
 	}
@@ -1141,7 +1149,7 @@ func normalizeTerminalExitCode(execCtx *workflow.ExecutionContext, completionErr
 	var selectedName string
 	var selectedState workflow.StepState
 	for stepName, state := range execCtx.GetAllStepStates() { //nolint:gocritic // rangeValCopy: selecting from a thread-safe snapshot requires value semantics
-		if state.Status != workflow.StatusFailed || state.ExitCode == 0 || state.CompletedAt.IsZero() {
+		if state.Status != workflow.StatusFailed || state.ExitCode <= 0 || state.CompletedAt.IsZero() {
 			continue
 		}
 		if selectedState.CompletedAt.IsZero() || state.CompletedAt.After(selectedState.CompletedAt) ||
@@ -1150,7 +1158,7 @@ func normalizeTerminalExitCode(execCtx *workflow.ExecutionContext, completionErr
 			selectedState = state
 		}
 	}
-	if selectedState.ExitCode != 0 {
+	if selectedState.ExitCode > 0 {
 		execCtx.ExitCode = selectedState.ExitCode
 		return
 	}
@@ -1747,10 +1755,9 @@ func (s *ExecutionService) prepareStepExecution(
 	step *workflow.Step,
 	execCtx *workflow.ExecutionContext,
 ) (stepCtx context.Context, intCtx *interpolation.Context, cancel context.CancelFunc, err error) {
-	// apply step timeout
-	stepCtx = ctx
-	if step.Timeout > 0 {
-		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second) //nolint:gosec // G118: cancel is returned to caller who defers it
+	stepCtx, cancel, derived := deriveExecutionContext(ctx, step.Timeout)
+	if !derived {
+		cancel = nil
 	}
 
 	// build interpolation context
@@ -1829,9 +1836,6 @@ func (s *ExecutionService) executeStepCommand(
 ) (*ports.CommandResult, int, error) {
 	ctx, span := s.startSpan(ctx, "shell.execute")
 	defer span.End()
-	if cmd != nil {
-		span.SetAttribute("shell.command", cmd.Program)
-	}
 
 	// Handle nil executor for testing (temporary for T010 RED phase tests)
 	if s.executor == nil {
@@ -2140,8 +2144,8 @@ func (s *ExecutionService) validateInputs(inputs map[string]any, defs []workflow
 	return validation.ValidateInputs(inputs, valDefs)
 }
 
-// Resume continues an interrupted workflow execution from where it left off.
-// It loads persisted state, validates resumability, merges input overrides,
+// Resume continues an interrupted workflow execution from a selected step.
+// It loads persisted state, validates resumability, merges supplied inputs,
 // and continues execution from the resolved fromStep while skipping completed steps.
 // fromStep may be "current", "previous", or a literal step name present in States.
 // ErrExecutionNotFound is returned by Resume when the requested workflow execution
@@ -2206,6 +2210,16 @@ func (s *ExecutionService) Resume(
 
 	// Validate the effective inputs before changing state or emitting a new start.
 	effectiveInputs := MergeInputs(execCtx.GetInputs(), inputOverrides)
+	// Apply defaults for missing values, including legacy metadata-only checkpoints,
+	// then reject invalid inputs before allocating another attempt.
+	for _, input := range wf.Inputs {
+		if _, provided := effectiveInputs[input.Name]; !provided && input.Default != nil {
+			effectiveInputs[input.Name] = input.Default
+		}
+	}
+	if inputErr := s.validateInputs(effectiveInputs, wf.Inputs); inputErr != nil {
+		return nil, fmt.Errorf("input validation failed: %w", inputErr)
+	}
 	s.resumeValidationMu.Lock()
 	validationErr := s.workflowSvc.ValidateLoadedWorkflowWithInputs(ctx, wf, execCtx.WorkflowName, ports.ValidateOptions{}, effectiveInputs)
 	s.resumeValidationMu.Unlock()
@@ -2235,8 +2249,8 @@ func (s *ExecutionService) Resume(
 		s.cleanupStatesAfter(execCtx, targetStep)
 	}
 
-	// 7. Merge input overrides
-	for k, v := range inputOverrides {
+	// 7. Apply validated inputs, including defaults absent from the checkpoint.
+	for k, v := range effectiveInputs {
 		execCtx.SetInput(k, v)
 	}
 
@@ -2507,12 +2521,8 @@ func (s *ExecutionService) executeCustomStepType(
 		return "", fmt.Errorf("step %s: %s", step.Name, errMsg)
 	}
 
-	stepCtx := ctx
-	if step.Timeout > 0 {
-		var cancel context.CancelFunc
-		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second)
-		defer cancel()
-	}
+	stepCtx, cancel, _ := deriveExecutionContext(ctx, step.Timeout)
+	defer cancel()
 
 	intCtx := s.buildInterpolationContext(execCtx)
 	if err := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Pre, intCtx, false); err != nil {
@@ -2528,6 +2538,7 @@ func (s *ExecutionService) executeCustomStepType(
 
 	s.logger.Debug("executing custom step type", "step", step.Name, "type", step.Type)
 	result, execErr := s.stepTypeProvider.ExecuteStep(stepCtx, req)
+	execErr = classifyExecutionContextError(ctx, stepCtx, step.Timeout, execErr)
 
 	state := workflow.StepState{
 		Name:        step.Name,
@@ -2632,13 +2643,8 @@ func (s *ExecutionService) executePluginOperation(
 		return "", fmt.Errorf("step %s: operation %q not found", step.Name, step.Operation)
 	}
 
-	// Apply step timeout
-	stepCtx := ctx
-	if step.Timeout > 0 {
-		var cancel context.CancelFunc
-		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second)
-		defer cancel()
-	}
+	stepCtx, cancel, _ := deriveExecutionContext(ctx, step.Timeout)
+	defer cancel()
 
 	// Build interpolation context
 	intCtx := s.buildInterpolationContext(execCtx)
@@ -2657,6 +2663,7 @@ func (s *ExecutionService) executePluginOperation(
 	// Execute the operation
 	s.logger.Debug("executing plugin operation", "step", step.Name, "operation", step.Operation)
 	result, execErr := s.operationProvider.Execute(stepCtx, step.Operation, resolvedInputs)
+	execErr = classifyExecutionContextError(ctx, stepCtx, step.Timeout, execErr)
 
 	// Record step state
 	state := workflow.StepState{
@@ -2785,17 +2792,13 @@ func (s *ExecutionService) executeAgentStep(
 		return "", fmt.Errorf("step %s: agent configuration missing", step.Name)
 	}
 
-	// Apply step timeout (use agent timeout if step timeout not set)
-	stepCtx := ctx
+	// A positive step timeout takes precedence over a positive agent timeout.
 	timeout := step.Timeout
-	if timeout == 0 && step.Agent.Timeout > 0 {
+	if timeout <= 0 && step.Agent.Timeout > 0 {
 		timeout = step.Agent.Timeout
 	}
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
-		defer cancel()
-	}
+	stepCtx, cancel, _ := deriveExecutionContext(ctx, timeout)
+	defer cancel()
 
 	// Inject the per-step display renderer (ACP typed streaming). No-op for all other
 	// entry points, which never set a factory. Covers the conversation-substruct,
@@ -2816,7 +2819,8 @@ func (s *ExecutionService) executeAgentStep(
 
 	// F033: Route to conversation execution if mode is "conversation"
 	if step.Agent.Mode == "conversation" {
-		return s.executeConversationStep(stepCtx, wf, step, execCtx)
+		nextStep, conversationErr := s.executeConversationStep(stepCtx, wf, step, execCtx)
+		return nextStep, classifyExecutionContextError(ctx, stepCtx, timeout, conversationErr)
 	}
 
 	// F063: Load prompt from file if prompt_file is specified
@@ -2952,6 +2956,7 @@ func (s *ExecutionService) executeAgentStep(
 			}
 		}
 	}
+	execErr = classifyExecutionContextError(ctx, stepCtx, timeout, execErr)
 
 	if result != nil {
 		span.SetAttribute("provider", resolvedProvider)
@@ -3380,4 +3385,51 @@ func (s *ExecutionService) applyOutputFormat(step *workflow.Step, state *workflo
 // Delegates to the package-level helper; see interpolation_helpers.go.
 func (s *ExecutionService) interpolateTerminalMessage(message string, intCtx *interpolation.Context) string {
 	return interpolateTerminalMessage(s.resolver, s.logger, message, intCtx)
+}
+
+func deriveExecutionContext(parent context.Context, timeoutSeconds int) (context.Context, context.CancelFunc, bool) {
+	if timeoutSeconds <= 0 {
+		return parent, func() {}, false
+	}
+
+	const maxTimeout = time.Duration(1<<63 - 1)
+	timeout := maxTimeout
+	if int64(timeoutSeconds) <= int64(maxTimeout/time.Second) {
+		timeout = time.Duration(timeoutSeconds) * time.Second
+	}
+
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	return ctx, cancel, true
+}
+
+func classifyExecutionContextError(
+	parent context.Context,
+	executionCtx context.Context,
+	timeoutSeconds int,
+	err error,
+) error {
+	if err == nil {
+		return nil
+	}
+
+	if parentErr := parent.Err(); parentErr != nil {
+		if errors.Is(err, parentErr) {
+			return httpx.RedactError(err)
+		}
+		return httpx.RedactError(errors.Join(parentErr, err))
+	}
+
+	if timeoutSeconds > 0 && errors.Is(executionCtx.Err(), context.DeadlineExceeded) {
+		return domainerrors.NewExecutionError(
+			domainerrors.ErrorCodeExecutionCommandTimeout,
+			"execution timed out",
+			map[string]any{
+				"timeout_owner":   "step",
+				"timeout_seconds": timeoutSeconds,
+			},
+			context.DeadlineExceeded,
+		)
+	}
+
+	return err
 }

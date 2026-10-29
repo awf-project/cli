@@ -764,6 +764,9 @@ func (a *Adapter) emitTerminalEvent(session *RunSession, execErr error) {
 		kind = ports.EventWorkflowFailed
 		session.setErr(execErr)
 		payload = &ports.EnrichedTerminal{Error: execErr.Error()}
+		if reason := session.cancellationReason(); reason != "" {
+			payload.Error = reason
+		}
 	}
 	session.appendEvent(ports.Event{
 		Kind:      kind,

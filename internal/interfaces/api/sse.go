@@ -92,6 +92,7 @@ type SSEHandler struct {
 	b        *Bridge
 	wg       *sync.WaitGroup
 	sessions SessionLookup
+	shutdown <-chan struct{}
 }
 
 // NewSSEHandler creates an SSEHandler bound to the given Bridge and WaitGroup.
@@ -126,6 +127,8 @@ func (h *SSEHandler) Stream(ctx context.Context, in *StreamInput, send sse.Sende
 	for {
 		select {
 		case <-ctx.Done():
+			return nil
+		case <-h.shutdown:
 			return nil
 		case event, ok := <-session.Events():
 			if !ok {

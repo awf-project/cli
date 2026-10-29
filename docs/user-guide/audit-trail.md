@@ -104,7 +104,9 @@ tail -f audit.jsonl | jq
 
 ## Secret Masking
 
-Input values whose keys match secret patterns (`SECRET_*`, `API_KEY*`, `PASSWORD*`, `TOKEN*`) are automatically masked:
+All input values are masked, including values under ordinary keys such as `prompt` or `credential`. The audit keeps input names and execution metadata. Execution checkpoints are private local state written with owner-only permissions (`0600`). They retain inputs, environment values, outputs, structured responses and conversation state so `awf resume` can reuse saved inputs and completed step results without replaying external side effects. These files may contain sensitive data; audit masking does not redact the checkpoint. Use `--input name=value` to override saved inputs and `--from <step>` to deliberately replay steps. Older metadata-only checkpoints have already lost these values: supply missing inputs again and replay prerequisite steps as needed. Shell command text is excluded from telemetry.
+
+For example:
 
 ```bash
 awf run deploy --input api_key=sk-secret123

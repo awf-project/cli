@@ -3,6 +3,9 @@ package cli
 import (
 	"os"
 
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/ports"
+
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/awf-project/cli/internal/interfaces/tui"
 	"github.com/spf13/cobra"
@@ -32,8 +35,25 @@ func NewApp(cfg *Config) *App {
 	}
 }
 
-func NewRootCommand() *cobra.Command {
-	cmd, _ := newRootCommand(false)
+// RootOption configures dependencies for an embedded root command.
+type RootOption func(*Config)
+
+// WithExecutionSetupOptions extends execution wiring for fresh and resumed runs.
+func WithExecutionSetupOptions(opts ...application.SetupOption) RootOption {
+	return func(cfg *Config) { cfg.ExecutionSetupOptions = append(cfg.ExecutionSetupOptions, opts...) }
+}
+
+// WithCommandExecutor supplies the command executor used by execution wiring.
+func WithCommandExecutor(executor ports.CommandExecutor) RootOption {
+	return func(cfg *Config) { cfg.CommandExecutor = executor }
+}
+
+func NewRootCommand(opts ...RootOption) *cobra.Command {
+	cfg := DefaultConfig()
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	cmd, _ := newRootCommandWithConfig(cfg, false)
 	return cmd
 }
 

@@ -1714,9 +1714,9 @@ analyze:
   on_success: process_response
 ```
 
-### 3. Add Timeouts
+### 3. Set an Explicit Timeout When Needed
 
-Always set reasonable timeouts:
+Omitted timeouts do not impose a hidden execution limit. Set a positive timeout when this agent step needs its own deadline:
 
 ```yaml
 analyze:

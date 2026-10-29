@@ -80,6 +80,26 @@ states:
 | `on_success` | Overrides template's on_success transition |
 | `on_failure` | Overrides template's on_failure transition |
 
+### Override a template timeout
+
+If a template defines a positive step timeout, omitting `timeout` on the using step inherits that limit. Set `timeout: 0` to remove the template's local limit, or set a positive value to replace it:
+
+```yaml
+states:
+  initial: analyze
+  analyze:
+    use_template: ai-analyze
+    timeout: 0
+    parameters:
+      prompt: "Review this code"
+    on_success: done
+  done:
+    type: terminal
+    status: success
+```
+
+The step still follows any earlier caller deadline and user cancellation. See the [timeout reference](../reference/timeouts.md) for the full precedence rules.
+
 ## Parameter Interpolation
 
 Template parameters use `{{parameters.name}}` syntax:

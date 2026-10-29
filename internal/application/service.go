@@ -27,6 +27,7 @@ type WorkflowService struct {
 	logger                 ports.Logger
 	validator              ports.ExpressionValidator
 	validatorProvider      ports.WorkflowValidatorProvider
+	stepTypeProvider       ports.StepTypeProvider
 	packDiscoverer         ports.PackDiscoverer
 	opProvider             ports.OperationProvider
 	templateAnalyzer       workflow.TemplateAnalyzer
@@ -56,6 +57,9 @@ func NewWorkflowService(
 func (s *WorkflowService) SetValidatorProvider(p ports.WorkflowValidatorProvider) {
 	s.validatorProvider = p
 }
+
+// SetStepTypeProvider supplies plugin registration checks after discovery.
+func (s *WorkflowService) SetStepTypeProvider(p ports.StepTypeProvider) { s.stepTypeProvider = p }
 
 func (s *WorkflowService) SetPackDiscoverer(d ports.PackDiscoverer) {
 	s.packDiscoverer = d
@@ -178,7 +182,11 @@ func (s *WorkflowService) validateLoadedWorkflow(ctx context.Context, wf *workfl
 	wf = cloneWorkflowForValidation(wf)
 
 	if s.validator != nil {
-		if err := wf.Validate(s.validator.Compile, nil); err != nil {
+		var checker workflow.StepTypeChecker
+		if s.stepTypeProvider != nil {
+			checker = s.stepTypeProvider.HasStepType
+		}
+		if err := wf.Validate(s.validator.Compile, checker); err != nil {
 			var stateRefErr *workflow.StateReferenceError
 			if errors.As(err, &stateRefErr) {
 				availableAny := make([]any, len(stateRefErr.AvailableStates))

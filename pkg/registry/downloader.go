@@ -25,17 +25,17 @@ const maxDownloadBytes = 100 * 1024 * 1024 // 100 MB
 // Returns downloaded bytes, limited to 100MB.
 func Download(ctx context.Context, client httpx.HTTPDoer, url string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("download failed: %w", err)
+		return nil, fmt.Errorf("download failed: %w", httpx.RedactError(err))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
-		return nil, fmt.Errorf("download failed: %w", err)
+		return nil, fmt.Errorf("download failed: %w", httpx.RedactError(err))
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("download failed: %w", err)
+		return nil, fmt.Errorf("download failed: %w", httpx.RedactError(err))
 	}
 	defer resp.Body.Close()
 
@@ -45,7 +45,7 @@ func Download(ctx context.Context, client httpx.HTTPDoer, url string) ([]byte, e
 
 	body, truncated, err := httpx.ReadBody(resp.Body, maxDownloadBytes)
 	if err != nil {
-		return nil, fmt.Errorf("download failed: %w", err)
+		return nil, fmt.Errorf("download failed: %w", httpx.RedactError(err))
 	}
 
 	if truncated {

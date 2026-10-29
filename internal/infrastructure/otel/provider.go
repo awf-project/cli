@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/pkg/httpx"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -26,9 +28,10 @@ type Config struct {
 // TracerProvider wraps the OTel SDK tracer provider with OTLP gRPC export.
 // Created via otlptracegrpc.New(); use Shutdown to flush and stop.
 type TracerProvider struct {
-	provider *sdktrace.TracerProvider
-	tracer   oteltrace.Tracer
-	exporter *otlptrace.Exporter
+	provider      *sdktrace.TracerProvider
+	tracer        oteltrace.Tracer
+	exporter      *otlptrace.Exporter
+	cancelExports context.CancelFunc
 }
 
 type spanAdapter struct {
@@ -60,7 +63,7 @@ func NewTracerProvider(ctx context.Context, cfg Config) (*TracerProvider, error)
 		return nil, errors.New("service name is required")
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("otel provider: %w", err)
+		return nil, fmt.Errorf("otel provider: %w", httpx.RedactError(err))
 	}
 
 	opts := []otlptracegrpc.Option{
@@ -72,23 +75,32 @@ func NewTracerProvider(ctx context.Context, cfg Config) (*TracerProvider, error)
 
 	exp, err := otlptracegrpc.New(ctx, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("create otlp grpc exporter: %w", err)
+		return nil, fmt.Errorf("create otlp grpc exporter: %w", httpx.RedactError(err))
 	}
 
+	provider := newProviderWithExporter(exp, cfg.ServiceName)
+	provider.exporter = exp
+	return provider, nil
+}
+
+// newProviderWithExporter keeps background batches cancellable during shutdown,
+// including exports already running before ForceFlush starts.
+func newProviderWithExporter(exp sdktrace.SpanExporter, serviceName string, opts ...sdktrace.BatchSpanProcessorOption) *TracerProvider {
+	lifetime, cancel := context.WithCancel(context.Background())
 	res := resource.NewSchemaless(
-		attribute.String("service.name", cfg.ServiceName),
+		attribute.String("service.name", serviceName),
 	)
 
 	sdkProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exp),
+		sdktrace.WithBatcher(shutdownSpanExporter{SpanExporter: exp, lifetime: lifetime}, opts...),
 		sdktrace.WithResource(res),
 	)
 
 	return &TracerProvider{
-		provider: sdkProvider,
-		tracer:   sdkProvider.Tracer(cfg.ServiceName),
-		exporter: exp,
-	}, nil
+		provider:      sdkProvider,
+		tracer:        sdkProvider.Tracer(serviceName),
+		cancelExports: cancel,
+	}
 }
 
 func (p *TracerProvider) Start(ctx context.Context, spanName string) (context.Context, ports.Span) {
@@ -97,8 +109,48 @@ func (p *TracerProvider) Start(ctx context.Context, spanName string) (context.Co
 }
 
 func (p *TracerProvider) Shutdown(ctx context.Context) error {
-	if err := p.provider.Shutdown(ctx); err != nil {
-		return fmt.Errorf("shutdown tracer provider: %w", err)
+	// Flush under the caller deadline before SDK shutdown drains its queue with a
+	// background context. Reserve time for the batch worker to join after cancellation.
+	flushCtx := ctx
+	cancel := func() {}
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		flushCtx, cancel = context.WithDeadline(ctx, deadline.Add(-remaining/4))
+	}
+	defer cancel()
+	if p.cancelExports != nil {
+		stop := context.AfterFunc(flushCtx, p.cancelExports)
+		defer stop()
+		defer p.cancelExports()
+	}
+	flushErr := p.provider.ForceFlush(flushCtx)
+	if err := errors.Join(flushErr, p.provider.Shutdown(ctx)); err != nil {
+		return fmt.Errorf("shutdown tracer provider: %w", httpx.RedactError(err))
+	}
+	return nil
+}
+
+// shutdownSpanExporter links SDK background exports to the provider lifetime.
+// The SDK otherwise drains its queue using a context unrelated to Shutdown.
+type shutdownSpanExporter struct {
+	sdktrace.SpanExporter
+	lifetime context.Context
+}
+
+func (e shutdownSpanExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stop := context.AfterFunc(e.lifetime, cancel)
+	defer stop()
+	if err := e.SpanExporter.ExportSpans(ctx, spans); err != nil {
+		return fmt.Errorf("export spans: %w", httpx.RedactError(err))
+	}
+	return nil
+}
+
+func (e shutdownSpanExporter) Shutdown(ctx context.Context) error {
+	if err := e.SpanExporter.Shutdown(ctx); err != nil {
+		return fmt.Errorf("shutdown exporter: %w", httpx.RedactError(err))
 	}
 	return nil
 }

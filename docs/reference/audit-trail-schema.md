@@ -43,7 +43,7 @@ Emitted when a workflow execution begins, capturing **intent** (before execution
 
 | Field | Type | Required | Example | Notes |
 |-------|------|----------|---------|-------|
-| `inputs` | object | yes | `{"env":"staging","api_key":"***"}` | Key-value map of workflow inputs from `--input` flags. Secret-pattern keys masked as `"***"`. If entry would exceed 4KB, input values are truncated progressively (longest first) and `inputs_truncated` flag set to `true`. |
+| `inputs` | object | yes | `{"env":"***","api_key":"***"}` | Key-value map of workflow inputs from `--input` flags. All input values are masked as `"***"`; keys are retained. If entry would exceed 4KB, input values are truncated progressively (longest first) and `inputs_truncated` flag set to `true`. |
 | `inputs_truncated` | boolean | no | `true` | Present only if input values were truncated to stay under 4KB limit |
 
 **Minimal Example:**
@@ -70,7 +70,7 @@ Emitted when a workflow execution begins, capturing **intent** (before execution
   "user": "deploy-bot",
   "workflow_name": "deploy-app",
   "inputs": {
-    "env": "staging",
+    "env": "***",
     "region": "us-east-1",
     "api_key": "***",
     "database_password": "***"
@@ -176,12 +176,7 @@ an event with a non-empty error is therefore never serialized as `success`.
 
 ### inputs (masking rules)
 
-Keys matching these patterns have values masked as `"***"`:
-
-- `SECRET_*` (case-insensitive)
-- `API_KEY*` (case-insensitive)
-- `PASSWORD*` (case-insensitive)
-- `TOKEN*` (case-insensitive)
+All input values are masked as `"***"` in the application layer, regardless of key spelling. An ordinary name such as `credential` or `prompt` may carry confidential data. Input keys remain available for diagnostics; original values are never sent to the audit writer.
 
 **Examples:**
 
@@ -190,7 +185,7 @@ Keys matching these patterns have values masked as `"***"`:
 | `api_key: "sk-1234567890abcdef"` | `"api_key": "***"` |
 | `APIKey: "sk-1234567890abcdef"` | `"APIKey": "***"` |
 | `secret_token: "ghp_abcdef123456"` | `"secret_token": "***"` |
-| `normal_input: "value"` | `"normal_input": "value"` |
+| `normal_input: "value"` | `"normal_input": "***"` |
 
 ### Entry Size (4KB Limit)
 

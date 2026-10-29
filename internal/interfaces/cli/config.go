@@ -56,19 +56,21 @@ func ParseOutputMode(s string) (OutputMode, error) {
 
 // Config holds CLI configuration.
 type Config struct {
-	Verbose         bool
-	Quiet           bool
-	NoColor         bool
-	NoHints         bool
-	OutputMode      OutputMode
-	OutputFormat    ui.OutputFormat
-	LogLevel        string
-	ConfigPath      string
-	StoragePath     string
-	PluginsDir      string // Override plugin discovery directory (empty = use BuildPluginPaths)
-	OtelExporter    string
-	OtelServiceName string
-	Facade          ports.WorkflowFacade // nil until wired via NewRootCommandWithFacade or main.go
+	ExecutionSetupOptions []application.SetupOption
+	CommandExecutor       ports.CommandExecutor
+	Verbose               bool
+	Quiet                 bool
+	NoColor               bool
+	NoHints               bool
+	OutputMode            OutputMode
+	OutputFormat          ui.OutputFormat
+	LogLevel              string
+	ConfigPath            string
+	StoragePath           string
+	PluginsDir            string // Override plugin discovery directory (empty = use BuildPluginPaths)
+	OtelExporter          string
+	OtelServiceName       string
+	Facade                ports.WorkflowFacade // nil until wired via NewRootCommandWithFacade or main.go
 }
 
 // DefaultConfig returns default configuration.

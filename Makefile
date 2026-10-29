@@ -102,9 +102,10 @@ test-race:
 lint:
 	golangci-lint run
 
-# Format code with gofumpt (stricter than gofmt)
+# Use the installed formatter and the same gofumpt/goimports rules as lint.
+# Formatting must not depend on downloading a tool during workflow execution.
 format:
-	go run mvdan.cc/gofumpt@latest -w .
+	golangci-lint fmt
 
 # Vet code
 vet:

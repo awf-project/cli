@@ -1,12 +1,70 @@
 package repository
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMapStep_TimeoutPresence(t *testing.T) {
+	tests := []struct {
+		name        string
+		stepType    string
+		raw         string
+		want        int
+		wantAgent   int
+		wantSet     bool
+		wantMessage string
+	}{
+		{name: "command omitted", stepType: "step", raw: "", want: 0, wantSet: false},
+		{name: "command explicit zero", stepType: "step", raw: "0", want: 0, wantSet: true},
+		{name: "command integer seconds", stepType: "step", raw: "15", want: 15, wantSet: true},
+		{name: "command Go duration", stepType: "step", raw: "2m30s", want: 150, wantSet: true},
+		{name: "agent omitted", stepType: "agent", raw: "", wantAgent: 0, wantSet: false},
+		{name: "agent explicit zero", stepType: "agent", raw: "0", wantAgent: 0, wantSet: true},
+		{name: "agent positive", stepType: "agent", raw: "15", wantAgent: 15, wantSet: true},
+		{name: "invalid syntax", stepType: "step", raw: "eventually", wantMessage: "invalid duration: eventually"},
+		{name: "integer seconds overflow", stepType: "step", raw: "9223372037", wantMessage: "invalid duration: 9223372037"},
+		{name: "negative duration", stepType: "step", raw: "-1s", wantMessage: "timeout must be non-negative"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			yamlState := &yamlStep{
+				Type:    tt.stepType,
+				Command: "true",
+				Timeout: tt.raw,
+			}
+			if tt.stepType == "agent" {
+				yamlState.Provider = "claude"
+			}
+			step, err := mapStep("workflow.yaml", "execute", yamlState)
+
+			if tt.wantMessage == "" {
+				require.NoError(t, err)
+				require.NotNil(t, step)
+				assert.Equal(t, tt.want, step.Timeout)
+				assert.Equal(t, tt.wantSet, step.TimeoutSet)
+				if tt.stepType == "agent" {
+					require.NotNil(t, step.Agent)
+					assert.Equal(t, tt.wantAgent, step.Agent.Timeout)
+				}
+				return
+			}
+
+			require.Error(t, err)
+			assert.Nil(t, step)
+			var parseErr *ParseError
+			require.True(t, errors.As(err, &parseErr))
+			assert.Equal(t, "states.execute.timeout", parseErr.Field)
+			assert.Equal(t, tt.wantMessage, parseErr.Message)
+		})
+	}
+}
 
 // Feature: 39 - Agent Step Type
 
@@ -417,12 +475,14 @@ func TestMapStep_AgentStep(t *testing.T) {
 			},
 			wantStep: func(t *testing.T, step *workflow.Step) {
 				assert.Equal(t, workflow.StepTypeAgent, step.Type)
-				assert.Equal(t, 300, step.Timeout) // 5 minutes = 300 seconds
+				assert.Zero(t, step.Timeout)
+				assert.True(t, step.TimeoutSet)
 				assert.Equal(t, "error_handler", step.OnFailure)
 
 				require.NotNil(t, step.Agent)
 				assert.Equal(t, "codex", step.Agent.Provider)
 				assert.Equal(t, "Generate tests for {{states.parse.output}}", step.Agent.Prompt)
+				assert.Equal(t, 300, step.Agent.Timeout) // 5 minutes = 300 seconds
 			},
 		},
 		{
@@ -592,7 +652,9 @@ func TestMapStep_AgentPreservesOtherFields(t *testing.T) {
 	// Verify other fields are preserved
 	assert.Equal(t, "agent_step", step.Name)
 	assert.Equal(t, "Complex agent step", step.Description)
-	assert.Equal(t, 120, step.Timeout)
+	assert.Zero(t, step.Timeout)
+	assert.True(t, step.TimeoutSet)
+	assert.Equal(t, 120, step.Agent.Timeout)
 	assert.Equal(t, "success_state", step.OnSuccess)
 	assert.Equal(t, "failure_state", step.OnFailure)
 	assert.False(t, step.ContinueOnError)
@@ -967,12 +1029,14 @@ func TestMapStep_AgentConversationMode(t *testing.T) {
 			wantStep: func(t *testing.T, step *workflow.Step) {
 				assert.Equal(t, workflow.StepTypeAgent, step.Type)
 				assert.Equal(t, "Iterative code review", step.Description)
-				assert.Equal(t, 600, step.Timeout)
+				assert.Zero(t, step.Timeout)
+				assert.True(t, step.TimeoutSet)
 				assert.Equal(t, "deploy", step.OnSuccess)
 
 				require.NotNil(t, step.Agent)
 				assert.Equal(t, "claude", step.Agent.Provider)
 				assert.Equal(t, "conversation", step.Agent.Mode)
+				assert.Equal(t, 600, step.Agent.Timeout)
 				assert.Equal(t, "You are a code reviewer.", step.Agent.SystemPrompt)
 				assert.Equal(t, "Review this code:\n{{inputs.code}}", step.Agent.Prompt)
 
@@ -1395,6 +1459,35 @@ func TestParseDuration_ErrorPaths(t *testing.T) {
 
 			require.Error(t, err)
 			assert.Equal(t, int64(0), got.Nanoseconds())
+		})
+	}
+}
+
+func TestParseDuration_IntegerSecondBounds(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    time.Duration
+		wantErr bool
+	}{
+		{name: "below positive maximum", raw: "9223372035", want: 9223372035 * time.Second},
+		{name: "positive maximum", raw: "9223372036", want: 9223372036 * time.Second},
+		{name: "above positive maximum", raw: "9223372037", wantErr: true},
+		{name: "negative minimum", raw: "-9223372036", want: -9223372036 * time.Second},
+		{name: "below negative minimum", raw: "-9223372037", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseDuration(tt.raw)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Zero(t, got)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

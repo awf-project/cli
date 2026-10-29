@@ -134,15 +134,15 @@ func TestHTTPRequestOperation_OptionalInputs(t *testing.T) {
 	}
 }
 
-func TestHTTPRequestOperation_TimeoutInputDefaults(t *testing.T) {
+func TestHTTPRequestOperation_TimeoutIsOptional(t *testing.T) {
 	ops := AllOperations()
 	require.Len(t, ops, 1)
 	op := ops[0]
 
-	// Verify timeout has default value (FR-006)
 	timeoutInput := op.Inputs["timeout"]
-	assert.Equal(t, 30, timeoutInput.Default, "timeout should default to 30 seconds")
-	assert.Contains(t, timeoutInput.Description, "default: 30", "timeout description should mention default value")
+	assert.False(t, timeoutInput.Required)
+	assert.Nil(t, timeoutInput.Default)
+	assert.Equal(t, pluginmodel.InputTypeInteger, timeoutInput.Type)
 }
 
 func TestHTTPRequestOperation_HeadersInputType(t *testing.T) {
@@ -575,14 +575,13 @@ func TestHTTPRequestOperation_FR005Compliance(t *testing.T) {
 }
 
 func TestHTTPRequestOperation_FR006Compliance(t *testing.T) {
-	// FR-006: The operation must apply timeout as a per-request deadline; default 30 seconds
-
 	ops := AllOperations()
 	require.Len(t, ops, 1)
 	op := ops[0]
 
 	timeoutInput := op.Inputs["timeout"]
-	assert.Equal(t, 30, timeoutInput.Default, "FR-006: timeout must default to 30 seconds")
+	assert.False(t, timeoutInput.Required, "FR-006: timeout must be opt-in")
+	assert.Nil(t, timeoutInput.Default, "FR-006: timeout omission must not create a provider-owned deadline")
 }
 
 func TestHTTPRequestOperation_FR008Compliance(t *testing.T) {

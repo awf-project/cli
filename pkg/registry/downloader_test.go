@@ -9,8 +9,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,6 +27,39 @@ type mockDownloadDoer struct {
 	statusCode int
 	body       []byte
 	err        error
+}
+
+type bodyCloseTrackingDoer struct {
+	client            *http.Client
+	bodyClosed        chan struct{}
+	responseDelivered chan struct{}
+}
+
+func (d *bodyCloseTrackingDoer) Do(req *http.Request) (*http.Response, error) {
+	resp, err := d.client.Do(req) //nolint:gosec // G704: test request targets a controlled httptest server.
+	if err != nil {
+		return nil, err
+	}
+
+	resp.Body = &bodyCloseTracker{
+		ReadCloser: resp.Body,
+		closed:     d.bodyClosed,
+	}
+	close(d.responseDelivered)
+
+	return resp, nil
+}
+
+type bodyCloseTracker struct {
+	io.ReadCloser
+	closed chan struct{}
+	once   sync.Once
+}
+
+func (b *bodyCloseTracker) Close() error {
+	b.once.Do(func() { close(b.closed) })
+
+	return b.ReadCloser.Close()
 }
 
 func (m *mockDownloadDoer) Do(req *http.Request) (*http.Response, error) {
@@ -107,17 +143,144 @@ func TestDownload_Exceeds100MBLimit(t *testing.T) {
 }
 
 func TestDownload_ContextCancellation(t *testing.T) {
-	mockDoer := &mockDownloadDoer{
-		statusCode: 200,
-		body:       []byte("data"),
+	const sensitiveValue = "secret-workflow-input"
+
+	requestCanceled := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, err := io.WriteString(w, sensitiveValue)
+		if err != nil {
+			return
+		}
+		w.(http.Flusher).Flush()
+
+		<-r.Context().Done()
+		close(requestCanceled)
+	}))
+	t.Cleanup(server.Close)
+
+	bodyClosed := make(chan struct{})
+	responseDelivered := make(chan struct{})
+	doer := &bodyCloseTrackingDoer{
+		client:            server.Client(),
+		bodyClosed:        bodyClosed,
+		responseDelivered: responseDelivered,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	type downloadResult struct {
+		data []byte
+		err  error
+	}
+	result := make(chan downloadResult, 1)
+	go func() {
+		data, err := registry.Download(
+			ctx,
+			doer,
+			server.URL+"?token="+sensitiveValue,
+		)
+		result <- downloadResult{data: data, err: err}
+	}()
+
+	select {
+	case <-responseDelivered:
+	case <-time.After(time.Second):
+		t.Fatal("download response was not delivered")
+	}
 	cancel()
 
-	_, err := registry.Download(ctx, mockDoer, "https://example.com/plugin.tar.gz")
+	var got downloadResult
+	select {
+	case got = <-result:
+	case <-time.After(time.Second):
+		t.Fatal("download did not stop after parent cancellation")
+	}
 
-	require.Error(t, err)
+	require.Error(t, got.err)
+	assert.ErrorIs(t, got.err, context.Canceled)
+	assert.Nil(t, got.data)
+	assert.False(t, strings.Contains(got.err.Error(), sensitiveValue))
+
+	select {
+	case <-bodyClosed:
+	case <-time.After(time.Second):
+		t.Fatal("response body was not closed")
+	}
+
+	select {
+	case <-requestCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("server request context was not canceled")
+	}
+
+	t.Run("deadline expiry", func(t *testing.T) {
+		deadlineRequestCanceled := make(chan struct{})
+		deadlineServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, err := io.WriteString(w, sensitiveValue)
+			if err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+
+			<-r.Context().Done()
+			close(deadlineRequestCanceled)
+		}))
+		t.Cleanup(deadlineServer.Close)
+
+		deadlineBodyClosed := make(chan struct{})
+		deadlineResponseDelivered := make(chan struct{})
+		deadlineDoer := &bodyCloseTrackingDoer{
+			client:            deadlineServer.Client(),
+			bodyClosed:        deadlineBodyClosed,
+			responseDelivered: deadlineResponseDelivered,
+		}
+
+		deadlineCtx, deadlineCancel := context.WithTimeout(context.Background(), time.Second)
+		defer deadlineCancel()
+
+		deadlineResult := make(chan downloadResult, 1)
+		go func() {
+			data, err := registry.Download(
+				deadlineCtx,
+				deadlineDoer,
+				deadlineServer.URL+"?token="+sensitiveValue,
+			)
+			deadlineResult <- downloadResult{data: data, err: err}
+		}()
+
+		select {
+		case <-deadlineResponseDelivered:
+		case <-time.After(time.Second):
+			t.Fatal("download response was not delivered before deadline expiry")
+		}
+
+		var deadlineGot downloadResult
+		select {
+		case deadlineGot = <-deadlineResult:
+		case <-time.After(2 * time.Second):
+			t.Fatal("download did not stop after parent deadline expiry")
+		}
+
+		require.Error(t, deadlineGot.err)
+		assert.ErrorIs(t, deadlineGot.err, context.DeadlineExceeded)
+		assert.Nil(t, deadlineGot.data)
+		assert.False(t, strings.Contains(deadlineGot.err.Error(), sensitiveValue))
+
+		select {
+		case <-deadlineBodyClosed:
+		case <-time.After(time.Second):
+			t.Fatal("response body was not closed after deadline expiry")
+		}
+
+		select {
+		case <-deadlineRequestCanceled:
+		case <-time.After(time.Second):
+			t.Fatal("server request context was not canceled after deadline expiry")
+		}
+	})
 }
 
 // ============================================================================

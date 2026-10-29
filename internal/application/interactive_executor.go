@@ -388,7 +388,7 @@ func (e *InteractiveExecutor) handleEditInput(
 
 // checkpoint saves the current execution state.
 func (e *InteractiveExecutor) checkpoint(ctx context.Context, execCtx *workflow.ExecutionContext) {
-	if err := e.store.Save(ctx, execCtx); err != nil {
+	if err := e.store.Save(ctx, execCtx.PersistenceSnapshot()); err != nil {
 		e.logger.Warn("checkpoint failed", "workflow_id", execCtx.WorkflowID, "error", err)
 	}
 }
@@ -417,13 +417,8 @@ func (e *InteractiveExecutor) executeStep(
 ) (string, error) {
 	startTime := time.Now()
 
-	// Apply step timeout
-	stepCtx := ctx
-	if step.Timeout > 0 {
-		var cancel context.CancelFunc
-		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second)
-		defer cancel()
-	}
+	stepCtx, cancel, _ := deriveExecutionContext(ctx, step.Timeout)
+	defer cancel()
 
 	// Build interpolation context
 	intCtx := e.buildInterpolationContext(execCtx)
@@ -460,6 +455,7 @@ func (e *InteractiveExecutor) executeStep(
 
 	// Execute command
 	result, execErr := e.executor.Execute(stepCtx, cmd)
+	execErr = classifyExecutionContextError(ctx, stepCtx, step.Timeout, execErr)
 
 	// Record step state
 	state := workflow.StepState{
@@ -528,6 +524,9 @@ func (e *InteractiveExecutor) HandleExecutionError(
 	// Execute post-hooks even on failure
 	if err := e.hookExecutor.ExecuteHooks(ctx, step.Hooks.Post, intCtx, false); err != nil {
 		e.logger.Warn("post-hook failed", "step", step.Name, "error", err)
+	}
+	if isContextTermination(execErr) {
+		return "", execErr
 	}
 
 	// Transitions take priority over ContinueOnError/OnFailure (ADR-001).
@@ -616,13 +615,8 @@ func (e *InteractiveExecutor) executeParallelStep(
 ) (string, error) {
 	startTime := time.Now()
 
-	// Apply step timeout
-	stepCtx := ctx
-	if step.Timeout > 0 {
-		var cancel context.CancelFunc
-		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second)
-		defer cancel()
-	}
+	stepCtx, cancel, _ := deriveExecutionContext(ctx, step.Timeout)
+	defer cancel()
 
 	// Build interpolation context
 	intCtx := e.buildInterpolationContext(execCtx)
@@ -645,6 +639,7 @@ func (e *InteractiveExecutor) executeParallelStep(
 
 	// Execute parallel branches
 	result, err := e.parallelExecutor.Execute(stepCtx, wf, step.Branches, config, execCtx, adapter)
+	err = classifyExecutionContextError(ctx, stepCtx, step.Timeout, err)
 
 	// Copy branch results to execCtx.States
 	if result != nil {
@@ -687,6 +682,9 @@ func (e *InteractiveExecutor) executeParallelStep(
 		if hookErr := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			e.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
+		if isContextTermination(err) {
+			return "", err
+		}
 
 		if step.OnFailure != "" {
 			return step.OnFailure, nil
@@ -715,13 +713,8 @@ func (e *InteractiveExecutor) executeLoopStep(
 ) (string, error) {
 	startTime := time.Now()
 
-	// Apply step timeout
-	stepCtx := ctx
-	if step.Timeout > 0 {
-		var cancel context.CancelFunc
-		stepCtx, cancel = context.WithTimeout(ctx, time.Duration(step.Timeout)*time.Second)
-		defer cancel()
-	}
+	stepCtx, cancel, _ := deriveExecutionContext(ctx, step.Timeout)
+	defer cancel()
 
 	// Execute pre-hooks
 	intCtx := e.buildInterpolationContext(execCtx)
@@ -763,6 +756,7 @@ func (e *InteractiveExecutor) executeLoopStep(
 			stepCtx, wf, step, execCtx, stepExecutor, e.buildInterpolationContext,
 		)
 	}
+	err = classifyExecutionContextError(ctx, stepCtx, step.Timeout, err)
 
 	// Record loop step state
 	loopState := workflow.StepState{
@@ -780,6 +774,9 @@ func (e *InteractiveExecutor) executeLoopStep(
 		intCtx = e.buildInterpolationContext(execCtx)
 		if hookErr := e.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			e.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+		}
+		if isContextTermination(err) {
+			return "", err
 		}
 
 		if step.OnFailure != "" {
@@ -801,6 +798,10 @@ func (e *InteractiveExecutor) executeLoopStep(
 	}
 
 	return step.Loop.OnComplete, nil
+}
+
+func isContextTermination(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 // interactiveStepExecutorAdapter adapts InteractiveExecutor to the ports.StepExecutor interface.

@@ -18,6 +18,18 @@
       "path": ".zpm/kb/feedback",
       "scope": "project",
       "mode": "rw"
+    },
+    {
+      "name": "feature_b021",
+      "path": ".zpm/kb/feature_b021",
+      "scope": "project",
+      "mode": "rw"
+    },
+    {
+      "name": "feature_b021_pr",
+      "path": ".zpm/kb/feature_b021_pr",
+      "scope": "project",
+      "mode": "rw"
     }
   ]
 }

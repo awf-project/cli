@@ -71,7 +71,7 @@ You'll see the agent's first reply, then a `> ` prompt where you can type. When 
 | `prompt` | Yes | First user message — sent automatically as turn 1 |
 | `system_prompt` | No | System message preserved for the whole session |
 | `options` | No | Provider-specific options (model, allowed_tools, etc.) |
-| `timeout` | No | Per-turn timeout in seconds (default: 300) |
+| `timeout` | No | Optional per-turn timeout in seconds; omission does not add a local deadline |
 
 ### Terminal Requirement
 

@@ -5,9 +5,6 @@ import (
 	"time"
 )
 
-// DefaultSubWorkflowTimeout is the default timeout in seconds for sub-workflow execution.
-const DefaultSubWorkflowTimeout = 300
-
 // MaxCallStackDepth is the maximum allowed nesting depth for sub-workflow calls.
 const MaxCallStackDepth = 10
 
@@ -28,15 +25,6 @@ func (c *CallWorkflowConfig) Validate() error {
 		return errors.New("timeout must be non-negative")
 	}
 	return nil
-}
-
-// GetTimeout returns the effective timeout in seconds.
-// Returns DefaultSubWorkflowTimeout if not explicitly set.
-func (c *CallWorkflowConfig) GetTimeout() int {
-	if c.Timeout > 0 {
-		return c.Timeout
-	}
-	return DefaultSubWorkflowTimeout
 }
 
 // SubWorkflowResult holds the result of a sub-workflow execution.

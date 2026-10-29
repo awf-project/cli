@@ -1,11 +1,16 @@
 package agents
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -78,7 +83,7 @@ func TestOpenAICompatibleProvider_Execute_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 
 			result, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
 
@@ -125,7 +130,7 @@ func TestOpenAICompatibleProvider_Execute_EmptyPrompt(t *testing.T) {
 				"base_url": "http://localhost:11434/v1",
 				"model":    "llama",
 			}
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 
 			result, err := provider.Execute(context.Background(), tt.prompt, options, nil, nil)
 			require.Error(t, err, "should return error for empty prompt")
@@ -213,7 +218,7 @@ func TestOpenAICompatibleProvider_Validate(t *testing.T) {
 			t.Setenv("OPENAI_BASE_URL", "")
 			t.Setenv("OPENAI_MODEL", "")
 
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 			_, err := provider.Execute(context.Background(), "test prompt", tt.options, nil, nil)
 			require.Error(t, err, "should return error for invalid options")
 			assert.Contains(t, err.Error(), tt.wantErr)
@@ -274,7 +279,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_Success(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 			state := tt.stateSetup()
 
 			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, tt.options, nil, nil)
@@ -294,7 +299,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_Success(t *testing.T) {
 }
 
 func TestOpenAICompatibleProvider_ExecuteConversation_NilState(t *testing.T) {
-	provider := NewOpenAICompatibleProvider()
+	provider := newTestOpenAICompatibleProvider()
 
 	result, err := provider.ExecuteConversation(context.Background(), nil, "test", nil, nil, nil)
 	require.Error(t, err)
@@ -322,7 +327,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_EmptyPrompt(t *testing.T) 
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 			state := workflow.NewConversationState("system")
 
 			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, nil, nil, nil)
@@ -334,7 +339,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_EmptyPrompt(t *testing.T) 
 }
 
 func TestOpenAICompatibleProvider_ExecuteConversation_StatePreservation(t *testing.T) {
-	provider := NewOpenAICompatibleProvider()
+	provider := newTestOpenAICompatibleProvider()
 
 	initialState := workflow.NewConversationState("You are helpful")
 	initialState.Turns = []workflow.Turn{
@@ -365,7 +370,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_StatePreservation(t *testi
 }
 
 func TestOpenAICompatibleProvider_Name(t *testing.T) {
-	provider := NewOpenAICompatibleProvider()
+	provider := newTestOpenAICompatibleProvider()
 	assert.Equal(t, "openai_compatible", provider.Name())
 }
 
@@ -388,7 +393,7 @@ func TestOpenAICompatibleProvider_APIKeyNeverInErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 
 			result, err := provider.Execute(context.Background(), "test", tt.options, nil, nil)
 			if err != nil {
@@ -495,7 +500,7 @@ func TestOpenAICompatibleProvider_ValidationErrors(t *testing.T) {
 			t.Setenv("OPENAI_BASE_URL", "")
 			t.Setenv("OPENAI_MODEL", "")
 
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 
 			result, err := provider.Execute(context.Background(), "test prompt", tt.options, nil, nil)
 			require.Error(t, err)
@@ -577,7 +582,7 @@ func TestOpenAICompatibleProvider_MaxCompletionTokensMigration(t *testing.T) {
 			t.Setenv("OPENAI_BASE_URL", "")
 			t.Setenv("OPENAI_MODEL", "")
 
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 			_, err := provider.Execute(context.Background(), "test prompt", tt.options, nil, nil)
 
 			if tt.wantErr {
@@ -666,7 +671,7 @@ func ptrInt(v int) *int {
 
 func TestOpenAICompatibleProvider_Execute_TokenTracking(t *testing.T) {
 	t.Run("tokens are actual not estimated", func(t *testing.T) {
-		provider := NewOpenAICompatibleProvider()
+		provider := newTestOpenAICompatibleProvider()
 		options := map[string]any{
 			"base_url": "http://localhost:11434/v1",
 			"model":    "llama",
@@ -684,7 +689,7 @@ func TestOpenAICompatibleProvider_Execute_TokenTracking(t *testing.T) {
 
 func TestOpenAICompatibleProvider_ExecuteConversation_TokenTracking(t *testing.T) {
 	t.Run("conversation tokens from API usage", func(t *testing.T) {
-		provider := NewOpenAICompatibleProvider()
+		provider := newTestOpenAICompatibleProvider()
 		state := workflow.NewConversationState("You are helpful")
 
 		result, err := provider.ExecuteConversation(context.Background(), state, "test", nil, nil, nil)
@@ -725,7 +730,7 @@ func TestOpenAICompatibleProvider_BaseURLNormalization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 			options := map[string]any{
 				"base_url": tt.baseURL,
 				"model":    "llama",
@@ -742,7 +747,7 @@ func TestOpenAICompatibleProvider_BaseURLNormalization(t *testing.T) {
 
 func TestOpenAICompatibleProvider_ConstructorWithOptions(t *testing.T) {
 	t.Run("constructor with functional options", func(t *testing.T) {
-		provider := NewOpenAICompatibleProvider()
+		provider := newTestOpenAICompatibleProvider()
 		assert.NotNil(t, provider)
 		assert.Equal(t, "openai_compatible", provider.Name())
 	})
@@ -807,7 +812,7 @@ func TestOpenAICompatibleProvider_Execute_WithOptionsMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 
 			result, err := provider.Execute(context.Background(), "test prompt", tt.options, nil, nil)
 			require.NoError(t, err)
@@ -817,7 +822,7 @@ func TestOpenAICompatibleProvider_Execute_WithOptionsMap(t *testing.T) {
 }
 
 func TestOpenAICompatibleProvider_ExecuteConversation_WithHistory(t *testing.T) {
-	provider := NewOpenAICompatibleProvider()
+	provider := newTestOpenAICompatibleProvider()
 
 	state := workflow.NewConversationState("assistant")
 	state.Turns = []workflow.Turn{
@@ -869,7 +874,7 @@ func TestOpenAICompatibleProvider_Execute_JSONOutputFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 
 			result, err := provider.Execute(context.Background(), "Return valid JSON", tt.options, nil, nil)
 
@@ -896,7 +901,7 @@ func TestOpenAICompatibleProvider_Execute_JSONOutputFormat(t *testing.T) {
 
 func TestOpenAICompatibleProvider_Execute_JSONParsing_InvalidJSON(t *testing.T) {
 	t.Run("invalid JSON response with output_format json", func(t *testing.T) {
-		provider := NewOpenAICompatibleProvider()
+		provider := newTestOpenAICompatibleProvider()
 		options := map[string]any{
 			"base_url":      "http://localhost:11434/v1",
 			"model":         "llama",
@@ -916,7 +921,7 @@ func TestOpenAICompatibleProvider_Execute_JSONParsing_InvalidJSON(t *testing.T) 
 
 func TestOpenAICompatibleProvider_Execute_NoJSONOutputFormat(t *testing.T) {
 	t.Run("without output_format should skip JSON parsing", func(t *testing.T) {
-		provider := NewOpenAICompatibleProvider()
+		provider := newTestOpenAICompatibleProvider()
 		options := map[string]any{
 			"base_url": "http://localhost:11434/v1",
 			"model":    "llama",
@@ -936,7 +941,7 @@ func TestOpenAICompatibleProvider_Execute_NoJSONOutputFormat(t *testing.T) {
 
 func TestOpenAICompatibleProvider_Execute_JSONOutputFormat_TextOnly(t *testing.T) {
 	t.Run("output_format json with non-json response should error", func(t *testing.T) {
-		provider := NewOpenAICompatibleProvider()
+		provider := newTestOpenAICompatibleProvider()
 		options := map[string]any{
 			"base_url":      "http://localhost:11434/v1",
 			"model":         "llama",
@@ -1042,7 +1047,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_MessageArrayStructure(t *t
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 			state := tt.setup()
 			result, err := provider.ExecuteConversation(context.Background(), state, tt.prompt, tt.options, nil, nil)
 			tt.validate(t, result, err)
@@ -1106,7 +1111,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_TokenFieldsPopulated(t *te
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 			state := tt.setup()
 			result, err := provider.ExecuteConversation(context.Background(), state, "test prompt", tt.options, nil, nil)
 
@@ -1118,7 +1123,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_TokenFieldsPopulated(t *te
 
 func TestOpenAICompatibleProvider_ExecuteConversation_StateUpdateValidation(t *testing.T) {
 	// T004: Verify that new user and assistant turns are added to ConversationState
-	provider := NewOpenAICompatibleProvider()
+	provider := newTestOpenAICompatibleProvider()
 
 	state := workflow.NewConversationState("You are helpful")
 	state.Turns = []workflow.Turn{
@@ -1155,7 +1160,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_StateUpdateValidation(t *t
 
 func TestOpenAICompatibleProvider_ExecuteConversation_ResponseOutput(t *testing.T) {
 	// T004: Verify Output field is populated with assistant response
-	provider := NewOpenAICompatibleProvider()
+	provider := newTestOpenAICompatibleProvider()
 
 	state := workflow.NewConversationState("system")
 	result, err := provider.ExecuteConversation(context.Background(), state, "What is 2+2?", map[string]any{
@@ -1209,7 +1214,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_SystemPromptHandling(t *te
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 			state := workflow.NewConversationState("system")
 
 			result, err := provider.ExecuteConversation(context.Background(), state, "test", tt.options, nil, nil)
@@ -1268,7 +1273,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_ErrorPropagation(t *testin
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider := NewOpenAICompatibleProvider()
+			provider := newTestOpenAICompatibleProvider()
 
 			result, err := provider.ExecuteConversation(context.Background(), tt.state, tt.prompt, tt.options, nil, nil)
 
@@ -1281,7 +1286,7 @@ func TestOpenAICompatibleProvider_ExecuteConversation_ErrorPropagation(t *testin
 
 func TestOpenAICompatibleProvider_ExecuteConversation_TimestampTracking(t *testing.T) {
 	// T004: Verify StartedAt and CompletedAt are set
-	provider := NewOpenAICompatibleProvider()
+	provider := newTestOpenAICompatibleProvider()
 	state := workflow.NewConversationState("system")
 
 	startBefore := time.Now()
@@ -1312,6 +1317,27 @@ type mockHTTPDoer struct {
 	statusCode int
 	retryAfter string
 	body       string
+}
+
+type contextCapturingHTTPDoer struct {
+	request    *http.Request
+	statusCode int
+	body       string
+	onRequest  func(context.Context)
+}
+
+func (d *contextCapturingHTTPDoer) Do(request *http.Request) (*http.Response, error) {
+	d.request = request
+	if d.onRequest != nil {
+		d.onRequest(request.Context())
+	}
+	if err := request.Context().Err(); err != nil {
+		return nil, err
+	}
+	return &http.Response{
+		StatusCode: d.statusCode,
+		Body:       io.NopCloser(strings.NewReader(d.body)),
+	}, nil
 }
 
 func (m *mockHTTPDoer) Do(_ *http.Request) (*http.Response, error) {
@@ -1594,7 +1620,7 @@ func TestOpenAICompatibleProvider_ContextDeadlineExceeded_Execute(t *testing.T) 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Immediately cancel context
 
-	provider := NewOpenAICompatibleProvider()
+	provider := newTestOpenAICompatibleProvider()
 
 	result, err := provider.Execute(ctx, "test prompt", map[string]any{
 		"base_url": "http://localhost:11434/v1",
@@ -1611,7 +1637,7 @@ func TestOpenAICompatibleProvider_ContextDeadlineExceeded_ExecuteConversation(t 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Immediately cancel context
 
-	provider := NewOpenAICompatibleProvider()
+	provider := newTestOpenAICompatibleProvider()
 	state := workflow.NewConversationState("system")
 
 	result, err := provider.ExecuteConversation(ctx, state, "test prompt", map[string]any{
@@ -1622,6 +1648,334 @@ func TestOpenAICompatibleProvider_ContextDeadlineExceeded_ExecuteConversation(t 
 	require.Error(t, err, "should return error for canceled context")
 	assert.Nil(t, result, "should not return result on error")
 	assert.Contains(t, err.Error(), "context canceled", "error should indicate context was canceled")
+}
+
+type openAIContextRun func(context.Context, *OpenAICompatibleProvider, map[string]any, io.Writer, io.Writer) error
+
+func TestOpenAICompatibleProvider_UsesCallerTimeoutContext(t *testing.T) {
+	const (
+		prompt              = "PRIVATE_PROMPT"
+		systemPrompt        = "PRIVATE_SYSTEM_PROMPT"
+		conversationMessage = "PRIVATE_CONVERSATION_MESSAGE"
+	)
+
+	tests := []struct {
+		name string
+		run  openAIContextRun
+	}{
+		{
+			name: "execute",
+			run: func(ctx context.Context, provider *OpenAICompatibleProvider, runOptions map[string]any, stdout, stderr io.Writer) error {
+				_, err := provider.Execute(ctx, prompt, runOptions, stdout, stderr)
+				return err
+			},
+		},
+		{
+			name: "conversation",
+			run: func(ctx context.Context, provider *OpenAICompatibleProvider, runOptions map[string]any, stdout, stderr io.Writer) error {
+				state := workflow.NewConversationState(systemPrompt)
+				state.Turns = []workflow.Turn{*workflow.NewTurn(workflow.TurnRoleUser, conversationMessage)}
+				_, err := provider.ExecuteConversation(ctx, state, prompt, runOptions, stdout, stderr)
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testOpenAICallerContext(t, tt.run)
+			testOpenAIContextConfidentiality(t, tt.run)
+			testOpenAIDefaultTransportContext(t, tt.run)
+		})
+	}
+}
+
+func testOpenAICallerContext(t *testing.T, run openAIContextRun) {
+	t.Helper()
+	const (
+		systemPrompt = "PRIVATE_SYSTEM_PROMPT"
+		apiKey       = "PRIVATE_AUTHORIZATION_HEADER"
+	)
+
+	successBody := `{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`
+	options := map[string]any{
+		"base_url":      "http://ollama.local/v1",
+		"model":         "test-model",
+		"system_prompt": systemPrompt,
+		"api_key":       apiKey,
+	}
+
+	t.Run("deadline free", func(t *testing.T) {
+		doer := &contextCapturingHTTPDoer{statusCode: http.StatusOK, body: successBody}
+		provider := NewOpenAICompatibleProvider(WithHTTPClient(httpx.NewClient(httpx.WithDoer(doer))))
+
+		require.NoError(t, run(context.Background(), provider, options, nil, nil))
+		require.NotNil(t, doer.request)
+		_, hasDeadline := doer.request.Context().Deadline()
+		assert.False(t, hasDeadline)
+	})
+
+	t.Run("parent deadline", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		wantDeadline, ok := ctx.Deadline()
+		require.True(t, ok)
+
+		doer := &contextCapturingHTTPDoer{statusCode: http.StatusOK, body: successBody}
+		provider := NewOpenAICompatibleProvider(WithHTTPClient(httpx.NewClient(httpx.WithDoer(doer))))
+
+		require.NoError(t, run(ctx, provider, options, nil, nil))
+		require.NotNil(t, doer.request)
+		gotDeadline, gotDeadlineOK := doer.request.Context().Deadline()
+		assert.True(t, gotDeadlineOK)
+		assert.Equal(t, wantDeadline, gotDeadline)
+	})
+
+	t.Run("cancellation preserves identity", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		doer := &contextCapturingHTTPDoer{
+			statusCode: http.StatusOK,
+			body:       successBody,
+			onRequest: func(context.Context) {
+				cancel()
+			},
+		}
+		provider := NewOpenAICompatibleProvider(WithHTTPClient(httpx.NewClient(httpx.WithDoer(doer))))
+
+		err := run(ctx, provider, options, nil, nil)
+		require.NotNil(t, doer.request)
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("deadline expiry preserves identity", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+		defer cancel()
+
+		doer := &contextCapturingHTTPDoer{
+			statusCode: http.StatusOK,
+			body:       successBody,
+			onRequest: func(requestCtx context.Context) {
+				<-requestCtx.Done()
+			},
+		}
+		provider := NewOpenAICompatibleProvider(WithHTTPClient(httpx.NewClient(httpx.WithDoer(doer))))
+
+		err := run(ctx, provider, options, nil, nil)
+		require.NotNil(t, doer.request)
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
+	})
+}
+
+func testOpenAIContextConfidentiality(t *testing.T, run openAIContextRun) {
+	t.Helper()
+	const (
+		prompt              = "PRIVATE_PROMPT"
+		systemPrompt        = "PRIVATE_SYSTEM_PROMPT"
+		conversationMessage = "PRIVATE_CONVERSATION_MESSAGE"
+		toolArguments       = `{"credential":"PRIVATE_TOOL_ARGUMENT"}`
+		authorizationHeader = "Bearer PRIVATE_AUTHORIZATION_HEADER"
+		apiKey              = "PRIVATE_AUTHORIZATION_HEADER"
+		token               = "PRIVATE_TOKEN"
+		otherSecret         = "PRIVATE_OTHER_SECRET"
+		rawResponse         = "PRIVATE_RAW_RESPONSE"
+		toolDispatchError   = "PRIVATE_TOOL_DISPATCH_ERROR"
+	)
+
+	options := map[string]any{
+		"base_url":      "http://ollama.local/v1",
+		"model":         "test-model",
+		"system_prompt": systemPrompt,
+		"api_key":       apiKey,
+	}
+
+	t.Run("errors remain confidential", func(t *testing.T) {
+		// The server deliberately echoes every sensitive request category.
+		// Neither public execution mode may reproduce those values in errors
+		// or output streams that callers commonly capture as logs.
+		doer := &contextCapturingHTTPDoer{
+			statusCode: http.StatusInternalServerError,
+			body: `{"error":"` + strings.Join([]string{
+				rawResponse, systemPrompt, conversationMessage, toolArguments,
+				authorizationHeader, apiKey, token, otherSecret,
+			}, "|") + `"}`,
+		}
+		provider := NewOpenAICompatibleProvider(WithHTTPClient(httpx.NewClient(httpx.WithDoer(doer))))
+		var stdout, stderr bytes.Buffer
+
+		err := run(context.Background(), provider, options, &stdout, &stderr)
+		require.Error(t, err)
+		require.NotNil(t, doer.request)
+		assert.Equal(t, authorizationHeader, doer.request.Header.Get("Authorization"))
+		captured := err.Error() + "\n" + stdout.String() + "\n" + stderr.String()
+		for _, secret := range []string{
+			prompt, systemPrompt, conversationMessage, toolArguments,
+			authorizationHeader, apiKey, token, otherSecret, rawResponse,
+		} {
+			assert.NotContains(t, captured, secret)
+		}
+		assert.False(t, errors.Is(err, context.Canceled))
+	})
+
+	t.Run("tool call failures remain confidential", func(t *testing.T) {
+		var requestCount atomic.Int32
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requestNumber := requestCount.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			if requestNumber == 1 {
+				_, _ = io.WriteString(w, `{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_secret","type":"function","function":{"name":"secret_tool","arguments":`+strconv.Quote(toolArguments)+`}}]},"finish_reason":"tool_calls"}]}`)
+				return
+			}
+
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = io.WriteString(w, `{"error":"tool follow-up failed"}`)
+		}))
+		defer server.Close()
+
+		router := &stubToolRouter{callErr: errors.New(toolDispatchError)}
+		provider := NewOpenAICompatibleProvider(WithHTTPClient(httpx.NewClient(httpx.WithDoer(server.Client()))))
+		provider.SetToolRouter(router)
+		toolOptions := map[string]any{
+			"base_url": server.URL,
+			"model":    "test-model",
+			workflow.MCPProxyConfigKey: &workflow.MCPProxyConfig{
+				Enable:            true,
+				InterceptBuiltins: true,
+			},
+		}
+		var stdout, stderr bytes.Buffer
+
+		err := run(context.Background(), provider, toolOptions, &stdout, &stderr)
+		require.Error(t, err)
+		assert.Equal(t, int32(2), requestCount.Load())
+		assert.Equal(t, "secret_tool", router.lastName)
+		assert.Equal(t, "PRIVATE_TOOL_ARGUMENT", router.lastArgs["credential"])
+		captured := err.Error() + "\n" + stdout.String() + "\n" + stderr.String()
+		assert.NotContains(t, captured, toolArguments)
+		assert.NotContains(t, captured, "PRIVATE_TOOL_ARGUMENT")
+		assert.NotContains(t, captured, toolDispatchError)
+	})
+}
+
+type openAITransportStop struct {
+	name    string
+	newCtx  func() (context.Context, context.CancelFunc)
+	wantErr error
+}
+
+func testOpenAIDefaultTransportContext(t *testing.T, run openAIContextRun) {
+	t.Helper()
+	for _, waitPoint := range []string{"response headers", "response body"} {
+		testOpenAIUnlimitedTransport(t, run, waitPoint)
+
+		for _, stop := range []openAITransportStop{
+			{
+				name: "caller deadline stops " + waitPoint,
+				newCtx: func() (context.Context, context.CancelFunc) {
+					return context.WithTimeout(context.Background(), 100*time.Millisecond)
+				},
+				wantErr: context.DeadlineExceeded,
+			},
+			{
+				name: "caller cancellation stops " + waitPoint,
+				newCtx: func() (context.Context, context.CancelFunc) {
+					return context.WithCancel(context.Background())
+				},
+				wantErr: context.Canceled,
+			},
+		} {
+			testOpenAICanceledTransport(t, run, waitPoint, stop)
+		}
+	}
+}
+
+func testOpenAIUnlimitedTransport(t *testing.T, run openAIContextRun, waitPoint string) {
+	t.Helper()
+	successBody := "{\"choices\":[{\"message\":{\"content\":\"ok\"}}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}"
+	t.Run("default transport waits without a configured timeout for "+waitPoint, func(t *testing.T) {
+		requestArrived := make(chan struct{})
+		releaseResponse := make(chan struct{})
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			if waitPoint == "response body" {
+				w.WriteHeader(http.StatusOK)
+				w.(http.Flusher).Flush()
+			}
+			close(requestArrived)
+			select {
+			case <-releaseResponse:
+				if waitPoint == "response headers" {
+					w.WriteHeader(http.StatusOK)
+				}
+				_, _ = io.WriteString(w, successBody)
+			case <-request.Context().Done():
+			}
+		}))
+		defer server.Close()
+
+		provider := NewOpenAICompatibleProvider()
+		localOptions := map[string]any{"base_url": server.URL, "model": "test-model"}
+		finished := make(chan error, 1)
+		go func() {
+			finished <- run(context.Background(), provider, localOptions, nil, nil)
+		}()
+
+		select {
+		case <-requestArrived:
+		case <-time.After(2 * time.Second):
+			t.Fatal("provider request did not reach the local endpoint")
+		}
+		select {
+		case err := <-finished:
+			t.Fatalf("deadline-free request stopped while waiting for %s: %v", waitPoint, err)
+		case <-time.After(100 * time.Millisecond):
+		}
+		close(releaseResponse)
+		require.NoError(t, <-finished)
+	})
+}
+
+func testOpenAICanceledTransport(t *testing.T, run openAIContextRun, waitPoint string, stop openAITransportStop) {
+	t.Helper()
+
+	t.Run(stop.name, func(t *testing.T) {
+		requestArrived := make(chan struct{})
+		releaseResponse := make(chan struct{})
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+			if waitPoint == "response body" {
+				w.WriteHeader(http.StatusOK)
+				w.(http.Flusher).Flush()
+			}
+			close(requestArrived)
+			<-releaseResponse
+		}))
+		defer server.Close()
+		defer close(releaseResponse)
+
+		ctx, cancel := stop.newCtx()
+		defer cancel()
+		provider := NewOpenAICompatibleProvider()
+		localOptions := map[string]any{"base_url": server.URL, "model": "test-model"}
+		finished := make(chan error, 1)
+		go func() {
+			finished <- run(ctx, provider, localOptions, nil, nil)
+		}()
+
+		select {
+		case <-requestArrived:
+		case <-time.After(2 * time.Second):
+			t.Fatal("provider request did not reach the local endpoint")
+		}
+		if errors.Is(stop.wantErr, context.Canceled) {
+			cancel()
+		}
+		select {
+		case err := <-finished:
+			assert.ErrorIs(t, err, stop.wantErr)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("provider did not stop while waiting for %s", waitPoint)
+		}
+	})
 }
 
 func TestOpenAICompatibleProvider_HTTPErrorMapping_UnexpectedStatus_Execute(t *testing.T) {

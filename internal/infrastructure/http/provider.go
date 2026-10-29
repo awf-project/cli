@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"slices"
 	"strings"
@@ -107,7 +108,10 @@ func (p *HTTPOperationProvider) handleHTTPRequest(ctx context.Context, inputs ma
 	// Extract optional inputs
 	headers := extractHeaders(inputs)
 	body := extractBody(inputs)
-	timeout, hasTimeout := extractTimeout(inputs)
+	timeout, hasTimeout, err := extractTimeout(inputs)
+	if err != nil {
+		return failureResult(err.Error()), nil
+	}
 	retryableStatusCodes := extractRetryableStatusCodes(inputs)
 
 	// Apply timeout to context if specified in inputs
@@ -122,7 +126,7 @@ func (p *HTTPOperationProvider) handleHTTPRequest(ctx context.Context, inputs ma
 	const maxBodyBytes = 1 << 20
 	resp, err := p.client.Do(ctxWithTimeout, method, url, headers, body, maxBodyBytes)
 	if err != nil {
-		return handleRequestError(err, timeout), nil
+		return handleRequestError(err, timeout)
 	}
 
 	// Check if status code is retryable
@@ -195,37 +199,44 @@ func extractHeaders(inputs map[string]any) map[string]string {
 
 // extractBody extracts body from inputs
 func extractBody(inputs map[string]any) string {
+	const emptyBody = ""
+
 	bodyRaw, exists := inputs["body"]
 	if !exists {
-		return ""
+		return emptyBody
 	}
 
 	body, ok := bodyRaw.(string)
 	if !ok {
-		return ""
+		return emptyBody
 	}
 	return body
 }
 
-// extractTimeout extracts timeout from inputs
-func extractTimeout(inputs map[string]any) (time.Duration, bool) {
+// extractTimeout extracts a positive integer-second timeout from inputs.
+func extractTimeout(inputs map[string]any) (time.Duration, bool, error) {
 	timeoutRaw, exists := inputs["timeout"]
 	if !exists {
-		return 0, false
+		return 0, false, nil
 	}
 
+	const maxTimeoutSeconds = int64(^uint64(0)>>1) / int64(time.Second)
+	var seconds int64
 	switch v := timeoutRaw.(type) {
 	case int:
-		if v > 0 {
-			return time.Duration(v) * time.Second, true
+		if v > 0 && int64(v) <= maxTimeoutSeconds {
+			seconds = int64(v)
 		}
 	case float64:
-		if v > 0 {
-			return time.Duration(v) * time.Second, true
+		if v > 0 && v == math.Trunc(v) && v <= float64(maxTimeoutSeconds) {
+			seconds = int64(v)
 		}
 	}
 
-	return 0, false
+	if seconds == 0 {
+		return 0, false, fmt.Errorf("http.request: timeout must be a positive integer within the supported range")
+	}
+	return time.Duration(seconds) * time.Second, true, nil
 }
 
 // extractRetryableStatusCodes extracts retryable status codes from inputs
@@ -252,19 +263,19 @@ func extractRetryableStatusCodes(inputs map[string]any) []int {
 	return codes
 }
 
-// handleRequestError converts HTTP request errors to operation results.
-// timeout is the user-specified timeout (0 means default was used).
-func handleRequestError(err error, timeout time.Duration) *pluginmodel.OperationResult {
+// handleRequestError preserves context cancellation identity while keeping
+// request and transport details out of provider errors.
+func handleRequestError(err error, timeout time.Duration) (*pluginmodel.OperationResult, error) {
 	if errors.Is(err, context.DeadlineExceeded) {
 		if timeout > 0 {
-			return failureResult("http.request: request timeout after " + timeout.String())
+			return nil, fmt.Errorf("http.request: request timeout after %s: %w", timeout, context.DeadlineExceeded)
 		}
-		return failureResult("http.request: request timeout")
+		return nil, fmt.Errorf("http.request: request timeout: %w", context.DeadlineExceeded)
 	}
 	if errors.Is(err, context.Canceled) {
-		return failureResult("http.request: request cancelled")
+		return nil, fmt.Errorf("http.request: request cancelled: %w", context.Canceled)
 	}
-	return failureResult("http.request: " + err.Error())
+	return failureResult("http.request: request failed"), nil
 }
 
 // isRetryableStatus checks if a status code is in the retryable list
