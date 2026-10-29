@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1462,4 +1464,61 @@ func TestExecutionService_AgentStep_ProviderInterpolation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExecutionService_AgentStep_ResolvesOptionTemplates(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "prompt.md"), []byte("hello"), 0o644))
+	t.Setenv("OPENAI_BASE_URL", "https://llm.example/v1")
+
+	var captured map[string]any
+	claude := mocks.NewMockAgentProvider("claude")
+	claude.SetExecuteFunc(func(ctx context.Context, prompt string, options map[string]any, stdout, stderr io.Writer) (*workflow.AgentResult, error) {
+		captured = options
+		return &workflow.AgentResult{Output: "ok", StartedAt: time.Now(), CompletedAt: time.Now()}, nil
+	})
+	registry := mocks.NewMockAgentRegistry()
+	_ = registry.Register(claude)
+
+	wf := &workflow.Workflow{
+		Name:      "agent-test",
+		Initial:   "ask",
+		SourceDir: dir,
+		Steps: map[string]*workflow.Step{
+			"ask": {
+				Name: "ask",
+				Type: workflow.StepTypeAgent,
+				Agent: &workflow.AgentConfig{
+					Provider:   "claude",
+					PromptFile: "prompt.md",
+					Options: map[string]any{
+						"base_url": "{{.env.OPENAI_BASE_URL}}",
+						"model":    "m1",
+						"extra":    map[string]any{"endpoint": "{{.env.OPENAI_BASE_URL}}"},
+					},
+				},
+				OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+
+	wfSvc := application.NewWorkflowService(newMockRepository(), newMockStateStore(), newMockExecutor(), &mockLogger{}, nil)
+	execSvc := application.NewExecutionService(
+		wfSvc,
+		newMockExecutor(),
+		newMockParallelExecutor(),
+		newMockStateStore(),
+		&mockLogger{},
+		interpolation.NewTemplateResolver(),
+		nil,
+	)
+	execSvc.SetAgentRegistry(registry)
+
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "agent-test-run")
+	require.NoError(t, err)
+	require.NotNil(t, captured)
+	assert.Equal(t, "https://llm.example/v1", captured["base_url"])
+	assert.Equal(t, "m1", captured["model"])
+	assert.Equal(t, "https://llm.example/v1", captured["extra"].(map[string]any)["endpoint"])
 }

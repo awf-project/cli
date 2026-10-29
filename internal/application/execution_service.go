@@ -2872,7 +2872,11 @@ func (s *ExecutionService) executeAgentStep(
 
 	// Execute the agent
 	s.logger.Debug("executing agent step", "step", step.Name, "provider", resolvedProvider)
-	opts := cloneAndInjectOutputFormat(step.Agent.Options, step.Agent.OutputFormat)
+	opts, err := s.resolveAgentOptions(step.Agent.Options, intCtx)
+	if err != nil {
+		return "", fmt.Errorf("step %s: resolve agent options: %w", step.Name, err)
+	}
+	opts = cloneAndInjectOutputFormat(opts, step.Agent.OutputFormat)
 
 	composedPrompt, roleErr := s.buildRoleAwareSystemPrompt(stepCtx, step, wf.SourceDir, intCtx)
 	if roleErr != nil {
@@ -2960,7 +2964,7 @@ func (s *ExecutionService) executeAgentStep(
 
 	if result != nil {
 		span.SetAttribute("provider", resolvedProvider)
-		if model, ok := step.Agent.Options["model"].(string); ok && model != "" {
+		if model, ok := opts["model"].(string); ok && model != "" {
 			span.SetAttribute("model", model)
 		}
 		span.SetAttribute("tokens_used", result.Tokens)
@@ -3049,6 +3053,46 @@ func (s *ExecutionService) executeAgentStep(
 // prior step's session (continue_from set). Unlike executeConversationStep,
 // this does not enter the interactive user-input loop; it runs exactly one
 // agent turn and returns.
+// resolveAgentOptions renders string values in agent options with the same
+// interpolation context as the prompt, including nested maps and slices.
+func (s *ExecutionService) resolveAgentOptions(options map[string]any, intCtx *interpolation.Context) (map[string]any, error) {
+	if options == nil {
+		return nil, nil
+	}
+
+	resolved := make(map[string]any, len(options))
+	for key, value := range options {
+		resolvedValue, err := s.resolveAgentOptionValue(value, intCtx)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", key, err)
+		}
+		resolved[key] = resolvedValue
+	}
+
+	return resolved, nil
+}
+
+func (s *ExecutionService) resolveAgentOptionValue(value any, intCtx *interpolation.Context) (any, error) {
+	switch v := value.(type) {
+	case string:
+		return s.resolver.Resolve(v, intCtx)
+	case map[string]any:
+		return s.resolveAgentOptions(v, intCtx)
+	case []any:
+		resolved := make([]any, len(v))
+		for i, item := range v {
+			itemValue, err := s.resolveAgentOptionValue(item, intCtx)
+			if err != nil {
+				return nil, err
+			}
+			resolved[i] = itemValue
+		}
+		return resolved, nil
+	default:
+		return value, nil
+	}
+}
+
 func (s *ExecutionService) executeResumableAgentCall(
 	ctx context.Context,
 	step *workflow.Step,
