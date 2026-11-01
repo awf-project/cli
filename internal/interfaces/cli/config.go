@@ -9,6 +9,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/infrastructure/analyzer"
 	"github.com/awf-project/cli/internal/infrastructure/expression"
+	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/skills"
 	"github.com/awf-project/cli/internal/infrastructure/store"
@@ -142,6 +143,12 @@ func newWorkflowRepositoryForIdentifier(identifier string) (repo *repository.Com
 // ExecutionService. It returns the facade and a cleanup that closes the history store. On
 // any setup error it returns (nil, no-op) so callers degrade gracefully rather than failing.
 func buildFacade(cfg *Config) (facade ports.WorkflowFacade, cleanup func()) {
+	return buildFacadeWithPlugins(cfg, nil)
+}
+
+// buildFacadeWithPlugins is buildFacade for a command that started the plugin system (validate): the workflow service then
+// also knows the operations, the validators and the step types that plugins provide. With nil it only knows the built-ins.
+func buildFacadeWithPlugins(cfg *Config, plugins *PluginSystemResult) (facade ports.WorkflowFacade, cleanup func()) {
 	noop := func() {}
 
 	repo := NewWorkflowRepository()
@@ -159,9 +166,18 @@ func buildFacade(cfg *Config) (facade ports.WorkflowFacade, cleanup func()) {
 	if configErr != nil {
 		return nil, noop
 	}
-	workflowSvc.SetPluginOperationProvider(application.NewBuiltinOperationProvider(
+	builtins := application.NewBuiltinOperationProvider(
 		logger, application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend},
-	))
+	)
+	if plugins != nil && plugins.Manager != nil {
+		workflowSvc.SetPluginOperationProvider(pluginmgr.NewCompositeOperationProvider(builtins, plugins.Manager))
+	} else {
+		workflowSvc.SetPluginOperationProvider(builtins)
+	}
+	if plugins != nil && plugins.RPCManager != nil {
+		workflowSvc.SetValidatorProvider(plugins.RPCManager.ValidatorProvider(0))
+		workflowSvc.SetStepTypeProvider(plugins.RPCManager.StepTypeProvider(logger))
+	}
 	workflowSvc.SetSkillRepository(skills.NewFilesystemSkillRepository(&cliLogger{silent: cfg.Quiet}))
 
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))

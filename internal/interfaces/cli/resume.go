@@ -265,10 +265,31 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 		return
 	}
 
+	// Initialize the plugin system, as `run` does. Without it the operation registry only holds the built-ins, and the
+	// operation validation that precedes a resume rejects every step that calls a plugin operation ("operation ... not
+	// found in step ..."), although the same workflow ran.
+	pluginResult, pluginErr := initPluginSystem(ctx, cfg, logger)
+	if pluginErr != nil {
+		err = fmt.Errorf("failed to initialize plugins: %w", pluginErr)
+		return
+	}
+
 	setupOpts := []application.SetupOption{
 		application.WithHistoryStore(historyStore),
 		application.WithAgentRoleRepository(roles.NewFilesystemAgentRoleRepository(logger)),
 		application.WithUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout)),
+		application.WithPluginState(pluginResult.Service),
+		application.WithPluginService(pluginResult.Service),
+	}
+	if pluginResult.RPCManager != nil {
+		setupOpts = append(setupOpts, application.WithPluginProviders(application.PluginProviders{
+			Operations: pluginResult.Manager,
+			Validators: pluginResult.RPCManager.ValidatorProvider(0),
+			StepTypes:  pluginResult.RPCManager.StepTypeProvider(logger),
+		}))
+	}
+	if pluginResult.EventPublisher != nil {
+		setupOpts = append(setupOpts, application.WithEventPublisher(pluginResult.EventPublisher))
 	}
 
 	// Setup audit trail writer (F071), best-effort.
@@ -302,6 +323,7 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 	setupOpts = append(setupOpts, cfg.ExecutionSetupOptions...)
 	setupResult, buildErr := application.NewExecutionSetup(repo, stateStore, shellExecutor, logger, setupOpts...).Build(ctx)
 	if buildErr != nil {
+		pluginResult.Cleanup()
 		if auditCleanup != nil {
 			auditCleanup()
 		}
@@ -315,6 +337,7 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 	runFacade := buildRunCapableFacade(setupResult.ExecService, setupResult.WorkflowSvc, historyStore, repo, recorder, logger)
 	if runFacade == nil {
 		setupResult.Cleanup()
+		pluginResult.Cleanup()
 		if auditCleanup != nil {
 			auditCleanup()
 		}
@@ -327,6 +350,7 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 
 	cleanup = func() {
 		setupResult.Cleanup()
+		pluginResult.Cleanup()
 		if auditCleanup != nil {
 			auditCleanup()
 		}
