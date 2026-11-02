@@ -1407,14 +1407,13 @@ Invoke another workflow as a sub-workflow, passing inputs and capturing outputs.
 ```yaml
 analyze_code:
   type: call_workflow
-  call_workflow:
-    workflow: analyze-single-file
-    inputs:
-      file_path: "{{.inputs.target_file}}"
-      max_tokens: "{{.inputs.max_tokens}}"
-    outputs:
-      result: analysis_result
-    timeout: 300
+  workflow: analyze-single-file
+  inputs:
+    file_path: "{{.inputs.target_file}}"
+    max_tokens: "{{.inputs.max_tokens}}"
+  outputs:
+    result: analysis_result
+  timeout: 300
   on_success: aggregate_results
   on_failure: handle_error
 ```
@@ -1497,19 +1496,17 @@ When a `call_workflow` is executed within an installed pack, workflow name resol
 # Inside pack "speckit", this resolves to speckit's own workflows/ directory first
 analyze:
   type: call_workflow
-  call_workflow:
-    workflow: analyze-helper
-    inputs:
-      file: "{{.inputs.target}}"
+  workflow: analyze-helper
+  inputs:
+    file: "{{.inputs.target}}"
   on_success: done
 
 # Cross-pack reference: resolves to another installed pack
 validate:
   type: call_workflow
-  call_workflow:
-    workflow: linter/check-syntax
-    inputs:
-      source: "{{.states.analyze.Output}}"
+  workflow: linter/check-syntax
+  inputs:
+    source: "{{.states.analyze.Output}}"
   on_success: done
 ```
 
@@ -1562,13 +1559,12 @@ process_files:
 
 analyze_file:
   type: call_workflow
-  call_workflow:
-    workflow: analyze-source-file
-    inputs:
-      # {{.loop.Item}} is automatically JSON-serialized for complex types
-      file_info: "{{.loop.Item}}"
-    outputs:
-      analysis: file_analysis
+  workflow: analyze-source-file
+  inputs:
+    # {{.loop.Item}} is automatically JSON-serialized for complex types
+    file_info: "{{.loop.Item}}"
+  outputs:
+    analysis: file_analysis
   on_success: next
 
 next:
