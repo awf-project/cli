@@ -447,34 +447,34 @@ func TestTwoSubscribersWithOverlappingPatternsReceiveIndependentCopies(t *testin
 	mu.Unlock()
 }
 
-func TestPublishWithContextCancellation(t *testing.T) {
+func TestPublishDeliversEventAfterContextCancellation(t *testing.T) {
 	logger := &testLogger{}
 	bus := NewEventBus(logger)
 	defer bus.Close()
 
-	ctxCancelled := atomic.Bool{}
+	type key struct{}
+	var cancelled atomic.Bool
+	var value atomic.Value
+	delivered := make(chan struct{})
 	deliverer := &mockEventDeliverer{
 		deliverFunc: func(ctx context.Context, event *pluginmodel.DomainEvent) ([]*pluginmodel.DomainEvent, error) {
-			<-ctx.Done()
-			ctxCancelled.Store(true)
-			return nil, ctx.Err()
+			cancelled.Store(ctx.Err() != nil)
+			value.Store(ctx.Value(key{}))
+			close(delivered)
+			return nil, nil
 		},
 	}
 
 	bus.Subscribe("plugin-1", []string{"test.*"}, deliverer)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), key{}, "run-1"))
 	cancel()
 
-	event := &pluginmodel.DomainEvent{
-		ID:   "evt-1",
-		Type: "test.event",
-	}
+	require.NoError(t, bus.Publish(ctx, &pluginmodel.DomainEvent{ID: "evt-1", Type: "test.event"}))
+	<-delivered
 
-	bus.Publish(ctx, event)
-	time.Sleep(100 * time.Millisecond)
-
-	assert.True(t, ctxCancelled.Load(), "context should be cancelled in deliverer")
+	assert.False(t, cancelled.Load(), "an event published before the run ended is delivered even if the run context is canceled")
+	assert.Equal(t, "run-1", value.Load(), "context values are kept")
 }
 
 func TestPublishMultipleEventsSequentially(t *testing.T) {
@@ -513,4 +513,118 @@ func TestPublishMultipleEventsSequentially(t *testing.T) {
 		assert.Equal(t, fmt.Sprintf("evt-%d", i), deliveredEvents[i].ID)
 	}
 	mu.Unlock()
+}
+
+func (l *testLogger) hasWarningCount(substr string) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	n := 0
+	for _, w := range l.warnings {
+		if strings.Contains(w, substr) {
+			n++
+		}
+	}
+	return n
+}
+
+func TestUnsubscribeDeliversQueuedEvents(t *testing.T) {
+	logger := &testLogger{}
+	bus := NewEventBus(logger)
+	defer bus.Close()
+
+	var delivered atomic.Int32
+	deliverer := &mockEventDeliverer{
+		deliverFunc: func(ctx context.Context, event *pluginmodel.DomainEvent) ([]*pluginmodel.DomainEvent, error) {
+			time.Sleep(20 * time.Millisecond)
+			delivered.Add(1)
+			return nil, nil
+		},
+	}
+	bus.Subscribe("plugin-1", []string{"test.*"}, deliverer)
+
+	for i := 0; i < 5; i++ {
+		require.NoError(t, bus.Publish(context.Background(), &pluginmodel.DomainEvent{Type: "test.event"}))
+	}
+	bus.Unsubscribe("plugin-1")
+
+	assert.Equal(t, int32(5), delivered.Load(), "events queued at unsubscribe must be delivered")
+	assert.Equal(t, 0, logger.hasWarningCount("discarded"))
+}
+
+func TestUnsubscribeDeliversQueuedEventsAfterContextCancellation(t *testing.T) {
+	logger := &testLogger{}
+	bus := NewEventBus(logger)
+	defer bus.Close()
+
+	release := make(chan struct{})
+	started := make(chan struct{})
+	var first sync.Once
+	var live atomic.Int32
+	deliverer := &mockEventDeliverer{
+		deliverFunc: func(ctx context.Context, event *pluginmodel.DomainEvent) ([]*pluginmodel.DomainEvent, error) {
+			first.Do(func() { close(started); <-release })
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			live.Add(1)
+			return nil, nil
+		},
+	}
+	bus.Subscribe("plugin-1", []string{"test.*"}, deliverer)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	for i := 0; i < 3; i++ {
+		require.NoError(t, bus.Publish(ctx, &pluginmodel.DomainEvent{Type: "test.event"}))
+	}
+	<-started
+	cancel()
+	close(release)
+	bus.Unsubscribe("plugin-1")
+
+	assert.Equal(t, int32(3), live.Load(), "the event in flight and the two queued are delivered despite the cancellation")
+	assert.Equal(t, 0, logger.hasWarningCount("event delivery failed"))
+}
+
+func TestUnsubscribeLogsEventsDiscardedAfterFlushTimeout(t *testing.T) {
+	old := flushTimeout
+	flushTimeout = 30 * time.Millisecond
+	defer func() { flushTimeout = old }()
+
+	logger := &testLogger{}
+	bus := NewEventBus(logger)
+	defer bus.Close()
+
+	var delivered atomic.Int32
+	deliverer := &mockEventDeliverer{
+		deliverFunc: func(ctx context.Context, event *pluginmodel.DomainEvent) ([]*pluginmodel.DomainEvent, error) {
+			time.Sleep(50 * time.Millisecond)
+			delivered.Add(1)
+			return nil, nil
+		},
+	}
+	bus.Subscribe("plugin-1", []string{"test.*"}, deliverer)
+
+	for i := 0; i < 6; i++ {
+		require.NoError(t, bus.Publish(context.Background(), &pluginmodel.DomainEvent{Type: "test.event"}))
+	}
+	bus.Unsubscribe("plugin-1")
+
+	assert.Less(t, delivered.Load(), int32(6))
+	assert.Equal(t, 1, logger.hasWarningCount("events discarded at unsubscribe"))
+}
+
+func TestDeliveryErrorIsLogged(t *testing.T) {
+	logger := &testLogger{}
+	bus := NewEventBus(logger)
+	defer bus.Close()
+
+	deliverer := &mockEventDeliverer{
+		deliverFunc: func(ctx context.Context, event *pluginmodel.DomainEvent) ([]*pluginmodel.DomainEvent, error) {
+			return nil, fmt.Errorf("stream broken")
+		},
+	}
+	bus.Subscribe("plugin-1", []string{"test.*"}, deliverer)
+	require.NoError(t, bus.Publish(context.Background(), &pluginmodel.DomainEvent{Type: "test.event"}))
+
+	assert.Eventually(t, func() bool { return logger.hasWarningCount("event delivery failed") == 1 }, time.Second, 5*time.Millisecond)
 }

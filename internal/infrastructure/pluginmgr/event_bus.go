@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -13,6 +14,9 @@ const (
 	defaultEventBufferSize = 256
 	maxPropagationDepth    = 3
 )
+
+// flushTimeout bounds how long Unsubscribe waits for the events still queued; a variable so tests can shorten it.
+var flushTimeout = 5 * time.Second
 
 // EventDeliverer decouples EventBus from the gRPC adapter, enabling unit testing with mock deliverers.
 type EventDeliverer interface {
@@ -111,29 +115,68 @@ func (b *EventBus) runDelivery(sub *eventSubscription) {
 	for {
 		select {
 		case <-sub.done:
+			b.flush(sub, nil)
 			return
 		case env, ok := <-sub.eventCh:
 			if !ok {
 				return
 			}
-			emitted, err := sub.deliverer.DeliverEvent(env.ctx, env.event)
-			if err != nil {
-				continue
+			select {
+			case <-sub.done: // the select picked the event over done: the run is over, so the flush bound applies
+				b.flush(sub, env)
+				return
+			default:
 			}
-			for _, e := range emitted {
-				depth := env.event.PropagationDepth + 1
-				if e.PropagationDepth > depth {
-					depth = e.PropagationDepth
-				}
-				if depth >= maxPropagationDepth {
-					b.logger.Warn("propagation depth exceeded", "plugin", sub.pluginName, "depth", depth)
-					continue
-				}
-				e.PropagationDepth = depth
-				if pubErr := b.Publish(env.ctx, e); pubErr != nil {
-					b.logger.Warn("failed to republish emitted event", "plugin", sub.pluginName)
-				}
+			b.deliver(sub, env)
+		}
+	}
+}
+
+// flush delivers the events still queued when the plugin is unsubscribed, so that workflow.completed reaches a plugin that is
+// only slow. It waits at most flushTimeout; the events left after that are counted in a warning.
+func (b *EventBus) flush(sub *eventSubscription, pending *eventEnvelope) {
+	timer := time.NewTimer(flushTimeout)
+	defer timer.Stop()
+	for env := pending; ; env = nil {
+		if env == nil {
+			select {
+			case env = <-sub.eventCh:
+			default:
+				return
 			}
+		}
+		select {
+		case <-timer.C:
+			b.logger.Warn("events discarded at unsubscribe", "plugin", sub.pluginName, "count", len(sub.eventCh)+1)
+			return
+		default:
+		}
+		b.deliver(sub, env)
+	}
+}
+
+// deliver hands one event to the plugin and republishes the events the plugin emitted in response. The run context is usually
+// canceled while its last events are still queued, so the delivery keeps its values but not its cancellation; the deliverer
+// applies its own timeout. A delivery that fails is
+// logged: the event is lost for that plugin, and nothing else tells the plugin or the user.
+func (b *EventBus) deliver(sub *eventSubscription, env *eventEnvelope) {
+	emitted, err := sub.deliverer.DeliverEvent(context.WithoutCancel(env.ctx), env.event)
+	if err != nil {
+		b.logger.Warn("event delivery failed", "plugin", sub.pluginName, "eventType", env.event.Type, "error", err)
+		return
+	}
+	for _, e := range emitted {
+		depth := env.event.PropagationDepth + 1
+		if e.PropagationDepth > depth {
+			depth = e.PropagationDepth
+		}
+		if depth >= maxPropagationDepth {
+			b.logger.Warn("propagation depth exceeded", "plugin", sub.pluginName, "depth", depth)
+			continue
+		}
+		e.PropagationDepth = depth
+		if pubErr := b.Publish(env.ctx, e); pubErr != nil {
+			b.logger.Warn("failed to republish emitted event", "plugin", sub.pluginName)
 		}
 	}
 }
