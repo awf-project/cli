@@ -16,12 +16,22 @@ type ProjectConfig struct {
 		DefaultBackend string `yaml:"default_backend"`
 	} `yaml:"notify"`
 
+	// Agents maps an alias to an agent provider and default options.
+	// A step's provider may name an alias; see agents.AgentRegistry.SetAliases.
+	Agents map[string]AgentAlias `yaml:"agents"`
+
 	// Telemetry holds OpenTelemetry tracing defaults.
 	// CLI flags --otel-exporter and --otel-service-name take precedence.
 	Telemetry struct {
 		Exporter    string `yaml:"exporter"`
 		ServiceName string `yaml:"service_name"`
 	} `yaml:"telemetry"`
+}
+
+// AgentAlias is a named agent: a built-in provider and options merged under the step options.
+type AgentAlias struct {
+	Provider string         `yaml:"provider"`
+	Options  map[string]any `yaml:"options"`
 }
 
 // ConfigError represents an error during config file operations.

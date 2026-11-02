@@ -3,6 +3,8 @@ package agents
 import (
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -15,6 +17,7 @@ var _ ports.AgentRegistry = (*AgentRegistry)(nil)
 type AgentRegistry struct {
 	mu        sync.RWMutex
 	providers map[string]ports.AgentProvider
+	aliases   map[string]Alias
 }
 
 func NewAgentRegistry() *AgentRegistry {
@@ -42,6 +45,9 @@ func (r *AgentRegistry) Get(name string) (ports.AgentProvider, error) {
 
 	provider, exists := r.providers[name]
 	if !exists {
+		if len(r.aliases) > 0 {
+			return nil, fmt.Errorf("provider %q not found (known aliases: %s)", name, strings.Join(r.sortedAliasNames(), ", "))
+		}
 		return nil, fmt.Errorf("provider %q not found", name)
 	}
 
@@ -98,4 +104,46 @@ func (r *AgentRegistry) RegisterDefaults(cmdExec ports.CommandExecutor, openAIOp
 	}
 
 	return nil
+}
+
+// Alias names a provider and default options, so that a workflow can say `provider: einstein`
+// and each user decides which tool and model that stands for.
+type Alias struct {
+	Provider string
+	Options  map[string]any
+}
+
+// SetAliases replaces the alias table. An alias is resolved before the provider names, so it shadows
+// a provider with the same name. Aliases do not chain: Provider must name a registered provider.
+func (r *AgentRegistry) SetAliases(aliases map[string]Alias) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.aliases = aliases
+}
+
+// ResolveAlias returns the provider name and the default options behind name. A name that is not an
+// alias is returned unchanged with no options.
+func (r *AgentRegistry) ResolveAlias(name string) (provider string, options map[string]any) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if a, ok := r.aliases[name]; ok {
+		return a.Provider, a.Options
+	}
+	return name, nil
+}
+
+// AliasNames returns the alias names in alphabetical order.
+func (r *AgentRegistry) AliasNames() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.sortedAliasNames()
+}
+
+func (r *AgentRegistry) sortedAliasNames() []string {
+	names := make([]string, 0, len(r.aliases))
+	for n := range r.aliases {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
 }

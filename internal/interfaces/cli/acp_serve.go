@@ -99,10 +99,18 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 	// Project config is best-effort for a long-running server (missing/invalid config must
 	// not prevent serving). Only the notify backend default is consumed.
 	notifyBackend := ""
-	if projectCfg, projErr := loadProjectConfig(logger); projErr != nil {
+	projectCfg, projErr := loadProjectConfig(logger)
+	if projErr != nil {
 		logger.Warn("acp-serve: project config not loaded, using defaults", "error", projErr)
+		projectCfg = nil
 	} else if projectCfg != nil {
 		notifyBackend = projectCfg.Notify.DefaultBackend
+	}
+	// Agent aliases are best-effort too: a broken alias file is reported and the server starts without aliases.
+	agentAliases, aliasErr := agents.LoadAliases(projectCfg)
+	if aliasErr != nil {
+		logger.Warn("acp-serve: agent aliases not loaded, using none", "error", aliasErr)
+		agentAliases = nil
 	}
 
 	// Plugin system (shared; graceful-degrades when no plugins installed).
@@ -127,6 +135,7 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 	masker := infralogger.NewSecretMasker()
 
 	baseOpts := []application.SetupOption{
+		application.WithAgentAliases(agentAliases),
 		application.WithNotifyConfig(application.NotifyConfig{DefaultBackend: notifyBackend}),
 		application.WithTemplatePaths([]string{".awf/templates", filepath.Join(appCfg.StoragePath, "templates")}),
 		application.WithTracer(ports.NopTracer{}),
