@@ -358,7 +358,8 @@ func (a *Adapter) Run(ctx context.Context, req ports.RunRequest) (ports.RunSessi
 // ValidateDir uses a dir-scoped ad-hoc WorkflowService with NO plugin validator provider
 // wired; therefore opts.SkipPlugins is inherently satisfied and opts.ValidatorTimeout
 // bounds nothing here. opts is accepted for BatchValidator interface symmetry and
-// forward-compatibility.
+// forward-compatibility. The one thing it takes from the project service is the operation provider, so that a step
+// that calls an unknown operation is reported as the single-workflow form reports it.
 //
 // Returns ErrInvalidRequest when dir is empty. Returns an OS-level error when dir cannot
 // be read. Per-file validation failures are captured in FileValidationResult.Errors rather
@@ -397,6 +398,11 @@ func (a *Adapter) ValidateDir(ctx context.Context, dir string, opts ports.Valida
 	})
 	validator := expression.NewExprValidator()
 	svc := NewWorkflowService(repo, nil, nil, nil, validator)
+	// The operations the project knows are the operations of the files too: without a provider the check that an operation
+	// exists, and that its inputs fit its schema, is skipped, and a workflow that calls an unknown operation is reported valid.
+	if a.workflowSvc != nil {
+		svc.SetPluginOperationProvider(a.workflowSvc.opProvider)
+	}
 
 	results := make([]ports.FileValidationResult, 0, len(names))
 	for _, name := range names {
