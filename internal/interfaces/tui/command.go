@@ -13,6 +13,7 @@ import (
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/infrastructure/agents"
 	"github.com/awf-project/cli/internal/infrastructure/audit"
 	"github.com/awf-project/cli/internal/infrastructure/config"
 	"github.com/awf-project/cli/internal/infrastructure/executor"
@@ -147,7 +148,13 @@ func buildBridge(ctx context.Context) (*Bridge, *TUIInputReader, func(), error) 
 	logger := &nopLogger{}
 
 	// Assemble setup options.
+	agentAliases, aliasErr := agents.LoadAliases(projectCfg)
+	if aliasErr != nil {
+		_ = historyStore.Close()
+		return nil, nil, nopCleanup, fmt.Errorf("config error: %w", aliasErr)
+	}
 	setupOpts := []application.SetupOption{
+		application.WithAgentAliases(agentAliases),
 		application.WithNotifyConfig(application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend}),
 		application.WithHistoryStore(historyStore),
 		application.WithTemplatePaths([]string{

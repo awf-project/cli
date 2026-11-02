@@ -15,6 +15,7 @@ var knownConfigKeys = map[string]bool{
 	"output_format": true,
 	"notify":        true,
 	"telemetry":     true,
+	"agents":        true,
 }
 
 // WarningFunc is a callback for reporting non-fatal warnings during config loading.

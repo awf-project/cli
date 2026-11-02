@@ -64,6 +64,10 @@ awf run workflow --input model_source=codex --input data="..."
 
 This enables workflows to support multiple AI backends without duplicating step definitions.
 
+### Agent Aliases
+
+`provider` can also name an alias that you define in the configuration, such as `provider: reviewer`. The alias stands for a provider and default options, and each person decides which tool and model it means. The options of the step are merged over the options of the alias. See [Agent Aliases](configuration.md#agent-aliases).
+
 ## Supported Providers
 
 ### Claude (Anthropic)

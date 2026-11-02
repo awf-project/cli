@@ -722,3 +722,27 @@ unknown2: value2
 		t.Errorf("got %d warnings, want 2 for unknown keys 'unknown1', 'unknown2'", len(warnings))
 	}
 }
+
+func TestYAMLConfigLoader_Load_Agents(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	content := "agents:\n  einstein:\n    provider: claude\n    options:\n      model: opus\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var warnings []string
+
+	cfg, err := NewYAMLConfigLoader(path).WithWarningFunc(func(format string, args ...any) {
+		warnings = append(warnings, format)
+	}).Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	got := cfg.Agents["einstein"]
+	if got.Provider != "claude" || got.Options["model"] != "opus" {
+		t.Errorf("Agents[einstein] = %+v", got)
+	}
+	if len(warnings) != 0 {
+		t.Errorf("agents is a known key, got warnings %v", warnings)
+	}
+}

@@ -205,6 +205,7 @@ func (m *ConversationManager) ExecuteConversation(
 		return nil, fmt.Errorf("step %s: resolve provider: %w", step.Name, err)
 	}
 
+	resolvedProvider, aliasOptions := resolveAgentAlias(m.agentRegistry, resolvedProvider)
 	provider, err := m.agentRegistry.Get(resolvedProvider)
 	if err != nil {
 		return nil, fmt.Errorf("step %s: %w", step.Name, err)
@@ -223,7 +224,7 @@ func (m *ConversationManager) ExecuteConversation(
 	// Clone options to preserve immutability of step.Agent.Options,
 	// and inject output_format so baseCLIProvider can route display filtering
 	// identically between executeAgentStep and conversation mode (F082).
-	options := cloneAndInjectOutputFormat(step.Agent.Options, step.Agent.OutputFormat)
+	options := cloneAndInjectOutputFormat(mergeAliasOptions(aliasOptions, step.Agent.Options), step.Agent.OutputFormat)
 	if composedPrompt != "" {
 		if _, exists := options["system_prompt"]; exists {
 			m.logger.Warn("options.system_prompt overridden by composed role+system_prompt", "step", step.Name)

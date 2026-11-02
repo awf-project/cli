@@ -284,9 +284,10 @@ func (s *WorkflowService) validateAgentProviderStep(ctx context.Context, stepNam
 		return nil
 	}
 
+	providerName, aliasOptions := resolveAgentAlias(s.agentRegistry, providerName)
 	provider, err := s.agentRegistry.Get(providerName)
 	if err != nil || provider == nil {
-		return []error{providerValidationError(providerName, stepName, "unavailable", err)}
+		return []error{unavailableProviderError(s.agentRegistry, providerName, stepName, err)}
 	}
 	if err := provider.Validate(); err != nil {
 		return []error{providerValidationError(providerName, stepName, "unavailable", err)}
@@ -295,8 +296,9 @@ func (s *WorkflowService) validateAgentProviderStep(ctx context.Context, stepNam
 	if !ok {
 		return []error{providerValidationError(providerName, stepName, "preflight_unsupported", nil)}
 	}
+	// The alias options go through the same template resolution as the step options.
 	resolvedOptions, deferred, missing, optionErrors := resolveStaticValue(
-		agent.Options, declared, available, requireInputs, s.templateAnalyzer,
+		mergeAliasOptions(aliasOptions, agent.Options), declared, available, requireInputs, s.templateAnalyzer,
 	)
 	if deferred || missing || len(optionErrors) > 0 {
 		if len(optionErrors) == 0 && inputErr != nil {
@@ -315,6 +317,21 @@ func (s *WorkflowService) validateAgentProviderStep(ctx context.Context, stepNam
 		return []error{providerValidationError(providerName, stepName, "interactive_input_required", inputErr)}
 	}
 	return nil
+}
+
+// unavailableProviderError is providerValidationError for a provider that is not registered. When aliases
+// are configured it also lists them, so that a mistyped alias shows what the user can write instead.
+func unavailableProviderError(registry ports.AgentRegistry, provider, step string, cause error) error {
+	names := agentAliasNames(registry)
+	if len(names) == 0 {
+		return providerValidationError(provider, step, "unavailable", cause)
+	}
+	return domerrors.NewStructuredError(
+		domerrors.ErrorCodeUserInputValidationFailed,
+		fmt.Sprintf("provider %q failed validation for step %q: unavailable", provider, step),
+		map[string]any{"provider": provider, "step": step, "reason": "unavailable", "known_aliases": strings.Join(names, ", ")},
+		cause,
+	)
 }
 
 func providerValidationError(provider, step, reason string, cause error) error {

@@ -2854,25 +2854,34 @@ func (s *ExecutionService) executeAgentStep(
 		return "", fmt.Errorf("step %s: resolve provider: %w", step.Name, err)
 	}
 
+	aliasName := resolvedProvider
+	resolvedProvider, aliasOptions := resolveAgentAlias(s.agentRegistry, resolvedProvider)
 	provider, err := s.agentRegistry.Get(resolvedProvider)
 	if err != nil {
 		return "", fmt.Errorf("step %s: %w", step.Name, err)
 	}
 
+	// The alias options sit under the step options. Both the audit log and the template resolution below see the merged set,
+	// so that an alias cannot enable dangerously_skip_permissions without the warning.
+	stepOptions := mergeAliasOptions(aliasOptions, step.Agent.Options)
+
 	// Audit log if dangerously_skip_permissions is enabled
-	if step.Agent.Options != nil {
-		if skipPerms, ok := step.Agent.Options["dangerously_skip_permissions"].(bool); ok && skipPerms {
-			s.logger.Warn("dangerously_skip_permissions enabled",
-				"workflow", execCtx.WorkflowName,
-				"step", step.Name,
-				"provider", resolvedProvider,
-				"timestamp", time.Now().Format(time.RFC3339))
+	if skipPerms, ok := stepOptions["dangerously_skip_permissions"].(bool); ok && skipPerms {
+		attrs := []any{
+			"workflow", execCtx.WorkflowName,
+			"step", step.Name,
+			"provider", resolvedProvider,
+			"timestamp", time.Now().Format(time.RFC3339),
 		}
+		if aliasName != resolvedProvider {
+			attrs = append(attrs, "alias", aliasName)
+		}
+		s.logger.Warn("dangerously_skip_permissions enabled", attrs...)
 	}
 
 	// Execute the agent
 	s.logger.Debug("executing agent step", "step", step.Name, "provider", resolvedProvider)
-	opts, err := s.resolveAgentOptions(step.Agent.Options, intCtx)
+	opts, err := s.resolveAgentOptions(stepOptions, intCtx)
 	if err != nil {
 		return "", fmt.Errorf("step %s: resolve agent options: %w", step.Name, err)
 	}
