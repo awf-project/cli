@@ -1,0 +1,18 @@
+{{- /* Bound automatically generated descriptions; documentation summaries may
+contain entire tables or code examples. Preserve explicit page metadata. */ -}}
+{{- $description := or .Params.seo.description .Description -}}
+{{- if not $description -}}
+  {{- $description = .Summary | plainify | htmlUnescape | strings.TrimSpace -}}
+  {{- if lt (strings.RuneCount $description) 110 -}}
+    {{- $description = printf "%s — %s" .Title site.Params.description -}}
+  {{- end -}}
+  {{- $description = $description | truncate 155 | plainify | htmlUnescape -}}
+  {{- if gt (strings.RuneCount $description) 160 -}}
+    {{- $description = substr $description 0 157 | printf "%s…" -}}
+  {{- end -}}
+{{- end -}}
+{{- $length := strings.RuneCount $description -}}
+{{- if or (lt $length 110) (gt $length 160) -}}
+  {{- errorf "Description for %s must contain 110–160 characters (got %d)" .RelPermalink $length -}}
+{{- end -}}
+<meta name="description" content="{{ $description }}">

@@ -10,6 +10,7 @@ vendor/
 /awf
 /npm-cache/
 /site/public/
+/site/.generated/
 /site/resources/
 /site/hugo_stats.json
 coverage.out

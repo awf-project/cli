@@ -35,7 +35,7 @@ type FileAuditTrailWriter struct {
 // Creates parent directories as needed. File permissions are 0o600.
 func NewFileAuditTrailWriter(path string) (*FileAuditTrailWriter, error) {
 	cleanPath := filepath.Clean(path)
-	if err := os.MkdirAll(filepath.Dir(cleanPath), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(cleanPath), 0o750); err != nil { //nolint:gosec // G703: callers intentionally choose the audit destination; no base-directory restriction applies.
 		return nil, fmt.Errorf("creating audit log directory: %w", err)
 	}
 

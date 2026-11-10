@@ -1,0 +1,14 @@
+{{/* Styles are migrated and compiled by scripts/prepare-styles.mjs. */}}
+{{ if hugo.IsDevelopment }}
+  {{ with resources.Get "css/app.css" }}
+    <link rel="stylesheet" href="{{ .RelPermalink }}">
+  {{ end }}
+{{ else }}
+  {{/* PurgeCSS needs the complete hugo_stats.json, written after rendering. */}}
+  {{ with (templates.Defer (dict "key" "main-stylesheet")) }}
+    {{ with resources.Get "css/app.css" | css.PostCSS (dict "config" "config/postcss.config.js") | minify | fingerprint }}
+      <link rel="stylesheet" href="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous">
+    {{ end }}
+  {{ end }}
+{{ end }}
+<noscript><style>img.lazyload { display: none; }</style></noscript>

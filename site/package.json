@@ -10,14 +10,16 @@
   },
   "scripts": {
     "create": "hugo new",
-    "dev": "hugo server --disableFastRender --noHTTPCache",
+    "dev": "node scripts/hugo.mjs server --disableFastRender --noHTTPCache --panicOnWarning",
     "format": "prettier **/** -w -c",
-    "build": "hugo --minify --gc",
-    "preview": "vite preview --outDir public"
+    "build": "node scripts/hugo.mjs --minify --gc --panicOnWarning --printPathWarnings",
+    "preview": "vite preview --outDir public",
+    "styles": "node scripts/prepare-styles.mjs",
+    "test": "node --test scripts/*.test.mjs"
   },
   "dependencies": {
-    "@thulite/doks-core": "^1.9.3",
     "@tabler/icons": "^3.36.1",
+    "@thulite/doks-core": "^1.9.3",
     "@thulite/images": "^3.3.4",
     "@thulite/inline-svg": "^1.2.2",
     "@thulite/seo": "^2.4.3",
@@ -31,6 +33,8 @@
     "@changesets/changelog-github": "^1.0.0",
     "@changesets/cli": "^3.0.0",
     "prettier": "^3.8.1",
+    "sass-embedded": "1.108.2",
+    "sass-migrator": "2.6.1",
     "vite": "^8.0.0"
   },
   "engines": {

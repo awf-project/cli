@@ -52,7 +52,7 @@ func TestExecuteAgentStep_ProviderNamesAnAlias(t *testing.T) {
 
 // runAliasStep runs one agent step whose provider names the alias "reviewer" and returns the options the provider
 // received and the logger of the run.
-func runAliasStep(t *testing.T, alias, step map[string]any, inputs map[string]any) (map[string]any, *testmocks.MockLogger) {
+func runAliasStep(t *testing.T, alias, step, inputs map[string]any) (map[string]any, *testmocks.MockLogger) {
 	t.Helper()
 	var got map[string]any
 	provider := testmocks.NewMockAgentProvider("test-provider")

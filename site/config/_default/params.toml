@@ -1,6 +1,6 @@
 # Hugo
 title = "AWF — AI Workflow Framework CLI"
-description = "Orchestrate AI agents through declarative YAML workflows with state machine execution."
+description = "Orchestrate AI agents with declarative YAML workflows. AWF brings state machines, parallel execution, and repeatable automation to your CLI."
 images = ["cover.png"]
 
 # mainSections
@@ -127,7 +127,7 @@ mathEngine = "KaTeX" # "KaTeX" (default) or "MathJax"
     separator = "" # "|" (default)
     suffix = "" # title hugo.toml (default)
   [seo.description]
-    summaryFallback = "" # "" (default)
+    summaryFallback = true
   [seo.favicons]
     icon = "favicon.png" # favicon.png (default)
     svgIcon = "favicon.svg" # favicon.svg (default)

@@ -1,6 +1,6 @@
 ---
 title: "Terminal User Interface (TUI)"
-description: "Interactive terminal interface for browsing, executing, and monitoring AWF workflows"
+description: "Browse, execute, and monitor AWF workflows in an interactive terminal interface with execution history, agent conversations, and audit logs."
 ---
 
 ## Overview

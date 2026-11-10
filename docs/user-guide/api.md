@@ -1,6 +1,6 @@
 ---
 title: "HTTP API"
-description: "AWF HTTP server for remote workflow execution and monitoring"
+description: "Run the AWF HTTP server to execute workflows remotely, monitor their progress, and integrate workflow orchestration into your own applications."
 lead: "Run and monitor AWF workflows over HTTP with REST endpoints and Server-Sent Events streaming"
 ---
 

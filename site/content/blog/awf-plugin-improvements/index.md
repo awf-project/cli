@@ -1,6 +1,6 @@
 ---
 title: "AWF Plugin improvements"
-description: "AWF v0.5.0: Enhancing the Plugin Ecosystem."
+description: "Explore the AWF v0.5.0 plugin improvements, including a stronger plugin ecosystem for extending declarative AI workflow execution."
 date: 2026-03-30
 draft: false
 categories: ["announcements", "plugins"]

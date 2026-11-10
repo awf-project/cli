@@ -25,7 +25,7 @@ type JSONLWriter struct {
 // Parent directories are created with mode 0o700. File mode is 0o600.
 func NewJSONLWriter(path string) (*JSONLWriter, error) {
 	cleanPath := filepath.Clean(path)
-	if err := os.MkdirAll(filepath.Dir(cleanPath), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(cleanPath), 0o700); err != nil { //nolint:gosec // G703: callers intentionally choose the transcript destination; no base-directory restriction applies.
 		return nil, fmt.Errorf("creating transcript directory: %w", err)
 	}
 

@@ -1,6 +1,6 @@
 ---
 title: "Introducing AWF"
-description: "AWF is an open-source CLI tool for orchestrating AI agents through declarative YAML workflows — built for developers who value determinism, efficiency, and engineering standards."
+description: "Meet AWF, an open-source CLI for orchestrating AI agents with declarative YAML workflows, predictable execution, and clear engineering standards."
 date: 2026-03-14
 draft: false
 categories: ["announcements"]

@@ -1,5 +1,5 @@
 [en]
-  languageName = "English"
+  label = "English"
   contentDir = "content"
   weight = 10
   [en.params]
@@ -8,7 +8,7 @@
     footer = 'Built with <a class="text-muted" href="https://getdoks.org/">Doks</a>'
 
 [de]
-  languageName = "German"
+  label = "German"
   contentDir = "content/de"
   weight = 15
   [de.params]
@@ -18,7 +18,7 @@
     alertText = 'Neue Version ist da! <a class="alert-link stretched-link" href="https://getdoks.org/blog/doks-v0.5/">Doks v0.5</a>'
 
 [nl]
-  languageName = "Nederlands"
+  label = "Nederlands"
   contentDir = "content/nl"
   weight = 20
   [nl.params]
