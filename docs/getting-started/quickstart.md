@@ -28,8 +28,10 @@ This creates the following structure:
 
 ## 2. Run the Example Workflow
 
+By default, AWF hides command output (`silent` mode). Use `--output=buffered` to display it after each step completes:
+
 ```bash
-awf run example
+awf run example --output=buffered
 ```
 
 Output:
@@ -47,6 +49,11 @@ name: hello
 version: "1.0.0"
 description: A simple hello world workflow
 
+inputs:
+  - name: name
+    type: string
+    required: true
+
 states:
   initial: greet
   greet:
@@ -60,7 +67,7 @@ states:
 Run it with an input:
 
 ```bash
-awf run hello --input name=World
+awf run hello --input name=World --output=buffered
 ```
 
 Output:
