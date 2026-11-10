@@ -113,6 +113,7 @@ type setupConfig struct {
 	eventPublisher         ports.EventPublisher
 	agentRoleRepo          ports.AgentRoleRepository
 	toolProxyCLIExec       ports.CLIExecutor
+	agentAliases           map[string]agents.Alias
 	displayRendererFactory func(stepID string) display.EventRenderer
 }
 
@@ -217,6 +218,11 @@ func WithAgentRoleRepository(repo ports.AgentRoleRepository) SetupOption {
 	return func(c *setupConfig) { c.agentRoleRepo = repo }
 }
 
+// WithAgentAliases sets the agent aliases a step's provider may name, resolved before the provider names.
+func WithAgentAliases(aliases map[string]agents.Alias) SetupOption {
+	return func(c *setupConfig) { c.agentAliases = aliases }
+}
+
 // WithToolProxy injects the CLIExecutor used to construct the MCP ToolProxyService (F099).
 // The ProviderFactory is built internally so it can capture the composite OperationProvider
 // constructed during Build (required to expose plugin tools alongside built-ins).
@@ -317,6 +323,7 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 	// Wire agent registry, tool proxy, and conversation manager when at least one agent is available.
 	// Order is mandatory per Architecture Rules: SetAgentRegistry → SetToolProxyService → SetConversationManager.
 	agentRegistry := agents.NewAgentRegistry()
+	agentRegistry.SetAliases(cfg.agentAliases)
 	wfSvc.SetAgentRegistry(agentRegistry)
 	wfSvc.SetUserInputReader(cfg.userInputReader)
 	if err := agentRegistry.RegisterDefaults(s.shellExecutor, agents.WithHTTPClient(httpx.NewClient(cfg.httpClientOptions...))); err == nil {

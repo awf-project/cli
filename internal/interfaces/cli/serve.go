@@ -10,6 +10,7 @@ import (
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/infrastructure/agents"
 	"github.com/awf-project/cli/internal/infrastructure/audit"
 	"github.com/awf-project/cli/internal/infrastructure/executor"
 	infraotel "github.com/awf-project/cli/internal/infrastructure/otel"
@@ -115,6 +116,11 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 			DefaultBackend: projectCfg.Notify.DefaultBackend,
 		}))
 	}
+	agentAliases, aliasErr := agents.LoadAliases(projectCfg)
+	if aliasErr != nil {
+		return fmt.Errorf("config error: %w", aliasErr)
+	}
+	setupOpts = append(setupOpts, application.WithAgentAliases(agentAliases))
 
 	if pluginErr == nil && pluginResult != nil {
 		setupOpts = append(

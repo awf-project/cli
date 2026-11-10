@@ -11,6 +11,7 @@ import (
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/infrastructure/agents"
 	"github.com/awf-project/cli/internal/infrastructure/audit"
 	"github.com/awf-project/cli/internal/infrastructure/executor"
 	"github.com/awf-project/cli/internal/infrastructure/roles"
@@ -252,8 +253,14 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 
 	// Load project config from .awf/config.yaml. A malformed config is a USER error
 	// (FR-005): surface it before building the execution stack.
-	if _, cfgErr := loadProjectConfig(logger); cfgErr != nil {
+	projectCfg, cfgErr := loadProjectConfig(logger)
+	if cfgErr != nil {
 		err = fmt.Errorf("config error: %w", cfgErr)
+		return
+	}
+	agentAliases, aliasErr := agents.LoadAliases(projectCfg)
+	if aliasErr != nil {
+		err = fmt.Errorf("config error: %w", aliasErr)
 		return
 	}
 
@@ -275,6 +282,7 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 	}
 
 	setupOpts := []application.SetupOption{
+		application.WithAgentAliases(agentAliases),
 		application.WithHistoryStore(historyStore),
 		application.WithAgentRoleRepository(roles.NewFilesystemAgentRoleRepository(logger)),
 		application.WithUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout)),

@@ -368,7 +368,13 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	// the composite OperationProvider and expose plugin tools alongside builtins.
 	toolCLIExec := agents.NewExecCLIExecutor()
 
+	agentAliases, aliasErr := agents.LoadAliases(projectCfg)
+	if aliasErr != nil {
+		return fmt.Errorf("config error: %w", aliasErr)
+	}
+
 	setupOpts := []application.SetupOption{
+		application.WithAgentAliases(agentAliases),
 		application.WithNotifyConfig(application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend}),
 		application.WithHistoryStore(historyStore),
 		application.WithTemplatePaths(templatePaths),
@@ -944,7 +950,13 @@ func runSingleStep(
 		filepath.Join(cfg.StoragePath, "templates"),
 	}
 
+	stepAliases, aliasErr := agents.LoadAliases(projectCfg)
+	if aliasErr != nil {
+		return fmt.Errorf("config error: %w", aliasErr)
+	}
+
 	stepSetupOpts := []application.SetupOption{
+		application.WithAgentAliases(stepAliases),
 		application.WithNotifyConfig(application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend}),
 		application.WithHistoryStore(historyStore),
 		application.WithTemplatePaths(templatePaths),

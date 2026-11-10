@@ -476,6 +476,53 @@ See [Plugins](plugins.md) for full plugin documentation.
 
 ---
 
+## Agent Aliases
+
+An alias gives a name of your choosing to a provider and default options, so that a workflow can write `provider: reviewer` and each person decides which tool that name stands for. Aliases go under the `agents:` key, in the project file (`.awf/config.yaml`), in the local project file (`.awf/config.local.yaml`, which you keep out of version control) or in the user file (`config.yaml` in `$AWF_CONFIG_HOME`, or in `$XDG_CONFIG_HOME/awf` when it is not set). Only the `agents:` key is read from the local file.
+
+```yaml
+agents:
+  reviewer:                 # any name you like
+    provider: claude
+    options:
+      model: opus
+  drafter:
+    provider: mistral_vibe
+```
+
+The `provider` of an agent step is looked up in this order, and the first match wins:
+
+1. an alias in the user file;
+2. an alias in the local project file;
+3. an alias in the project file;
+4. a built-in provider name.
+
+An alias with the name of a built-in provider hides that provider. The `options` of an alias are merged under the `options` of the step; on a conflict the step wins. Aliases do not chain: the `provider` of an alias must be a built-in provider. A `provider` that is neither an alias nor a built-in provider fails when the run starts, and the error lists the known aliases. `awf validate` does not check providers.
+
+The `options` of an alias accept every option that [Agent Steps](agent-steps.md) documents for the provider it names, with the same value types (strings, numbers, booleans and lists). String values, including those inside lists and maps, are rendered like the options of a step, so `api_key: "{{.env.OPENAI_API_KEY}}"` works in an alias:
+
+```yaml
+agents:
+  local-llm:
+    provider: openai_compatible
+    options:
+      base_url: http://localhost:11434/v1
+      model: llama3
+      api_key: "{{.env.OPENAI_API_KEY}}"
+  planner:
+    provider: mistral_vibe
+    options:
+      agent_profile: plan
+      max_turns: 4
+      enabled_tools: [read, grep]
+```
+
+An alias that sets `dangerously_skip_permissions: true` logs the same security warning as a step that sets it, and the warning names the alias. A step can switch the option off with `dangerously_skip_permissions: false`.
+
+Aliases apply wherever AWF runs agent steps: `awf run`, `awf run --step`, `awf resume`, `awf serve`, `awf acp serve` and the terminal UI. In `awf acp serve`, a configuration file that cannot be read is reported and the server starts without aliases.
+
+---
+
 ## Telemetry Configuration
 
 Configure OpenTelemetry distributed tracing in `.awf/config.yaml` under the `telemetry:` key. This enables tracing for all workflows in the project without requiring CLI flags.
