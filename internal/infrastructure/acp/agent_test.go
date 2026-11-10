@@ -340,7 +340,7 @@ func TestAgent_Cancel(t *testing.T) {
 	}
 }
 
-// TestAgent_UnsupportedMethods verifies that all 7 unsupported methods return MethodNotFound errors.
+// TestAgent_UnsupportedMethods verifies that unsupported methods return MethodNotFound errors.
 func TestAgent_UnsupportedMethods(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -351,6 +351,14 @@ func TestAgent_UnsupportedMethods(t *testing.T) {
 			name: "Authenticate returns methodNotFoundErr",
 			methodFn: func(a *Agent) error {
 				_, err := a.Authenticate(context.Background(), sdk.AuthenticateRequest{})
+				return err
+			},
+			wantCode: -32601,
+		},
+		{
+			name: "Logout returns methodNotFoundErr",
+			methodFn: func(a *Agent) error {
+				_, err := a.Logout(context.Background(), sdk.LogoutRequest{})
 				return err
 			},
 			wantCode: -32601,

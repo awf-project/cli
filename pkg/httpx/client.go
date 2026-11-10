@@ -126,6 +126,11 @@ func (c *Client) Do(ctx context.Context, method, url string, headers map[string]
 	defer httpResp.Body.Close()
 
 	bodyStr, truncated, err := ReadBody(httpResp.Body, maxBodyBytes)
+	// A peer may finish its response as cancellation closes the request. Preserve
+	// caller cancellation even when the body reader reports a tolerated EOF.
+	if ctx.Err() != nil {
+		return nil, RedactError(ctx.Err())
+	}
 	if err != nil {
 		return nil, RedactError(err)
 	}

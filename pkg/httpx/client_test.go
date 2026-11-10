@@ -3,6 +3,7 @@ package httpx
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -244,6 +245,40 @@ func TestClientTLSSetupBudgetDoesNotLimitResponse(t *testing.T) {
 			receiveSignal(t, stopped)
 		})
 	}
+}
+
+// A server can finish the response concurrently with request cancellation.
+func TestClientCancellationAtBodyEOF(t *testing.T) {
+	for _, maxBytes := range []int64{0, 1024} {
+		for _, readErr := range []error{io.EOF, io.ErrUnexpectedEOF} {
+			t.Run(fmt.Sprintf("limit=%d/error=%v", maxBytes, readErr), func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				body := &cancelAtEOFReader{cancel: cancel, err: readErr}
+				doer := &mockHTTPDoer{response: &http.Response{StatusCode: http.StatusOK, Body: body}}
+				response, err := NewClient(WithDoer(doer)).Get(ctx, "https://example.invalid", nil, maxBytes)
+				require.ErrorIs(t, err, context.Canceled)
+				assert.Nil(t, response)
+				assert.True(t, body.closed)
+			})
+		}
+	}
+}
+
+type cancelAtEOFReader struct {
+	cancel context.CancelFunc
+	err    error
+	closed bool
+}
+
+func (r *cancelAtEOFReader) Read(_ []byte) (int, error) {
+	r.cancel()
+	return 0, r.err
+}
+
+func (r *cancelAtEOFReader) Close() error {
+	r.closed = true
+	return nil
 }
 
 func TestClientHeaders(t *testing.T) {
