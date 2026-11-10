@@ -31,7 +31,7 @@
     "@changesets/changelog-github": "^1.0.0",
     "@changesets/cli": "^3.0.0",
     "prettier": "^3.8.1",
-    "vite": "^7.3.1"
+    "vite": "^8.0.0"
   },
   "engines": {
     "node": ">=24.13.0"
