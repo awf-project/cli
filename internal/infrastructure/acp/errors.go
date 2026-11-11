@@ -23,7 +23,7 @@ func toACPError(e *application.ACPHandlerError) error {
 	case application.ACPErrMethodNotFound:
 		// NewMethodNotFound carries the method name in Data{"method": ...}; the reserved
 		// MethodNotFound path has no human-readable detail to preserve beyond it.
-		return sdk.NewMethodNotFound(e.Message)
+		return sdk.NewMethodNotFound(e.Message) //nolint:wrapcheck // ACP transport requires the concrete *sdk.RequestError to preserve the JSON-RPC code and data.
 	case application.ACPErrInvalidParams:
 		return &sdk.RequestError{Code: -32602, Message: e.Message, Data: e.Data}
 	default: // ACPErrInternal

@@ -163,6 +163,13 @@ linters:
         linters:
           - wrapcheck
 
+      # Huma constructors create final HTTP responses; preserve their status and body.
+      # Other external errors in API handlers still require wrapping.
+      - path: internal/interfaces/api/
+        text: 'error returned from external package is unwrapped: sig: func github\.com/danielgtaylor/huma/v2\.Error[0-9]'
+        linters:
+          - wrapcheck
+
       # Infrastructure store layer - os.* errors must remain unwrapped
       # for os.IsNotExist/os.IsPermission checks to work
       - path: internal/infrastructure/store/
