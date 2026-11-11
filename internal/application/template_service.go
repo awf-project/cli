@@ -247,24 +247,7 @@ func (s *TemplateService) ApplyTemplateFields(
 
 	mergeTemplateTimeout(step, templateStep)
 
-	// Retry: merge field-by-field
-	if templateStep.Retry != nil {
-		if step.Retry == nil {
-			// No step retry config, use entire template retry
-			step.Retry = templateStep.Retry
-		} else {
-			// Merge individual fields - step values take precedence if non-zero/non-empty
-			if step.Retry.MaxAttempts == 0 {
-				step.Retry.MaxAttempts = templateStep.Retry.MaxAttempts
-			}
-			if step.Retry.InitialDelayMs == 0 {
-				step.Retry.InitialDelayMs = templateStep.Retry.InitialDelayMs
-			}
-			if step.Retry.Backoff == "" {
-				step.Retry.Backoff = templateStep.Retry.Backoff
-			}
-		}
-	}
+	mergeTemplateRetry(step, templateStep)
 
 	// Capture: merge field-by-field
 	if templateStep.Capture != nil {
@@ -287,6 +270,28 @@ func (s *TemplateService) ApplyTemplateFields(
 	step.TemplateRef = nil
 
 	return nil
+}
+
+// mergeTemplateRetry fills omitted retry fields from the template.
+func mergeTemplateRetry(step, templateStep *workflow.Step) {
+	// Retry: merge field-by-field
+	if templateStep.Retry != nil {
+		if step.Retry == nil {
+			// No step retry config, use entire template retry
+			step.Retry = templateStep.Retry
+		} else {
+			// Merge individual fields - step values take precedence if non-zero/non-empty
+			if step.Retry.MaxAttempts == 0 {
+				step.Retry.MaxAttempts = templateStep.Retry.MaxAttempts
+			}
+			if step.Retry.InitialDelayMs == 0 {
+				step.Retry.InitialDelayMs = templateStep.Retry.InitialDelayMs
+			}
+			if step.Retry.Backoff == "" {
+				step.Retry.Backoff = templateStep.Retry.Backoff
+			}
+		}
+	}
 }
 
 // mergeTemplateTimeout preserves the distinction between an omitted timeout and
