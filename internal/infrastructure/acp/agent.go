@@ -136,6 +136,11 @@ func (a *Agent) Authenticate(_ context.Context, _ sdk.AuthenticateRequest) (sdk.
 	return sdk.AuthenticateResponse{}, methodNotFoundErr(string(sdk.AgentMethodAuthenticate))
 }
 
+// Logout is unsupported because AWF does not advertise ACP authentication.
+func (a *Agent) Logout(_ context.Context, _ sdk.LogoutRequest) (sdk.LogoutResponse, error) {
+	return sdk.LogoutResponse{}, methodNotFoundErr(string(sdk.AgentMethodLogout))
+}
+
 func (a *Agent) CloseSession(_ context.Context, _ sdk.CloseSessionRequest) (sdk.CloseSessionResponse, error) {
 	return sdk.CloseSessionResponse{}, methodNotFoundErr(string(sdk.AgentMethodSessionClose))
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -129,6 +130,12 @@ func TestSSETimeoutDoesNotLeaveActiveStream(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = response.Body.Close(); httpTest.CloseClientConnections(); httpTest.Close() }()
+	// Headers are flushed before Huma encodes the event. Read past its small
+	// prefix so shutdown exercises a blocked socket write rather than racing
+	// the CPU time needed to encode 16 MiB under the race detector.
+	if _, err := io.CopyN(io.Discard, response.Body, 4096); err != nil {
+		t.Fatal(err)
+	}
 	err = server.Shutdown(context.Background())
 	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("unexpected shutdown error: %v", err)
