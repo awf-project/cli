@@ -1,4 +1,4 @@
 ---
 title: "Blog"
-description: "News, release notes, and articles about AWF."
+description: "Read AWF release notes, project news, and practical articles about orchestrating AI agents with declarative YAML workflows."
 ---

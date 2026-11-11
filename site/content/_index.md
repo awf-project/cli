@@ -1,6 +1,6 @@
 ---
 title: "AWF — AI Workflow Framework CLI"
-description: "Orchestrate AI agents through declarative YAML workflows with state machine execution."
+description: "Orchestrate AI agents with declarative YAML workflows. AWF brings state machines, parallel execution, and repeatable automation to your CLI."
 lead: "Orchestrate AI agents through declarative YAML workflows."
 date: 2026-03-14
 draft: false

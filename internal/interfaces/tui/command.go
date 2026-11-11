@@ -269,7 +269,7 @@ func findAWFAuditLog() string {
 			return ""
 		}
 		cleaned := filepath.Clean(envPath)
-		if _, err := os.Stat(cleaned); err == nil {
+		if _, err := os.Stat(cleaned); err == nil { //nolint:gosec // G703: AWF_AUDIT_LOG intentionally selects a user-configured path outside any fixed base directory.
 			return cleaned
 		}
 		return ""

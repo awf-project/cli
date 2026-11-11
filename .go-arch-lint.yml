@@ -428,6 +428,9 @@ deps:
       - domain-plugin
       - domain-transcript
       - infra-logger
+      # Agent aliases merge project, local and user configuration from XDG paths.
+      - infra-config
+      - infra-xdg
     canUse:
       - go-stdlib
       - go-sync
@@ -735,6 +738,8 @@ deps:
   interfaces-tui:
     mayDependOn:
       - application
+      # The TUI composition root loads aliases before wiring agent execution.
+      - infra-agents
       - domain-workflow
       - domain-ports
       - domain-errors

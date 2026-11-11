@@ -6,7 +6,7 @@ disableHugoGeneratorInject = true
 enableEmoji = true
 enableGitInfo = false
 enableRobotsTXT = true
-languageCode = "en-US"
+locale = "en-US"
 rssLimit = 10
 summarylength = 20 # 70 (default)
 
@@ -100,6 +100,14 @@ ignoreFiles = ['CLAUDE\.md$', '\.template\.md$']
 [imaging]
   anchor = "Center"
   bgColor = "#ffffff"
-  hint = "photo"
-  quality = 85
   resampleFilter = "Lanczos"
+
+[imaging.jpeg]
+  quality = 85
+
+[imaging.webp]
+  quality = 85
+  hint = "photo"
+
+[imaging.avif]
+  quality = 85

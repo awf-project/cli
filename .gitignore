@@ -73,3 +73,6 @@ examples/plugins/*/awf-plugin-*
 # Added by awf project-onboard
 .awf/storage/states/
 .awf/storage/logs/
+
+# Site styles prepared from the locked Doks/Bootstrap dependencies
+site/.generated/

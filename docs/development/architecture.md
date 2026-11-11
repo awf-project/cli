@@ -1,5 +1,6 @@
 ---
 title: "Architecture"
+description: "Explore AWF's hexagonal architecture, domain ports, application services, and infrastructure adapters, with strict dependency inversion across layers."
 ---
 
 AWF follows Hexagonal (Ports and Adapters) / Clean Architecture with strict dependency inversion.

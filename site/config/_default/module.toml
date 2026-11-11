@@ -66,6 +66,11 @@
   target = "archetypes"
 
 ## assets
+# Styles migrated and compiled by the npm build/dev scripts.
+[[mounts]]
+  source = ".generated/css"
+  target = "assets/css"
+
 [[mounts]]
   source = "node_modules/@thulite/core/assets"
   target = "assets"
@@ -119,3 +124,9 @@
 [[mounts]]
   source = "../docs/ADR"
   target = "content/docs/adr"
+  # The contributor README has no title and collides with the section index.
+  files = ["! README.md"]
+
+# Keep an old local Hugo from failing deep inside theme templates.
+[hugoVersion]
+  min = "0.167.0"

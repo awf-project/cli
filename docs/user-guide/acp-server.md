@@ -1,6 +1,6 @@
 ---
 title: "ACP Editor Integration"
-description: "Connect AWF to your ACP-compatible editor as a transparent AI agent"
+description: "Connect AWF to an ACP-compatible editor as a transparent AI agent, and configure the server for interactive workflow execution from your editor."
 ---
 
 ## Overview
