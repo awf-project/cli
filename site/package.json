@@ -34,7 +34,7 @@
     "@changesets/cli": "^3.0.0",
     "prettier": "^3.8.1",
     "sass-embedded": "1.108.2",
-    "sass-migrator": "2.6.1",
+    "sass-migrator": "2.7.0",
     "vite": "^8.0.0"
   },
   "engines": {
