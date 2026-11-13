@@ -822,18 +822,6 @@ func (s *ExecutionService) runExecutionLoop(
 	return execErr
 }
 
-// runWithCallStack executes a workflow by name with an optional parent call stack.
-// This is used internally by executeCallWorkflowStep to preserve circular detection.
-func (s *ExecutionService) runWithCallStack(
-	ctx context.Context,
-	workflowName string,
-	inputs map[string]any,
-	parentCallStack []string,
-	runID, parentRunID string,
-) (*workflow.ExecutionContext, error) {
-	return s.runWithCallStackAndWorkflow(ctx, workflowName, nil, inputs, parentCallStack, runID, parentRunID)
-}
-
 // runWithCallStackAndWorkflow executes a workflow with an optional parent call stack.
 // If wf is nil, loads the workflow by name. Otherwise uses the provided workflow.
 // runID/parentRunID thread the F106 run identity through to prepareExecution.
