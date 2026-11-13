@@ -1937,3 +1937,63 @@ func TestExecuteCallWorkflowStep_UnnamespacedWorkflow_WithLoader(t *testing.T) {
 	assert.False(t, loaderCalled, "loader should not be called for unnamespaced workflows")
 	assert.Equal(t, workflow.StatusCompleted, ctx.Status)
 }
+
+// packOnlyCallWorkflowFixture returns a parent calling target and a child that exists only
+// behind the pack loader: the harness repository does not know it.
+func packOnlyCallWorkflowFixture(target string) (parentWf, childWf *workflow.Workflow) {
+	childWf = &workflow.Workflow{
+		Name:    "helper",
+		Initial: "work",
+		Steps: map[string]*workflow.Step{
+			"work": {Name: "work", Type: workflow.StepTypeCommand, Command: "echo ok", OnSuccess: "done"},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+	parentWf = &workflow.Workflow{
+		Name:    "parent",
+		Initial: "call",
+		Steps: map[string]*workflow.Step{
+			"call": {
+				Name:         "call",
+				Type:         workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{Workflow: target},
+				OnSuccess:    "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+	return parentWf, childWf
+}
+
+func TestExecuteCallWorkflowStep_RunsWorkflowReturnedByPackLoader(t *testing.T) {
+	tests := []struct {
+		name     string
+		target   string
+		packName string
+	}{
+		{name: "namespaced reference", target: "utils/helper"},
+		{name: "unnamespaced reference inside a pack", target: "helper", packName: "utils"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parentWf, childWf := packOnlyCallWorkflowFixture(tt.target)
+			execSvc, _ := NewTestHarness(t).
+				WithWorkflow("parent", parentWf).
+				Build()
+			if tt.packName != "" {
+				execSvc.SetAWFPaths(map[string]string{application.AWFPackNameKey: tt.packName})
+			}
+			execSvc.SetPackWorkflowLoader(func(_ context.Context, packName, workflowName string) (*workflow.Workflow, string, error) {
+				if packName == "utils" && workflowName == "helper" {
+					return childWf, "/pack/utils", nil
+				}
+				return nil, "", fmt.Errorf("unexpected pack workflow %s/%s", packName, workflowName)
+			})
+
+			execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "parent-run")
+
+			require.NoError(t, err)
+			assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+		})
+	}
+}

@@ -43,7 +43,7 @@ func SplitCallWorkflowName(name string) (packName, workflowName string) {
 // The method performs the following steps:
 //  1. Validates call stack depth against MaxCallStackDepth
 //  2. Checks for circular workflow calls using the call stack
-//  3. Loads the sub-workflow via WorkflowService
+//  3. Loads the sub-workflow via the pack loader or WorkflowService
 //  4. Pushes current workflow to call stack
 //  5. Resolves input mappings via interpolation
 //  6. Creates child context with optional timeout
@@ -82,6 +82,8 @@ func (s *ExecutionService) executeCallWorkflowStep(
 
 	// 3. Load sub-workflow — route namespaced references through the pack workflow loader.
 	packName, workflowTarget := SplitCallWorkflowName(config.Workflow)
+	// The loaded workflow is the one executed in step 7: reloading it by name would miss pack workflows.
+	var subWf *workflow.Workflow
 	var loadErr error
 	switch {
 	case packName != "":
@@ -89,18 +91,18 @@ func (s *ExecutionService) executeCallWorkflowStep(
 		if s.packWorkflowLoader == nil {
 			return "", fmt.Errorf("step %s: pack workflow loader not configured for namespaced call %q", step.Name, config.Workflow)
 		}
-		if _, _, loadErr = s.packWorkflowLoader(ctx, packName, workflowTarget); loadErr != nil {
+		if subWf, _, loadErr = s.packWorkflowLoader(ctx, packName, workflowTarget); loadErr != nil {
 			return "", fmt.Errorf("step %s: load sub-workflow %q: %w", step.Name, config.Workflow, loadErr)
 		}
 	case s.awfPaths[AWFPackNameKey] != "" && s.packWorkflowLoader != nil:
 		// Unnamespaced within a pack context: try current pack first, fall back to standard.
-		if _, _, loadErr = s.packWorkflowLoader(ctx, s.awfPaths[AWFPackNameKey], workflowTarget); loadErr != nil {
-			if _, loadErr = s.workflowSvc.GetWorkflow(ctx, config.Workflow); loadErr != nil {
+		if subWf, _, loadErr = s.packWorkflowLoader(ctx, s.awfPaths[AWFPackNameKey], workflowTarget); loadErr != nil {
+			if subWf, loadErr = s.workflowSvc.GetWorkflow(ctx, config.Workflow); loadErr != nil {
 				return "", fmt.Errorf("step %s: load sub-workflow %q: %w", step.Name, config.Workflow, loadErr)
 			}
 		}
 	default:
-		if _, loadErr = s.workflowSvc.GetWorkflow(ctx, config.Workflow); loadErr != nil {
+		if subWf, loadErr = s.workflowSvc.GetWorkflow(ctx, config.Workflow); loadErr != nil {
 			return "", fmt.Errorf("step %s: load sub-workflow %q: %w", step.Name, config.Workflow, loadErr)
 		}
 	}
@@ -163,7 +165,7 @@ func (s *ExecutionService) executeCallWorkflowStep(
 	s.logger.Info("executing sub-workflow", "step", step.Name, "workflow", config.Workflow)
 	s.emitTranscriptCallWorkflowStarted(ctx, execCtx, step, childRunID)
 	subCtx = withRecorder(subCtx, childRecorder)
-	subResult, execErr := s.runWithCallStack(subCtx, config.Workflow, subInputs, execCtx.CallStack, childRunID, execCtx.WorkflowID)
+	subResult, execErr := s.runWithCallStackAndWorkflow(subCtx, config.Workflow, subWf, subInputs, execCtx.CallStack, childRunID, execCtx.WorkflowID)
 	s.emitTranscriptCallWorkflowCompleted(ctx, execCtx, step, childRunID, execErr)
 
 	// Create sub-workflow result for tracking
