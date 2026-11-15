@@ -42,9 +42,9 @@ type mcpProxyConfig struct {
 }
 
 // annotationSkipFormatValidation is a Cobra command annotation key that signals
-// PersistentPreRun to skip --format flag validation. Commands that communicate
+// PersistentPreRunE to skip --format flag validation. Commands that communicate
 // via a structured protocol (JSON-RPC, streaming) set this to avoid spurious
-// os.Exit(1) calls from format validation logic intended for human-readable output.
+// status-1 errors from format validation logic intended for human-readable output.
 // Using an annotation is more robust than matching c.Name() == "mcp-serve" because
 // it survives command renames without a corresponding root.go change.
 const annotationSkipFormatValidation = "skipFormatValidation"

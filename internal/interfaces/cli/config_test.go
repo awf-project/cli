@@ -1,17 +1,285 @@
 package cli
 
 import (
+	"bytes"
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type routingTestFacade struct{}
+
+type recordedHistoryStore struct {
+	events *[]string
+}
+
+func (*recordedHistoryStore) Record(context.Context, *workflow.ExecutionRecord) error { return nil }
+
+func (*recordedHistoryStore) List(context.Context, *workflow.HistoryFilter) ([]*workflow.ExecutionRecord, error) {
+	return nil, nil
+}
+
+func (*recordedHistoryStore) GetStats(context.Context, *workflow.HistoryFilter) (*workflow.HistoryStats, error) {
+	return nil, nil
+}
+
+func (*recordedHistoryStore) Cleanup(context.Context, time.Duration) (int, error) { return 0, nil }
+
+func (s *recordedHistoryStore) Close() error {
+	*s.events = append(*s.events, "history-close")
+	return nil
+}
+
+func (routingTestFacade) List(context.Context) ([]ports.WorkflowSummary, error) { return nil, nil }
+
+func (routingTestFacade) Validate(context.Context, ports.RunRequest) (ports.ValidationReport, error) {
+	return ports.ValidationReport{}, nil
+}
+
+func (routingTestFacade) Status(context.Context, string) (ports.RunStatus, error) {
+	return ports.RunStatus{RunID: "run-1"}, nil
+}
+
+func (routingTestFacade) History(context.Context, ports.HistoryFilter) ([]ports.RunRecord, error) {
+	return nil, nil
+}
+
+func (routingTestFacade) Run(context.Context, ports.RunRequest) (ports.RunSession, error) {
+	return nil, nil
+}
+
+func (routingTestFacade) Resume(context.Context, ports.ResumeRequest) (ports.RunSession, error) {
+	return nil, nil
+}
+
+func TestValidateCommand_IsOnlyPluginAwareFacadeRoute(t *testing.T) {
+	cmd := NewRootCommand()
+	var marked []string
+	var visit func(*cobra.Command)
+	visit = func(current *cobra.Command) {
+		if current.Annotations[annotationPluginAwareValidation] == "true" {
+			marked = append(marked, current.CommandPath())
+		}
+		for _, child := range current.Commands() {
+			visit(child)
+		}
+	}
+	visit(cmd)
+
+	assert.Equal(t, []string{"awf validate"}, marked)
+}
+
+func TestAutoFacade_ValidationSetupErrorPreventsRunE(t *testing.T) {
+	t.Run("setup error", func(t *testing.T) {
+		setupErr := errors.New("validation setup failed")
+		cleanupCalls := 0
+		runCalls := 0
+		cfg := DefaultConfig()
+		cfg.StoragePath = t.TempDir()
+		cmd, cleanup := newRootCommandWithBuilders(
+			cfg,
+			true,
+			func(*Config) (ports.WorkflowFacade, func()) { return routingTestFacade{}, func() {} },
+			func(*Config) (ports.WorkflowFacade, func(), error) {
+				return nil, func() { cleanupCalls++ }, setupErr
+			},
+		)
+		validateCmd, _, findErr := cmd.Find([]string{"validate"})
+		require.NoError(t, findErr)
+		validateCmd.RunE = func(*cobra.Command, []string) error {
+			runCalls++
+			return errors.New("validate RunE invoked")
+		}
+		cmd.SetOut(new(bytes.Buffer))
+		cmd.SetErr(new(bytes.Buffer))
+		cmd.SetArgs([]string{"validate", "workflow"})
+
+		err := cmd.Execute()
+
+		require.ErrorIs(t, err, setupErr)
+		assert.ErrorContains(t, err, "initialize validation facade")
+		assert.Zero(t, runCalls)
+		assert.Equal(t, 1, cleanupCalls)
+		cleanup()
+		cleanup()
+		assert.Equal(t, 1, cleanupCalls)
+	})
+
+	t.Run("successful setup cleanup", func(t *testing.T) {
+		cleanupCalls := 0
+		runCalls := 0
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		require.NoError(t, os.Mkdir(filepath.Join(home, ".awf"), 0o700))
+		migrationNoticeMu.Lock()
+		migrationNoticeShown = false
+		migrationNoticeMu.Unlock()
+		t.Cleanup(func() {
+			migrationNoticeMu.Lock()
+			migrationNoticeShown = false
+			migrationNoticeMu.Unlock()
+		})
+		cfg := DefaultConfig()
+		cfg.StoragePath = t.TempDir()
+		cmd, cleanup := newRootCommandWithBuilders(
+			cfg,
+			true,
+			func(*Config) (ports.WorkflowFacade, func()) { return routingTestFacade{}, func() {} },
+			func(*Config) (ports.WorkflowFacade, func(), error) {
+				return routingTestFacade{}, func() { cleanupCalls++ }, nil
+			},
+		)
+		validateCmd, _, findErr := cmd.Find([]string{"validate"})
+		require.NoError(t, findErr)
+		validateCmd.RunE = func(*cobra.Command, []string) error {
+			runCalls++
+			return nil
+		}
+		output := new(bytes.Buffer)
+		cmd.SetOut(output)
+		cmd.SetErr(output)
+		cmd.SetArgs([]string{"--format", "json", "validate", "workflow"})
+
+		require.NoError(t, cmd.Execute())
+		assert.Equal(t, 1, runCalls)
+		assert.Equal(t, ui.FormatJSON, cfg.OutputFormat)
+		assert.Equal(t, 1, strings.Count(output.String(), "NOTICE: Legacy ~/.awf directory detected"))
+		assert.Zero(t, cleanupCalls)
+		cleanup()
+		cleanup()
+		assert.Equal(t, 1, cleanupCalls)
+	})
+}
+
+func TestValidationFacade_ReleasesPluginResources(t *testing.T) {
+	t.Run("plugin initialization error", func(t *testing.T) {
+		events := []string{}
+		initErr := errors.New("plugin initialization failed")
+		facade, cleanup, err := buildValidationFacadeWithDependencies(DefaultConfig(), validationFacadeDependencies{
+			initPlugins: func(_ context.Context, _ *Config, logger ports.Logger) (*PluginSystemResult, error) {
+				require.NotPanics(t, func() { logger.Warn("synthetic plugin initialization warning") })
+				events = append(events, "plugin-init", "plugin-partial-release")
+				return nil, initErr
+			},
+			openHistory: func(string) (ports.HistoryStore, error) {
+				events = append(events, "history-open")
+				return nil, nil
+			},
+		})
+
+		require.ErrorIs(t, err, initErr)
+		assert.Nil(t, facade)
+		cleanup()
+		cleanup()
+		assert.Equal(t, []string{"plugin-init", "plugin-partial-release"}, events)
+	})
+
+	t.Run("history acquisition error", func(t *testing.T) {
+		events := []string{}
+		historyErr := errors.New("history initialization failed")
+		facade, cleanup, err := buildValidationFacadeWithDependencies(DefaultConfig(), validationFacadeDependencies{
+			initPlugins: func(context.Context, *Config, ports.Logger) (*PluginSystemResult, error) {
+				events = append(events, "plugin-init")
+				return &PluginSystemResult{
+					Cleanup: func() { events = append(events, "plugin-cleanup") },
+				}, nil
+			},
+			openHistory: func(string) (ports.HistoryStore, error) {
+				events = append(events, "history-open")
+				return nil, historyErr
+			},
+		})
+
+		require.ErrorIs(t, err, historyErr)
+		assert.Nil(t, facade)
+		cleanup()
+		cleanup()
+		assert.Equal(t, []string{"plugin-init", "history-open", "plugin-cleanup"}, events)
+	})
+
+	t.Run("successful cleanup is idempotent", func(t *testing.T) {
+		events := []string{}
+		facade, cleanup, err := buildValidationFacadeWithDependencies(DefaultConfig(), validationFacadeDependencies{
+			initPlugins: func(context.Context, *Config, ports.Logger) (*PluginSystemResult, error) {
+				events = append(events, "plugin-init")
+				return &PluginSystemResult{
+					Service: application.NewPluginService(nil, nil, ports.NopLogger{}),
+					Cleanup: func() { events = append(events, "plugin-cleanup") },
+				}, nil
+			},
+			openHistory: func(string) (ports.HistoryStore, error) {
+				events = append(events, "history-open")
+				return &recordedHistoryStore{events: &events}, nil
+			},
+		})
+
+		require.NoError(t, err)
+		require.NotNil(t, facade)
+		cleanup()
+		cleanup()
+		assert.Equal(t, []string{"plugin-init", "history-open", "plugin-cleanup", "history-close"}, events)
+	})
+}
+
+func TestAutoFacade_ReadCommandsDoNotInitializePlugins(t *testing.T) {
+	pluginsDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(pluginsDir, "invalid-plugin.yaml"), []byte("not: [valid"), 0o600))
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "list", args: []string{"list"}},
+		{name: "history", args: []string{"history"}},
+		{name: "status", args: []string{"status", "run-1"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			validationBuilds := 0
+			ordinaryBuilds := 0
+			cfg := DefaultConfig()
+			cfg.StoragePath = t.TempDir()
+			cmd, cleanup := newRootCommandWithBuilders(
+				cfg,
+				true,
+				func(*Config) (ports.WorkflowFacade, func()) {
+					ordinaryBuilds++
+					return routingTestFacade{}, func() {}
+				},
+				func(*Config) (ports.WorkflowFacade, func(), error) {
+					validationBuilds++
+					return nil, func() {}, errors.New("plugin setup must not run")
+				},
+			)
+			defer cleanup()
+			cmd.SetOut(new(bytes.Buffer))
+			cmd.SetErr(new(bytes.Buffer))
+			cmd.SetArgs(tt.args)
+
+			err := cmd.Execute()
+
+			require.NoError(t, err)
+			assert.Equal(t, 1, ordinaryBuilds)
+			assert.Zero(t, validationBuilds)
+		})
+	}
+}
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()

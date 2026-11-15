@@ -6,6 +6,7 @@ func AllOperations() []pluginmodel.OperationSchema {
 	return []pluginmodel.OperationSchema{
 		{
 			Name:        "notify.send",
+			PluginName:  "notify",
 			Description: "Send a notification via configured backend (desktop, webhook)",
 			Inputs: map[string]pluginmodel.InputSchema{
 				"backend": {

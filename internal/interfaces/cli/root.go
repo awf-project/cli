@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"fmt"
 	"os"
+	"sync"
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -66,11 +68,25 @@ func NewRootCommandAutoFacade() (cmd *cobra.Command, cleanup func()) {
 }
 
 func newRootCommand(autoFacade bool) (cmd *cobra.Command, cleanup func()) {
-	return newRootCommandWithConfig(DefaultConfig(), autoFacade)
+	return newRootCommandWithBuilders(DefaultConfig(), autoFacade, buildFacade, buildValidationFacade)
 }
 
-func newRootCommandWithConfig(cfg *Config, autoFacade bool) (cmd *cobra.Command, cleanup func()) {
+func newRootCommandWithBuilders(
+	cfg *Config,
+	autoFacade bool,
+	build facadeBuilder,
+	buildValidation validationFacadeBuilder,
+) (cmd *cobra.Command, cleanup func()) {
 	var facadeCleanup func()
+	var cleanupOnce sync.Once
+	releaseFacade := func() {
+		if facadeCleanup == nil {
+			return
+		}
+		release := facadeCleanup
+		facadeCleanup = nil
+		release()
+	}
 
 	cmd = &cobra.Command{
 		Use:   "awf",
@@ -110,38 +126,10 @@ Examples:
 	var formatStr string
 	pf.StringVarP(&formatStr, "format", "f", "text", "Output format (text, json, table, quiet)")
 
-	// Parse format flag before each command.
-	// mcp-serve is exempt: it communicates exclusively via JSON-RPC on stdio and
-	// must never call os.Exit(1) for an irrelevant --format flag. All other commands
-	// go through the normal format validation path.
-	originalPreRun := cmd.PersistentPreRun
-	cmd.PersistentPreRun = func(c *cobra.Command, args []string) {
-		if c.Annotations[annotationSkipFormatValidation] == "true" {
-			// Skip --format validation for commands that communicate via a structured
-			// protocol (e.g. mcp-serve uses JSON-RPC on stdio). The annotation is set
-			// on the command at construction time; using an annotation is more robust
-			// than matching c.Name() because it survives command renames.
-			if originalPreRun != nil {
-				originalPreRun(c, args)
-			}
-			return
-		}
-		format, err := ui.ParseOutputFormat(formatStr)
-		if err != nil {
-			c.PrintErrf("Error: %s\n", err)
-			os.Exit(1)
-		}
-		cfg.OutputFormat = format
-		if autoFacade && cfg.Facade == nil {
-			if facade, cleanup := buildFacade(cfg); facade != nil {
-				cfg.Facade = facade
-				facadeCleanup = cleanup
-			}
-		}
-		if originalPreRun != nil {
-			originalPreRun(c, args)
-		}
-	}
+	cmd.PersistentPreRunE = newRootPersistentPreRun(
+		cfg, autoFacade, &formatStr, cmd.PersistentPreRun, build, buildValidation,
+		func(release func()) { facadeCleanup = release },
+	)
 
 	// Subcommands
 	cmd.AddCommand(newInitCommand(cfg))
@@ -163,9 +151,88 @@ Examples:
 	cmd.AddCommand(newMCPServeCommand(Deps{}))
 	cmd.AddCommand(newACPServeCommand(Deps{}))
 
-	return cmd, func() {
-		if facadeCleanup != nil {
-			facadeCleanup()
+	return cmd, func() { cleanupOnce.Do(releaseFacade) }
+}
+
+func newRootCommandWithConfig(cfg *Config, autoFacade bool) (cmd *cobra.Command, cleanup func()) {
+	return newRootCommandWithBuilders(cfg, autoFacade, buildFacade, buildValidationFacade)
+}
+
+func newRootPersistentPreRun(
+	cfg *Config,
+	autoFacade bool,
+	formatStr *string,
+	originalPreRun func(*cobra.Command, []string),
+	build facadeBuilder,
+	buildValidation validationFacadeBuilder,
+	setCleanup func(func()),
+) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		if cmd.Annotations[annotationSkipFormatValidation] == "true" {
+			invokePersistentPreRun(originalPreRun, cmd, args)
+			return nil
 		}
+		format, err := ui.ParseOutputFormat(*formatStr)
+		if err != nil {
+			cmd.PrintErrf("Error: %s\n", err)
+			return &exitError{code: ExitUser, err: err, handled: true}
+		}
+		cfg.OutputFormat = format
+		if err := initializeCommandFacade(cmd, cfg, autoFacade, build, buildValidation, setCleanup); err != nil {
+			return err
+		}
+		invokePersistentPreRun(originalPreRun, cmd, args)
+		return nil
+	}
+}
+
+func initializeCommandFacade(
+	cmd *cobra.Command,
+	cfg *Config,
+	autoFacade bool,
+	build facadeBuilder,
+	buildValidation validationFacadeBuilder,
+	setCleanup func(func()),
+) error {
+	if !autoFacade || cfg.Facade != nil {
+		return nil
+	}
+	if cmd.Annotations[annotationPluginAwareValidation] == "true" {
+		skipPlugins, err := cmd.Flags().GetBool("skip-plugins")
+		if err != nil {
+			return fmt.Errorf("read validation plugin flag: %w", err)
+		}
+		// Preserve --skip-plugins before facade construction can start external
+		// plugins or expose their operations to validation.
+		if skipPlugins {
+			if facade, cleanup := build(cfg); facade != nil {
+				cfg.Facade = facade
+				setCleanup(cleanup)
+			}
+			return nil
+		}
+		facade, cleanup, err := buildValidation(cfg)
+		if err != nil {
+			if cleanup != nil {
+				cleanup()
+			}
+			return fmt.Errorf("initialize validation facade: %w", err)
+		}
+		if facade != nil {
+			cfg.Facade = facade
+			setCleanup(cleanup)
+		}
+		return nil
+	}
+	if facade, cleanup := build(cfg); facade != nil {
+		cfg.Facade = facade
+		setCleanup(cleanup)
+	}
+	return nil
+}
+
+func invokePersistentPreRun(preRun func(*cobra.Command, []string), cmd *cobra.Command, args []string) {
+	if preRun != nil {
+		preRun(cmd, args)
 	}
 }
