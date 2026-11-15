@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/awf-project/cli/internal/application"
+	"github.com/awf-project/cli/internal/infrastructure/agents"
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
@@ -465,11 +466,13 @@ func emitPluginWarnings(cmd *cobra.Command, packDir string, pluginSvc *applicati
 	}
 
 	manifest, err := workflowpkg.ParseManifest(data)
-	if err != nil || len(manifest.Plugins) == 0 {
+	if err != nil {
 		return
 	}
 
-	for pluginName, versionConstraint := range manifest.Plugins {
+	emitAgentPluginWarnings(cmd, manifest.Requires.AgentPlugins)
+
+	for pluginName, versionConstraint := range manifest.RequiredPlugins() {
 		if pluginSvc != nil {
 			_, exists := pluginSvc.GetPlugin(pluginName)
 			if exists {
@@ -478,6 +481,23 @@ func emitPluginWarnings(cmd *cobra.Command, packDir string, pluginSvc *applicati
 		}
 
 		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: pack requires plugin %q (%s) — install with: awf plugin install <owner>/%s\n", pluginName, versionConstraint, pluginName)
+	}
+}
+
+// emitAgentPluginWarnings warns about the agent CLI plugins that the pack requires and that are not installed.
+func emitAgentPluginWarnings(cmd *cobra.Command, required map[string][]string) {
+	registry := agents.NewClaudePluginRegistry()
+	for provider, plugins := range required {
+		for _, plugin := range plugins {
+			if !registry.Supports(provider) {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: pack requires the %s plugin %q, which awf cannot check\n", provider, plugin)
+				continue
+			}
+			if installed, err := registry.Installed(cmd.Context(), provider, plugin); err == nil && installed {
+				continue
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: pack requires the %s plugin %q — install with: claude plugin install %s\n", provider, plugin, plugin)
+		}
 	}
 }
 

@@ -50,6 +50,7 @@ states:
 | `inputs` | array | No | Input parameter definitions |
 | `states` | object | Yes | State definitions |
 | `states.initial` | string | Yes | Name of the starting state |
+| `requires` | object | No | Plugins the workflow needs outside its own files (see [Requirements](#requirements)) |
 
 ---
 
@@ -1863,6 +1864,31 @@ command: echo "Home: {{.env.HOME}}"
 See [Variable Interpolation Reference](../reference/interpolation.md) for complete details.
 
 ---
+
+## Requirements
+
+A workflow declares the plugins it needs under `requires`. `awf validate` and `awf run` check them before any other
+check of the workflow, and fail with a message that names each missing plugin and the command that installs it.
+
+```yaml
+name: review
+requires:
+  plugins:
+    nexus: ">=0.1.0"        # awf plugin, installed and enabled, with an optional version constraint
+  agent_plugins:
+    claude: ["egm@egm"]     # Claude Code plugins, as name@marketplace or name
+states:
+  initial: ask
+  # ...
+```
+
+| Field | Description |
+|-------|-------------|
+| `requires.plugins` | awf plugin name → version constraint. An empty constraint (`""`) accepts any version. A plugin without a semantic version, such as a built-in of a development build, passes any constraint. |
+| `requires.agent_plugins` | Agent provider → list of plugins of that agent CLI. `claude` is the only provider awf can check: it reads `plugins/installed_plugins.json` of `CLAUDE_CONFIG_DIR` (default `~/.claude`), and accepts a plugin installed for the user or for a project that contains the current directory. |
+
+`awf validate --skip-plugins` skips the check of `requires.plugins`, not that of `requires.agent_plugins`. A pack
+declares the same block in its manifest for all its workflows: see [Workflow Packs](workflow-packs.md#manifest-fields).
 
 ## Hooks
 

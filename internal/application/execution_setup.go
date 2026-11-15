@@ -376,6 +376,10 @@ func (s *ExecutionSetup) Build(_ context.Context) (*SetupResult, error) {
 
 	skillRepo := infraskills.NewFilesystemSkillRepository(s.logger)
 	wfSvc.SetSkillRepository(skillRepo)
+	wfSvc.SetAgentPluginRegistry(agents.NewClaudePluginRegistry())
+	if cfg.pluginService != nil {
+		wfSvc.SetPluginVersionLookup(cfg.pluginService)
+	}
 	execSvc.SetSkillRepository(skillRepo)
 
 	if cfg.agentRoleRepo != nil {
