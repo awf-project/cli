@@ -486,14 +486,14 @@ func emitPluginWarnings(cmd *cobra.Command, packDir string, pluginSvc *applicati
 
 // emitAgentPluginWarnings warns about the agent CLI plugins that the pack requires and that are not installed.
 func emitAgentPluginWarnings(cmd *cobra.Command, required map[string][]string) {
-	registry := agents.NewClaudePluginRegistry()
+	claudePlugins := agents.NewClaudePluginRegistry()
 	for provider, plugins := range required {
 		for _, plugin := range plugins {
-			if !registry.Supports(provider) {
+			if !claudePlugins.Supports(provider) {
 				fmt.Fprintf(cmd.ErrOrStderr(), "Warning: pack requires the %s plugin %q, which awf cannot check\n", provider, plugin)
 				continue
 			}
-			if installed, err := registry.Installed(cmd.Context(), provider, plugin); err == nil && installed {
+			if installed, err := claudePlugins.Installed(cmd.Context(), provider, plugin); err == nil && installed {
 				continue
 			}
 			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: pack requires the %s plugin %q — install with: claude plugin install %s\n", provider, plugin, plugin)

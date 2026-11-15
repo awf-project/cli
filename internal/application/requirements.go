@@ -19,8 +19,8 @@ func (s *WorkflowService) SetPluginVersionLookup(lookup ports.PluginVersionLooku
 
 // SetAgentPluginRegistry configures the registry that checks the `requires.agent_plugins` of a workflow.
 // Without it, the agent plugin requirements are not checked.
-func (s *WorkflowService) SetAgentPluginRegistry(registry ports.AgentPluginRegistry) {
-	s.agentPlugins = registry
+func (s *WorkflowService) SetAgentPluginRegistry(agentPluginRegistry ports.AgentPluginRegistry) {
+	s.agentPlugins = agentPluginRegistry
 }
 
 // validateRequirements checks the `requires:` block of a workflow before its steps, so that a missing plugin is named
