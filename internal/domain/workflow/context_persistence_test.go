@@ -10,6 +10,7 @@ import (
 func TestPersistenceSnapshotRetainsResumeDataWithoutMutatingLiveContext(t *testing.T) {
 	const canary = "PRIVATE_BUSINESS_DATA"
 	live := NewExecutionContext("run-id", "workflow-name")
+	live.PackName = "pack-name"
 	live.Inputs["ordinary-key"] = canary
 	live.Env["ordinary-key"] = canary
 	live.CurrentLoop = &LoopContext{Item: canary, Parent: &LoopContext{Item: canary}}
@@ -26,6 +27,7 @@ func TestPersistenceSnapshotRetainsResumeDataWithoutMutatingLiveContext(t *testi
 	require.Equal(t, live.Env, restored.Env)
 	require.Equal(t, live.CurrentLoop, restored.CurrentLoop)
 	require.Equal(t, live.CallStack, restored.CallStack)
+	require.Equal(t, "pack-name", restored.PackName)
 	state := restored.States["work"]
 	require.Equal(t, canary, state.Output)
 	require.Equal(t, canary, state.Stderr)

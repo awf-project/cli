@@ -407,6 +407,28 @@ func (s *ExecutionService) buildRoleAwareSystemPrompt(ctx context.Context, step 
 	return BuildRoleSystemPrompt(ctx, s.agentRoleRepo, s.resolver, step, workflowDir, intCtx)
 }
 
+// loadResumedWorkflow loads the definition of a run to resume. A run started from a pack is reloaded through the pack
+// workflow loader, and the pack becomes the context of path resolution, as it was for the first run.
+func (s *ExecutionService) loadResumedWorkflow(ctx context.Context, execCtx *workflow.ExecutionContext) (*workflow.Workflow, error) {
+	if execCtx.PackName == "" {
+		return s.workflowSvc.GetWorkflow(ctx, execCtx.WorkflowName)
+	}
+	if s.packWorkflowLoader == nil {
+		return nil, fmt.Errorf("workflow %s/%s comes from a pack, and no pack workflow loader is configured", execCtx.PackName, execCtx.WorkflowName)
+	}
+	wf, _, err := s.packWorkflowLoader(ctx, execCtx.PackName, execCtx.WorkflowName)
+	if err != nil {
+		return nil, err
+	}
+	paths := make(map[string]string, len(s.awfPaths)+1)
+	for key, value := range s.awfPaths {
+		paths[key] = value
+	}
+	paths[AWFPackNameKey] = execCtx.PackName
+	s.awfPaths = paths
+	return wf, nil
+}
+
 // SetAWFPaths configures the AWF XDG directory paths for F063 template interpolation.
 // Keys: prompts_dir, config_dir, data_dir, workflows_dir, plugins_dir, scripts_dir.
 func (s *ExecutionService) SetAWFPaths(paths map[string]string) {
@@ -692,6 +714,10 @@ func (s *ExecutionService) prepareExecution(
 	}
 	execCtx := workflow.NewExecutionContext(resolvedRunID, wf.Name)
 	execCtx.ParentRunID = parentRunID
+	if parentRunID == "" {
+		// Resume reloads the workflow from this pack: its name alone is not enough to find it.
+		execCtx.PackName = s.awfPaths[AWFPackNameKey]
+	}
 	execCtx.Status = workflow.StatusRunning
 	span.SetAttribute("execution_id", execCtx.WorkflowID)
 
@@ -2179,8 +2205,8 @@ func (s *ExecutionService) Resume(
 		return nil, fmt.Errorf("workflow already completed, cannot resume")
 	}
 
-	// 3. Load workflow definition
-	wf, err := s.workflowSvc.GetWorkflow(ctx, execCtx.WorkflowName)
+	// 3. Load workflow definition, from its pack when the run started from one
+	wf, err := s.loadResumedWorkflow(ctx, execCtx)
 	if err != nil {
 		return nil, fmt.Errorf("load workflow: %w", err)
 	}
@@ -2272,6 +2298,7 @@ func cloneExecutionContext(execCtx *workflow.ExecutionContext) (*workflow.Execut
 	return &workflow.ExecutionContext{
 		WorkflowID:              execCtx.WorkflowID,
 		WorkflowName:            execCtx.WorkflowName,
+		PackName:                execCtx.PackName,
 		ParentRunID:             execCtx.ParentRunID,
 		Status:                  execCtx.GetStatus(),
 		CurrentStep:             execCtx.GetCurrentStep(),

@@ -11,11 +11,13 @@ import (
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/agents"
 	"github.com/awf-project/cli/internal/infrastructure/audit"
 	"github.com/awf-project/cli/internal/infrastructure/executor"
 	"github.com/awf-project/cli/internal/infrastructure/roles"
 	"github.com/awf-project/cli/internal/infrastructure/store"
+	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -288,6 +290,10 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 		application.WithUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout)),
 		application.WithPluginState(pluginResult.Service),
 		application.WithPluginService(pluginResult.Service),
+		// No pack name here: Resume reads it from the saved state and loads the workflow through this resolver.
+		application.WithPackContext("", func(ctx context.Context, packName, workflowName string) (*workflow.Workflow, string, error) {
+			return resolvePackWorkflow(ctx, packName, workflowName, xdg.LocalWorkflowPacksDir(), xdg.AWFWorkflowPacksDir())
+		}),
 	}
 	if pluginResult.RPCManager != nil {
 		setupOpts = append(setupOpts, application.WithPluginProviders(application.PluginProviders{

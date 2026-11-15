@@ -72,6 +72,7 @@ type ExecutionContext struct {
 	mu                      sync.RWMutex // protects concurrent map access
 	WorkflowID              string
 	WorkflowName            string
+	PackName                string `json:",omitempty"` // pack the workflow was loaded from; empty for a local workflow
 	ParentRunID             string // non-empty when this run was spawned by a call_workflow step
 	Status                  ExecutionStatus
 	CurrentStep             string
@@ -341,7 +342,7 @@ func (c *ExecutionContext) PersistenceSnapshot() *ExecutionContext {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	snapshot := &ExecutionContext{
-		WorkflowID: c.WorkflowID, WorkflowName: c.WorkflowName, ParentRunID: c.ParentRunID,
+		WorkflowID: c.WorkflowID, WorkflowName: c.WorkflowName, PackName: c.PackName, ParentRunID: c.ParentRunID,
 		Status: c.Status, CurrentStep: c.CurrentStep, ExitCode: c.ExitCode,
 		Inputs: maps.Clone(c.Inputs), Env: maps.Clone(c.Env), States: make(map[string]StepState, len(c.States)),
 		CurrentLoop: c.CurrentLoop,
