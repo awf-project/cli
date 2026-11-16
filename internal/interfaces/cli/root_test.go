@@ -12,6 +12,48 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func TestRootCommand_InvalidFormatPreservesDiagnosticAndExitCode(t *testing.T) {
+	for _, autoFacade := range []bool{false, true} {
+		name := "embedded"
+		if autoFacade {
+			name = "auto_facade"
+		}
+		t.Run(name, func(t *testing.T) {
+			var cmd *cobra.Command
+			if autoFacade {
+				var cleanup func()
+				cmd, cleanup = cli.NewRootCommandAutoFacade()
+				t.Cleanup(cleanup)
+			} else {
+				cmd = cli.NewRootCommand()
+			}
+			var stdout, stderr bytes.Buffer
+			cmd.SetOut(&stdout)
+			cmd.SetErr(&stderr)
+			cmd.SetArgs([]string{"list", "--format", "invalid"})
+
+			err := cmd.Execute()
+			exit, ok := err.(interface {
+				ExitCode() int
+				Handled() bool
+			})
+			if !ok {
+				t.Fatalf("expected handled exit error, got %v", err)
+			}
+			if exit.ExitCode() != cli.ExitUser || !exit.Handled() {
+				t.Fatalf("expected handled status 1, got code=%d handled=%t", exit.ExitCode(), exit.Handled())
+			}
+			const diagnostic = "Error: invalid output format: invalid (valid: text, json, table, quiet)\n"
+			if stderr.String() != diagnostic {
+				t.Errorf("stderr = %q, want %q", stderr.String(), diagnostic)
+			}
+			if stdout.Len() != 0 {
+				t.Errorf("command ran after invalid format: stdout = %q", stdout.String())
+			}
+		})
+	}
+}
+
 func TestNewRootCommand(t *testing.T) {
 	cmd := cli.NewRootCommand()
 

@@ -14,28 +14,44 @@ import (
 
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/pkg/plugin/sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
 
-// TestMain detects AWF_PLUGIN env var for self-hosting pattern
 func TestMain(m *testing.M) {
-	// Self-hosting: if AWF_PLUGIN env is set, this process becomes the test plugin
-	if os.Getenv("AWF_PLUGIN") != "" {
+	if os.Getenv("AWF_PLUGIN") == "awf-plugin-v1" {
 		if os.Getenv("AWF_TIMEOUT_FIXTURE_DIR") != "" {
 			serveTimeoutPlugin()
 			return
 		}
-		// Serve test plugin - should implement gRPC handshake
-		// For now, this demonstrates the pattern; actual plugin serving
-		// would use go-plugin framework
-		os.Exit(0)
+		sdk.Serve(&validationOperationPlugin{BasePlugin: sdk.BasePlugin{
+			PluginName:    "awf-plugin-validation-test",
+			PluginVersion: "1.0.0",
+		}})
+		return
 	}
 
 	// Isolate default audit persistence before any root command is constructed.
 	os.Exit(runIsolatedCLITests(m))
+}
+
+type validationOperationPlugin struct {
+	sdk.BasePlugin
+}
+
+func (*validationOperationPlugin) Operations() []string {
+	return []string{"echo"}
+}
+
+func (*validationOperationPlugin) HandleOperation(
+	_ context.Context,
+	_ string,
+	_ map[string]any,
+) (*sdk.OperationResult, error) {
+	return sdk.NewSuccessResult("echo", nil), nil
 }
 
 func runIsolatedCLITests(m *testing.M) int {
@@ -429,20 +445,11 @@ func tamperedPluginBinary(t *testing.T, pluginPath string) string {
 // getPluginChecksum extracts checksum from plugin info
 func getPluginChecksum(t *testing.T, info *pluginmodel.PluginInfo) string {
 	t.Helper()
-
-	if info == nil {
-		return ""
-	}
-
-	// In real implementation, checksum would be stored in PluginInfo or state
-	// Verify the file exists before computing checksum
-	if info.Path != "" {
-		if _, err := os.Stat(info.Path); err == nil {
-			return computeFileChecksum(t, info.Path)
-		}
-	}
-
-	return ""
+	require.NotNil(t, info)
+	require.NotEmpty(t, info.Path)
+	_, err := os.Stat(info.Path)
+	require.NoError(t, err)
+	return computeFileChecksum(t, info.Path)
 }
 
 // verifyPluginChecksum simulates `awf plugin verify` command

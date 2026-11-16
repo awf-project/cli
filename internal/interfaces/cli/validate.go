@@ -23,6 +23,8 @@ import (
 // system prompt payloads before execution, not a domain invariant.
 const agentRoleCombinedPromptWarnBytes = 10 * 1024
 
+const annotationPluginAwareValidation = "pluginAwareValidation"
+
 func newValidateCommand(cfg *Config) *cobra.Command {
 	var skipPlugins bool
 	var validatorTimeout time.Duration
@@ -32,6 +34,9 @@ func newValidateCommand(cfg *Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate [workflow]",
 		Short: "Validate a workflow definition",
+		Annotations: map[string]string{
+			annotationPluginAwareValidation: "true",
+		},
 		Long: `Validate a workflow YAML file without executing it.
 
 Checks for:
@@ -71,40 +76,8 @@ Examples:
 	return cmd
 }
 
-// withValidationPlugins starts the plugin system and swaps cfg.Facade for one that knows what the plugins provide, so that a
-// workflow that calls a plugin operation validates, and the plugin validators run. `run` and `resume` do the same. With
-// --skip-plugins nothing starts and the built-ins alone are known. The returned function restores the facade and stops the plugins.
-func withValidationPlugins(ctx context.Context, cfg *Config, skipPlugins bool) (restore func(), err error) {
-	if skipPlugins {
-		return func() {}, nil
-	}
-	pluginResult, err := initPluginSystem(ctx, cfg, ports.NopLogger{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize plugins: %w", err)
-	}
-	facade, cleanup := buildFacadeWithPlugins(cfg, pluginResult)
-	if facade == nil {
-		pluginResult.Cleanup()
-		return func() {}, nil
-	}
-	previous := cfg.Facade
-	cfg.Facade = facade
-	return func() {
-		cfg.Facade = previous
-		cleanup()
-		pluginResult.Cleanup()
-	}, nil
-}
-
 func runValidate(cmd *cobra.Command, cfg *Config, workflowName string, skipPlugins bool, validatorTimeout time.Duration) error {
 	ctx := context.Background()
-	if cfg.Facade != nil {
-		restore, pluginErr := withValidationPlugins(ctx, cfg, skipPlugins)
-		if pluginErr != nil {
-			return writeErrorAndExit(ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints), pluginErr, ExitSystem)
-		}
-		defer restore()
-	}
 
 	writer := ui.NewOutputWriter(cmd.OutOrStdout(), cmd.ErrOrStderr(), cfg.OutputFormat, cfg.NoColor, cfg.NoHints)
 
@@ -199,13 +172,6 @@ func runValidateViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWrit
 // summary line and exit-code propagation.
 func runValidateDir(cmd *cobra.Command, cfg *Config, dir string, skipPlugins bool, validatorTimeout time.Duration) error {
 	ctx := context.Background()
-	if cfg.Facade != nil {
-		restore, pluginErr := withValidationPlugins(ctx, cfg, skipPlugins)
-		if pluginErr != nil {
-			return fmt.Errorf("validate: %w", pluginErr)
-		}
-		defer restore()
-	}
 
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		Verbose: cfg.Verbose,
@@ -235,13 +201,6 @@ func runValidateDir(cmd *cobra.Command, cfg *Config, dir string, skipPlugins boo
 // through the ports.BatchValidator port exposed by the facade.
 func runValidatePack(cmd *cobra.Command, cfg *Config, packName string, skipPlugins bool, validatorTimeout time.Duration) error {
 	ctx := context.Background()
-	if cfg.Facade != nil {
-		restore, pluginErr := withValidationPlugins(ctx, cfg, skipPlugins)
-		if pluginErr != nil {
-			return fmt.Errorf("validate: %w", pluginErr)
-		}
-		defer restore()
-	}
 
 	formatter := ui.NewFormatter(cmd.OutOrStdout(), ui.FormatOptions{
 		Verbose: cfg.Verbose,
@@ -301,6 +260,7 @@ func renderBatchResults(cmd *cobra.Command, formatter *ui.Formatter, results []p
 }
 
 func validateSkillRefs(wf *workflow.Workflow) ([]string, error) {
+	var warnings []string
 	hasSkills := false
 	for _, step := range wf.Steps {
 		if len(step.Skills) > 0 {
@@ -309,12 +269,11 @@ func validateSkillRefs(wf *workflow.Workflow) ([]string, error) {
 		}
 	}
 	if !hasSkills {
-		return nil, nil
+		return warnings, nil
 	}
 
 	repo := skills.NewFilesystemSkillRepository(nil)
 	ctx := context.Background()
-	var warnings []string
 
 	for _, step := range wf.Steps {
 		for _, ref := range step.Skills {
@@ -372,8 +331,8 @@ func validateRoleRefs(ctx context.Context, wf *workflow.Workflow, repo ports.Age
 		// pure name-refs are routed to Load, which also rejects '/' and '\'.
 		// Since path-refs may legitimately contain separators, we only block
 		// '..' here (which is invalid in both name-refs and path-refs).
-		// Name-refs containing '/' or '\' are already unreachable: isRolePathRef
-		// classifies them as path-refs and LoadFromPath handles them safely via
+		// isRolePathRef classifies name-like refs containing separators as path
+		// refs, and LoadFromPath handles them safely via
 		// filepath.Clean — no additional guard is needed at this layer.
 		if strings.Contains(role, "..") {
 			return nil, workflow.ValidationError{

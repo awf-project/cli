@@ -8,6 +8,7 @@ func AllOperations() []pluginmodel.OperationSchema {
 		// http.request - Perform HTTP request
 		{
 			Name:        "http.request",
+			PluginName:  "http",
 			Description: "Perform HTTP request (GET, POST, PUT, DELETE) with configurable timeout and headers",
 			Inputs: map[string]pluginmodel.InputSchema{
 				"url": {

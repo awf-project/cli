@@ -1,15 +1,16 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/infrastructure/analyzer"
 	"github.com/awf-project/cli/internal/infrastructure/expression"
-	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/skills"
 	"github.com/awf-project/cli/internal/infrastructure/store"
@@ -72,6 +73,17 @@ type Config struct {
 	OtelExporter          string
 	OtelServiceName       string
 	Facade                ports.WorkflowFacade // nil until wired via NewRootCommandWithFacade or main.go
+}
+
+type facadeBuilder func(*Config) (ports.WorkflowFacade, func())
+
+type validationFacadeBuilder func(*Config) (ports.WorkflowFacade, func(), error)
+
+// validationFacadeDependencies are per-construction resource boundaries. They
+// make lifecycle verification deterministic without mutable package test hooks.
+type validationFacadeDependencies struct {
+	initPlugins func(context.Context, *Config, ports.Logger) (*PluginSystemResult, error)
+	openHistory func(string) (ports.HistoryStore, error)
 }
 
 // DefaultConfig returns default configuration.
@@ -137,18 +149,9 @@ func newWorkflowRepositoryForIdentifier(identifier string) (repo *repository.Com
 	}), filepath.Base(cleaned)
 }
 
-// buildFacade constructs a CLI-wide ports.WorkflowFacade for the read/validate operations
-// (list, history, status, validate). Execution paths build their own run-capable facade
-// (buildRunCapableFacade), so this read-only facade carries a no-op recorder and a zero
-// ExecutionService. It returns the facade and a cleanup that closes the history store. On
-// any setup error it returns (nil, no-op) so callers degrade gracefully rather than failing.
+// buildFacade constructs the plugin-free facade used by ordinary read commands and
+// validate --skip-plugins. Execution paths build their own run-capable facade.
 func buildFacade(cfg *Config) (facade ports.WorkflowFacade, cleanup func()) {
-	return buildFacadeWithPlugins(cfg, nil)
-}
-
-// buildFacadeWithPlugins is buildFacade for a command that started the plugin system (validate): the workflow service then
-// also knows the operations, the validators and the step types that plugins provide. With nil it only knows the built-ins.
-func buildFacadeWithPlugins(cfg *Config, plugins *PluginSystemResult) (facade ports.WorkflowFacade, cleanup func()) {
 	noop := func() {}
 
 	repo := NewWorkflowRepository()
@@ -156,10 +159,10 @@ func buildFacadeWithPlugins(cfg *Config, plugins *PluginSystemResult) (facade po
 
 	workflowSvc := application.NewWorkflowService(repo, nil, nil, nil, expression.NewExprValidator())
 	workflowSvc.SetPackDiscoverer(discoverer)
+	workflowSvc.SetTemplateAnalyzer(analyzer.NewInterpolationAnalyzer())
 	// Wire the template-reference validation phase ({{error.*}} outside error hooks,
 	// forward references, unknown namespaces) so facade-routed `awf validate` keeps the
 	// full validation pipeline the legacy runValidate ran.
-	workflowSvc.SetTemplateAnalyzer(analyzer.NewInterpolationAnalyzer())
 	// Validate builtins against the same schemas and notification defaults used by execution.
 	logger := ports.NopLogger{}
 	projectCfg, configErr := loadProjectConfig(logger)
@@ -169,15 +172,7 @@ func buildFacadeWithPlugins(cfg *Config, plugins *PluginSystemResult) (facade po
 	builtins := application.NewBuiltinOperationProvider(
 		logger, application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend},
 	)
-	if plugins != nil && plugins.Manager != nil {
-		workflowSvc.SetPluginOperationProvider(pluginmgr.NewCompositeOperationProvider(builtins, plugins.Manager))
-	} else {
-		workflowSvc.SetPluginOperationProvider(builtins)
-	}
-	if plugins != nil && plugins.RPCManager != nil {
-		workflowSvc.SetValidatorProvider(plugins.RPCManager.ValidatorProvider(0))
-		workflowSvc.SetStepTypeProvider(plugins.RPCManager.StepTypeProvider(logger))
-	}
+	workflowSvc.SetPluginOperationProvider(builtins)
 	workflowSvc.SetSkillRepository(skills.NewFilesystemSkillRepository(&cliLogger{silent: cfg.Quiet}))
 
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
@@ -198,6 +193,69 @@ func buildFacadeWithPlugins(cfg *Config, plugins *PluginSystemResult) (facade po
 	)
 
 	return adapter, func() { _ = historyStore.Close() }
+}
+
+func buildValidationFacade(cfg *Config) (ports.WorkflowFacade, func(), error) {
+	return buildValidationFacadeWithDependencies(cfg, validationFacadeDependencies{
+		initPlugins: initPluginSystem,
+		openHistory: func(path string) (ports.HistoryStore, error) {
+			return store.NewSQLiteHistoryStore(path)
+		},
+	})
+}
+
+func buildValidationFacadeWithDependencies(cfg *Config, deps validationFacadeDependencies) (ports.WorkflowFacade, func(), error) {
+	noop := func() {}
+	logger := &cliLogger{
+		formatter: ui.NewFormatter(os.Stderr, ui.FormatOptions{
+			Verbose: cfg.Verbose,
+			Quiet:   cfg.Quiet,
+			NoColor: cfg.NoColor,
+		}),
+		verbose: cfg.Verbose,
+		silent:  cfg.Quiet,
+	}
+	plugins, err := deps.initPlugins(context.Background(), cfg, logger)
+	if err != nil {
+		return nil, noop, err
+	}
+
+	pluginCleanup := plugins.Cleanup
+	if pluginCleanup == nil {
+		pluginCleanup = noop
+	}
+	historyStore, err := deps.openHistory(filepath.Join(cfg.StoragePath, "history.db"))
+	if err != nil {
+		pluginCleanup()
+		return nil, noop, err
+	}
+
+	repo := NewWorkflowRepository()
+	discoverer := workflowpkg.NewPackDiscovererAdapter(workflowPackSearchDirs())
+	workflowSvc := application.NewWorkflowService(repo, nil, nil, nil, expression.NewExprValidator())
+	workflowSvc.SetPackDiscoverer(discoverer)
+	workflowSvc.SetTemplateAnalyzer(analyzer.NewInterpolationAnalyzer())
+	workflowSvc.SetPluginOperationProvider(buildValidationOperationProvider(plugins.Service, plugins.Manager, logger))
+	if plugins.RPCManager != nil {
+		workflowSvc.SetValidatorProvider(plugins.RPCManager.ValidatorProvider(0))
+		workflowSvc.SetStepTypeProvider(plugins.RPCManager.StepTypeProvider(logger))
+	}
+	workflowSvc.SetSkillRepository(skills.NewFilesystemSkillRepository(logger))
+
+	adapter := application.NewAdapter(
+		workflowSvc,
+		&application.ExecutionService{},
+		application.NewHistoryService(historyStore, logger),
+		application.NewResolver(discoverer, repo),
+		infraTranscript.NewNopRecorder(),
+		application.NewSessionRegistry(),
+	)
+
+	cleanup := sync.OnceFunc(func() {
+		pluginCleanup()
+		_ = historyStore.Close()
+	})
+	return adapter, cleanup, nil
 }
 
 // BuildPromptPaths returns the prompt paths in priority order:

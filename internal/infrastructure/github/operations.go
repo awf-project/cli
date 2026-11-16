@@ -14,6 +14,7 @@ func AllOperations() []pluginmodel.OperationSchema {
 		// P1: Get Issue - Retrieve GitHub issue data
 		{
 			Name:        "github.get_issue",
+			PluginName:  "github",
 			Description: "Retrieve GitHub issue data",
 			Inputs: map[string]pluginmodel.InputSchema{
 				"number": {Type: pluginmodel.InputTypeInteger, Required: true, Description: "Issue number"},
@@ -26,6 +27,7 @@ func AllOperations() []pluginmodel.OperationSchema {
 		// P1: Get Pull Request - Retrieve GitHub PR data
 		{
 			Name:        "github.get_pr",
+			PluginName:  "github",
 			Description: "Retrieve GitHub pull request data",
 			Inputs: map[string]pluginmodel.InputSchema{
 				"number": {Type: pluginmodel.InputTypeInteger, Required: true, Description: "PR number"},
@@ -38,6 +40,7 @@ func AllOperations() []pluginmodel.OperationSchema {
 		// P1: Create Pull Request - Create a new GitHub PR
 		{
 			Name:        "github.create_pr",
+			PluginName:  "github",
 			Description: "Create a new GitHub pull request",
 			Inputs: map[string]pluginmodel.InputSchema{
 				"title": {Type: pluginmodel.InputTypeString, Required: true, Description: "PR title"},
@@ -53,6 +56,7 @@ func AllOperations() []pluginmodel.OperationSchema {
 		// P1: Create Issue - Create a new GitHub issue
 		{
 			Name:        "github.create_issue",
+			PluginName:  "github",
 			Description: "Create a new GitHub issue",
 			Inputs: map[string]pluginmodel.InputSchema{
 				"title":     {Type: pluginmodel.InputTypeString, Required: true, Description: "Issue title"},
@@ -67,6 +71,7 @@ func AllOperations() []pluginmodel.OperationSchema {
 		// P2: Add Labels - Add labels to an issue or PR
 		{
 			Name:        "github.add_labels",
+			PluginName:  "github",
 			Description: "Add labels to a GitHub issue or PR",
 			Inputs: map[string]pluginmodel.InputSchema{
 				"number": {Type: pluginmodel.InputTypeInteger, Required: true, Description: "Issue or PR number"},
@@ -79,6 +84,7 @@ func AllOperations() []pluginmodel.OperationSchema {
 		// P2: List Comments - List comments on an issue or PR
 		{
 			Name:        "github.list_comments",
+			PluginName:  "github",
 			Description: "List comments on a GitHub issue or PR",
 			Inputs: map[string]pluginmodel.InputSchema{
 				"number": {Type: pluginmodel.InputTypeInteger, Required: true, Description: "Issue or PR number"},
@@ -91,6 +97,7 @@ func AllOperations() []pluginmodel.OperationSchema {
 		// P2: Add Comment - Add a comment to an issue or PR
 		{
 			Name:        "github.add_comment",
+			PluginName:  "github",
 			Description: "Add a comment to a GitHub issue or PR",
 			Inputs: map[string]pluginmodel.InputSchema{
 				"number": {Type: pluginmodel.InputTypeInteger, Required: true, Description: "Issue or PR number"},
@@ -103,6 +110,7 @@ func AllOperations() []pluginmodel.OperationSchema {
 		// P2: Batch Operations - Execute multiple GitHub operations in batch
 		{
 			Name:        "github.batch",
+			PluginName:  "github",
 			Description: "Execute multiple GitHub operations in batch",
 			Inputs: map[string]pluginmodel.InputSchema{
 				"operations":  {Type: pluginmodel.InputTypeArray, Required: true, Description: "Array of operation definitions to execute"},
