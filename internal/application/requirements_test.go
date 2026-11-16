@@ -8,6 +8,8 @@ import (
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
+	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
+	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -122,4 +124,68 @@ func TestValidateRequirements_NotCheckedWithoutLookups(t *testing.T) {
 	wf := requiringWorkflow(workflow.Requirements{Plugins: map[string]string{"jira": ""}, AgentPlugins: map[string][]string{"claude": {"egm@egm"}}})
 
 	require.NoError(t, svc.ValidateLoadedWorkflow(context.Background(), wf, "needs", ports.ValidateOptions{}))
+}
+
+// A parent that calls a child through call_workflow; only the pack loader knows the child, which requires plugins.
+func callWorkflowServices(t *testing.T, childRequires workflow.Requirements, versions ports.PluginVersionLookup) (*application.ExecutionService, *workflow.Workflow, *testmocks.MockCommandExecutor) {
+	t.Helper()
+	logger := testmocks.NewMockLogger()
+	executor := testmocks.NewMockCommandExecutor()
+	executor.SetCommandResult("", &ports.CommandResult{ExitCode: 0})
+	store := testmocks.NewMockStateStore()
+	wfSvc := application.NewWorkflowService(testmocks.NewMockWorkflowRepository(), store, executor, logger, nil)
+	wfSvc.SetPluginVersionLookup(versions)
+	execSvc := application.NewExecutionService(wfSvc, executor, application.NewParallelExecutor(logger), store, logger,
+		interpolation.NewTemplateResolver(), application.NewHistoryService(testmocks.NewMockHistoryStore(), logger))
+	execSvc.SetAgentRegistry(testmocks.NewMockAgentRegistry())
+
+	child := &workflow.Workflow{
+		Name:     "helper",
+		Initial:  "work",
+		Requires: childRequires,
+		Steps: map[string]*workflow.Step{
+			"work": {Name: "work", Type: workflow.StepTypeCommand, Command: "echo child", OnSuccess: "done"},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+	execSvc.SetPackWorkflowLoader(func(_ context.Context, packName, workflowName string) (*workflow.Workflow, string, error) {
+		if packName == "utils" && workflowName == "helper" {
+			return child, "/pack/utils", nil
+		}
+		return nil, "", errors.New("unexpected pack workflow")
+	})
+	parent := &workflow.Workflow{
+		Name:    "parent",
+		Initial: "call",
+		Steps: map[string]*workflow.Step{
+			"call": {Name: "call", Type: workflow.StepTypeCallWorkflow, CallWorkflow: &workflow.CallWorkflowConfig{Workflow: "utils/helper"}, OnSuccess: "done"},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+	return execSvc, parent, executor
+}
+
+func TestExecuteCallWorkflowStep_ChecksTheRequirementsOfTheChild(t *testing.T) {
+	requires := workflow.Requirements{Plugins: map[string]string{"nexus": ">=0.1.0"}}
+
+	t.Run("a missing plugin stops the call before the child runs", func(t *testing.T) {
+		execSvc, parent, executor := callWorkflowServices(t, requires, fakePluginVersions{})
+
+		_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parent, nil, "parent-run")
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `sub-workflow "utils/helper"`)
+		assert.Contains(t, err.Error(), `awf plugin "nexus", which is not installed or not enabled`)
+		assert.Empty(t, executor.GetCalls(), "no step of the child runs")
+	})
+
+	t.Run("an installed plugin lets the child run", func(t *testing.T) {
+		execSvc, parent, executor := callWorkflowServices(t, requires, fakePluginVersions{"nexus": "0.2.0"})
+
+		execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parent, nil, "parent-run")
+
+		require.NoError(t, err)
+		assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+		assert.NotEmpty(t, executor.GetCalls())
+	})
 }

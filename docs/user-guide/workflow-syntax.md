@@ -1887,6 +1887,9 @@ states:
 | `requires.plugins` | awf plugin name → version constraint. An empty constraint (`""`) accepts any version. A plugin without a semantic version, such as a built-in of a development build, passes any constraint. |
 | `requires.agent_plugins` | Agent provider → list of plugins of that agent CLI. `claude` is the only provider awf can check: it reads `plugins/installed_plugins.json` of `CLAUDE_CONFIG_DIR` (default `~/.claude`), and accepts a plugin installed for the user or for a project that contains the current directory. |
 
+A workflow started by a `call_workflow` step has its requirements checked when the step loads it, before its hooks
+and its first step: a missing requirement fails the `call_workflow` step with the same message.
+
 `awf validate --skip-plugins` skips the check of `requires.plugins`, not that of `requires.agent_plugins`. A pack
 declares the same block in its manifest for all its workflows: see [Workflow Packs](workflow-packs.md#manifest-fields).
 
