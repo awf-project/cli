@@ -5,7 +5,7 @@ go 1.26.7
 require (
 	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.1.1
-	charm.land/lipgloss/v2 v2.1.0
+	charm.land/lipgloss/v2 v2.1.1
 	github.com/coder/acp-go-sdk v0.13.5
 	github.com/expr-lang/expr v1.17.8
 	github.com/fatih/color v1.19.0
