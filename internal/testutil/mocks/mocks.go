@@ -342,6 +342,7 @@ func (m *MockStateStore) Save(ctx context.Context, state *workflow.ExecutionCont
 	stateCopy := &workflow.ExecutionContext{
 		WorkflowID:   state.WorkflowID,
 		WorkflowName: state.WorkflowName,
+		PackName:     state.PackName,
 		Status:       state.Status,
 		CurrentStep:  state.CurrentStep,
 		ExitCode:     state.ExitCode,
@@ -377,6 +378,7 @@ func (m *MockStateStore) Load(ctx context.Context, workflowID string) (*workflow
 	stateCopy := &workflow.ExecutionContext{
 		WorkflowID:   state.WorkflowID,
 		WorkflowName: state.WorkflowName,
+		PackName:     state.PackName,
 		Status:       state.Status,
 		CurrentStep:  state.CurrentStep,
 		ExitCode:     state.ExitCode,
