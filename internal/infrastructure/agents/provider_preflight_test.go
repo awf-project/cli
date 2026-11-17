@@ -28,10 +28,17 @@ type preflightProvider interface {
 
 type preflightExecutor struct {
 	*mocks.MockCLIExecutor
-	stdout   []byte
-	stderr   []byte
-	err      error
-	afterRun func()
+	stdout    []byte
+	stderr    []byte
+	err       error
+	responses []preflightExecution
+	afterRun  func()
+}
+
+type preflightExecution struct {
+	stdout string
+	stderr string
+	err    error
 }
 
 func newPreflightExecutor(stdout, stderr string, err error) *preflightExecutor {
@@ -47,6 +54,11 @@ func (e *preflightExecutor) Run(ctx context.Context, name string, stdoutW, stder
 	_, _, _ = e.MockCLIExecutor.Run(ctx, name, stdoutW, stderrW, args...)
 	if e.afterRun != nil {
 		e.afterRun()
+	}
+	if len(e.responses) > 0 {
+		response := e.responses[0]
+		e.responses = e.responses[1:]
+		return []byte(response.stdout), []byte(response.stderr), response.err
 	}
 	return e.stdout, e.stderr, e.err
 }
@@ -458,15 +470,10 @@ func checkOpenCodePreflight(t *testing.T) {
 		rawCanary    = "RAW_STATUS_MUST_NOT_LEAK"
 	)
 
-	// OpenCode 1.18.29 was verified on 2026-10-20 using the installed executable's
-	// `opencode --version`, `opencode auth --help`, and `opencode auth list --help`.
-	// OpenCode's official CLI documentation also identifies `auth list` as the
-	// non-interactive command that lists authenticated providers. The exact argv is
-	// ["auth", "list"]. Exit 0 with a positive `N credential(s)` footer is
-	// authenticated; exit 0 with `0 credentials` is unauthenticated. Sanitized
-	// examples are `│  ● Provider account` + `└  1 credential` and
-	// `└  0 credentials`. Unknown text is malformed, while an unknown `auth`
-	// subcommand/version error is unsupported. No credential values are retained.
+	// OpenCode v2 exposes auth status as structured data through
+	// `auth list --format json`: a non-empty `connections` array indicates a
+	// stored credential. Older versions that reject --format are retried with
+	// `auth list`, whose final "N credential(s)" footer is parsed instead.
 	for _, tc := range []struct {
 		name       string
 		stdout     string
@@ -477,11 +484,11 @@ func checkOpenCodePreflight(t *testing.T) {
 	}{
 		{
 			name:   "opencode authenticated",
-			stdout: "Credentials /tmp/redacted/opencode/auth.json\n│  ● Provider account\n└  1 credential\n",
+			stdout: `[{"id":"provider","name":"Provider","connections":[{"id":"account","label":"Account","method":"oauth","type":"oauth"}]}]`,
 		},
 		{
 			name:       "opencode unauthenticated",
-			stdout:     "Credentials /tmp/redacted/opencode/auth.json\n└  0 credentials\n",
+			stdout:     `[{"id":"provider","name":"Provider","connections":[]}]`,
 			wantReason: PreflightNotAuthenticated,
 		},
 		{
@@ -536,7 +543,7 @@ func checkOpenCodePreflight(t *testing.T) {
 			require.Len(t, executor.GetCalls(), 1)
 			call := executor.GetCalls()[0]
 			assert.Equal(t, "opencode", call.Name)
-			assert.Equal(t, []string{"auth", "list"}, call.Args)
+			assert.Equal(t, []string{"auth", "list", "--format", "json"}, call.Args)
 			assert.False(t, slices.Contains(call.Args, promptCanary))
 			assert.False(t, slices.Contains(call.Args, secretCanary))
 			if tc.wantReason == "" {
@@ -561,6 +568,23 @@ func checkOpenCodePreflight(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("older version falls back to text output", func(t *testing.T) {
+		executor := newPreflightExecutor("", "", nil)
+		executor.responses = []preflightExecution{
+			{stderr: "Unknown option: --format", err: errors.New("exit status 2")},
+			{stdout: "Credentials /tmp/redacted/opencode/auth.json\n│  ● Provider account\n└  1 credential\n"},
+		}
+		provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(executor))
+
+		err := provider.Preflight(context.Background(), nil)
+
+		require.NoError(t, err)
+		calls := executor.GetCalls()
+		require.Len(t, calls, 2)
+		assert.Equal(t, []string{"auth", "list", "--format", "json"}, calls[0].Args)
+		assert.Equal(t, []string{"auth", "list"}, calls[1].Args)
+	})
 }
 
 func checkUnsupportedCLIPreflight(t *testing.T) {

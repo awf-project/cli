@@ -193,7 +193,7 @@ func (p *OpenCodeProvider) Validate() error {
 }
 
 func (p *OpenCodeProvider) Preflight(ctx context.Context, options map[string]any) error {
-	stdout, stderr, err := runProviderPreflight(ctx, p.executor, "opencode", options, "auth", "list")
+	stdout, stderr, err := runProviderPreflight(ctx, p.executor, "opencode", options, "auth", "list", "--format", "json")
 	if opencodeStatusUnsupported(stderr) {
 		return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusUnsupported, Cause: sanitizedPreflightCause(err)}
 	}
@@ -201,30 +201,92 @@ func (p *OpenCodeProvider) Preflight(ctx context.Context, options map[string]any
 		return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusMalformed, Cause: sanitizedPreflightCause(err)}
 	}
 
-	// OpenCode 1.18.29 emits a final "N credential(s)" line. Treat only that
-	// complete footer as authoritative so changed or partial output fails closed.
-	matches := opencodeCredentialCount.FindStringSubmatch(strings.TrimSpace(string(stdout)))
-	if len(matches) != 2 {
-		return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusMalformed, Cause: sanitizedPreflightCause(err)}
+	var connectionCount int
+	if err != nil && opencodeFormatUnsupported(stderr) {
+		// Older OpenCode versions may not support JSON output. Retry their
+		// default format, whose final credential-count footer is documented
+		// by the versions this fallback supports.
+		stdout, stderr, err = runProviderPreflight(ctx, p.executor, "opencode", options, "auth", "list")
+		if opencodeStatusUnsupported(stderr) {
+			return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusUnsupported, Cause: sanitizedPreflightCause(err)}
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusMalformed, Cause: sanitizedPreflightCause(err)}
+		}
+		if err != nil {
+			return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusMalformed, Cause: sanitizedPreflightCause(err)}
+		}
+
+		count, parseErr := parseOpenCodeLegacyCredentialCount(stdout)
+		if parseErr != nil {
+			return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusMalformed, Cause: sanitizedPreflightCause(err)}
+		}
+		connectionCount = count
+	} else {
+		if err != nil {
+			return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusMalformed, Cause: sanitizedPreflightCause(err)}
+		}
+		count, parseErr := parseOpenCodeAuthConnections(stdout)
+		if parseErr != nil {
+			return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusMalformed, Cause: sanitizedPreflightCause(err)}
+		}
+		connectionCount = count
 	}
-	count, parseErr := strconv.Atoi(matches[1])
-	if parseErr != nil {
-		return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusMalformed, Cause: errors.New("status output was malformed")}
-	}
-	if count == 0 {
+
+	if connectionCount == 0 {
 		return &ProviderPreflightError{Provider: "opencode", Reason: PreflightNotAuthenticated, Cause: sanitizedPreflightCause(err)}
-	}
-	if err != nil {
-		return &ProviderPreflightError{Provider: "opencode", Reason: PreflightStatusMalformed, Cause: sanitizedPreflightCause(err)}
 	}
 	return nil
 }
 
 var opencodeCredentialCount = regexp.MustCompile(`(?m)(?:^|\n)[^\n]*\b(\d+) credentials?\s*$`)
 
+func parseOpenCodeAuthConnections(stdout []byte) (int, error) {
+	var integrations []struct {
+		Connections []json.RawMessage `json:"connections"`
+	}
+	if err := json.Unmarshal(stdout, &integrations); err != nil || integrations == nil {
+		return 0, errors.New("OpenCode auth list JSON was malformed")
+	}
+
+	connectionCount := 0
+	for _, integration := range integrations {
+		for _, rawConnection := range integration.Connections {
+			var connection map[string]json.RawMessage
+			if err := json.Unmarshal(rawConnection, &connection); err != nil || connection == nil {
+				return 0, errors.New("OpenCode auth connection was malformed")
+			}
+			connectionCount++
+		}
+	}
+	return connectionCount, nil
+}
+
+func parseOpenCodeLegacyCredentialCount(stdout []byte) (int, error) {
+	matches := opencodeCredentialCount.FindStringSubmatch(strings.TrimSpace(string(stdout)))
+	if len(matches) != 2 {
+		return 0, errors.New("OpenCode auth list output was malformed")
+	}
+	count, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return 0, errors.New("OpenCode auth list count was malformed")
+	}
+	return count, nil
+}
+
 func opencodeStatusUnsupported(stderr []byte) bool {
 	message := strings.ToLower(string(stderr))
 	return strings.Contains(message, "unknown command") || strings.Contains(message, "unknown subcommand")
+}
+
+func opencodeFormatUnsupported(stderr []byte) bool {
+	message := strings.ToLower(string(stderr))
+	hasFormat := strings.Contains(message, "--format") || strings.Contains(message, "format")
+	hasUnsupportedOption := strings.Contains(message, "unknown option") ||
+		strings.Contains(message, "unknown flag") ||
+		strings.Contains(message, "unrecognized option") ||
+		strings.Contains(message, "invalid option")
+	return hasFormat && hasUnsupportedOption
 }
 
 func sanitizedPreflightCause(err error) error {
