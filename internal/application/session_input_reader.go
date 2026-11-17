@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"time"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 )
@@ -34,10 +33,9 @@ func userInputReaderFrom(ctx context.Context) ports.UserInputReader {
 }
 
 // sessionInputReader is the session-bound ports.UserInputReader used by the facade
-// conversation path. ReadInput emits an EventInputRequired event into the RunSession
-// (so interface drivers can prompt the user and surface the parking state) and then
-// blocks on the session's respond channel until RunSession.Respond delivers a value
-// or the session/run context is cancelled.
+// conversation path. ReadInput asks the RunSession event owner to publish an
+// EventInputRequired event, then blocks on the session's respond channel until
+// RunSession.Respond delivers a value or the session/run context is cancelled.
 //
 // This mirrors the ACP facadeInputBridge: input requests surface as events and the
 // continuation arrives via RunSession.Respond, rather than a blocking read on a
@@ -54,17 +52,31 @@ func newSessionInputReader(session *RunSession) *sessionInputReader {
 
 var _ ports.UserInputReader = (*sessionInputReader)(nil)
 
-// ReadInput parks the workflow on user input: it appends an EventInputRequired event
-// carrying the prompt, then waits for a response delivered via RunSession.Respond.
-// A cancelled session or run context unblocks the read and is reported to the caller
-// as the context error so the conversation loop can stop cleanly.
+// ReadInput parks the workflow on user input. Publication is handed to the session's
+// sole event owner and acknowledged before the existing response wait begins.
 func (r *sessionInputReader) ReadInput(ctx context.Context) (string, error) {
-	r.session.appendEvent(ports.Event{
-		Kind:      ports.EventInputRequired,
-		RunID:     r.session.id,
-		Timestamp: time.Now(),
-		Payload:   &ports.EnrichedInputRequest{Prompt: "> "},
-	})
+	acknowledged := make(chan struct{})
+	publication := inputPublicationRequest{
+		input: &ports.EnrichedInputRequest{Prompt: "> "},
+		acknowledge: func() {
+			close(acknowledged)
+		},
+	}
+	select {
+	case r.session.inputPublicationCh <- publication:
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case <-r.session.ctx.Done():
+		return "", r.session.ctx.Err()
+	}
+
+	select {
+	case <-acknowledged:
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case <-r.session.ctx.Done():
+		return "", r.session.ctx.Err()
+	}
 
 	resp, err := awaitSessionResponse(ctx, r.session, r.session.respondCh)
 	if err != nil {

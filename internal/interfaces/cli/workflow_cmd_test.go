@@ -979,6 +979,7 @@ func TestRunWorkflowList_EmptyShowsNoMessage(t *testing.T) {
 	require.NoError(t, os.MkdirAll(xdgIsolated, 0o755))
 	t.Setenv("XDG_CONFIG_HOME", xdgIsolated)
 	t.Setenv("XDG_DATA_HOME", xdgIsolated)
+	t.Setenv("AWF_WORKFLOWS_PATH", filepath.Join(projDir, "empty-env-workflows"))
 
 	origWd, err := os.Getwd()
 	require.NoError(t, err)

@@ -608,17 +608,203 @@ func TestFacadeAdapter_ResumeReturnsRunSession(t *testing.T) {
 type controlledRecorder struct {
 	subscribeCount atomic.Int32
 	ch             chan transcript.ExchangeEvent
+	subscribed     chan struct{}
+	subscribeOnce  sync.Once
+	cancelled      chan struct{}
+	cancelOnce     sync.Once
+}
+
+func TestAdapterPublishesQueuedAssistantBeforeInputRequest(t *testing.T) {
+	recorder := newControlledRecorder()
+	assistantTimestamp := time.Date(2026, time.November, 17, 12, 0, 0, 0, time.UTC)
+	recorder.Send(transcript.ExchangeEvent{
+		Type:        transcript.EventTypeMessageAssistant,
+		RunID:       "ordered-input",
+		ParentRunID: "parent-run",
+		Seq:         41,
+		Timestamp:   assistantTimestamp,
+		Payload: &transcript.MessagePayload{Blocks: []transcript.ContentBlock{{
+			Type: transcript.BlockTypeText,
+			Text: "assistant response",
+		}}},
+	})
+
+	adapter := NewAdapter(nil, nil, nil, nil, recorder, NewSessionRegistry())
+	testCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	releaseExecution := make(chan struct{})
+	session, err := adapter.newSession(testCtx, "ordered-input", recorder, func(execCtx context.Context) error {
+		<-releaseExecution
+		return nil
+	})
+	require.NoError(t, err)
+
+	publication := inputPublicationRequest{}
+	ownerAtAcknowledgement := make(chan struct{})
+	releaseAcknowledgement := make(chan struct{})
+	acknowledged := make(chan struct{})
+	publication.acknowledge = func() {
+		close(ownerAtAcknowledgement)
+		<-releaseAcknowledgement
+		close(acknowledged)
+	}
+	publicationSent := make(chan struct{})
+	go func() {
+		session.inputPublicationCh <- publication
+		close(publicationSent)
+	}()
+	receiveSessionInputResult(t, testCtx, publicationSent)
+	receiveSessionInputResult(t, testCtx, ownerAtAcknowledgement)
+
+	first := receiveSessionInputResult(t, testCtx, session.Events())
+	second := receiveSessionInputResult(t, testCtx, session.Events())
+	assert.Equal(t, ports.Event{
+		Seq:         41,
+		Kind:        ports.EventMessageAssistant,
+		RunID:       "ordered-input",
+		ParentRunID: "parent-run",
+		Payload:     &ports.EnrichedMessagePayload{Content: "assistant response"},
+		Timestamp:   assistantTimestamp,
+	}, first)
+	assert.Equal(t, ports.EventInputRequired, second.Kind)
+	assert.Equal(t, "ordered-input", second.RunID)
+	assert.False(t, second.Timestamp.IsZero())
+	assert.Equal(t, &ports.EnrichedInputRequest{Prompt: "> "}, second.Payload)
+
+	select {
+	case <-acknowledged:
+		t.Fatal("publication was acknowledged before both queued events were observed")
+	default:
+	}
+	close(releaseAcknowledgement)
+	receiveSessionInputResult(t, testCtx, acknowledged)
+
+	close(recorder.ch)
+	close(releaseExecution)
+	for range session.Events() {
+	}
+}
+
+func TestAdapterStopsInputPublicationWhenSessionIsCancelled(t *testing.T) {
+	recorder := newControlledRecorder()
+	close(recorder.ch)
+	adapter := NewAdapter(nil, nil, nil, nil, recorder, NewSessionRegistry())
+	adapter.SetUserInputReader(neverExitReader{})
+	testCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	readStarted := make(chan struct{})
+	readMayProceed := make(chan struct{})
+	readDone := make(chan error, 1)
+	executionDone := make(chan struct{})
+	session, err := adapter.newSession(testCtx, "cancel-input", recorder, func(execCtx context.Context) error {
+		defer close(executionDone)
+		close(readStarted)
+		<-readMayProceed
+		_, readErr := userInputReaderFrom(execCtx).ReadInput(execCtx)
+		readDone <- readErr
+		return readErr
+	})
+	require.NoError(t, err)
+	receiveSessionInputResult(t, testCtx, readStarted)
+	require.NoError(t, session.Close())
+	close(readMayProceed)
+	assert.Equal(t, context.Canceled, receiveSessionInputResult(t, testCtx, readDone))
+	receiveSessionInputResult(t, testCtx, executionDone)
+	receiveSessionInputResult(t, testCtx, recorder.cancelled)
+	_, open := <-session.Events()
+	assert.False(t, open)
+}
+
+func TestAdapterPublishesInputWithoutRecorderSubscription(t *testing.T) {
+	tests := []struct {
+		name     string
+		recorder func() ports.Recorder
+	}{
+		{name: "nil recorder"},
+		{
+			name: "already closed subscription",
+			recorder: func() ports.Recorder {
+				recorder := newControlledRecorder()
+				close(recorder.ch)
+				return recorder
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var recorder ports.Recorder
+			if tt.recorder != nil {
+				recorder = tt.recorder()
+			}
+			assertRecorderIndependentInput(t, recorder, nil)
+		})
+	}
+}
+
+func TestAdapterPublishesInputAfterActiveRecorderSubscriptionCloses(t *testing.T) {
+	recorder := newControlledRecorder()
+	assertRecorderIndependentInput(t, recorder, func(ctx context.Context) {
+		receiveSessionInputResult(t, ctx, recorder.subscribed)
+		close(recorder.ch)
+	})
+}
+
+func assertRecorderIndependentInput(t *testing.T, recorder ports.Recorder, beforeRead func(context.Context)) {
+	t.Helper()
+	adapter := NewAdapter(nil, nil, nil, nil, recorder, NewSessionRegistry())
+	adapter.SetUserInputReader(neverExitReader{})
+	testCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	startRead := make(chan struct{})
+	executionDone := make(chan error, 1)
+	session, err := adapter.newSession(testCtx, "recorder-independent-input", recorder, func(execCtx context.Context) error {
+		<-startRead
+		value, readErr := userInputReaderFrom(execCtx).ReadInput(execCtx)
+		if readErr == nil && value != "next turn" {
+			readErr = fmt.Errorf("unexpected input %q", value)
+		}
+		executionDone <- readErr
+		return readErr
+	})
+	require.NoError(t, err)
+
+	if beforeRead != nil {
+		beforeRead(testCtx)
+	}
+	close(startRead)
+
+	request := receiveSessionInputResult(t, testCtx, session.Events())
+	require.Equal(t, ports.EventInputRequired, request.Kind)
+	assert.Equal(t, &ports.EnrichedInputRequest{Prompt: "> "}, request.Payload)
+	require.NoError(t, session.Respond(ports.InputResponse{Value: "next turn"}))
+	require.NoError(t, receiveSessionInputResult(t, testCtx, executionDone))
+
+	terminal := receiveSessionInputResult(t, testCtx, session.Events())
+	assert.Equal(t, ports.EventWorkflowCompleted, terminal.Kind)
+	_, open := <-session.Events()
+	assert.False(t, open)
 }
 
 func newControlledRecorder() *controlledRecorder {
-	return &controlledRecorder{ch: make(chan transcript.ExchangeEvent, 100)}
+	return &controlledRecorder{
+		ch:         make(chan transcript.ExchangeEvent, 100),
+		subscribed: make(chan struct{}),
+		cancelled:  make(chan struct{}),
+	}
 }
 
 func (r *controlledRecorder) Record(_ context.Context, _ transcript.ExchangeEvent) error { return nil }
 
 func (r *controlledRecorder) Subscribe() (<-chan transcript.ExchangeEvent, func()) {
 	r.subscribeCount.Add(1)
-	return r.ch, func() {}
+	r.subscribeOnce.Do(func() { close(r.subscribed) })
+	return r.ch, func() {
+		r.cancelOnce.Do(func() { close(r.cancelled) })
+	}
 }
 
 func (r *controlledRecorder) Close() error { return nil }

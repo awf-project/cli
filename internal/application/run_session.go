@@ -10,6 +10,11 @@ import (
 
 var _ ports.RunSession = (*RunSession)(nil)
 
+type inputPublicationRequest struct {
+	input       *ports.EnrichedInputRequest
+	acknowledge func()
+}
+
 // RunSession is the concrete implementation of ports.RunSession.
 // The adapter (T058) owns the subscription goroutine and drives appendEvent.
 // No goroutine is started here — see constraint in T057.
@@ -23,21 +28,22 @@ var _ ports.RunSession = (*RunSession)(nil)
 //   - Receivers (range s.Events()) never take s.mu, so holding s.mu for the
 //     non-blocking send cannot cause a deadlock.
 type RunSession struct {
-	id               string
-	events           chan ports.Event
-	respondCh        chan ports.InputResponse
-	replayBuffer     []ports.Event
-	replayBufferSize int
-	head             int
-	size             int
-	err              error
-	closed           bool
-	terminalRecorded bool
-	cancelReason     string
-	closeOnce        sync.Once
-	mu               sync.RWMutex
-	ctx              context.Context
-	cancel           context.CancelFunc
+	id                 string
+	events             chan ports.Event
+	respondCh          chan ports.InputResponse
+	inputPublicationCh chan inputPublicationRequest
+	replayBuffer       []ports.Event
+	replayBufferSize   int
+	head               int
+	size               int
+	err                error
+	closed             bool
+	terminalRecorded   bool
+	cancelReason       string
+	closeOnce          sync.Once
+	mu                 sync.RWMutex
+	ctx                context.Context
+	cancel             context.CancelFunc
 	// inputs stores the workflow input values supplied at run-start so that
 	// StatusSnapshot can expose them without re-deriving them from the event stream
 	// (inputs are not emitted as events). Set once AFTER construction via setInputs
@@ -56,13 +62,14 @@ func newRunSession(ctx context.Context, id string, replayBufferSize int) *RunSes
 	}
 	childCtx, cancel := context.WithCancel(ctx) //nolint:gocritic,gosec // cancel is stored in RunSession.cancel and called by Close(); G118 false positive
 	return &RunSession{
-		id:               id,
-		events:           make(chan ports.Event, replayBufferSize),
-		respondCh:        make(chan ports.InputResponse, 1),
-		replayBuffer:     make([]ports.Event, replayBufferSize),
-		replayBufferSize: replayBufferSize,
-		ctx:              childCtx,
-		cancel:           cancel,
+		id:                 id,
+		events:             make(chan ports.Event, replayBufferSize),
+		respondCh:          make(chan ports.InputResponse, 1),
+		inputPublicationCh: make(chan inputPublicationRequest),
+		replayBuffer:       make([]ports.Event, replayBufferSize),
+		replayBufferSize:   replayBufferSize,
+		ctx:                childCtx,
+		cancel:             cancel,
 	}
 }
 
