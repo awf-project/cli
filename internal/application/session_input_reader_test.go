@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"io"
 	"testing"
 	"time"
@@ -15,66 +16,155 @@ import (
 	"github.com/awf-project/cli/pkg/interpolation"
 )
 
-// TestSessionInputReader_EmitsInputRequiredAndUnblocksOnRespond verifies the facade
-// conversation parking round-trip (F110 G4): ReadInput appends an EventInputRequired
-// event and blocks until RunSession.Respond delivers a value.
-func TestSessionInputReader_EmitsInputRequiredAndUnblocksOnRespond(t *testing.T) {
+func TestSessionInputReaderWaitsForEventOwner(t *testing.T) {
 	session := newRunSession(context.Background(), "run-1", 16)
 	reader := newSessionInputReader(session)
+	t.Cleanup(func() { require.NoError(t, session.Close()) })
 
-	resultCh := make(chan string, 1)
-	errCh := make(chan error, 1)
+	testCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	type readResult struct {
+		value string
+		err   error
+	}
+	resultCh := make(chan readResult, 1)
 	go func() {
-		v, err := reader.ReadInput(context.Background())
-		resultCh <- v
-		errCh <- err
+		value, err := reader.ReadInput(testCtx)
+		resultCh <- readResult{value: value, err: err}
 	}()
 
-	// The first event on the session must be the bridge-synthesized input request.
+	var publication inputPublicationRequest
 	select {
-	case ev := <-session.Events():
-		require.Equal(t, ports.EventInputRequired, ev.Kind)
-		req, ok := ev.Payload.(*ports.EnrichedInputRequest)
-		require.True(t, ok, "payload must be *EnrichedInputRequest")
-		assert.NotEmpty(t, req.Prompt)
-	case <-time.After(time.Second):
-		t.Fatal("expected EventInputRequired to be emitted")
+	case publication = <-session.inputPublicationCh:
+	case <-testCtx.Done():
+		t.Fatal("ReadInput did not hand publication to the event owner")
+	}
+	assert.NotNil(t, publication.acknowledge)
+
+	select {
+	case event := <-session.Events():
+		t.Fatalf("input reader published an event before the event owner acknowledged it: %#v", event)
+	default:
+	}
+	select {
+	case result := <-resultCh:
+		t.Fatalf("ReadInput returned before publication acknowledgement: value %q, error %v", result.value, result.err)
+	default:
 	}
 
-	require.NoError(t, session.Respond(ports.InputResponse{Value: "next turn"}))
+	publication.acknowledge()
+	const submitted = "next turn"
+	require.NoError(t, session.Respond(ports.InputResponse{Value: submitted}))
 
-	select {
-	case v := <-resultCh:
-		assert.Equal(t, "next turn", v)
-		assert.NoError(t, <-errCh)
-	case <-time.After(time.Second):
-		t.Fatal("ReadInput did not unblock after Respond")
+	result := receiveSessionInputResult(t, testCtx, resultCh)
+	require.NoError(t, result.err)
+	assert.Equal(t, submitted, result.value)
+}
+
+func TestSessionInputReaderStopsWhenInputPublicationIsCancelled(t *testing.T) {
+	tests := []struct {
+		name           string
+		deliverRequest bool
+		closeSession   bool
+	}{
+		{name: "caller cancellation while delivery is pending"},
+		{name: "caller cancellation while acknowledgement is pending", deliverRequest: true},
+		{name: "session close while delivery is pending", closeSession: true},
+		{name: "session close while acknowledgement is pending", deliverRequest: true, closeSession: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := newRunSession(context.Background(), "run-2", 16)
+			reader := newSessionInputReader(session)
+			t.Cleanup(func() { require.NoError(t, session.Close()) })
+
+			testCtx, stopTest := context.WithTimeout(context.Background(), time.Second)
+			defer stopTest()
+			readCtx, cancelRead := context.WithCancel(testCtx)
+			defer cancelRead()
+
+			type readResult struct {
+				value string
+				err   error
+			}
+			resultCh := make(chan readResult, 1)
+			go func() {
+				value, err := reader.ReadInput(readCtx)
+				resultCh <- readResult{value: value, err: err}
+			}()
+
+			if tt.deliverRequest {
+				select {
+				case <-session.inputPublicationCh:
+				case <-testCtx.Done():
+					t.Fatal("ReadInput did not deliver the publication request")
+				}
+			}
+
+			if tt.closeSession {
+				require.NoError(t, session.Close())
+			} else {
+				cancelRead()
+			}
+
+			result := receiveSessionInputResult(t, testCtx, resultCh)
+			assert.Empty(t, result.value)
+			expectedErr := readCtx.Err()
+			if tt.closeSession {
+				expectedErr = session.ctx.Err()
+			}
+			assert.Equal(t, expectedErr, result.err)
+			assert.NotErrorIs(t, result.err, ports.ErrSessionClosed)
+		})
 	}
 }
 
-// TestSessionInputReader_ContextCancelUnblocks verifies that a cancelled caller context
-// unblocks the parked read and surfaces the context error (so the conversation loop can
-// stop instead of hanging).
-func TestSessionInputReader_ContextCancelUnblocks(t *testing.T) {
-	session := newRunSession(context.Background(), "run-2", 16)
-	reader := newSessionInputReader(session)
+func TestSessionInputReaderPublishesThroughFacadeOwner(t *testing.T) {
+	adapter := NewAdapter(nil, nil, nil, nil, nil, NewSessionRegistry())
+	adapter.SetUserInputReader(neverExitReader{})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	errCh := make(chan error, 1)
-	go func() {
-		_, err := reader.ReadInput(ctx)
-		errCh <- err
-	}()
-
-	// Drain the emitted input-required event.
-	<-session.Events()
-	cancel()
+	testCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	resultCh := make(chan string, 1)
+	session, err := adapter.newSession(testCtx, "run-facade", &mockRecorder{}, func(execCtx context.Context) error {
+		reader := userInputReaderFrom(execCtx)
+		if reader == nil {
+			return errors.New("session input reader was not bound")
+		}
+		value, readErr := reader.ReadInput(execCtx)
+		if readErr == nil {
+			resultCh <- value
+		}
+		return readErr
+	})
+	require.NoError(t, err)
 
 	select {
-	case err := <-errCh:
-		assert.ErrorIs(t, err, context.Canceled)
-	case <-time.After(time.Second):
-		t.Fatal("ReadInput did not unblock after context cancel")
+	case event := <-session.Events():
+		require.Equal(t, ports.EventInputRequired, event.Kind)
+		request, ok := event.Payload.(*ports.EnrichedInputRequest)
+		require.True(t, ok)
+		assert.Equal(t, "> ", request.Prompt)
+	case <-testCtx.Done():
+		t.Fatalf("facade event owner did not publish the input event: %v", testCtx.Err())
+	}
+
+	const submitted = "facade response"
+	require.NoError(t, session.Respond(ports.InputResponse{Value: submitted}))
+	assert.Equal(t, submitted, receiveSessionInputResult(t, testCtx, resultCh))
+}
+
+func receiveSessionInputResult[T any](t *testing.T, ctx context.Context, resultCh <-chan T) T {
+	t.Helper()
+	select {
+	case result := <-resultCh:
+		return result
+	case <-ctx.Done():
+		t.Fatalf("ReadInput did not return before the test deadline: %v", ctx.Err())
+		var zero T
+		return zero
 	}
 }
 

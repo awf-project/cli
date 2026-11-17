@@ -162,6 +162,7 @@ func TestDetectAuth_GhCLI(t *testing.T) {
 func TestDetectAuth_TokenEnv(t *testing.T) {
 	t.Run("GITHUB_TOKEN set", func(t *testing.T) {
 		// Setup: gh CLI unavailable, GITHUB_TOKEN set
+		t.Setenv("PATH", "/nonexistent")
 		testToken := "ghp_test_token_12345" // #nosec G101 -- test token, not a real credential
 		t.Setenv("GITHUB_TOKEN", testToken)
 
@@ -189,6 +190,7 @@ func TestDetectAuth_TokenEnv(t *testing.T) {
 	})
 
 	t.Run("GITHUB_TOKEN with whitespace only", func(t *testing.T) {
+		t.Setenv("PATH", "/nonexistent")
 		t.Setenv("GITHUB_TOKEN", "   \n\t  ")
 
 		ctx := context.Background()
@@ -284,6 +286,7 @@ func TestDetectAuth_SecretMasking(t *testing.T) {
 // TestDetectAuth_ThreadSafety tests concurrent calls to DetectAuth.
 func TestDetectAuth_ThreadSafety(t *testing.T) {
 	t.Run("concurrent DetectAuth calls", func(t *testing.T) {
+		t.Setenv("PATH", "/nonexistent")
 		t.Setenv("GITHUB_TOKEN", "ghp_concurrent_test")
 
 		const goroutines = 10
@@ -335,6 +338,7 @@ func TestDetectAuth_EdgeCases(t *testing.T) {
 		{
 			name: "GITHUB_TOKEN with special characters",
 			setupEnv: func(t *testing.T) {
+				t.Setenv("PATH", "/nonexistent")
 				t.Setenv("GITHUB_TOKEN", "ghp_token!@#$%^&*()")
 			},
 			wantType:    "token",
@@ -344,6 +348,7 @@ func TestDetectAuth_EdgeCases(t *testing.T) {
 		{
 			name: "GITHUB_TOKEN with unicode",
 			setupEnv: func(t *testing.T) {
+				t.Setenv("PATH", "/nonexistent")
 				t.Setenv("GITHUB_TOKEN", "ghp_token_日本語")
 			},
 			wantType:    "token",
@@ -353,6 +358,7 @@ func TestDetectAuth_EdgeCases(t *testing.T) {
 		{
 			name: "GITHUB_TOKEN very long",
 			setupEnv: func(t *testing.T) {
+				t.Setenv("PATH", "/nonexistent")
 				// Create a 1000-character token using strings.Repeat
 				longToken := "ghp_" + string([]byte(strings.Repeat("a", 1000)))
 				t.Setenv("GITHUB_TOKEN", longToken)

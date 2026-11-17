@@ -665,6 +665,23 @@ func (a *Adapter) newSession(ctx context.Context, id string, rec ports.Recorder,
 		// execDone so persistence and the terminal error precede channel closure.
 		for {
 			select {
+			case publication := <-session.inputPublicationCh:
+				// Recorder publication is the source order for assistant output. Drain
+				// everything already queued before exposing the later input request. A
+				// missing or closed recorder cannot own prompt publication, so it only
+				// disables further transcript reads; the session still publishes and
+				// acknowledges the input request.
+				if !a.drainBuffered(session, sub) {
+					sub = nil
+				}
+				session.appendEvent(ports.Event{
+					Kind:      ports.EventInputRequired,
+					RunID:     session.ID(),
+					Timestamp: time.Now(),
+					Payload:   inputPublicationPayload(publication),
+				})
+				publication.acknowledge()
+
 			case ev, ok := <-sub:
 				if !ok {
 					// Recorder subscription ended (e.g. a NopRecorder returns an already-
@@ -702,21 +719,31 @@ func (a *Adapter) newSession(ctx context.Context, id string, rec ports.Recorder,
 	return session, nil
 }
 
+func inputPublicationPayload(publication inputPublicationRequest) *ports.EnrichedInputRequest {
+	if publication.input != nil {
+		return publication.input
+	}
+	return &ports.EnrichedInputRequest{Prompt: "> "}
+}
+
 // drainBuffered projects every transcript event currently buffered on sub (non-blocking)
 // into the session. Used before emitting the terminal event so buffered events keep their
 // position ahead of EventWorkflowCompleted/Failed.
-func (a *Adapter) drainBuffered(session *RunSession, sub <-chan transcript.ExchangeEvent) {
+func (a *Adapter) drainBuffered(session *RunSession, sub <-chan transcript.ExchangeEvent) bool {
+	if sub == nil {
+		return false
+	}
 	for {
 		select {
 		case ev, ok := <-sub:
 			if !ok {
-				return
+				return false
 			}
 			if fEv, err := ProjectEvent(ev); err == nil {
 				session.appendEvent(fEv)
 			}
 		default:
-			return
+			return true
 		}
 	}
 }
