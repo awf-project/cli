@@ -2,16 +2,98 @@ package application_test
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestBuildInterpolationContext_UsesExecutionPackWithoutMutatingConfiguredPaths(t *testing.T) {
+	tests := []struct {
+		name     string
+		packName string
+	}{
+		{name: "pack workflow", packName: "probe"},
+		{name: "local workflow"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configuredPaths := map[string]string{
+				application.AWFPackNameKey: "configured-pack",
+				"scripts_dir":              "/configured/scripts",
+				"prompts_dir":              "/configured/prompts",
+			}
+			originalPaths := maps.Clone(configuredPaths)
+			wf := &workflow.Workflow{
+				Name:    "child",
+				Initial: "run",
+				Steps: map[string]*workflow.Step{
+					"run": {
+						Name:      "run",
+						Type:      workflow.StepTypeCommand,
+						Command:   "echo {{.awf.pack_name}}|{{.awf.scripts_dir}}|{{.awf.prompts_dir}}",
+						OnSuccess: "done",
+					},
+					"done": {Name: "done", Type: workflow.StepTypeTerminal, Status: workflow.TerminalSuccess},
+				},
+			}
+			expectedCommand := "echo " + tt.packName + "|/configured/scripts|/configured/prompts"
+			execSvc, mocks := NewTestHarness(t).
+				WithWorkflow("child", wf).
+				WithCommandResult(expectedCommand, &ports.CommandResult{Stdout: expectedCommand, ExitCode: 0}).
+				WithCommandResult("echo |/configured/scripts|/configured/prompts", &ports.CommandResult{Stdout: "local", ExitCode: 0}).
+				Build()
+			execSvc.SetAWFPaths(configuredPaths)
+			if tt.packName != "" {
+				execSvc.SetPackWorkflowLoader(func(_ context.Context, packName, workflowName string) (*workflow.Workflow, string, error) {
+					require.Equal(t, tt.packName, packName)
+					require.Equal(t, "child", workflowName)
+					return wf, "/packs/" + packName, nil
+				})
+			}
+
+			state := workflow.NewExecutionContext("run-1", "child")
+			state.PackName = tt.packName
+			state.Status = workflow.StatusFailed
+			state.CurrentStep = "run"
+			require.NoError(t, mocks.StateStore.Save(context.Background(), state))
+
+			execCtx, err := execSvc.Resume(context.Background(), "run-1", nil, "current")
+
+			require.NoError(t, err)
+			require.NotNil(t, execCtx)
+			assert.Equal(t, tt.packName, execCtx.PackName)
+			assert.Equal(t, originalPaths, configuredPaths)
+			calls := mocks.Executor.GetCalls()
+			require.NotEmpty(t, calls)
+			assert.Equal(t, expectedCommand, calls[len(calls)-1].Program)
+
+			if tt.packName != "" {
+				localState := workflow.NewExecutionContext("run-2", "child")
+				localState.Status = workflow.StatusFailed
+				localState.CurrentStep = "run"
+				require.NoError(t, mocks.StateStore.Save(context.Background(), localState))
+
+				localExecCtx, localErr := execSvc.Resume(context.Background(), "run-2", nil, "current")
+
+				require.NoError(t, localErr)
+				require.NotNil(t, localExecCtx)
+				assert.Empty(t, localExecCtx.PackName)
+				calls = mocks.Executor.GetCalls()
+				require.Len(t, calls, 2)
+				assert.Equal(t, "echo |/configured/scripts|/configured/prompts", calls[1].Program)
+			}
+		})
+	}
+}
 
 // Feature: F063 - Prompt File Loading for Agent Steps
 // Component: T012 - Populate .awf context in buildInterpolationContext()

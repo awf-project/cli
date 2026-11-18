@@ -231,6 +231,44 @@ func TestResolveStepCommand_LocalOverGlobal_DirField(t *testing.T) {
 	assert.Equal(t, localScriptsDir, cmd.Dir, "dir field should resolve to local directory when it exists")
 }
 
+func TestResolveStepCommand_UsesExecutionPackForCommandAndDirResolution(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "packs", "execution-pack", "workflows")
+	serviceScriptsDir := filepath.Join(tmpDir, "configured", "scripts")
+	executionScriptsDir := filepath.Join(tmpDir, ".awf", "scripts", "execution-pack")
+
+	require.NoError(t, os.MkdirAll(sourceDir, 0o755))
+	require.NoError(t, os.MkdirAll(serviceScriptsDir, 0o755))
+	require.NoError(t, os.MkdirAll(executionScriptsDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(executionScriptsDir, "run.sh"), []byte("run"), 0o755))
+
+	step := &workflow.Step{
+		Name:    "run-pack-resource",
+		Type:    workflow.StepTypeCommand,
+		Command: "bash {{.awf.scripts_dir}}/run.sh",
+		Dir:     "{{.awf.scripts_dir}}",
+	}
+	intCtx := &interpolation.Context{AWF: map[string]string{
+		"scripts_dir":  serviceScriptsDir,
+		AWFPackNameKey: "execution-pack",
+	}}
+	svc := &ExecutionService{
+		outputLimiter: NewOutputLimiter(workflow.DefaultOutputLimits()),
+		resolver:      newRealResolver(),
+		awfPaths: map[string]string{
+			"scripts_dir":  serviceScriptsDir,
+			AWFPackNameKey: "configured-pack",
+		},
+	}
+
+	cmd, err := svc.resolveStepCommand(context.Background(), &workflow.Workflow{SourceDir: sourceDir}, step, intCtx)
+
+	require.NoError(t, err)
+	require.NotNil(t, cmd)
+	assert.Equal(t, "bash "+filepath.Join(executionScriptsDir, "run.sh"), cmd.Program)
+	assert.Equal(t, executionScriptsDir, cmd.Dir)
+}
+
 // TestResolveStepCommand_LocalOverGlobal_MultipleVars tests that commands with multiple AWF variables
 // have all variables resolved with local-over-global precedence.
 func TestResolveStepCommand_LocalOverGlobal_MultipleVars(t *testing.T) {

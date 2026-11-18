@@ -53,10 +53,11 @@ func buildInterpolationContext(
 
 	// Populate AWF context with XDG directory paths.
 	// Paths are injected via SetAWFPaths() to avoid infrastructure import in application layer.
-	awfContext := awfPaths
-	if awfContext == nil {
-		awfContext = map[string]string{}
+	awfContext := make(map[string]string, len(awfPaths)+1)
+	for key, value := range awfPaths {
+		awfContext[key] = value
 	}
+	awfContext[AWFPackNameKey] = execCtx.PackName
 
 	intCtx := &interpolation.Context{
 		Inputs: execCtx.Inputs,

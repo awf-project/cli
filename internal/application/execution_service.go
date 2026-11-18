@@ -420,12 +420,6 @@ func (s *ExecutionService) loadResumedWorkflow(ctx context.Context, execCtx *wor
 	if err != nil {
 		return nil, err
 	}
-	paths := make(map[string]string, len(s.awfPaths)+1)
-	for key, value := range s.awfPaths {
-		paths[key] = value
-	}
-	paths[AWFPackNameKey] = execCtx.PackName
-	s.awfPaths = paths
 	return wf, nil
 }
 
@@ -678,7 +672,7 @@ func (s *ExecutionService) RunWithWorkflowAndRunID(
 	inputs map[string]any,
 	runID string,
 ) (*workflow.ExecutionContext, error) {
-	return s.runWithCallStackAndWorkflow(ctx, "", wf, inputs, nil, runID, "")
+	return s.runWithCallStackAndWorkflow(ctx, "", wf, inputs, nil, runID, "", s.awfPaths[AWFPackNameKey])
 }
 
 // prepareExecution handles workflow setup: span creation, template expansion, context
@@ -694,7 +688,7 @@ func (s *ExecutionService) prepareExecution(
 	wf *workflow.Workflow,
 	inputs map[string]any,
 	parentCallStack []string,
-	runID, parentRunID string,
+	runID, parentRunID, effectivePack string,
 ) (context.Context, ports.Span, *workflow.ExecutionContext, error) {
 	ctx, span := s.startSpan(ctx, "workflow.run")
 	span.SetAttribute("workflow.name", wf.Name)
@@ -714,10 +708,8 @@ func (s *ExecutionService) prepareExecution(
 	}
 	execCtx := workflow.NewExecutionContext(resolvedRunID, wf.Name)
 	execCtx.ParentRunID = parentRunID
-	if parentRunID == "" {
-		// Resume reloads the workflow from this pack: its name alone is not enough to find it.
-		execCtx.PackName = s.awfPaths[AWFPackNameKey]
-	}
+	// Resume reloads the workflow from this pack: its name alone is not enough to find it.
+	execCtx.PackName = effectivePack
 	execCtx.Status = workflow.StatusRunning
 	span.SetAttribute("execution_id", execCtx.WorkflowID)
 
@@ -857,7 +849,7 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 	wf *workflow.Workflow,
 	inputs map[string]any,
 	parentCallStack []string,
-	runID, parentRunID string,
+	runID, parentRunID, effectivePack string,
 ) (*workflow.ExecutionContext, error) {
 	if wf == nil {
 		var err error
@@ -867,7 +859,7 @@ func (s *ExecutionService) runWithCallStackAndWorkflow(
 		}
 	}
 
-	spanCtx, span, execCtx, err := s.prepareExecution(ctx, wf, inputs, parentCallStack, runID, parentRunID)
+	spanCtx, span, execCtx, err := s.prepareExecution(ctx, wf, inputs, parentCallStack, runID, parentRunID, effectivePack)
 	if err != nil {
 		// execCtx is non-nil when a workflow_start hook aborted after the execution
 		// context was built and marked failed; propagate it so callers (and the test
@@ -1807,7 +1799,7 @@ func (s *ExecutionService) resolveStepCommand(
 		return nil, fmt.Errorf("interpolate command: %w", err)
 	}
 	// FR-001: Apply local-over-global resolution to command field after interpolation
-	resolvedCmd = resolveCommandAWFPaths(resolvedCmd, wf.SourceDir, s.awfPaths)
+	resolvedCmd = resolveCommandAWFPaths(resolvedCmd, wf.SourceDir, intCtx.AWF)
 
 	// resolve dir if specified
 	resolvedDir := ""
@@ -1817,7 +1809,7 @@ func (s *ExecutionService) resolveStepCommand(
 			return nil, fmt.Errorf("interpolate dir: %w", err)
 		}
 		// FR-002: Apply local-over-global resolution to dir field after interpolation
-		resolvedDir = resolveCommandAWFPaths(resolvedDir, wf.SourceDir, s.awfPaths)
+		resolvedDir = resolveCommandAWFPaths(resolvedDir, wf.SourceDir, intCtx.AWF)
 	}
 
 	// build command with env for secret masking

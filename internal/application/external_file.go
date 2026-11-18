@@ -166,19 +166,13 @@ func resolveCommandAWFPaths(cmd, sourceDir string, awfMap map[string]string) str
 			continue
 		}
 
-		localSubdir := strings.TrimSuffix(key, "_dir")
-
-		// For pack workflows, resolve via 3-tier chain; for local workflows, use standard 2-tier
-		var localDir string
-		if packName != "" {
-			localDir = findPackLocalDir(sourceDir, localSubdir, packName)
-		} else {
-			// For local workflows, use standard 2-tier resolution
-			localDir = filepath.Join(filepath.Dir(sourceDir), localSubdir)
-		}
-
-		// Handle case where entire string is just the global directory (e.g., Dir field)
+		// Resolve a bare directory separately from file paths inside commands.
 		if result == globalDir {
+			localSubdir := strings.TrimSuffix(key, "_dir")
+			localDir := filepath.Join(filepath.Dir(sourceDir), localSubdir)
+			if packName != "" {
+				localDir = findPackLocalDir(sourceDir, localSubdir, packName)
+			}
 			if _, err := os.Stat(localDir); err == nil {
 				result = localDir
 			}
@@ -186,16 +180,16 @@ func resolveCommandAWFPaths(cmd, sourceDir string, awfMap map[string]string) str
 		}
 
 		// Handle file paths within commands
-		result = replaceAWFPathsInString(result, globalDir, localDir)
+		result = replaceAWFPathsInString(result, globalDir, func(path string) string {
+			return resolveLocalOverGlobal(path, sourceDir, awfMap)
+		})
 	}
 
 	return result
 }
 
-// replaceAWFPathsInString replaces occurrences of a global AWF path with its local equivalent in a string.
-// When a local file does not exist for a given occurrence, that occurrence is skipped and scanning
-// continues from after the unresolvable match — so later occurrences are still resolved.
-func replaceAWFPathsInString(str, globalDir, localDir string) string {
+// replaceAWFPathsInString resolves each occurrence of a global AWF resource path independently.
+func replaceAWFPathsInString(str, globalDir string, resolvePath func(string) string) string {
 	globalPrefix := globalDir + string(filepath.Separator)
 
 	// Build the result by scanning left-to-right with an offset so each unresolvable
@@ -221,19 +215,10 @@ func replaceAWFPathsInString(str, globalDir, localDir string) string {
 			break
 		}
 
-		localPath := filepath.Join(localDir, suffix)
-
-		if _, err := os.Stat(localPath); err == nil {
-			// Replace this occurrence with the local path.
-			result.WriteString(str[offset:absIdx])
-			result.WriteString(localPath)
-			offset = absIdx + len(globalPrefix) + len(suffix)
-		} else {
-			// Local file absent: keep the global path and advance past this occurrence
-			// so subsequent occurrences can still be resolved.
-			result.WriteString(str[offset : absIdx+len(globalPrefix)+len(suffix)])
-			offset = absIdx + len(globalPrefix) + len(suffix)
-		}
+		end := absIdx + len(globalPrefix) + len(suffix)
+		result.WriteString(str[offset:absIdx])
+		result.WriteString(resolvePath(str[absIdx:end]))
+		offset = end
 	}
 
 	return result.String()
