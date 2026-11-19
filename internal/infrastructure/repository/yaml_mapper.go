@@ -32,6 +32,7 @@ func mapToDomain(filePath string, y *yamlWorkflow) (*workflow.Workflow, error) {
 		Steps:       make(map[string]*workflow.Step),
 		Hooks:       mapWorkflowHooks(y.Hooks),
 		Plugins:     y.Plugins,
+		Requires:    mapRequirements(y.Requires),
 		SourceDir:   filepath.Dir(absPath),
 	}
 
@@ -660,4 +661,12 @@ func validateInlineErrorObject(filePath, stepName string, obj map[string]any) er
 	}
 
 	return nil
+}
+
+// mapRequirements maps the `requires:` block; an absent block gives no requirement.
+func mapRequirements(y *yamlRequirements) workflow.Requirements {
+	if y == nil {
+		return workflow.Requirements{}
+	}
+	return workflow.Requirements{Plugins: y.Plugins, AgentPlugins: y.AgentPlugins}
 }

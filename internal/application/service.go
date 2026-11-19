@@ -35,6 +35,8 @@ type WorkflowService struct {
 	userInputReaderMu      sync.RWMutex
 	userInputReader        ports.UserInputReader
 	skillRepo              ports.SkillRepository
+	pluginVersions         ports.PluginVersionLookup
+	agentPlugins           ports.AgentPluginRegistry
 	lastValidationWarnings []workflow.ValidationError
 }
 
@@ -207,6 +209,10 @@ func (s *WorkflowService) validateLoadedWorkflow(ctx context.Context, wf *workfl
 			}
 			return fmt.Errorf("validate workflow %s: %w", name, err)
 		}
+	}
+
+	if err := s.validateRequirements(ctx, wf, opts); err != nil {
+		return err
 	}
 
 	if err := s.validatePromptFiles(wf); err != nil {

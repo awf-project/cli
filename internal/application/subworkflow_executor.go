@@ -43,7 +43,7 @@ func SplitCallWorkflowName(name string) (packName, workflowName string) {
 // The method performs the following steps:
 //  1. Validates call stack depth against MaxCallStackDepth
 //  2. Checks for circular workflow calls using the call stack
-//  3. Loads the sub-workflow via the pack loader or WorkflowService
+//  3. Loads the sub-workflow via the pack loader or WorkflowService, and checks its `requires:` block
 //  4. Pushes current workflow to call stack
 //  5. Resolves input mappings via interpolation
 //  6. Creates child context with optional timeout
@@ -104,6 +104,14 @@ func (s *ExecutionService) executeCallWorkflowStep(
 	default:
 		if subWf, loadErr = s.workflowSvc.GetWorkflow(ctx, config.Workflow); loadErr != nil {
 			return "", fmt.Errorf("step %s: load sub-workflow %q: %w", step.Name, config.Workflow, loadErr)
+		}
+	}
+
+	// The child has not gone through the validation of `awf run`, which only sees the top-level workflow: check its
+	// `requires:` block here, before its hooks and its steps run.
+	if s.workflowSvc != nil {
+		if err := s.workflowSvc.validateRequirements(ctx, subWf, ports.ValidateOptions{}); err != nil {
+			return "", fmt.Errorf("step %s: sub-workflow %q: %w", step.Name, config.Workflow, err)
 		}
 	}
 

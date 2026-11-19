@@ -462,3 +462,24 @@ func TestValidate_ReservedScope(t *testing.T) {
 		})
 	}
 }
+
+func TestParseManifest_Requires(t *testing.T) {
+	m, err := workflowpkg.ParseManifest([]byte(`
+name: review
+version: "1.0.0"
+awf_version: ">=0.11.0"
+workflows: [review]
+plugins:
+  jira: ">=1.0.0"
+  nexus: ">=0.0.1"
+requires:
+  plugins:
+    nexus: ">=0.1.0"
+  agent_plugins:
+    claude: ["egm@egm"]
+`))
+
+	require.NoError(t, err)
+	assert.Equal(t, map[string][]string{"claude": {"egm@egm"}}, m.Requires.AgentPlugins)
+	assert.Equal(t, map[string]string{"jira": ">=1.0.0", "nexus": ">=0.1.0"}, m.RequiredPlugins(), "requires.plugins wins over plugins")
+}
