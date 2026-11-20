@@ -11,9 +11,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/awf-project/cli/internal/interfaces/cli"
+	"github.com/awf-project/cli/pkg/interpolation"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -365,6 +368,214 @@ states:
 
 	err := cmd.Execute()
 	require.NoError(t, err, "Failed to resolve relative call_workflow in pack: %v", err)
+}
+
+// Feature: 185
+func TestPackRun_NestedCrossPackCallsUseChildContext(t *testing.T) {
+	tests := []struct {
+		name                         string
+		createUtilsOverride          bool
+		createUnrelatedUtilsOverride bool
+		wantResource                 string
+	}{
+		{name: "user script override", createUtilsOverride: true, wantResource: "utils-override"},
+		{name: "embedded child script", wantResource: "utils-embedded"},
+		{name: "unrelated user script override", createUnrelatedUtilsOverride: true, wantResource: "utils-embedded"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := setupInitTestDir(t)
+			t.Setenv("XDG_DATA_HOME", filepath.Join(tmpDir, "xdg-data"))
+			require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".awf", "states"), 0o755))
+
+			markerPath := filepath.Join(tmpDir, "pack-context-markers")
+			appendMarker := func(label string) string {
+				return fmt.Sprintf("printf '%%s\\n' %s >> %s", interpolation.ShellEscape(label), interpolation.ShellEscape(markerPath))
+			}
+
+			createPackStructure(t, tmpDir, "source", map[string]string{
+				"parent": `name: parent
+version: "1.0.0"
+states:
+  initial: call_helper
+  call_helper:
+    type: call_workflow
+    workflow: utils/helper
+    on_success: call_parent_tail
+  call_parent_tail:
+    type: call_workflow
+    workflow: parent-tail
+    on_success: done
+  done:
+    type: terminal
+`,
+				"leaf": fmt.Sprintf(`name: leaf
+version: "1.0.0"
+states:
+  initial: mark
+  mark:
+    type: step
+    command: %s
+    on_success: done
+  done:
+    type: terminal
+`, appendMarker("source-leaf")),
+				"parent-tail": fmt.Sprintf(`name: parent-tail
+version: "1.0.0"
+states:
+  initial: mark
+  mark:
+    type: step
+    command: %s
+    on_success: done
+  done:
+    type: terminal
+`, appendMarker("source-parent")),
+				"parallel-child": `name: parallel-child
+version: "1.0.0"
+states:
+  initial: call_parallel_leaf
+  call_parallel_leaf:
+    type: call_workflow
+    workflow: parallel-leaf
+    on_success: done
+  done:
+    type: terminal
+`,
+				"parallel-leaf": fmt.Sprintf(`name: parallel-leaf
+version: "1.0.0"
+states:
+  initial: mark
+  mark:
+    type: step
+    command: %s
+    on_success: done
+  done:
+    type: terminal
+`, appendMarker("source-parallel")),
+			})
+
+			createPackStructure(t, tmpDir, "utils", map[string]string{
+				"helper": `name: helper
+version: "1.0.0"
+states:
+  initial: call_leaf
+  call_leaf:
+    type: call_workflow
+    workflow: leaf
+    on_success: run_resource
+  run_resource:
+    type: step
+    command: sh "{{.awf.scripts_dir}}/helper.sh"
+    on_success: run_parallel
+  run_parallel:
+    type: parallel
+    strategy: all_succeed
+    parallel:
+      - source_branch
+      - auxiliary_branch
+    on_success: done
+  source_branch:
+    type: call_workflow
+    workflow: source/parallel-child
+    on_success: done
+  auxiliary_branch:
+    type: call_workflow
+    workflow: auxiliary/parallel-child
+    on_success: done
+  done:
+    type: terminal
+`,
+				"leaf": fmt.Sprintf(`name: leaf
+version: "1.0.0"
+states:
+  initial: mark
+  mark:
+    type: step
+    command: %s
+    on_success: done
+  done:
+    type: terminal
+`, appendMarker("utils-leaf")),
+			})
+			createPackScripts(t, tmpDir, "utils", map[string]string{
+				"helper.sh": "#!/bin/sh\n" + appendMarker("utils-embedded") + "\n",
+			})
+
+			createPackStructure(t, tmpDir, "auxiliary", map[string]string{
+				"parallel-child": `name: parallel-child
+version: "1.0.0"
+states:
+  initial: call_parallel_leaf
+  call_parallel_leaf:
+    type: call_workflow
+    workflow: parallel-leaf
+    on_success: done
+  done:
+    type: terminal
+`,
+				"parallel-leaf": fmt.Sprintf(`name: parallel-leaf
+version: "1.0.0"
+states:
+  initial: mark
+  mark:
+    type: step
+    command: %s
+    on_success: done
+  done:
+    type: terminal
+`, appendMarker("auxiliary-parallel")),
+			})
+
+			for packName, marker := range map[string]string{
+				"source": "source-override",
+				"utils":  "utils-override",
+			} {
+				if packName == "utils" && !tt.createUtilsOverride {
+					continue
+				}
+				overrideDir := filepath.Join(tmpDir, ".awf", "scripts", packName)
+				require.NoError(t, os.MkdirAll(overrideDir, 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(overrideDir, "helper.sh"),
+					[]byte("#!/bin/sh\n"+appendMarker(marker)+"\n"),
+					0o644,
+				))
+			}
+
+			if tt.createUnrelatedUtilsOverride {
+				overrideDir := filepath.Join(tmpDir, ".awf", "scripts", "utils")
+				require.NoError(t, os.MkdirAll(overrideDir, 0o755))
+				require.NoError(t, os.WriteFile(
+					filepath.Join(overrideDir, "foo.sh"),
+					[]byte("#!/bin/sh\n"+appendMarker("unrelated-override")+"\n"),
+					0o644,
+				))
+			}
+
+			cmd := cli.NewRootCommand()
+			var output bytes.Buffer
+			cmd.SetOut(&output)
+			cmd.SetErr(&output)
+			cmd.SetArgs([]string{"--storage=" + tmpDir, "run", "source/parent"})
+
+			require.NoError(t, cmd.Execute(), output.String())
+			markerData, err := os.ReadFile(markerPath)
+			require.NoError(t, err)
+			markers := strings.Fields(string(markerData))
+			require.Len(t, markers, 5)
+			assert.Equal(t, "utils-leaf", markers[0])
+			assert.Equal(t, tt.wantResource, markers[1])
+			assert.ElementsMatch(t, []string{"source-parallel", "auxiliary-parallel"}, markers[2:4])
+			assert.Equal(t, "source-parent", markers[4])
+			assert.NotContains(t, markers, "source-leaf")
+			assert.NotContains(t, markers, "source-override")
+			if tt.createUtilsOverride {
+				assert.NotContains(t, markers, "utils-embedded")
+			}
+		})
+	}
 }
 
 // TestPackRun_MissingPack returns error for non-existent pack

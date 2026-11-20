@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/transcript"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	testmocks "github.com/awf-project/cli/internal/testutil/mocks"
 	"github.com/stretchr/testify/assert"
@@ -600,7 +603,7 @@ func TestExecuteCallWorkflowStep_MaxNestingExceeded(t *testing.T) {
 	// We need 12 workflows because:
 	// - The depth check happens when a workflow tries to CALL another
 	// - At depth=10, the 11th call_workflow should fail
-	// - So we need: deep-a(calls b) -> deep-b(calls c) -> ... -> deep-k(calls l) -> deep-l(terminal)
+	// - So we need: deep-a(calls b) -> deep-b(calls c) through deep-k(calls l) -> deep-l(terminal)
 	// That's 11 call_workflow steps, with the 11th triggering the depth check at depth=10
 	harness := NewTestHarness(t)
 
@@ -1871,15 +1874,34 @@ func TestExecuteCallWorkflowStep_NamespacedWorkflow_LoaderError(t *testing.T) {
 		WithWorkflow("parent", parentWf).
 		Build()
 
+	loaderErr := errors.New("pack not found")
 	execSvc.SetPackWorkflowLoader(func(ctx context.Context, packName, workflowName string) (*workflow.Workflow, string, error) {
-		return nil, "", fmt.Errorf("pack not found")
+		return nil, "", loaderErr
 	})
 
 	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "parent-run")
 
-	assert.Error(t, err)
+	require.Error(t, err)
+	require.ErrorIs(t, err, loaderErr)
 	assert.Contains(t, err.Error(), "load sub-workflow")
 	assert.Contains(t, err.Error(), "pack not found")
+}
+
+func TestExecuteCallWorkflowStep_RepositoryErrorPreservesCause(t *testing.T) {
+	parentWf := callWorkflowFixture("parent", "local-child", "done")
+	repositoryErr := errors.New("repository unavailable")
+
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("parent", parentWf).
+		Build()
+	mocks.Repository.SetLoadError(repositoryErr)
+
+	_, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "parent-run")
+
+	require.Error(t, err)
+	require.ErrorIs(t, err, repositoryErr)
+	assert.Contains(t, err.Error(), "load sub-workflow")
+	assert.Contains(t, err.Error(), "local-child")
 }
 
 func TestExecuteCallWorkflowStep_UnnamespacedWorkflow_WithLoader(t *testing.T) {
@@ -1965,6 +1987,169 @@ func packOnlyCallWorkflowFixture(target string) (parentWf, childWf *workflow.Wor
 	return parentWf, childWf
 }
 
+func callWorkflowFixture(name, target, next string) *workflow.Workflow {
+	return &workflow.Workflow{
+		Name:    name,
+		Initial: "call",
+		Steps: map[string]*workflow.Step{
+			"call": {
+				Name:         "call",
+				Type:         workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{Workflow: target},
+				OnSuccess:    next,
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+}
+
+func commandWorkflowFixture(name, command string) *workflow.Workflow {
+	return &workflow.Workflow{
+		Name:    name,
+		Initial: "work",
+		Steps: map[string]*workflow.Step{
+			"work": {Name: "work", Type: workflow.StepTypeCommand, Command: command, OnSuccess: "done"},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+}
+
+func commandPrograms(calls []*ports.Command) []string {
+	programs := make([]string, 0, len(calls))
+	for _, call := range calls {
+		programs = append(programs, call.Program)
+	}
+	return programs
+}
+
+func assertSubWorkflowLogs(t *testing.T, messages []testmocks.LogMessage, steps, workflows, sensitiveValues []string) {
+	t.Helper()
+
+	subWorkflowLogs := make([]testmocks.LogMessage, 0, len(workflows))
+	for _, message := range messages {
+		if message.Msg == "executing sub-workflow" {
+			subWorkflowLogs = append(subWorkflowLogs, message)
+		}
+		for _, sensitiveValue := range sensitiveValues {
+			assert.NotContains(t, fmt.Sprint(message), sensitiveValue)
+		}
+	}
+
+	require.Len(t, steps, len(workflows))
+	require.Len(t, subWorkflowLogs, len(workflows))
+	for index, workflowName := range workflows {
+		assert.Equal(t, "INFO", subWorkflowLogs[index].Level)
+		assert.Equal(t, []any{"step", steps[index], "workflow", workflowName}, subWorkflowLogs[index].Fields)
+	}
+}
+
+func TestExecuteCallWorkflowStep_NestedCrossPackCallsUseChildPack(t *testing.T) {
+	parentWf := callWorkflowFixture("parent", "utils/helper", "done")
+	parentWf.Steps["call"].CallWorkflow.Inputs = map[string]string{
+		"child_input":       "{{.inputs.secret}}",
+		"environment_value": "{{.env.T002_ENV_VALUE}}",
+		"mapped_value":      "t002-mapped-value",
+		"resource_contents": "t002-resource-contents",
+	}
+	helperWf := callWorkflowFixture("helper", "leaf", "done")
+	utilsLeaf := commandWorkflowFixture("leaf", "echo utility-leaf")
+	sourceLeaf := commandWorkflowFixture("leaf", "echo source-leaf")
+
+	execSvc, mocks := NewTestHarness(t).WithWorkflow("parent", parentWf).Build()
+	execSvc.SetAWFPaths(map[string]string{application.AWFPackNameKey: "source"})
+	loaderCalls := make([]string, 0, 2)
+	execSvc.SetPackWorkflowLoader(func(_ context.Context, packName, workflowName string) (*workflow.Workflow, string, error) {
+		loaderCalls = append(loaderCalls, packName+"/"+workflowName)
+		switch packName + "/" + workflowName {
+		case "utils/helper":
+			return helperWf, "/packs/utils", nil
+		case "utils/leaf":
+			return utilsLeaf, "/packs/utils", nil
+		case "source/leaf":
+			return sourceLeaf, "/packs/source", nil
+		default:
+			return nil, "", fmt.Errorf("unexpected pack workflow %s/%s", packName, workflowName)
+		}
+	})
+
+	t.Setenv("T002_ENV_VALUE", "t002-environment-secret")
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, map[string]any{
+		"secret": "t002-child-input-secret",
+	}, "parent-run")
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+	assert.Equal(t, []string{"utils/helper", "utils/leaf"}, loaderCalls)
+	assert.Equal(t, []string{"echo utility-leaf"}, commandPrograms(mocks.Executor.GetCalls()))
+	assertSubWorkflowLogs(t, mocks.Logger.GetMessages(), []string{"call", "call"}, []string{"utils/helper", "leaf"}, []string{
+		"t002-child-input-secret",
+		"t002-environment-secret",
+		"t002-mapped-value",
+		"t002-resource-contents",
+	})
+}
+
+func TestExecuteCallWorkflowStep_ParentPackContextIsRestored(t *testing.T) {
+	parentWf := callWorkflowFixture("parent", "utils/helper", "call_source")
+	parentWf.Steps["call_source"] = &workflow.Step{
+		Name:         "call_source",
+		Type:         workflow.StepTypeCallWorkflow,
+		CallWorkflow: &workflow.CallWorkflowConfig{Workflow: "source-child"},
+		OnSuccess:    "done",
+	}
+	helperWf := commandWorkflowFixture("helper", "echo utility-helper")
+	sourceChild := commandWorkflowFixture("source-child", "echo source-child")
+
+	execSvc, mocks := NewTestHarness(t).WithWorkflow("parent", parentWf).Build()
+	execSvc.SetAWFPaths(map[string]string{application.AWFPackNameKey: "source"})
+	loaderCalls := make([]string, 0, 2)
+	execSvc.SetPackWorkflowLoader(func(_ context.Context, packName, workflowName string) (*workflow.Workflow, string, error) {
+		loaderCalls = append(loaderCalls, packName+"/"+workflowName)
+		switch packName + "/" + workflowName {
+		case "utils/helper":
+			return helperWf, "/packs/utils", nil
+		case "source/source-child":
+			return sourceChild, "/packs/source", nil
+		default:
+			return nil, "", fmt.Errorf("unexpected pack workflow %s/%s", packName, workflowName)
+		}
+	})
+
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "parent-run")
+
+	require.NoError(t, err)
+	assert.Equal(t, "source", execCtx.PackName)
+	assert.Equal(t, []string{"utils/helper", "source/source-child"}, loaderCalls)
+	assert.Equal(t, []string{"echo utility-helper", "echo source-child"}, commandPrograms(mocks.Executor.GetCalls()))
+	assertSubWorkflowLogs(t, mocks.Logger.GetMessages(), []string{"call", "call_source"}, []string{"utils/helper", "source-child"}, nil)
+}
+
+func TestExecuteCallWorkflowStep_LocalFallbackUsesLocalContext(t *testing.T) {
+	parentWf := callWorkflowFixture("parent", "local-helper", "done")
+	localHelper := callWorkflowFixture("local-helper", "leaf", "done")
+	localLeaf := commandWorkflowFixture("leaf", "echo local-leaf")
+
+	execSvc, mocks := NewTestHarness(t).
+		WithWorkflow("parent", parentWf).
+		WithWorkflow("local-helper", localHelper).
+		WithWorkflow("leaf", localLeaf).
+		Build()
+	execSvc.SetAWFPaths(map[string]string{application.AWFPackNameKey: "source"})
+	loaderCalls := make([]string, 0, 1)
+	execSvc.SetPackWorkflowLoader(func(_ context.Context, packName, workflowName string) (*workflow.Workflow, string, error) {
+		loaderCalls = append(loaderCalls, packName+"/"+workflowName)
+		return nil, "", fmt.Errorf("pack workflow unavailable")
+	})
+
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "parent-run")
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+	assert.Equal(t, []string{"source/local-helper"}, loaderCalls)
+	assert.Equal(t, []string{"echo local-leaf"}, commandPrograms(mocks.Executor.GetCalls()))
+	assertSubWorkflowLogs(t, mocks.Logger.GetMessages(), []string{"call", "call"}, []string{"local-helper", "leaf"}, nil)
+}
+
 func TestExecuteCallWorkflowStep_RunsWorkflowReturnedByPackLoader(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1996,4 +2181,188 @@ func TestExecuteCallWorkflowStep_RunsWorkflowReturnedByPackLoader(t *testing.T) 
 			assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
 		})
 	}
+}
+
+func TestExecuteCallWorkflowStep_ParallelPackContextsAreIsolated(t *testing.T) {
+	parentWf := &workflow.Workflow{
+		Name:    "parallel-parent",
+		Initial: "parallel",
+		Steps: map[string]*workflow.Step{
+			"parallel": {
+				Name:      "parallel",
+				Type:      workflow.StepTypeParallel,
+				Branches:  []string{"call_alpha", "call_beta"},
+				Strategy:  string(workflow.StrategyAllSucceed),
+				OnSuccess: "done",
+			},
+			"call_alpha": {
+				Name:         "call_alpha",
+				Type:         workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{Workflow: "alpha/helper"},
+			},
+			"call_beta": {
+				Name:         "call_beta",
+				Type:         workflow.StepTypeCallWorkflow,
+				CallWorkflow: &workflow.CallWorkflowConfig{Workflow: "beta/helper"},
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal},
+		},
+	}
+	helperWf := callWorkflowFixture("helper", "leaf", "done")
+	alphaLeaf := commandWorkflowFixture("leaf", "echo alpha-leaf")
+	betaLeaf := commandWorkflowFixture("leaf", "echo beta-leaf")
+
+	execSvc, mocks := NewTestHarness(t).WithWorkflow("parallel-parent", parentWf).Build()
+	var mu sync.Mutex
+	loaderCalls := make([]string, 0, 4)
+	initialLoads := 0
+	bothInitialLoads := make(chan struct{})
+	execSvc.SetPackWorkflowLoader(func(ctx context.Context, packName, workflowName string) (*workflow.Workflow, string, error) {
+		call := packName + "/" + workflowName
+		mu.Lock()
+		loaderCalls = append(loaderCalls, call)
+		if workflowName == "helper" {
+			initialLoads++
+			if initialLoads == 2 {
+				close(bothInitialLoads)
+			}
+		}
+		mu.Unlock()
+
+		if workflowName == "helper" {
+			select {
+			case <-bothInitialLoads:
+			case <-ctx.Done():
+				return nil, "", ctx.Err()
+			}
+			return helperWf, filepath.Join("/packs", packName), nil
+		}
+		switch call {
+		case "alpha/leaf":
+			return alphaLeaf, "/packs/alpha", nil
+		case "beta/leaf":
+			return betaLeaf, "/packs/beta", nil
+		default:
+			return nil, "", fmt.Errorf("unexpected pack workflow %s", call)
+		}
+	})
+
+	execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, "parallel-parent-run")
+
+	require.NoError(t, err)
+	assert.Equal(t, workflow.StatusCompleted, execCtx.Status)
+	mu.Lock()
+	calls := make([]string, len(loaderCalls))
+	copy(calls, loaderCalls)
+	mu.Unlock()
+	assert.ElementsMatch(t, []string{"alpha/helper", "beta/helper", "alpha/leaf", "beta/leaf"}, calls)
+	assert.ElementsMatch(t, []string{"echo alpha-leaf", "echo beta-leaf"}, commandPrograms(mocks.Executor.GetCalls()))
+}
+
+type subworkflowTranscriptRecorder struct {
+	mu     sync.Mutex
+	events []transcript.ExchangeEvent
+}
+
+func (r *subworkflowTranscriptRecorder) Record(_ context.Context, event transcript.ExchangeEvent) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, event)
+	return nil
+}
+
+func (r *subworkflowTranscriptRecorder) Subscribe() (<-chan transcript.ExchangeEvent, func()) {
+	ch := make(chan transcript.ExchangeEvent)
+	return ch, func() { close(ch) }
+}
+
+func (r *subworkflowTranscriptRecorder) Close() error { return nil }
+
+func (r *subworkflowTranscriptRecorder) Events() []transcript.ExchangeEvent {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	events := make([]transcript.ExchangeEvent, len(r.events))
+	copy(events, r.events)
+	return events
+}
+
+func TestExecuteCallWorkflowStep_NestedCallsPreserveLineageGuards(t *testing.T) {
+	t.Run("circular call preserves sentinel", func(t *testing.T) {
+		wf := callWorkflowFixture("circular", "circular", "done")
+		execSvc, _ := NewTestHarness(t).WithWorkflow("circular", wf).Build()
+
+		execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), wf, nil, "circular-parent-run")
+
+		require.Error(t, err)
+		require.NotNil(t, execCtx)
+		assert.Equal(t, workflow.StatusFailed, execCtx.Status)
+		assert.ErrorIs(t, err, application.ErrCircularWorkflowCall)
+	})
+
+	t.Run("maximum nesting preserves sentinel", func(t *testing.T) {
+		harness := NewTestHarness(t)
+		var root *workflow.Workflow
+		for depth := 0; depth <= workflow.MaxCallStackDepth; depth++ {
+			name := fmt.Sprintf("depth-%d", depth)
+			next := fmt.Sprintf("depth-%d", depth+1)
+			wf := callWorkflowFixture(name, next, "done")
+			if depth == 0 {
+				root = wf
+			}
+			harness.WithWorkflow(name, wf)
+		}
+		harness.WithWorkflow(fmt.Sprintf("depth-%d", workflow.MaxCallStackDepth+1), commandWorkflowFixture("leaf", "echo unreachable"))
+		execSvc, _ := harness.Build()
+
+		execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), root, nil, "depth-parent-run")
+
+		require.Error(t, err)
+		require.NotNil(t, execCtx)
+		assert.Equal(t, workflow.StatusFailed, execCtx.Status)
+		assert.ErrorIs(t, err, application.ErrMaxNestingExceeded)
+	})
+
+	t.Run("child transcript preserves parent lineage", func(t *testing.T) {
+		const parentRunID = "lineage-parent-run"
+		parentWf := callWorkflowFixture("parent", "child", "done")
+		childWf := commandWorkflowFixture("child", "echo child")
+		execSvc, _ := NewTestHarness(t).
+			WithWorkflow("parent", parentWf).
+			WithWorkflow("child", childWf).
+			Build()
+		parentRecorder := &subworkflowTranscriptRecorder{}
+		childRecorder := &subworkflowTranscriptRecorder{}
+		execSvc.SetRecorder(parentRecorder)
+		execSvc.SetRecorderFactory(func(string) (ports.Recorder, error) { return childRecorder, nil })
+
+		execCtx, err := execSvc.RunWithWorkflowAndRunID(context.Background(), parentWf, nil, parentRunID)
+
+		require.NoError(t, err)
+		assert.Equal(t, parentRunID, execCtx.WorkflowID)
+		parentEvents := parentRecorder.Events()
+		var childRunID, completedChildRunID string
+		for _, event := range parentEvents {
+			if event.Type == transcript.EventTypeStepCallWorkflowStarted {
+				childRunID = event.ChildRunID
+			}
+			if event.Type == transcript.EventTypeStepCallWorkflowCompleted {
+				completedChildRunID = event.ChildRunID
+			}
+		}
+		require.NotEmpty(t, childRunID)
+		require.NotEmpty(t, completedChildRunID)
+		assert.Equal(t, childRunID, completedChildRunID)
+		assert.NotEqual(t, parentRunID, childRunID)
+
+		childEvents := childRecorder.Events()
+		var sawStarted, sawCompleted bool
+		for _, event := range childEvents {
+			assert.Equal(t, childRunID, event.RunID)
+			assert.Equal(t, parentRunID, event.ParentRunID)
+			sawStarted = sawStarted || event.Type == transcript.EventTypeStepStarted
+			sawCompleted = sawCompleted || event.Type == transcript.EventTypeStepCompleted
+		}
+		assert.True(t, sawStarted)
+		assert.True(t, sawCompleted)
+	})
 }

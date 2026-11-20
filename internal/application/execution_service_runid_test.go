@@ -41,7 +41,7 @@ func TestPrepareExecution_UsesProvidedRunID(t *testing.T) {
 	svc := newRunIDTestService()
 	wf := terminalOnlyWorkflow()
 
-	_, span, execCtx, err := svc.prepareExecution(context.Background(), wf, nil, nil, "fixed-run-id", "parent-run-id")
+	_, span, execCtx, err := svc.prepareExecution(context.Background(), wf, nil, nil, "fixed-run-id", "parent-run-id", "")
 	require.NoError(t, err)
 	if span != nil {
 		defer span.End()
@@ -57,7 +57,7 @@ func TestPrepareExecution_GeneratesRunIDWhenEmpty(t *testing.T) {
 	svc := newRunIDTestService()
 	wf := terminalOnlyWorkflow()
 
-	_, span, execCtx, err := svc.prepareExecution(context.Background(), wf, nil, nil, "", "")
+	_, span, execCtx, err := svc.prepareExecution(context.Background(), wf, nil, nil, "", "", "")
 	require.NoError(t, err)
 	if span != nil {
 		defer span.End()
@@ -118,7 +118,7 @@ func TestRun_ChildRecorderViaContext_IsolatesEvents(t *testing.T) {
 	}
 
 	ctx := withRecorder(context.Background(), childRec)
-	execCtx, err := svc.runWithCallStackAndWorkflow(ctx, "", wf, nil, nil, "child-run", "parent-run")
+	execCtx, err := svc.runWithCallStackAndWorkflow(ctx, "", wf, nil, nil, "child-run", "parent-run", "")
 	require.NoError(t, err)
 	require.NotNil(t, execCtx)
 

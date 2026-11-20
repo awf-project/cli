@@ -685,7 +685,7 @@ func TestExtractFilePathSuffix_NoDelimiter(t *testing.T) {
 	assert.Equal(t, "script.sh", suffix)
 }
 
-func TestReplaceAWFPathsInString_SingleReplacement(t *testing.T) {
+func TestResolveCommandAWFPaths_SingleReplacement(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	localDir := filepath.Join(tmpDir, "scripts")
@@ -697,12 +697,12 @@ func TestReplaceAWFPathsInString_SingleReplacement(t *testing.T) {
 	globalDir := "/global/scripts"
 	cmdStr := globalDir + "/test.sh arg1"
 
-	result := replaceAWFPathsInString(cmdStr, globalDir, localDir)
+	result := resolveCommandAWFPaths(cmdStr, filepath.Join(tmpDir, "workflow.yaml"), map[string]string{"scripts_dir": globalDir})
 
 	assert.Equal(t, localFile+" arg1", result, "should replace single occurrence")
 }
 
-func TestReplaceAWFPathsInString_MultipleReplacements(t *testing.T) {
+func TestResolveCommandAWFPaths_MultipleReplacements(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	localDir := filepath.Join(tmpDir, "scripts")
@@ -716,13 +716,13 @@ func TestReplaceAWFPathsInString_MultipleReplacements(t *testing.T) {
 	globalDir := "/global/scripts"
 	cmdStr := globalDir + "/script1.sh && " + globalDir + "/script2.sh"
 
-	result := replaceAWFPathsInString(cmdStr, globalDir, localDir)
+	result := resolveCommandAWFPaths(cmdStr, filepath.Join(tmpDir, "workflow.yaml"), map[string]string{"scripts_dir": globalDir})
 
 	expected := file1 + " && " + file2
 	assert.Equal(t, expected, result, "should replace all occurrences")
 }
 
-func TestReplaceAWFPathsInString_SkipMissing(t *testing.T) {
+func TestResolveCommandAWFPaths_SkipMissing(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	localDir := filepath.Join(tmpDir, "scripts")
@@ -734,23 +734,23 @@ func TestReplaceAWFPathsInString_SkipMissing(t *testing.T) {
 	globalDir := "/global/scripts"
 	cmdStr := globalDir + "/missing.sh && " + globalDir + "/exists.sh"
 
-	result := replaceAWFPathsInString(cmdStr, globalDir, localDir)
+	result := resolveCommandAWFPaths(cmdStr, filepath.Join(tmpDir, "workflow.yaml"), map[string]string{"scripts_dir": globalDir})
 
 	expected := globalDir + "/missing.sh && " + existingFile
 	assert.Equal(t, expected, result, "should keep unresolvable paths unchanged and replace resolvable ones")
 }
 
-func TestReplaceAWFPathsInString_NoOccurrences(t *testing.T) {
+func TestResolveCommandAWFPaths_NoOccurrences(t *testing.T) {
 	cmdStr := "echo hello world"
 	globalDir := "/global/scripts"
-	localDir := "/local/scripts"
+	tmpDir := t.TempDir()
 
-	result := replaceAWFPathsInString(cmdStr, globalDir, localDir)
+	result := resolveCommandAWFPaths(cmdStr, filepath.Join(tmpDir, "workflow.yaml"), map[string]string{"scripts_dir": globalDir})
 
 	assert.Equal(t, cmdStr, result, "should return unchanged when no matches")
 }
 
-func TestReplaceAWFPathsInString_PartialMatch(t *testing.T) {
+func TestResolveCommandAWFPaths_PartialMatch(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	localDir := filepath.Join(tmpDir, "scripts")
@@ -758,7 +758,7 @@ func TestReplaceAWFPathsInString_PartialMatch(t *testing.T) {
 
 	// /global/scripts is not followed by separator
 	cmdStr := "/global/scripts-version/file.sh"
-	result := replaceAWFPathsInString(cmdStr, "/global/scripts", localDir)
+	result := resolveCommandAWFPaths(cmdStr, filepath.Join(tmpDir, "workflow.yaml"), map[string]string{"scripts_dir": "/global/scripts"})
 
 	assert.Equal(t, cmdStr, result, "should not replace partial matches")
 }

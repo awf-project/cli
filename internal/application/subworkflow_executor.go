@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -40,18 +41,6 @@ func SplitCallWorkflowName(name string) (packName, workflowName string) {
 
 // executeCallWorkflowStep executes a call_workflow step that invokes another workflow as a sub-workflow.
 //
-// The method performs the following steps:
-//  1. Validates call stack depth against MaxCallStackDepth
-//  2. Checks for circular workflow calls using the call stack
-//  3. Loads the sub-workflow via the pack loader or WorkflowService
-//  4. Pushes current workflow to call stack
-//  5. Resolves input mappings via interpolation
-//  6. Creates child context with optional timeout
-//  7. Executes sub-workflow recursively
-//  8. Maps sub-workflow outputs to parent step state
-//  9. Pops call stack
-//  10. Returns next step based on success/failure
-//
 //nolint:gocognit // Complexity 43: subworkflow execution handles input mapping, nested workflow loading, execution, output capture, error propagation. Subworkflow orchestration requires this.
 func (s *ExecutionService) executeCallWorkflowStep(
 	ctx context.Context,
@@ -61,28 +50,27 @@ func (s *ExecutionService) executeCallWorkflowStep(
 ) (string, error) {
 	startTime := time.Now()
 
-	// Validate call_workflow configuration exists
 	if step.CallWorkflow == nil {
 		return "", fmt.Errorf("step %s: call_workflow configuration is required", step.Name)
 	}
 
 	config := step.CallWorkflow
+	callStack := execCtx.PersistenceSnapshot().CallStack
 
-	// 1. Check call stack depth
-	if execCtx.CallStackDepth() >= workflow.MaxCallStackDepth {
+	if len(callStack) >= workflow.MaxCallStackDepth {
 		return "", fmt.Errorf("step %s: %w (depth: %d, max: %d)",
-			step.Name, ErrMaxNestingExceeded, execCtx.CallStackDepth(), workflow.MaxCallStackDepth)
+			step.Name, ErrMaxNestingExceeded, len(callStack), workflow.MaxCallStackDepth)
 	}
 
-	// 2. Check for circular workflow call
-	if execCtx.IsInCallStack(config.Workflow) {
+	if slices.Contains(callStack, config.Workflow) {
 		return "", fmt.Errorf("step %s: %w: workflow %q is already in call stack %v",
-			step.Name, ErrCircularWorkflowCall, config.Workflow, execCtx.CallStack)
+			step.Name, ErrCircularWorkflowCall, config.Workflow, callStack)
 	}
 
-	// 3. Load sub-workflow — route namespaced references through the pack workflow loader.
+	// Route namespaced references through the pack workflow loader.
 	packName, workflowTarget := SplitCallWorkflowName(config.Workflow)
-	// The loaded workflow is the one executed in step 7: reloading it by name would miss pack workflows.
+	var effectivePack string
+	// Execute the loaded workflow directly; reloading it by name would miss pack workflows.
 	var subWf *workflow.Workflow
 	var loadErr error
 	switch {
@@ -94,12 +82,15 @@ func (s *ExecutionService) executeCallWorkflowStep(
 		if subWf, _, loadErr = s.packWorkflowLoader(ctx, packName, workflowTarget); loadErr != nil {
 			return "", fmt.Errorf("step %s: load sub-workflow %q: %w", step.Name, config.Workflow, loadErr)
 		}
-	case s.awfPaths[AWFPackNameKey] != "" && s.packWorkflowLoader != nil:
+		effectivePack = packName
+	case execCtx.PackName != "" && s.packWorkflowLoader != nil:
 		// Unnamespaced within a pack context: try current pack first, fall back to standard.
-		if subWf, _, loadErr = s.packWorkflowLoader(ctx, s.awfPaths[AWFPackNameKey], workflowTarget); loadErr != nil {
+		if subWf, _, loadErr = s.packWorkflowLoader(ctx, execCtx.PackName, workflowTarget); loadErr != nil {
 			if subWf, loadErr = s.workflowSvc.GetWorkflow(ctx, config.Workflow); loadErr != nil {
 				return "", fmt.Errorf("step %s: load sub-workflow %q: %w", step.Name, config.Workflow, loadErr)
 			}
+		} else {
+			effectivePack = execCtx.PackName
 		}
 	default:
 		if subWf, loadErr = s.workflowSvc.GetWorkflow(ctx, config.Workflow); loadErr != nil {
@@ -129,11 +120,10 @@ func (s *ExecutionService) executeCallWorkflowStep(
 		}()
 	}
 
-	// 4. Push current workflow to call stack
-	execCtx.PushCallStack(wf.Name)
-	defer execCtx.PopCallStack()
+	// Extend a branch-local call stack. Parallel branches share execCtx, so
+	// mutating its stack here would mix lineage and race with sibling calls.
+	callStack = append(callStack, wf.Name)
 
-	// 5. Build interpolation context and resolve input mappings
 	intCtx := s.buildInterpolationContext(execCtx)
 	subInputs := make(map[string]any)
 	for key, template := range config.Inputs {
@@ -144,7 +134,6 @@ func (s *ExecutionService) executeCallWorkflowStep(
 		subInputs[key] = resolved
 	}
 
-	// 6. Apply timeout
 	// Prefer step-level timeout (from YAML timeout: field) over config.Timeout.
 	timeout := step.Timeout
 	if timeout <= 0 {
@@ -158,14 +147,13 @@ func (s *ExecutionService) executeCallWorkflowStep(
 		s.logger.Warn("pre-hook failed", "step", step.Name, "error", err)
 	}
 
-	// 7. Execute sub-workflow with parent call stack for circular detection.
 	// Route the child run's transcript emission to its own Recorder (one file per
 	// sub-run, F106 US5) via the context, and thread the child/parent run identity so
 	// the child's events carry RunID=childRunID and ParentRunID=parent's WorkflowID.
 	s.logger.Info("executing sub-workflow", "step", step.Name, "workflow", config.Workflow)
 	s.emitTranscriptCallWorkflowStarted(ctx, execCtx, step, childRunID)
 	subCtx = withRecorder(subCtx, childRecorder)
-	subResult, execErr := s.runWithCallStackAndWorkflow(subCtx, config.Workflow, subWf, subInputs, execCtx.CallStack, childRunID, execCtx.WorkflowID)
+	subResult, execErr := s.runWithCallStackAndWorkflow(subCtx, config.Workflow, subWf, subInputs, callStack, childRunID, execCtx.WorkflowID, effectivePack)
 	s.emitTranscriptCallWorkflowCompleted(ctx, execCtx, step, childRunID, execErr)
 
 	// Create sub-workflow result for tracking
@@ -180,7 +168,6 @@ func (s *ExecutionService) executeCallWorkflowStep(
 		Attempt:     1,
 	}
 
-	// 8. Map sub-workflow outputs to parent state
 	if subResult != nil && execErr == nil {
 		for subOutputName, parentVarName := range config.Outputs {
 			if subState, ok := subResult.States[subOutputName]; ok {
