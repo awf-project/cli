@@ -18,6 +18,7 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
+	"github.com/awf-project/cli/internal/interfaces/notifierwiring"
 )
 
 // OutputMode defines how command output is displayed.
@@ -60,6 +61,7 @@ func ParseOutputMode(s string) (OutputMode, error) {
 type Config struct {
 	ExecutionSetupOptions []application.SetupOption
 	CommandExecutor       ports.CommandExecutor
+	DiscoveredOperations  ports.OperationProvider
 	Verbose               bool
 	Quiet                 bool
 	NoColor               bool
@@ -224,6 +226,11 @@ func buildValidationFacadeWithDependencies(cfg *Config, deps validationFacadeDep
 	if pluginCleanup == nil {
 		pluginCleanup = noop
 	}
+	projectCfg, err := loadProjectConfig(logger)
+	if err != nil {
+		pluginCleanup()
+		return nil, noop, err
+	}
 	historyStore, err := deps.openHistory(filepath.Join(cfg.StoragePath, "history.db"))
 	if err != nil {
 		pluginCleanup()
@@ -235,7 +242,15 @@ func buildValidationFacadeWithDependencies(cfg *Config, deps validationFacadeDep
 	workflowSvc := application.NewWorkflowService(repo, nil, nil, nil, expression.NewExprValidator())
 	workflowSvc.SetPackDiscoverer(discoverer)
 	workflowSvc.SetTemplateAnalyzer(analyzer.NewInterpolationAnalyzer())
-	workflowSvc.SetPluginOperationProvider(buildValidationOperationProvider(plugins.Service, plugins.Manager, logger))
+	workflowSvc.SetPluginOperationProvider(buildValidationOperationProvider(
+		plugins.Service,
+		plugins.Manager,
+		logger,
+		notifierwiring.Settings{
+			Backend:        projectCfg.Notifier.Backend,
+			DefaultChannel: projectCfg.Notifier.DefaultChannel,
+		},
+	))
 	if plugins.RPCManager != nil {
 		workflowSvc.SetValidatorProvider(plugins.RPCManager.ValidatorProvider(0))
 		workflowSvc.SetStepTypeProvider(plugins.RPCManager.StepTypeProvider(logger))

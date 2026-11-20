@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -553,7 +554,7 @@ func (s *ACPSessionService) HandleSessionPrompt(ctx context.Context, params json
 		// Route the editor's text to the parked workflow goroutine, then wait for the turn
 		// to resolve: the workflow either parks again (→ end_turn) or completes (→ output).
 		h.r.Respond(text)
-		return s.waitTurn(ctx, session, run), nil
+		return s.waitTurn(ctx, session, run)
 	}
 
 	// First dispatch: the prompt must name a workflow via a leading /<slash-command>.
@@ -590,7 +591,7 @@ func (s *ACPSessionService) HandleSessionPrompt(ctx context.Context, params json
 		return nil, wiringErr
 	}
 	session.runWG.Done()
-	return s.dispatchViaFacade(ctx, session, workflowName, inputs), nil
+	return s.dispatchViaFacade(ctx, session, workflowName, inputs)
 }
 
 // waitTurn blocks until the in-flight run resolves the current ACP turn: the workflow parks
@@ -599,15 +600,15 @@ func (s *ACPSessionService) HandleSessionPrompt(ctx context.Context, params json
 // (→ cancelled). It is the application-layer analog of the TUI's InputRequestedMsg handling:
 // a park ends the turn so the editor re-enables input, and the next session/prompt resumes the
 // same run by routing its text to the parked reader via Respond.
-func (s *ACPSessionService) waitTurn(ctx context.Context, session *ACPSession, run *acpRun) any {
+func (s *ACPSessionService) waitTurn(ctx context.Context, session *ACPSession, run *acpRun) (any, *ACPHandlerError) {
 	select {
 	case <-run.parkedCh:
-		return promptStop("end_turn")
+		return promptStop("end_turn"), nil
 	case <-run.doneCh:
 		return s.finishedTurn(ctx, session, run)
 	case <-ctx.Done():
 		// Server shutting down; Shutdown cancels and drains the run goroutine separately.
-		return promptStop("cancelled")
+		return promptStop("cancelled"), nil
 	}
 }
 
@@ -615,17 +616,21 @@ func (s *ACPSessionService) waitTurn(ctx context.Context, session *ACPSession, r
 // error, or cancellation) back to the editor as agent text so the user always sees a result
 // instead of a silent end_turn. The run's outcome fields are safe to read here: they were
 // written before close(doneCh), which waitTurn has already observed.
-func (s *ACPSessionService) finishedTurn(ctx context.Context, session *ACPSession, run *acpRun) any {
+func (s *ACPSessionService) finishedTurn(ctx context.Context, session *ACPSession, run *acpRun) (any, *ACPHandlerError) {
 	switch {
 	case run.cancelled:
 		s.sendAgentText(ctx, session.ID, fmt.Sprintf("Workflow %q cancelled.", run.workflowName))
-		return promptStop("cancelled")
+		return promptStop("cancelled"), nil
 	case run.runErr != nil:
 		// Include the concrete error type so operators can distinguish failure classes
 		// (timeout vs validation vs executor) from structured logs without a stack trace.
-		s.logger.Debug("session/prompt: workflow run failed", "workflow", run.workflowName, "error_type", fmt.Sprintf("%T", run.runErr), "error", run.runErr)
+		s.logger.Debug("session/prompt: workflow run failed", "workflow", run.workflowName, "error_type", fmt.Sprintf("%T", run.runErr))
+		var notifierErr *notifierOperationError
+		if errors.As(run.runErr, &notifierErr) {
+			return nil, acpInternalCause("workflow execution failed", run.runErr)
+		}
 		s.sendAgentText(ctx, session.ID, fmt.Sprintf("Workflow %q failed: %s", run.workflowName, run.runErr))
-		return promptStop("end_turn")
+		return promptStop("end_turn"), nil
 	default:
 		out := workflowOutputText(run.execCtx)
 		// streamed is read via atomic.Pointer so this is race-free with ensureSessionWiring (M7 fix).
@@ -639,7 +644,7 @@ func (s *ACPSessionService) finishedTurn(ctx context.Context, session *ACPSessio
 		default:
 			s.sendAgentText(ctx, session.ID, out)
 		}
-		return promptStop("end_turn")
+		return promptStop("end_turn"), nil
 	}
 }
 
@@ -718,7 +723,7 @@ func workflowOutputText(execCtx *workflow.ExecutionContext) string {
 //
 //   - A facadeInputBridge is stored in session.inputReader so the existing continuation-
 //     routing code (which calls h.r.Respond(text)) works unmodified for the facade path.
-func (s *ACPSessionService) dispatchViaFacade(requestCtx context.Context, session *ACPSession, workflowName string, inputs map[string]any) any {
+func (s *ACPSessionService) dispatchViaFacade(requestCtx context.Context, session *ACPSession, workflowName string, inputs map[string]any) (any, *ACPHandlerError) {
 	// runCtx is derived from the session-lifetime context, NOT the per-turn request ctx.
 	// This preserves the proven sessionCtx/runCtx split (F105 research Q4): the SDK cancels
 	// the per-turn ctx at end_turn, which would otherwise kill a parked run before its
@@ -746,9 +751,13 @@ func (s *ACPSessionService) dispatchViaFacade(requestCtx context.Context, sessio
 	if err != nil {
 		session.runWG.Done()
 		cancel()
-		s.logger.Warn("session/prompt: facade.Run failed", "sessionId", session.ID, "workflow", workflowName, "error", err)
+		s.logger.Warn("session/prompt: facade.Run failed", "sessionId", session.ID, "workflow", workflowName, "error_type", fmt.Sprintf("%T", err))
+		var notifierErr *notifierOperationError
+		if errors.As(err, &notifierErr) {
+			return nil, acpInternalCause("workflow failed to start", err)
+		}
 		s.sendAgentText(requestCtx, session.ID, fmt.Sprintf("Workflow %q failed to start: %s", workflowName, err))
-		return promptStop("end_turn")
+		return promptStop("end_turn"), nil
 	}
 
 	// Wire the facadeInputBridge so that continuation turns (parkedTurnCount > 0)

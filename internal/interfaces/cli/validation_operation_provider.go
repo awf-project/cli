@@ -7,12 +7,14 @@ import (
 	infrahttp "github.com/awf-project/cli/internal/infrastructure/http"
 	"github.com/awf-project/cli/internal/infrastructure/notify"
 	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
+	"github.com/awf-project/cli/internal/interfaces/notifierwiring"
 )
 
 func buildValidationOperationProvider(
 	pluginService *application.PluginService,
 	external ports.OperationProvider,
 	logger ports.Logger,
+	notifierSettings notifierwiring.Settings,
 ) ports.OperationProvider {
 	var githubProvider ports.OperationProvider
 	if pluginService.IsPluginEnabled("github") {
@@ -29,5 +31,10 @@ func buildValidationOperationProvider(
 		httpProvider = infrahttp.NewHTTPOperationProvider(nil, logger)
 	}
 
-	return pluginmgr.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider, external)
+	notifierProvider := notifierwiring.ComposeOperationProvider(
+		notifierSettings,
+		pluginService.IsPluginEnabled("notifier"),
+		external,
+	)
+	return pluginmgr.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider, notifierProvider)
 }

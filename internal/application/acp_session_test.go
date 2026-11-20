@@ -250,7 +250,7 @@ func TestACP_ConcurrentSessionsNoStateCollision(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			results[idx] = svc.dispatchViaFacade(context.Background(), fixtures[idx].session, "same-workflow", nil)
+			results[idx], _ = svc.dispatchViaFacade(context.Background(), fixtures[idx].session, "same-workflow", nil)
 		}(i)
 	}
 

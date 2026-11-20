@@ -34,6 +34,9 @@ func stepInputText(step *workflow.Step) string {
 	case step.ScriptFile != "":
 		return "📄 " + step.ScriptFile
 	case step.Operation != "":
+		if strings.HasPrefix(step.Operation, "notifier.") {
+			return step.Operation
+		}
 		text := step.Operation
 		if len(step.OperationInputs) > 0 {
 			parts := make([]string, 0, len(step.OperationInputs))

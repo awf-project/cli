@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/awf-project/cli/internal/application"
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/skills"
@@ -115,8 +116,21 @@ func runValidateViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWrit
 	}
 
 	var validationErr error
+	validationExitCode := ExitWorkflow
 	if !report.Valid && len(errMessages) > 0 {
 		validationErr = fmt.Errorf("%s", strings.Join(errMessages, "\n  "))
+		if report.Errors[0].Code == domainerrors.ErrorCodeUserInputValidationFailed {
+			validationErr = domainerrors.NewStructuredError(
+				report.Errors[0].Code,
+				strings.Join(errMessages, "\n  "),
+				nil,
+				nil,
+			)
+		}
+		var structured *domainerrors.StructuredError
+		if errors.As(validationErr, &structured) {
+			validationExitCode = structured.ExitCode()
+		}
 	}
 
 	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {
@@ -131,7 +145,7 @@ func runValidateViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWrit
 			return writeErr
 		}
 		if validationErr != nil {
-			return &exitError{code: ExitWorkflow, err: validationErr}
+			return &exitError{code: validationExitCode, err: validationErr}
 		}
 		return nil
 	}
@@ -148,7 +162,7 @@ func runValidateViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWrit
 			return writeErr
 		}
 		if validationErr != nil {
-			return &exitError{code: ExitWorkflow, err: validationErr}
+			return &exitError{code: validationExitCode, err: validationErr}
 		}
 		return nil
 	}
@@ -159,7 +173,7 @@ func runValidateViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWrit
 		NoColor: cfg.NoColor,
 	})
 	if validationErr != nil {
-		return writeErrorAndExit(writer, validationErr, ExitWorkflow)
+		return writeErrorAndExit(writer, validationErr, validationExitCode)
 	}
 	formatter.Success(fmt.Sprintf("Workflow '%s' is valid", workflowName))
 	return nil

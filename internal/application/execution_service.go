@@ -824,7 +824,11 @@ func (s *ExecutionService) runExecutionLoop(
 				"error":       err.Error(),
 			})
 			execCtx.Status = workflow.StatusFailed
-			s.logger.Error("step failed", "step", step.Name, "error", err)
+			if strings.HasPrefix(step.Operation, "notifier.") {
+				s.logger.Error("step failed", "step", step.Name, "operation", step.Operation)
+			} else {
+				s.logger.Error("step failed", "step", step.Name, "error", err)
+			}
 			execErr = err
 			break
 		}
@@ -2470,7 +2474,11 @@ func (s *ExecutionService) executeFromStep(
 				"error":       err.Error(),
 			})
 			execCtx.Status = workflow.StatusFailed
-			s.logger.Error("step failed", "step", step.Name, "error", err)
+			if strings.HasPrefix(step.Operation, "notifier.") {
+				s.logger.Error("step failed", "step", step.Name, "operation", step.Operation)
+			} else {
+				s.logger.Error("step failed", "step", step.Name, "error", err)
+			}
 			execErr = err
 			break
 		}
@@ -2613,12 +2621,28 @@ var ErrNoOperationProvider = errors.New("operation provider not configured")
 // F021: Plugin System - Executes operations registered by plugins.
 // Returns ErrNoOperationProvider if no operation provider is configured.
 //
+// notifierOperationError identifies a notifier failure and preserves its cause.
+//
 //nolint:gocognit // Complexity 31: plugin operation executor handles validation, resolution, state management. Plugin interface requires comprehensive error handling.
+type notifierOperationError struct {
+	cause error
+}
+
+func (e *notifierOperationError) Error() string { return e.cause.Error() }
+func (e *notifierOperationError) Unwrap() error { return e.cause }
+
 func (s *ExecutionService) executePluginOperation(
 	ctx context.Context,
 	step *workflow.Step,
 	execCtx *workflow.ExecutionContext,
-) (string, error) {
+) (_ string, operationErr error) {
+	if strings.HasPrefix(step.Operation, "notifier.") {
+		defer func() {
+			if operationErr != nil {
+				operationErr = &notifierOperationError{cause: operationErr}
+			}
+		}()
+	}
 	startTime := time.Now()
 
 	ctx, span := s.startSpan(ctx, "plugin.rpc")
@@ -2694,23 +2718,53 @@ func (s *ExecutionService) executePluginOperation(
 		state.Response = result.Outputs
 	}
 
+	if execErr != nil || (result != nil && !result.Success) {
+		return s.handlePluginOperationFailure(ctx, stepCtx, step, execCtx, &state, result, execErr)
+	}
+
+	// Success
+	state.Status = workflow.StatusCompleted
+	execCtx.SetStepState(step.Name, state)
+
+	// Execute post-hooks on success
+	intCtx = s.buildInterpolationContext(execCtx)
+	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
+		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
+	}
+
+	// Resolve next step using transitions or OnSuccess
+	return s.resolveNextStep(step, intCtx, true)
+}
+
+func (s *ExecutionService) handlePluginOperationFailure(
+	ctx, stepCtx context.Context,
+	step *workflow.Step,
+	execCtx *workflow.ExecutionContext,
+	state *workflow.StepState,
+	result *pluginmodel.OperationResult,
+	execErr error,
+) (string, error) {
 	// Handle execution error (e.g., context canceled, provider error)
 	if execErr != nil {
 		// Check if parent context was cancelled (workflow-level cancellation)
 		if ctx.Err() != nil && (errors.Is(execErr, context.Canceled) || errors.Is(execErr, context.DeadlineExceeded)) {
 			state.Status = workflow.StatusFailed
 			state.Error = execErr.Error()
-			execCtx.SetStepState(step.Name, state)
+			execCtx.SetStepState(step.Name, *state)
 			return "", fmt.Errorf("step %s: %w", step.Name, execErr)
 		}
 
 		state.Status = workflow.StatusFailed
 		state.Error = execErr.Error()
-		s.logger.Warn("operation failed", "step", step.Name, "operation", step.Operation, "error", execErr)
-		execCtx.SetStepState(step.Name, state)
+		if strings.HasPrefix(step.Operation, "notifier.") {
+			s.logger.Warn("operation failed", "step", step.Name, "operation", step.Operation)
+		} else {
+			s.logger.Warn("operation failed", "step", step.Name, "operation", step.Operation, "error", execErr)
+		}
+		execCtx.SetStepState(step.Name, *state)
 
 		// Execute post-hooks even on failure
-		intCtx = s.buildInterpolationContext(execCtx)
+		intCtx := s.buildInterpolationContext(execCtx)
 		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
@@ -2730,11 +2784,15 @@ func (s *ExecutionService) executePluginOperation(
 		if result.Error != "" {
 			state.Error = result.Error
 		}
-		s.logger.Warn("operation returned failure", "step", step.Name, "operation", step.Operation, "error", result.Error)
-		execCtx.SetStepState(step.Name, state)
+		if strings.HasPrefix(step.Operation, "notifier.") {
+			s.logger.Warn("operation returned failure", "step", step.Name, "operation", step.Operation)
+		} else {
+			s.logger.Warn("operation returned failure", "step", step.Name, "operation", step.Operation, "error", result.Error)
+		}
+		execCtx.SetStepState(step.Name, *state)
 
 		// Execute post-hooks even on failure
-		intCtx = s.buildInterpolationContext(execCtx)
+		intCtx := s.buildInterpolationContext(execCtx)
 		if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
 			s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
 		}
@@ -2751,19 +2809,7 @@ func (s *ExecutionService) executePluginOperation(
 		}
 		return "", fmt.Errorf("step %s: %s", step.Name, errMsg)
 	}
-
-	// Success
-	state.Status = workflow.StatusCompleted
-	execCtx.SetStepState(step.Name, state)
-
-	// Execute post-hooks on success
-	intCtx = s.buildInterpolationContext(execCtx)
-	if hookErr := s.hookExecutor.ExecuteHooks(stepCtx, step.Hooks.Post, intCtx, false); hookErr != nil {
-		s.logger.Warn("post-hook failed", "step", step.Name, "error", hookErr)
-	}
-
-	// Resolve next step using transitions or OnSuccess
-	return s.resolveNextStep(step, intCtx, true)
+	return "", errors.New("plugin operation failure handler called without a failure")
 }
 
 // ErrNoAgentRegistry is returned when an agent step is executed without a configured registry.

@@ -7,11 +7,16 @@
 package acp_test
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"testing"
@@ -20,6 +25,7 @@ import (
 	sdk "github.com/coder/acp-go-sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 // TestACPServe_ServerInitialization validates that the server starts up
@@ -117,6 +123,289 @@ func TestACPServe_WorkflowExecution(t *testing.T) {
 	require.True(t, ok, "result must be a JSON object")
 	assert.NotEmpty(t, result, "session/prompt must return non-empty result")
 }
+
+func TestACPServerDispatchesNotifierThroughDiscoveredAdapter(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds and executes an external recording adapter")
+	}
+
+	const (
+		workflowName     = "acp-notifier-dispatch"
+		payloadCanary    = "acp-payload-output-canary ; $(printf injected)"
+		defaultCanary    = "acp-default-channel-output-canary"
+		credentialCanary = "acp-adapter-credential-output-canary"
+	)
+	root := t.TempDir()
+	workflowDir := filepath.Join(root, "workflows")
+	pluginDir := filepath.Join(root, "plugins")
+	recordPath := filepath.Join(root, "adapter-record.jsonl")
+	adapterExitPath := filepath.Join(root, "adapter-exit.json")
+	hostLogPath := filepath.Join(root, "host-audit.jsonl")
+	require.NoError(t, os.MkdirAll(workflowDir, 0o700))
+	pluginID := installACPRecordingAdapter(t, root, pluginDir, recordPath, credentialCanary)
+
+	projectConfigPath := filepath.Join(root, "config.yaml")
+	projectConfig := fmt.Sprintf("notifier:\n  backend: %s\n  default_channel: %s\n", pluginID, defaultCanary)
+	require.NoError(t, os.WriteFile(projectConfigPath, []byte(projectConfig), 0o600))
+	workflow := fmt.Sprintf(`name: %s
+version: "1.0"
+states:
+  initial: notify
+  notify:
+    type: operation
+    operation: notifier.send
+    inputs:
+      text: %q
+    on_success: done
+  done:
+    type: terminal
+    status: success
+`, workflowName, payloadCanary)
+	require.NoError(t, os.WriteFile(filepath.Join(workflowDir, workflowName+".yaml"), []byte(workflow), 0o600))
+
+	t.Setenv("AWF_CONFIG_PATH", projectConfigPath)
+	t.Setenv("AWF_PLUGINS_PATH", pluginDir)
+	t.Setenv("AWF_WORKFLOWS_PATH", workflowDir)
+	t.Setenv("AWF_RECORDING_PATH", recordPath)
+	t.Setenv("AWF_ADAPTER_EXIT_PATH", adapterExitPath)
+	t.Setenv("AWF_AUDIT_LOG", hostLogPath)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg-config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "xdg-data"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "xdg-state"))
+
+	binaryPath := buildAWFBinary(t)
+	acpConfigPath := writeACPConfig(t, workflowDir)
+	stderrRead, stderrWrite, err := os.Pipe()
+	require.NoError(t, err)
+	originalStderr := os.Stderr
+	os.Stderr = stderrWrite
+	proc := startACPServeProcess(t, binaryPath, fmt.Sprintf("--config=%s", acpConfigPath))
+	os.Stderr = originalStderr
+	t.Cleanup(func() { os.Stderr = originalStderr })
+	stderrDone := make(chan []byte, 1)
+	go func() {
+		captured, _ := io.ReadAll(io.LimitReader(stderrRead, 1<<20))
+		stderrDone <- captured
+	}()
+
+	initResp := proc.request(t, 1, sdk.AgentMethodInitialize, map[string]any{
+		"protocolVersion": sdk.ProtocolVersionNumber,
+		"capabilities":    map[string]any{},
+		"clientInfo": map[string]any{
+			"name": "notifier-test-client", "version": "1.0.0",
+		},
+	})
+	require.Nil(t, initResp.Error, "initialize must succeed")
+	sessionResp := proc.request(t, 2, sdk.AgentMethodSessionNew, map[string]any{
+		"cwd": root, "mcpServers": []any{},
+	})
+	require.Nil(t, sessionResp.Error, "session/new must succeed")
+	sessionResult, ok := sessionResp.Result.(map[string]any)
+	require.True(t, ok, "session/new result must be a JSON object")
+	sessionID := fmt.Sprintf("%v", sessionResult["sessionId"])
+	require.NotEmpty(t, sessionID)
+
+	protocolFrames := marshalACPResponses(t, initResp, sessionResp)
+	protocolFrames = append(protocolFrames, drainACPCommandsAndCapture(t, proc, workflowName)...)
+	promptResp := proc.request(t, 3, sdk.AgentMethodSessionPrompt, map[string]any{
+		"sessionId": sessionID,
+		"prompt": []map[string]any{
+			{"type": "text", "text": "/" + workflowName},
+		},
+	})
+	require.Nil(t, promptResp.Error, "session/prompt must reach workflow completion: %+v", promptResp.Error)
+	require.NotNil(t, promptResp.Result)
+	promptFrame, err := json.Marshal(promptResp)
+	require.NoError(t, err)
+	protocolFrames = append(protocolFrames, promptFrame)
+	require.NoError(t, proc.stdin.Close())
+	waitDone := make(chan error, 1)
+	go func() { waitDone <- proc.cmd.Wait() }()
+	select {
+	case waitErr := <-waitDone:
+		require.NoError(t, waitErr, "ACP and adapter subprocesses must exit cleanly after stdin closes")
+	case <-time.After(5 * time.Second):
+		t.Fatal("ACP and adapter subprocesses did not exit within 5 seconds")
+	}
+	select {
+	case <-proc.readPumpDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for ACP stdout read pump completion")
+	}
+	protocolFrames = append(protocolFrames, drainACPPendingFrames(proc)...)
+	require.NoError(t, stderrWrite.Close())
+	var stderr []byte
+	select {
+	case stderr = <-stderrDone:
+	case <-time.After(time.Second):
+		t.Fatal("timed out collecting bounded ACP stderr")
+	}
+	require.NoError(t, stderrRead.Close())
+
+	records := readACPAdapterRecords(t, recordPath)
+	require.Len(t, records, 1)
+	adapterExit, err := os.ReadFile(adapterExitPath) //nolint:gosec // Test-owned isolated adapter receipt path.
+	require.NoError(t, err, "recording adapter must write its clean-exit receipt")
+	assert.JSONEq(t, fmt.Sprintf(`{"pid":%d}`, records[0].PID), string(adapterExit))
+	assert.Equal(t, pluginID, records[0].Adapter)
+	assert.Equal(t, "send", records[0].Operation)
+	assert.Equal(t, defaultCanary, records[0].Inputs["channel"])
+	assert.Equal(t, payloadCanary, records[0].Inputs["text"])
+
+	hostLog, err := os.ReadFile(hostLogPath) //nolint:gosec // Test-owned isolated audit path.
+	if errors.Is(err, os.ErrNotExist) {
+		hostLog = nil
+	} else {
+		require.NoError(t, err)
+	}
+	for _, frame := range protocolFrames {
+		assert.NotContains(t, string(frame), payloadCanary)
+		assert.NotContains(t, string(frame), credentialCanary)
+	}
+	for _, frame := range protocolFrames {
+		assert.NotContains(t, string(frame), defaultCanary)
+	}
+	for _, output := range []string{string(stderr), string(hostLog)} {
+		assert.NotContains(t, output, payloadCanary)
+		assert.NotContains(t, output, defaultCanary)
+		assert.NotContains(t, output, credentialCanary)
+	}
+}
+
+type acpAdapterRecord struct {
+	Adapter   string         `json:"adapter"`
+	Operation string         `json:"operation"`
+	Inputs    map[string]any `json:"inputs"`
+	PID       int            `json:"pid"`
+}
+
+func installACPRecordingAdapter(t *testing.T, root, pluginsDir, recordPath, credential string) string {
+	t.Helper()
+	const manifestTemplate = `name: recording
+version: 1.0.0
+awf_version: ">=0.1.0"
+capabilities:
+  - operations
+config:
+  adapter_credential:
+    type: string
+    default: %s
+`
+	manifest := fmt.Sprintf(manifestTemplate, credential)
+	var metadata struct {
+		Name string `yaml:"name"`
+	}
+	require.NoError(t, yaml.Unmarshal([]byte(manifest), &metadata))
+	require.NotEmpty(t, metadata.Name)
+	destination := filepath.Join(pluginsDir, metadata.Name)
+	require.NoError(t, os.MkdirAll(destination, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(destination, "plugin.yaml"), []byte(manifest), 0o600))
+	sourcePath := filepath.Join(root, "recording-plugin.go")
+	require.NoError(t, os.WriteFile(sourcePath, []byte(acpRecordingAdapterSource), 0o600))
+	buildCtx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
+	defer cancel()
+	build := exec.CommandContext(buildCtx, "go", "build", "-o", filepath.Join(destination, "awf-plugin-"+metadata.Name), sourcePath)
+	build.Dir = filepath.Join("..", "..", "..")
+	build.Env = append(os.Environ(), "AWF_RECORDING_PATH="+recordPath)
+	buildOutput, err := build.CombinedOutput()
+	require.NoError(t, err, string(buildOutput))
+	return metadata.Name
+}
+
+func marshalACPResponses(t *testing.T, responses ...jsonRPCResponse) [][]byte {
+	t.Helper()
+	frames := make([][]byte, 0, len(responses))
+	for _, response := range responses {
+		frame, err := json.Marshal(response)
+		require.NoError(t, err)
+		frames = append(frames, frame)
+	}
+	return frames
+}
+
+func drainACPCommandsAndCapture(t *testing.T, proc *acpProcess, workflowName string) [][]byte {
+	t.Helper()
+	deadline := time.After(acpRPCTimeout)
+	var frames [][]byte
+	for {
+		select {
+		case frame := <-proc.rawCh:
+			frames = append(frames, frame)
+			if bytes.Contains(frame, []byte(`"name":"`+workflowName+`"`)) {
+				return frames
+			}
+		case <-deadline:
+			t.Fatalf("timed out waiting for %s in available commands", workflowName)
+		}
+	}
+}
+
+func drainACPPendingFrames(proc *acpProcess) [][]byte {
+	var frames [][]byte
+	for {
+		select {
+		case frame := <-proc.rawCh:
+			frames = append(frames, frame)
+		default:
+			return frames
+		}
+	}
+}
+
+func readACPAdapterRecords(t *testing.T, path string) []acpAdapterRecord {
+	t.Helper()
+	file, err := os.Open(path) //nolint:gosec // Test-owned isolated record path.
+	require.NoError(t, err)
+	defer file.Close()
+	scanner := bufio.NewScanner(io.LimitReader(file, 1<<20))
+	var records []acpAdapterRecord
+	for scanner.Scan() {
+		var record acpAdapterRecord
+		require.NoError(t, json.Unmarshal(scanner.Bytes(), &record))
+		records = append(records, record)
+	}
+	require.NoError(t, scanner.Err())
+	return records
+}
+
+const acpRecordingAdapterSource = `package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+
+	"github.com/awf-project/cli/pkg/plugin/sdk"
+)
+
+type plugin struct{ sdk.BasePlugin }
+
+func (p *plugin) Operations() []string { return []string{"send"} }
+
+func (p *plugin) HandleOperation(_ context.Context, name string, inputs map[string]any) (*sdk.OperationResult, error) {
+	if name != "send" { return nil, errors.New("unsupported recording operation") }
+	record, err := json.Marshal(map[string]any{"adapter": "recording", "operation": name, "inputs": inputs, "pid": os.Getpid()})
+	if err != nil { return nil, err }
+	record = append(record, '\n')
+	if len(record) > 64*1024 { return nil, errors.New("record exceeds 64 KiB") }
+	file, err := os.OpenFile(os.Getenv("AWF_RECORDING_PATH"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil { return nil, err }
+	_, writeErr := file.Write(record)
+	closeErr := file.Close()
+	if writeErr != nil { return nil, writeErr }
+	if closeErr != nil { return nil, closeErr }
+	channel, _ := inputs["channel"].(string)
+	return sdk.NewSuccessResult("sent", map[string]any{"message_id": "message-001", "channel": channel}), nil
+}
+
+func main() {
+	sdk.Serve(&plugin{BasePlugin: sdk.BasePlugin{PluginName: "recording", PluginVersion: "1.0.0"}})
+	receipt, err := json.Marshal(map[string]any{"pid": os.Getpid()})
+	if err != nil { panic(err) }
+	if err := os.WriteFile(os.Getenv("AWF_ADAPTER_EXIT_PATH"), receipt, 0o600); err != nil { panic(err) }
+}
+`
 
 // TestACPServe_InvalidConfiguration validates that the server fails gracefully
 // when given invalid configuration (missing or malformed config file).

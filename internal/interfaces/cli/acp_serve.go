@@ -28,6 +28,7 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/roles"
 	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
+	"github.com/awf-project/cli/internal/interfaces/notifierwiring"
 	"github.com/awf-project/cli/pkg/display"
 )
 
@@ -97,14 +98,17 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 	appCfg := DefaultConfig()
 
 	// Project config is best-effort for a long-running server (missing/invalid config must
-	// not prevent serving). Only the notify backend default is consumed.
+	// not prevent serving). Notification defaults remain empty when it cannot be loaded.
 	notifyBackend := ""
+	notifierSettings := notifierwiring.Settings{}
 	projectCfg, projErr := loadProjectConfig(logger)
 	if projErr != nil {
 		logger.Warn("acp-serve: project config not loaded, using defaults", "error", projErr)
 		projectCfg = nil
 	} else if projectCfg != nil {
 		notifyBackend = projectCfg.Notify.DefaultBackend
+		notifierSettings.Backend = projectCfg.Notifier.Backend
+		notifierSettings.DefaultChannel = projectCfg.Notifier.DefaultChannel
 	}
 	// Agent aliases are best-effort too: a broken alias file is reported and the server starts without aliases.
 	agentAliases, aliasErr := agents.LoadAliases(projectCfg)
@@ -114,7 +118,7 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 	}
 
 	// Plugin system (shared; graceful-degrades when no plugins installed).
-	pluginResult, pErr := initPluginSystem(ctx, appCfg, logger)
+	pluginResult, pErr := acpServeInitPluginSystem(ctx, appCfg, logger)
 	if pErr != nil {
 		return &exitError{code: ExitExecution, err: fmt.Errorf("acp-serve: plugins: %w", pErr)}
 	}
@@ -144,13 +148,18 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 		application.WithPluginState(pluginResult.Service),
 		application.WithPluginService(pluginResult.Service),
 	}
-	if pluginResult.RPCManager != nil {
-		baseOpts = append(baseOpts, application.WithPluginProviders(application.PluginProviders{
-			Operations: pluginResult.Manager,
-			Validators: pluginResult.RPCManager.ValidatorProvider(0),
-			StepTypes:  pluginResult.RPCManager.StepTypeProvider(logger),
-		}))
+	pluginProviders := application.PluginProviders{
+		Operations: notifierwiring.ComposeOperationProvider(
+			notifierSettings,
+			pluginResult.Service.IsPluginEnabled("notifier"),
+			pluginResult.Manager,
+		),
 	}
+	if pluginResult.RPCManager != nil {
+		pluginProviders.Validators = pluginResult.RPCManager.ValidatorProvider(0)
+		pluginProviders.StepTypes = pluginResult.RPCManager.StepTypeProvider(logger)
+	}
+	baseOpts = append(baseOpts, application.WithPluginProviders(pluginProviders))
 	if historyStore != nil {
 		baseOpts = append(baseOpts, application.WithHistoryStore(sharedHistoryStore{HistoryStore: historyStore}))
 	}
@@ -276,6 +285,8 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 	defer sessionSvc.Shutdown()
 	return nil
 }
+
+var acpServeInitPluginSystem = initPluginSystem
 
 // newACPSDKLogger builds the *slog.Logger handed to the SDK connection and the ACP infra
 // components. All ACP diagnostics are routed to w (os.Stderr in production) so stdout stays

@@ -65,11 +65,12 @@ func fixtureWorkflowsDir(t *testing.T) string {
 // stream directly. This mirrors how a real ACP editor drives a concurrent agent: requests
 // and responses are correlated by id, and notifications are interleaved freely.
 type acpProcess struct {
-	cmd     *exec.Cmd
-	stdin   io.WriteCloser
-	mu      sync.Mutex
-	waiters map[string]chan jsonRPCResponse
-	rawCh   chan []byte
+	cmd          *exec.Cmd
+	stdin        io.WriteCloser
+	mu           sync.Mutex
+	waiters      map[string]chan jsonRPCResponse
+	rawCh        chan []byte
+	readPumpDone chan struct{}
 }
 
 func startACPServeProcess(t *testing.T, binaryPath string, args ...string) *acpProcess {
@@ -85,10 +86,11 @@ func startACPServeProcess(t *testing.T, binaryPath string, args ...string) *acpP
 	require.NoError(t, cmd.Start(), "failed to start acp-serve subprocess")
 
 	p := &acpProcess{
-		cmd:     cmd,
-		stdin:   stdin,
-		waiters: make(map[string]chan jsonRPCResponse),
-		rawCh:   make(chan []byte, 1024),
+		cmd:          cmd,
+		stdin:        stdin,
+		waiters:      make(map[string]chan jsonRPCResponse),
+		rawCh:        make(chan []byte, 1024),
+		readPumpDone: make(chan struct{}),
 	}
 	go p.readPump(stdout)
 
@@ -113,6 +115,7 @@ func startACPServeProcess(t *testing.T, binaryPath string, args ...string) *acpP
 // readPump reads newline-delimited frames and routes them. Responses (no "method") go to
 // the matching id waiter when one is registered; everything else is forwarded to rawCh.
 func (p *acpProcess) readPump(stdout io.Reader) {
+	defer close(p.readPumpDone)
 	reader := bufio.NewReader(stdout)
 	for {
 		line, err := reader.ReadBytes('\n')

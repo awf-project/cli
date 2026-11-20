@@ -2,8 +2,62 @@ package config
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestProjectConfigLoadsNotifierBackendAndChannelDefaults(t *testing.T) {
+	tests := []struct {
+		name                string
+		configData          []byte
+		wantNotifierBackend string
+		wantNotifierChannel string
+		wantLegacyBackend   string
+	}{
+		{
+			name: "distinct canonical and legacy values",
+			configData: []byte(`notifier:
+  backend: notifier-backend-canary
+  default_channel: notifier-channel-canary
+notify:
+  default_backend: legacy-backend-canary
+`),
+			wantNotifierBackend: "notifier-backend-canary",
+			wantNotifierChannel: "notifier-channel-canary",
+			wantLegacyBackend:   "legacy-backend-canary",
+		},
+		{
+			name: "omitted canonical channel remains empty",
+			configData: []byte(`notifier:
+  backend: notifier-backend-canary
+notify:
+  default_backend: legacy-backend-canary
+`),
+			wantNotifierBackend: "notifier-backend-canary",
+			wantNotifierChannel: "",
+			wantLegacyBackend:   "legacy-backend-canary",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configPath := filepath.Join(t.TempDir(), "config.yaml")
+			require.NoError(t, os.WriteFile(configPath, tt.configData, 0o600))
+
+			cfg, err := NewYAMLConfigLoader(configPath).Load()
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantNotifierBackend, cfg.Notifier.Backend)
+			assert.Equal(t, tt.wantNotifierChannel, cfg.Notifier.DefaultChannel)
+			assert.Equal(t, tt.wantLegacyBackend, cfg.Notify.DefaultBackend)
+			assert.NotEqual(t, cfg.Notify.DefaultBackend, cfg.Notifier.Backend)
+			assert.NotEqual(t, cfg.Notify.DefaultBackend, cfg.Notifier.DefaultChannel)
+		})
+	}
+}
 
 func TestProjectConfig_DefaultValues(t *testing.T) {
 	cfg := &ProjectConfig{}

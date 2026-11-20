@@ -25,6 +25,7 @@ var ValidInputTypes = []string{
 var ValidValidationRules = []string{
 	"url",
 	"email",
+	"nonblank",
 }
 
 type OperationSchema struct {

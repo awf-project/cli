@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +24,131 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestResumeCommandDispatchesNotifierThroughDiscoveredAdapter(t *testing.T) {
+	fixture := newNotifierRunFixture(t, []string{"send"})
+	const (
+		defaultChannel = "resume-default-channel-canary"
+		payload        = "resume-payload-canary"
+	)
+	fixture.writeConfig(t, fixture.pluginID, defaultChannel)
+	readyPath := filepath.Join(fixture.root, "resume-ready")
+	releasePath := filepath.Join(fixture.root, "resume-release")
+	sideEffectPath := filepath.Join(fixture.root, "completed-side-effect")
+	fixture.writeWorkflow(t, fmt.Sprintf(`
+  initial: prepare
+  prepare:
+    type: command
+    command: printf 'completed\n' >> %s
+    on_success: wait
+  wait:
+    type: command
+    command: touch %s; while [ ! -f %s ]; do sleep 0.01; done
+    on_success: notify
+  notify:
+    type: operation
+    operation: notifier.send
+    inputs:
+      text: %s
+    on_success: done
+  done:
+    type: terminal
+    status: success
+`, interpolation.ShellEscape(sideEffectPath), interpolation.ShellEscape(readyPath),
+		interpolation.ShellEscape(releasePath), payload))
+
+	type commandOutcome struct {
+		stdout string
+		stderr string
+		err    error
+	}
+	execute := func(ctx context.Context, args ...string) commandOutcome {
+		t.Helper()
+		cmd, cleanup := cli.NewRootCommandAutoFacade()
+		cleanupOnce := sync.OnceFunc(cleanup)
+		defer cleanupOnce()
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		cmd.SetOut(&stdout)
+		cmd.SetErr(&stderr)
+		commandArgs := []string{"--storage", fixture.storageDir, "--no-color"}
+		cmd.SetArgs(append(commandArgs, args...))
+		err := cmd.ExecuteContext(ctx)
+		return commandOutcome{stdout: stdout.String(), stderr: stderr.String(), err: err}
+	}
+
+	runCtx, cancelRun := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancelRun()
+	runDone := make(chan commandOutcome, 1)
+	go func() {
+		runDone <- execute(runCtx, "run", fixture.workflowName)
+	}()
+	readyTimer := time.NewTimer(10 * time.Second)
+	defer readyTimer.Stop()
+	readyTicker := time.NewTicker(10 * time.Millisecond)
+	defer readyTicker.Stop()
+	for !timeoutFileExists(readyPath) {
+		select {
+		case early := <-runDone:
+			require.FailNow(t, "workflow stopped before reaching the interruption point",
+				"error: %v\nstdout: %s\nstderr: %s", early.err, early.stdout, early.stderr)
+		case <-readyTimer.C:
+			cancelRun()
+			select {
+			case <-runDone:
+			case <-time.After(5 * time.Second):
+				t.Error("root command did not finish after readiness timeout cancellation")
+			}
+			require.FailNow(t, "workflow did not reach the interruption point")
+		case <-readyTicker.C:
+		}
+	}
+	cancelRun()
+	var initial commandOutcome
+	select {
+	case initial = <-runDone:
+	case <-time.After(5 * time.Second):
+		require.FailNow(t, "root command did not finish after cancellation")
+	}
+	require.ErrorIs(t, initial.err, context.Canceled)
+
+	checkpoint := fixture.loadExecution(t)
+	assertPersistedExecution(t, checkpoint, workflow.StatusCancelled)
+	preparedBeforeResume, found := checkpoint.GetStepState("prepare")
+	require.True(t, found)
+	require.Equal(t, workflow.StatusCompleted, preparedBeforeResume.Status)
+	before, readErr := os.ReadFile(sideEffectPath) //nolint:gosec // test-owned path.
+	require.NoError(t, readErr)
+	require.Equal(t, "completed\n", string(before))
+
+	require.NoError(t, os.WriteFile(releasePath, nil, 0o600))
+	resumeCtx, cancelResume := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancelResume()
+	resumedResult := execute(resumeCtx, "resume", checkpoint.WorkflowID)
+	require.NoError(t, resumedResult.err, resumedResult.stdout+resumedResult.stderr)
+
+	resumed := fixture.loadExecution(t)
+	assertPersistedExecution(t, resumed, workflow.StatusCompleted)
+	preparedAfterResume, found := resumed.GetStepState("prepare")
+	require.True(t, found)
+	assert.Equal(t, preparedBeforeResume.StartedAt, preparedAfterResume.StartedAt)
+	after, readErr := os.ReadFile(sideEffectPath) //nolint:gosec // test-owned path.
+	require.NoError(t, readErr)
+	assert.Equal(t, "completed\n", string(after))
+	records := fixture.readRecords(t)
+	require.Len(t, records, 1)
+	assert.Equal(t, fixture.pluginID, records[0].Adapter)
+	assert.Equal(t, "send", records[0].Operation)
+	assert.Equal(t, defaultChannel, records[0].Inputs["channel"])
+	assert.Equal(t, payload, records[0].Inputs["text"])
+	recordInfo, statErr := os.Stat(fixture.recordPath)
+	require.NoError(t, statErr)
+	assert.LessOrEqual(t, recordInfo.Size(), int64(64*1024))
+	fixture.assertConfidential(t,
+		initial.stdout+initial.stderr+resumedResult.stdout+resumedResult.stderr,
+		[]string{payload, defaultChannel, recordingCredential},
+	)
+}
 
 // TestResumeCommand_RestoresInputsAndOutputsFromCheckpoint exercises the
 // resume contract using real run checkpoints, not seeded state.
