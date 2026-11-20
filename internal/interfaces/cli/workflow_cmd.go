@@ -327,8 +327,8 @@ Examples:
 // extractPackName extracts pack name from repository name (removes awf-workflow- prefix).
 func extractPackName(ownerRepo string) string {
 	packName := ownerRepo
-	if idx := strings.LastIndex(ownerRepo, "/"); idx >= 0 {
-		packName = ownerRepo[idx+1:]
+	if _, repo, found := strings.CutLast(ownerRepo, "/"); found {
+		packName = repo
 	}
 	return strings.TrimPrefix(packName, "awf-workflow-")
 }

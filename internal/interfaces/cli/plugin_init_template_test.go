@@ -60,6 +60,7 @@ func TestPluginInitTemplate_ScaffoldedGoModUsesLocalDistributionModulePathWithou
 	}
 
 	assert.Equal(t, "awf-plugin-example", modulePath)
+	assert.Contains(t, goMod, "\ngo 1.27.0\n")
 	assert.Contains(t, goMod, "github.com/awf-project/cli v0.0.0")
 	assert.Contains(t, goMod, "replace github.com/awf-project/cli => ")
 	assert.NotContains(t, goMod, "replace github.com/awf-project/cli => .")

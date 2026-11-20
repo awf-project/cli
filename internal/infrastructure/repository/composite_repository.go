@@ -50,8 +50,7 @@ func (r *CompositeRepository) Load(ctx context.Context, name string) (*workflow.
 		wf, err := repo.Load(ctx, name)
 		if err != nil {
 			// Check if this is a "not found" error - if so, continue to next repo
-			var se *domerrors.StructuredError
-			if errors.As(err, &se) && se.Code == domerrors.ErrorCodeUserInputMissingFile {
+			if se, ok := errors.AsType[*domerrors.StructuredError](err); ok && se.Code == domerrors.ErrorCodeUserInputMissingFile {
 				continue // not found in this repo, try next
 			}
 			return nil, err // real error, propagate
@@ -170,8 +169,7 @@ func (r *CompositeRepository) LoadPack(ctx context.Context, packName, workflowNa
 		repo := NewYAMLRepository(packWorkflowsDir)
 		wf, err := repo.Load(ctx, workflowName)
 		if err != nil {
-			var se *domerrors.StructuredError
-			if errors.As(err, &se) && se.Code == domerrors.ErrorCodeUserInputMissingFile {
+			if se, ok := errors.AsType[*domerrors.StructuredError](err); ok && se.Code == domerrors.ErrorCodeUserInputMissingFile {
 				continue
 			}
 			return nil, err

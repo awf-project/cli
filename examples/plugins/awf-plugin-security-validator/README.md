@@ -167,7 +167,7 @@ To add additional security checks:
 
 - **Plugin Version**: 1.0.0
 - **Requires AWF**: >= 0.5.0
-- **Go Version**: 1.21+
+- **Go Version**: 1.27.0+
 
 ## License
 

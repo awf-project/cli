@@ -164,7 +164,6 @@ func (e *BatchExecutor) executeAllSucceed(
 	sem := e.makeSemaphore(config.MaxConcurrent)
 
 	for _, op := range operations {
-		op := op
 		g.Go(func() error {
 			// Acquire semaphore
 			if sem != nil {
@@ -214,15 +213,8 @@ func (e *BatchExecutor) executeAnySucceed(
 	var wg sync.WaitGroup
 	sem := e.makeSemaphore(config.MaxConcurrent)
 
-	successChan := make(chan struct{}, 1)
-	var firstSuccess bool
-
 	for _, op := range operations {
-		op := op
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			// Acquire semaphore
 			if sem != nil {
 				select {
@@ -256,35 +248,13 @@ func (e *BatchExecutor) executeAnySucceed(
 
 			result.Succeeded++
 
-			// Check if this is the first success
-			if !firstSuccess {
-				firstSuccess = true
-				cancel() // Cancel remaining operations
-
-				// Non-blocking send to success channel
-				select {
-				case successChan <- struct{}{}:
-				default:
-				}
+			if result.Succeeded == 1 {
+				cancel()
 			}
-		}()
+		})
 	}
 
-	// Wait for either success or all to complete
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-successChan:
-		// At least one succeeded, wait for remaining to be cancelled
-		<-done
-	case <-done:
-		// All completed
-	}
-
+	wg.Wait()
 	if result.Succeeded > 0 {
 		return nil
 	}
@@ -304,11 +274,7 @@ func (e *BatchExecutor) executeBestEffort(
 	sem := e.makeSemaphore(config.MaxConcurrent)
 
 	for _, op := range operations {
-		op := op
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			// Acquire semaphore
 			if sem != nil {
 				select {
@@ -340,7 +306,7 @@ func (e *BatchExecutor) executeBestEffort(
 			} else {
 				result.Succeeded++
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

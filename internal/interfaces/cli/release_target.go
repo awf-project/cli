@@ -31,15 +31,8 @@ func parseExactReleaseTarget(rawTarget string, optional bool) (exactReleaseTarge
 }
 
 func parseInstallReleaseTarget(source string) (string, exactReleaseTarget, error) {
-	repository := source
-	rawTarget := ""
-	hasVersionTarget := false
-
-	if at := strings.LastIndex(source, "@"); at >= 0 {
-		repository = source[:at]
-		rawTarget = source[at+1:]
-		hasVersionTarget = true
-	} else if strings.Contains(source, ":") {
+	repository, rawTarget, hasVersionTarget := strings.CutLast(source, "@")
+	if !hasVersionTarget && strings.Contains(source, ":") {
 		return "", exactReleaseTarget{}, fmt.Errorf("owner/repo:version syntax is not supported; use owner/repo@version")
 	}
 

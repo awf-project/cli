@@ -1,6 +1,6 @@
 # AI Workflow Framework - CLI
 
-[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/Go-1.27+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License: EUPL-1.2](https://img.shields.io/badge/License-EUPL--1.2-blue.svg)](LICENSE)
 
 A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, GitHub Copilot, Mistral Vibe, OpenCode, OpenAI-Compatible APIs) through YAML-configured workflows with state machine execution.

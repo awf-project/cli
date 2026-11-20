@@ -75,7 +75,7 @@ If any command cannot run in the current environment, report the exact command a
 
 const goModTemplate = `module {{.DistributionName}}
 
-go 1.25.8
+go 1.27.0
 
 require (
 	github.com/awf-project/cli {{.AWFModuleVersion}}

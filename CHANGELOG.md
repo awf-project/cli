@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Building AWF and newly scaffolded Go plugins requires Go 1.27.0 or later.
+
 ## [0.11.10] - 2026-11-16
 
 ## [0.11.10] - 2026-11-16
