@@ -72,6 +72,18 @@ func TestRegisterBuiltins_TableDriven(t *testing.T) {
 			expectedOps:     []string{"notify.send"},
 		},
 		{
+			name:            "notifier provider",
+			providerName:    "notifier",
+			expectedDesc:    "Notifier operation provider",
+			expectedOpCount: 4,
+			expectedOps: []string{
+				"notifier.send",
+				"notifier.update",
+				"notifier.react",
+				"notifier.upload",
+			},
+		},
+		{
 			name:            "http provider",
 			providerName:    "http",
 			expectedDesc:    "HTTP operation provider",

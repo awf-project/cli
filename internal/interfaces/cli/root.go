@@ -50,6 +50,13 @@ func WithCommandExecutor(executor ports.CommandExecutor) RootOption {
 	return func(cfg *Config) { cfg.CommandExecutor = executor }
 }
 
+// WithDiscoveredOperationProvider supplies the raw external operation provider
+// used by execution composition. It is primarily useful for embedded commands
+// whose host owns plugin discovery.
+func WithDiscoveredOperationProvider(provider ports.OperationProvider) RootOption {
+	return func(cfg *Config) { cfg.DiscoveredOperations = provider }
+}
+
 func NewRootCommand(opts ...RootOption) *cobra.Command {
 	cfg := DefaultConfig()
 	for _, opt := range opts {

@@ -27,10 +27,12 @@ func TestMain(m *testing.M) {
 			serveTimeoutPlugin()
 			return
 		}
+		appendValidationLifecycleRecord("start")
 		sdk.Serve(&validationOperationPlugin{BasePlugin: sdk.BasePlugin{
 			PluginName:    "awf-plugin-validation-test",
 			PluginVersion: "1.0.0",
 		}})
+		appendValidationLifecycleRecord("exit")
 		return
 	}
 
@@ -43,7 +45,7 @@ type validationOperationPlugin struct {
 }
 
 func (*validationOperationPlugin) Operations() []string {
-	return []string{"echo"}
+	return []string{"echo", "send"}
 }
 
 func (*validationOperationPlugin) HandleOperation(
@@ -51,7 +53,34 @@ func (*validationOperationPlugin) HandleOperation(
 	_ string,
 	_ map[string]any,
 ) (*sdk.OperationResult, error) {
+	appendValidationDispatchRecord()
 	return sdk.NewSuccessResult("echo", nil), nil
+}
+
+func appendValidationLifecycleRecord(event string) {
+	path := os.Getenv("AWF_VALIDATION_LIFECYCLE_RECORD")
+	if path == "" {
+		return
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // test-owned path
+	if err != nil {
+		return
+	}
+	_, _ = fmt.Fprintf(file, "%s:%d\n", event, os.Getpid())
+	_ = file.Close()
+}
+
+func appendValidationDispatchRecord() {
+	path := os.Getenv("AWF_VALIDATION_DISPATCH_RECORD")
+	if path == "" {
+		return
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // test-owned path
+	if err != nil {
+		return
+	}
+	_, _ = fmt.Fprintln(file, "dispatch")
+	_ = file.Close()
 }
 
 func runIsolatedCLITests(m *testing.M) int {

@@ -11,14 +11,155 @@ package cli_test
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 
+	"github.com/awf-project/cli/internal/domain/pluginmodel"
+	"github.com/awf-project/cli/internal/domain/workflow"
+	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var errNotifierWiringAdapter = errors.New("notifier wiring adapter failure")
+
+type notifierWiringAdapterCall struct {
+	name   string
+	inputs map[string]any
+}
+
+type notifierWiringAdapter struct {
+	mu    sync.Mutex
+	calls []notifierWiringAdapterCall
+}
+
+func (*notifierWiringAdapter) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
+	if name != "adapter.send" {
+		return nil, false
+	}
+	return &pluginmodel.OperationSchema{Name: name, PluginName: "adapter"}, true
+}
+
+func (a *notifierWiringAdapter) ListOperations() []*pluginmodel.OperationSchema {
+	operation, _ := a.GetOperation("adapter.send")
+	return []*pluginmodel.OperationSchema{operation}
+}
+
+func (a *notifierWiringAdapter) Execute(
+	_ context.Context,
+	name string,
+	inputs map[string]any,
+) (*pluginmodel.OperationResult, error) {
+	a.mu.Lock()
+	a.calls = append(a.calls, notifierWiringAdapterCall{name: name, inputs: inputs})
+	a.mu.Unlock()
+	return nil, errNotifierWiringAdapter
+}
+
+func (a *notifierWiringAdapter) recordedCalls() []notifierWiringAdapterCall {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	calls := make([]notifierWiringAdapterCall, len(a.calls))
+	copy(calls, a.calls)
+	return calls
+}
+
+// These three scenarios are intentionally exercised through the public root command.
+// They describe the notifier-composition boundary T010 owns: after discovery, each
+// execution path must expose notifier operations while retaining the discovered provider.
+func TestRunWiringPropagatesNotifierDefaultsAndFailures(t *testing.T) {
+	assertNotifierWiringFailure(t, notifierWiringRun)
+}
+
+func TestSingleStepWiringPropagatesNotifierDefaultsAndFailures(t *testing.T) {
+	assertNotifierWiringFailure(t, notifierWiringSingleStep)
+}
+
+func TestResumeWiringPropagatesNotifierDefaultsAndFailures(t *testing.T) {
+	assertNotifierWiringFailure(t, notifierWiringResume)
+}
+
+type notifierWiringPath string
+
+const (
+	notifierWiringRun        notifierWiringPath = "run"
+	notifierWiringSingleStep notifierWiringPath = "single-step"
+	notifierWiringResume     notifierWiringPath = "resume"
+)
+
+func assertNotifierWiringFailure(t *testing.T, path notifierWiringPath) {
+	t.Helper()
+
+	const (
+		backend        = "adapter"
+		defaultChannel = "default-channel-output-canary"
+		payload        = "payload-output-canary"
+	)
+	adapter := &notifierWiringAdapter{}
+
+	root := t.TempDir()
+	storagePath := filepath.Join(root, "storage")
+	hostLog := filepath.Join(root, "host.log")
+	workflowPath := filepath.Join(root, "notifier-wiring.yaml")
+	require.NoError(t, os.MkdirAll(filepath.Join(root, ".awf"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".awf", "config.yaml"), []byte("notifier:\n  backend: "+backend+"\n  default_channel: "+defaultChannel+"\n"), 0o600))
+	require.NoError(t, os.WriteFile(workflowPath, []byte("name: notifier-wiring\nversion: \"1.0\"\nstates:\n  initial: send\n  send:\n    type: operation\n    operation: notifier.send\n    inputs:\n      text: "+payload+"\n    on_success: done\n  done:\n    type: terminal\n    status: success\n"), 0o600))
+
+	t.Chdir(root)
+	t.Setenv("AWF_WORKFLOWS_PATH", root)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg-config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "xdg-data"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "xdg-state"))
+	t.Setenv("AWF_AUDIT_LOG", hostLog)
+
+	args := []string{"--storage", storagePath, "--no-color"}
+	if path == notifierWiringResume {
+		state := workflow.NewExecutionContext("notifier-wiring-resume", "notifier-wiring")
+		state.Status = workflow.StatusFailed
+		state.CurrentStep = "send"
+		require.NoError(t, store.NewJSONStore(filepath.Join(storagePath, "states")).Save(context.Background(), state))
+		args = append(args, "resume", state.WorkflowID)
+	} else {
+		args = append(args, "run", workflowPath)
+		if path == notifierWiringSingleStep {
+			args = append(args, "--step", "send")
+		}
+	}
+
+	cmd := cli.NewRootCommand(cli.WithDiscoveredOperationProvider(adapter))
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs(args)
+	err := cmd.Execute()
+
+	require.Error(t, err, "the unavailable discovered adapter must stop %s execution", path)
+	assert.ErrorIs(t, err, errNotifierWiringAdapter)
+	exitCoder, ok := err.(interface{ ExitCode() int })
+	require.True(t, ok, "the command error must preserve its exit-code contract")
+	assert.Equal(t, cli.ExitExecution, exitCoder.ExitCode())
+	calls := adapter.recordedCalls()
+	require.Len(t, calls, 1, "the discovered adapter must execute once for %s", path)
+	assert.Equal(t, "adapter.send", calls[0].name)
+	assert.Equal(t, map[string]any{"channel": defaultChannel, "text": payload}, calls[0].inputs)
+
+	combinedOutput := stdout.String() + stderr.String()
+	assert.NotContains(t, strings.ToLower(combinedOutput), "workflow completed", "failure must not render a successful operation result")
+	for _, canary := range []string{defaultChannel, payload} {
+		assert.NotContains(t, combinedOutput, canary, "command output must not leak %q", canary)
+	}
+	if hostLogContents, readErr := os.ReadFile(hostLog); readErr == nil {
+		for _, canary := range []string{defaultChannel, payload} {
+			assert.NotContains(t, string(hostLogContents), canary, "captured host log must not leak %q", canary)
+		}
+	}
+}
 
 func TestRunCommand_WiresCompositeOperationProvider_WithGitHubAndNotify(t *testing.T) {
 	// GIVEN: A temporary test directory with a workflow containing both github and notify operations
@@ -66,7 +207,7 @@ states:
 		// Composite wiring is correct if we get execution errors, not nil pointer errors
 		assert.NotContains(t, errMsg, "nil pointer", "should not panic from nil provider")
 		assert.NotContains(t, errMsg, "no operation provider", "composite provider should be wired")
-		// Expected errors: gh CLI not found, notify backends not implemented, etc.
+		// Expected errors include a missing gh CLI or unavailable notify backends.
 	}
 }
 
@@ -286,7 +427,7 @@ states:
     type: operation
     operation: notify.send
     inputs:
-      backend: desktop
+      backend: ntfy
       message: "Single step test"
     on_success: second
   second:
@@ -311,15 +452,10 @@ states:
 	})
 
 	err := cmd.Execute()
-	// THEN: Single-step mode has composite provider wired, dispatches to notify
-	if err != nil {
-		errMsg := err.Error()
-		// Composite provider should be wired, notify operation should be found
-		assert.NotContains(t, errMsg, "no operation provider", "composite should be wired in single-step mode")
-		assert.NotContains(t, errMsg, "operation not found", "notify operation should be in composite")
-		// Expected: ntfy backend not available (requires config)
-		assert.Contains(t, errMsg, "backend \"ntfy\" not available", "ntfy backend should not be configured")
+	if !assert.Error(t, err, "an unavailable backend must fail") {
+		return
 	}
+	assert.Contains(t, err.Error(), `backend "ntfy" not available`)
 }
 
 func TestRunCommand_MixedOperations_AllDispatchCorrectly(t *testing.T) {

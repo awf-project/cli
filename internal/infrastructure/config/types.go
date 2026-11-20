@@ -16,6 +16,11 @@ type ProjectConfig struct {
 		DefaultBackend string `yaml:"default_backend"`
 	} `yaml:"notify"`
 
+	Notifier struct {
+		Backend        string `yaml:"backend"`
+		DefaultChannel string `yaml:"default_channel"`
+	} `yaml:"notifier"`
+
 	// Agents maps an alias to an agent provider and default options.
 	// A step's provider may name an alias; see agents.AgentRegistry.SetAliases.
 	Agents map[string]AgentAlias `yaml:"agents"`

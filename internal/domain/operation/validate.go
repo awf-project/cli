@@ -5,6 +5,7 @@ import (
 	"net/mail"
 	"net/url"
 	"sort"
+	"strings"
 
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 )
@@ -135,7 +136,6 @@ func validateInput(name string, schema pluginmodel.InputSchema, value any, exist
 			return nil
 		}
 	}
-
 	// Validate type correctness
 	if err := validateType(name, value, schema.Type); err != nil {
 		return []inputValidationIssue{{message: err.Error(), redacted: err.Error()}}
@@ -254,6 +254,10 @@ func validateRule(name string, value any, rule string) error {
 	case "email":
 		if _, err := mail.ParseAddress(strValue); err != nil {
 			return fmt.Errorf("field %q: invalid email %q", name, strValue)
+		}
+	case "nonblank":
+		if strings.TrimSpace(strValue) == "" {
+			return fmt.Errorf("field %q: must not be blank", name)
 		}
 
 	default:

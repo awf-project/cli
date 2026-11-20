@@ -12,12 +12,14 @@ import (
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
+	"github.com/awf-project/cli/internal/interfaces/notifierwiring"
 )
 
 var errUnexpectedExternalExecution = errors.New("external operation execution is not part of validation composition")
 
 type validationExternalOperationProvider struct {
-	operation *pluginmodel.OperationSchema
+	operation  *pluginmodel.OperationSchema
+	executions int
 }
 
 func (p *validationExternalOperationProvider) GetOperation(name string) (*pluginmodel.OperationSchema, bool) {
@@ -41,12 +43,56 @@ func (p *validationExternalOperationProvider) Execute(
 	string,
 	map[string]any,
 ) (*pluginmodel.OperationResult, error) {
+	p.executions++
 	return nil, errUnexpectedExternalExecution
+}
+
+func TestValidationProviderComposesNotifierWithDiscoveredAdapters(t *testing.T) {
+	external := &validationExternalOperationProvider{operation: &pluginmodel.OperationSchema{
+		Name:       "recording.send",
+		PluginName: "recording",
+	}}
+	pluginService := application.NewPluginService(nil, nil, ports.NopLogger{})
+
+	provider := buildValidationOperationProvider(pluginService, external, ports.NopLogger{}, notifierwiring.Settings{})
+
+	for _, name := range []string{
+		"notifier.send",
+		"notifier.update",
+		"notifier.react",
+		"notifier.upload",
+		"recording.send",
+	} {
+		operation, found := provider.GetOperation(name)
+		require.True(t, found, "operation %q should be available during validation", name)
+		require.NotNil(t, operation)
+		assert.Equal(t, name, operation.Name)
+	}
+	assert.Zero(t, external.executions)
+}
+
+func TestValidationProviderRoutesNotifierOnlyToDiscoveredAdapters(t *testing.T) {
+	external := &validationExternalOperationProvider{operation: &pluginmodel.OperationSchema{
+		Name:       "notify.send",
+		PluginName: "notify",
+	}}
+	pluginService := application.NewPluginService(nil, nil, ports.NopLogger{})
+	provider := buildValidationOperationProvider(pluginService, external, ports.NopLogger{}, notifierwiring.Settings{})
+
+	result, err := provider.Execute(context.Background(), "notifier.send", map[string]any{
+		"backend": "notify",
+		"channel": "alerts",
+		"text":    "routing-canary",
+	})
+
+	require.ErrorIs(t, err, errUnexpectedExternalExecution)
+	assert.Nil(t, result)
+	assert.Equal(t, 1, external.executions)
 }
 
 func TestBuildValidationOperationProvider_IncludesEnabledBuiltins(t *testing.T) {
 	pluginService := application.NewPluginService(nil, nil, ports.NopLogger{})
-	provider := buildValidationOperationProvider(pluginService, nil, ports.NopLogger{})
+	provider := buildValidationOperationProvider(pluginService, nil, ports.NopLogger{}, notifierwiring.Settings{})
 	require.NotNil(t, provider, "validation composition should return an operation provider")
 
 	expectedOwners := map[string]string{
@@ -60,6 +106,10 @@ func TestBuildValidationOperationProvider_IncludesEnabledBuiltins(t *testing.T) 
 		"github.batch":         "github",
 		"notify.send":          "notify",
 		"http.request":         "http",
+		"notifier.send":        "notifier",
+		"notifier.update":      "notifier",
+		"notifier.react":       "notifier",
+		"notifier.upload":      "notifier",
 	}
 
 	listed := provider.ListOperations()
@@ -88,7 +138,7 @@ func TestBuildValidationOperationProvider_IncludesDiscoveredExternalProvider(t *
 	external := &validationExternalOperationProvider{operation: externalOperation}
 	pluginService := application.NewPluginService(nil, nil, ports.NopLogger{})
 
-	provider := buildValidationOperationProvider(pluginService, external, ports.NopLogger{})
+	provider := buildValidationOperationProvider(pluginService, external, ports.NopLogger{}, notifierwiring.Settings{})
 	require.NotNil(t, provider, "validation composition should return an operation provider")
 
 	assert.Contains(t, provider.ListOperations(), externalOperation)
@@ -102,7 +152,7 @@ func TestBuildValidationOperationProvider_ExcludesDisabledBuiltin(t *testing.T) 
 	require.NoError(t, stateStore.SetEnabled(context.Background(), "github", false))
 	pluginService := application.NewPluginService(nil, stateStore, ports.NopLogger{})
 
-	provider := buildValidationOperationProvider(pluginService, nil, ports.NopLogger{})
+	provider := buildValidationOperationProvider(pluginService, nil, ports.NopLogger{}, notifierwiring.Settings{})
 	require.NotNil(t, provider, "validation composition should return an operation provider")
 
 	for _, operation := range provider.ListOperations() {

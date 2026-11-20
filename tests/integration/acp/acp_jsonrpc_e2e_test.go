@@ -136,6 +136,119 @@ func TestACPServeJSONRPC_SessionPrompt_RunsWorkflow(t *testing.T) {
 	assert.NotEmpty(t, result, "session/prompt must return non-empty result")
 }
 
+func TestACPServeJSONRPC_SessionPromptPreservesWorkflowFailureResponses(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	workflowsDir := t.TempDir()
+	workflows := map[string]string{
+		"shell-failure": `name: shell-failure
+version: "1.0.0"
+states:
+  initial: run
+  run:
+    type: step
+    command: "exit 17"
+    on_success: done
+    on_failure: failed
+  done:
+    type: terminal
+    status: success
+  failed:
+    type: terminal
+    status: failure
+`,
+		"invalid-http-input": `name: invalid-http-input
+version: "1.0.0"
+states:
+  initial: request
+  request:
+    type: operation
+    operation: http.request
+    inputs:
+      method: GET
+    on_success: done
+  done:
+    type: terminal
+    status: success
+`,
+		"invalid-notifier-input": `name: invalid-notifier-input
+version: "1.0.0"
+states:
+  initial: notify
+  notify:
+    type: operation
+    operation: notifier.send
+    inputs:
+      backend: recording
+      channel: alerts
+    on_success: done
+  done:
+    type: terminal
+    status: success
+`,
+	}
+	for name, contents := range workflows {
+		require.NoError(t, os.WriteFile(filepath.Join(workflowsDir, name+".yaml"), []byte(contents), 0o600))
+	}
+
+	root := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
+	t.Setenv("AWF_PLUGINS_PATH", filepath.Join(root, "plugins"))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "plugins"), 0o700))
+
+	binaryPath := buildAWFBinary(t)
+	configPath := writeACPConfig(t, workflowsDir)
+	proc := startACPServeProcess(t, binaryPath, fmt.Sprintf("--config=%s", configPath))
+	initResp := proc.request(t, 1, sdk.AgentMethodInitialize, map[string]any{
+		"protocolVersion": sdk.ProtocolVersionNumber,
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "test-client", "version": "1.0.0"},
+	})
+	require.Nil(t, initResp.Error)
+
+	for i, tc := range []struct {
+		workflow  string
+		wantError bool
+	}{
+		{workflow: "shell-failure"},
+		{workflow: "invalid-http-input"},
+		{workflow: "invalid-notifier-input", wantError: true},
+	} {
+		t.Run(tc.workflow, func(t *testing.T) {
+			sessionResp := proc.request(t, 2+i*2, sdk.AgentMethodSessionNew, map[string]any{
+				"cwd":        root,
+				"mcpServers": []any{},
+			})
+			require.Nil(t, sessionResp.Error)
+			session, ok := sessionResp.Result.(map[string]any)
+			require.True(t, ok, "session/new must return a JSON object")
+			sessionID, ok := session["sessionId"].(string)
+			require.True(t, ok, "session/new must return a session ID")
+
+			resp := proc.request(t, 3+i*2, sdk.AgentMethodSessionPrompt, map[string]any{
+				"sessionId": sessionID,
+				"prompt":    []map[string]any{{"type": "text", "text": "/" + tc.workflow}},
+			})
+			if tc.wantError {
+				require.NotNil(t, resp.Error)
+				assert.Nil(t, resp.Result)
+				assert.Contains(t, fmt.Sprint(resp.Error), "workflow failed to start")
+				assert.NotContains(t, fmt.Sprint(resp.Error), "required field")
+				return
+			}
+
+			require.Nil(t, resp.Error)
+			result, ok := resp.Result.(map[string]any)
+			require.True(t, ok, "session/prompt must return a JSON result")
+			assert.Equal(t, "end_turn", result["stopReason"])
+		})
+	}
+}
+
 func TestACPServeJSONRPC_SessionCancel_ReturnsCancelledStopReason(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")

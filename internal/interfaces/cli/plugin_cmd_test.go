@@ -290,6 +290,7 @@ func TestPluginListCommand_NoPlugins(t *testing.T) {
 	assert.Contains(t, output, "github", "should show github builtin")
 	assert.Contains(t, output, "http", "should show http builtin")
 	assert.Contains(t, output, "notify", "should show notify builtin")
+	assert.Contains(t, output, "notifier", "should show notifier builtin")
 	// Should NOT show the "No plugins found" message since builtins exist
 	assert.NotContains(t, output, "No plugins found", "should not show no plugins message when builtins exist")
 }
@@ -297,40 +298,41 @@ func TestPluginListCommand_NoPlugins(t *testing.T) {
 func TestPluginListCommand_WithPlugins(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create plugin directory with a plugin
 	pluginsDir := filepath.Join(tmpDir, "plugins")
-	testPluginDir := filepath.Join(pluginsDir, "test-plugin")
-	require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
-
-	// Create valid plugin manifest
-	manifestContent := `name: test-plugin
+	for _, pluginName := range []string{"test-plugin", "second-plugin"} {
+		testPluginDir := filepath.Join(pluginsDir, pluginName)
+		require.NoError(t, os.MkdirAll(testPluginDir, 0o755))
+		manifestContent := fmt.Sprintf(`name: %s
 version: 1.0.0
 description: A test plugin
 awf_version: ">=0.1.0"
 capabilities:
   - operations
-`
-	require.NoError(t, os.WriteFile(
-		filepath.Join(testPluginDir, "plugin.yaml"),
-		[]byte(manifestContent),
-		0o644,
-	))
+`, pluginName)
+		require.NoError(t, os.WriteFile(
+			filepath.Join(testPluginDir, "plugin.yaml"),
+			[]byte(manifestContent),
+			0o644,
+		))
+	}
 
-	// Isolate from other plugins
+	t.Setenv("XDG_DATA_HOME", tmpDir)
 	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
 
 	cmd := cli.NewRootCommand()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	cmd.SetArgs([]string{"plugin", "list", "--storage", tmpDir})
+	cmd.SetArgs([]string{"plugin", "list", "--format", "json", "--storage", tmpDir})
 
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	output := out.String()
-	assert.Contains(t, output, "test-plugin", "should show plugin name")
-	assert.Contains(t, output, "1.0.0", "should show plugin version")
+	var plugins []map[string]any
+	require.NoError(t, json.Unmarshal(out.Bytes(), &plugins))
+	assert.Len(t, plugins, 6)
+	assert.Contains(t, out.String(), "test-plugin")
+	assert.Contains(t, out.String(), "second-plugin")
 }
 
 func TestPluginListCommand_JSONFormat(t *testing.T) {
@@ -460,14 +462,13 @@ capabilities:
 	output := out.String()
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 
-	// Quiet mode: just names, one per line
-	// Should include 3 builtins (github, http, notify) + 2 external plugins
-	assert.Len(t, lines, 5, "quiet mode should output one name per line (3 builtins + 2 external)")
+	assert.Len(t, lines, 6, "quiet mode should output four builtins and two external plugins")
 	assert.Contains(t, output, "plugin-one")
 	assert.Contains(t, output, "plugin-two")
 	assert.Contains(t, output, "github")
 	assert.Contains(t, output, "http")
 	assert.Contains(t, output, "notify")
+	assert.Contains(t, output, "notifier")
 }
 
 func TestPluginListCommand_ShowsDisabledPlugins(t *testing.T) {

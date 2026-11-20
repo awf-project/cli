@@ -24,6 +24,7 @@ import (
 	infraTranscript "github.com/awf-project/cli/internal/infrastructure/transcript"
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
+	"github.com/awf-project/cli/internal/interfaces/notifierwiring"
 )
 
 var (
@@ -169,13 +170,21 @@ func buildBridge(ctx context.Context) (*Bridge, *TUIInputReader, func(), error) 
 			application.WithPluginState(pluginResult.Service),
 			application.WithPluginService(pluginResult.Service),
 		)
-		if pluginResult.RPCManager != nil {
-			setupOpts = append(setupOpts, application.WithPluginProviders(application.PluginProviders{
-				Operations: pluginResult.Manager,
-				Validators: pluginResult.RPCManager.ValidatorProvider(0),
-				StepTypes:  pluginResult.RPCManager.StepTypeProvider(logger),
-			}))
+		pluginProviders := application.PluginProviders{
+			Operations: notifierwiring.ComposeOperationProvider(
+				notifierwiring.Settings{
+					Backend:        projectCfg.Notifier.Backend,
+					DefaultChannel: projectCfg.Notifier.DefaultChannel,
+				},
+				pluginResult.Service.IsPluginEnabled("notifier"),
+				pluginResult.Manager,
+			),
 		}
+		if pluginResult.RPCManager != nil {
+			pluginProviders.Validators = pluginResult.RPCManager.ValidatorProvider(0)
+			pluginProviders.StepTypes = pluginResult.RPCManager.StepTypeProvider(logger)
+		}
+		setupOpts = append(setupOpts, application.WithPluginProviders(pluginProviders))
 	}
 
 	// Tracer is always present (may be NopTracer when endpoint is unconfigured).

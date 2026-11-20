@@ -113,6 +113,19 @@ func TestValidateInputs_HappyPath(t *testing.T) {
 			inputs: map[string]any{},
 		},
 		{
+			name: "explicit empty optional string preserves caller value instead of default",
+			schema: &pluginmodel.OperationSchema{
+				Name: "external.operation",
+				Inputs: map[string]pluginmodel.InputSchema{
+					"label": {
+						Type:    pluginmodel.InputTypeString,
+						Default: "fallback",
+					},
+				},
+			},
+			inputs: map[string]any{"label": ""},
+		},
+		{
 			name: "validation rule url - valid",
 			schema: &pluginmodel.OperationSchema{
 				Name: "test.operation",

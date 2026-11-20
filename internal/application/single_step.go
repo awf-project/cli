@@ -87,6 +87,9 @@ func (s *ExecutionService) ExecuteSingleStep(
 
 	// Build interpolation context with inputs and mocked states
 	intCtx := s.buildSingleStepInterpolationContext(wf.Name, inputs, mocks)
+	if step.Type == workflow.StepTypeOperation {
+		return s.executeSingleOperation(ctx, wf, step, inputs, intCtx, result)
+	}
 
 	// Apply step timeout
 	stepCtx := ctx
@@ -164,6 +167,47 @@ func (s *ExecutionService) ExecuteSingleStep(
 	}
 
 	result.Status = workflow.StatusCompleted
+	return result, nil
+}
+
+func (s *ExecutionService) executeSingleOperation(
+	ctx context.Context,
+	wf *workflow.Workflow,
+	step *workflow.Step,
+	inputs map[string]any,
+	intCtx *interpolation.Context,
+	result *SingleStepResult,
+) (*SingleStepResult, error) {
+	execCtx := workflow.NewExecutionContext(intCtx.Workflow.ID, wf.Name)
+	for key, value := range inputs {
+		execCtx.SetInput(key, value)
+	}
+	for name, state := range intCtx.States {
+		execCtx.SetStepState(name, workflow.StepState{
+			Name:   name,
+			Status: workflow.ExecutionStatus(state.Status),
+			Output: state.Output,
+			Stderr: state.Stderr,
+		})
+	}
+
+	_, execErr := s.executePluginOperation(ctx, step, execCtx)
+	result.CompletedAt = time.Now()
+	if state, exists := execCtx.GetStepState(step.Name); exists {
+		result.Output = state.Output
+		result.Stderr = state.Stderr
+		result.ExitCode = state.ExitCode
+		result.Status = state.Status
+		result.Error = state.Error
+	}
+	if execErr != nil {
+		result.Status = workflow.StatusFailed
+		result.Error = execErr.Error()
+		return result, execErr
+	}
+	if result.Status == "" {
+		result.Status = workflow.StatusCompleted
+	}
 	return result, nil
 }
 
