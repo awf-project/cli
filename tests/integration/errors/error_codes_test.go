@@ -179,6 +179,47 @@ func TestErrorCommand_JSONOutput(t *testing.T) {
 // Given: workflows that trigger each error category
 // When: workflows execute and fail
 // Then: exit codes match category (USER→1, WORKFLOW→2, EXECUTION→3, SYSTEM→4)
+func TestValidateHTTPMissingURLReturnsWorkflowExitCode(t *testing.T) {
+	binPath, err := filepath.Abs(buildBinaryIfNeeded(t))
+	require.NoError(t, err)
+	root := t.TempDir()
+	workflowPath := filepath.Join(root, "http-missing-url.yaml")
+	require.NoError(t, os.WriteFile(workflowPath, []byte(`name: http-missing-url
+version: "1.0.0"
+states:
+  initial: request
+  request:
+    type: operation
+    operation: http.request
+    inputs:
+      method: GET
+    on_success: done
+  done:
+    type: terminal
+    status: success
+`), 0o600))
+
+	configPath := filepath.Join(root, "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("{}\n"), 0o600))
+
+	cmd := exec.Command(binPath, "--storage="+filepath.Join(root, "storage"), "validate", "http-missing-url")
+	cmd.Dir = root
+	cmd.Env = append(cmd.Environ(),
+		"AWF_CONFIG_PATH="+configPath,
+		"AWF_WORKFLOWS_PATH="+root,
+		"AWF_PLUGINS_PATH="+filepath.Join(root, "plugins"),
+		"XDG_CONFIG_HOME="+filepath.Join(root, "xdg-config"),
+		"XDG_DATA_HOME="+filepath.Join(root, "xdg-data"),
+	)
+
+	output, err := cmd.CombinedOutput()
+	exitErr, ok := err.(*exec.ExitError)
+	require.True(t, ok, "expected a validation failure, got %v\n%s", err, output)
+	assert.Equal(t, 2, exitErr.ExitCode(), "%s", output)
+	assert.Contains(t, string(output), `Error: invalid inputs for operation "http.request"`)
+	assert.Contains(t, string(output), `required field "url"`)
+}
+
 func TestStructuredError_ExitCodeMapping(t *testing.T) {
 	tests := []struct {
 		name         string

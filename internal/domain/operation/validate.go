@@ -5,6 +5,7 @@ import (
 	"net/mail"
 	"net/url"
 	"sort"
+	"strings"
 
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 )
@@ -118,6 +119,12 @@ func getSortedInputNames(inputs map[string]pluginmodel.InputSchema) []string {
 func validateInput(name string, schema pluginmodel.InputSchema, value any, exists bool, inputs map[string]any) []inputValidationIssue {
 	var issues []inputValidationIssue
 
+	// An explicit null backend is invalid even when a default is configured.
+	if schema.Validation == pluginmodel.ValidationRuleNotifierBackend && exists && value == nil {
+		message := fmt.Sprintf("field %q: must be a string", name)
+		return []inputValidationIssue{{message: message, redacted: message}}
+	}
+
 	// Check required fields
 	if schema.Required {
 		if !exists || value == nil || (value == "" && schema.Type == pluginmodel.InputTypeString) {
@@ -135,7 +142,6 @@ func validateInput(name string, schema pluginmodel.InputSchema, value any, exist
 			return nil
 		}
 	}
-
 	// Validate type correctness
 	if err := validateType(name, value, schema.Type); err != nil {
 		return []inputValidationIssue{{message: err.Error(), redacted: err.Error()}}
@@ -254,6 +260,14 @@ func validateRule(name string, value any, rule string) error {
 	case "email":
 		if _, err := mail.ParseAddress(strValue); err != nil {
 			return fmt.Errorf("field %q: invalid email %q", name, strValue)
+		}
+	case pluginmodel.ValidationRuleNotifierBackend:
+		if reason := pluginmodel.NotifierBackendNameProblem(strValue); reason != "" {
+			return fmt.Errorf("field %q: %s", name, reason)
+		}
+	case "nonblank":
+		if strings.TrimSpace(strValue) == "" {
+			return fmt.Errorf("field %q: must not be blank", name)
 		}
 
 	default:

@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -71,6 +73,41 @@ func TestBuildBridge_ReturnsNonNilBridge(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, bridge)
 	assert.NotNil(t, bridge.workflows, "bridge must have a workflow lister")
+}
+
+func TestBuildBridge_InstallsNotifierWithoutExternalPlugins(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "xdg-data"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg-config"))
+	t.Setenv("AWF_WORKFLOWS_PATH", filepath.Join(root, "workflows"))
+	t.Setenv("AWF_AUDIT_LOG", "off")
+
+	require.NoError(t, os.MkdirAll(filepath.Join(root, ".awf"), 0o700))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "workflows"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".awf", "config.yaml"), []byte(
+		"notifier:\n  backend: recording\n  default_channel: alerts\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "workflows", "notify.yaml"), []byte(`name: notify
+version: "1.0"
+states:
+  initial: send
+  send:
+    type: operation
+    operation: notifier.send
+    inputs:
+      text: hello
+    on_success: done
+  done:
+    type: terminal
+    status: success
+`), 0o600))
+
+	bridge, _, cleanup, err := buildBridge(context.Background())
+	defer cleanup()
+
+	require.NoError(t, err)
+	require.NotNil(t, bridge)
+	assert.NoError(t, bridge.workflows.ValidateWorkflow(context.Background(), "notify"))
 }
 
 func TestBuildWorkflowPaths_IncludesLocalAndGlobal(t *testing.T) {

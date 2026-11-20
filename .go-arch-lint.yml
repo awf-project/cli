@@ -261,6 +261,9 @@ components:
   infra-notify:
     in: infrastructure/notify
 
+  infra-notifier:
+    in: infrastructure/notifier
+
   infra-expression:
     in: infrastructure/expression
 
@@ -327,6 +330,9 @@ components:
 
   interfaces-api:
     in: interfaces/api
+
+  notifierwiring:
+    in: interfaces/notifierwiring
 
   # TEST UTILITIES
   testutil:
@@ -520,6 +526,13 @@ deps:
     canUse:
       - go-stdlib
       - go-sync
+
+  infra-notifier:
+    mayDependOn:
+      - domain-ports
+      - domain-plugin
+    canUse:
+      - go-stdlib
 
   infra-expression:
     mayDependOn:
@@ -724,6 +737,7 @@ deps:
       - interfaces-cli-ui
       - interfaces-tui
       - interfaces-api
+      - notifierwiring
     canUse:
       - go-stdlib
       - go-sync
@@ -756,6 +770,7 @@ deps:
       - infra-transcript
       - infra-workflowpkg
       - infra-xdg
+      - notifierwiring
     canUse:
       - go-stdlib
       - cobra
@@ -778,6 +793,14 @@ deps:
       - chi
       - zap
       - uuid
+
+  notifierwiring:
+    mayDependOn:
+      - domain-ports
+      - infra-notifier
+      - infra-plugin
+    canUse:
+      - go-stdlib
 
   interfaces-cli-ui:
     mayDependOn:

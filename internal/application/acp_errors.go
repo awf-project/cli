@@ -33,12 +33,18 @@ const (
 type ACPHandlerError struct {
 	Kind    ACPErrorKind
 	Message string
+	// Cause retains the application failure for errors.Is/errors.As without
+	// exposing its potentially sensitive text in the JSON-RPC message.
+	Cause error
 	// Data is optional machine-readable context (e.g. an ErrorCode string).
 	// It is mapped to the JSON-RPC error object's "data" field at the interface boundary.
 	Data any
 }
 
 func (e *ACPHandlerError) Error() string { return e.Message }
+
+// Unwrap preserves the underlying application error identity.
+func (e *ACPHandlerError) Unwrap() error { return e.Cause }
 
 // acpInvalidParamsWithData builds an ACPErrInvalidParams handler error carrying
 // supplementary machine-readable data (e.g. an error code) in the Data field.
@@ -54,6 +60,10 @@ func acpInvalidParams(msg string) *ACPHandlerError {
 // acpInternal builds an ACPErrInternal handler error.
 func acpInternal(msg string) *ACPHandlerError {
 	return &ACPHandlerError{Kind: ACPErrInternal, Message: msg}
+}
+
+func acpInternalCause(msg string, cause error) *ACPHandlerError {
+	return &ACPHandlerError{Kind: ACPErrInternal, Message: msg, Cause: cause}
 }
 
 // acpMethodNotFound builds an ACPErrMethodNotFound handler error. Used by handlers

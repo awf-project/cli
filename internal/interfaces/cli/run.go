@@ -28,6 +28,7 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
+	"github.com/awf-project/cli/internal/interfaces/notifierwiring"
 	"github.com/awf-project/cli/pkg/interpolation"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -391,13 +392,21 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 			application.WithPluginState(pluginResult.Service),
 			application.WithPluginService(pluginResult.Service),
 		)
-		if pluginResult.RPCManager != nil {
-			setupOpts = append(setupOpts, application.WithPluginProviders(application.PluginProviders{
-				Operations: pluginResult.Manager,
-				Validators: pluginResult.RPCManager.ValidatorProvider(0),
-				StepTypes:  pluginResult.RPCManager.StepTypeProvider(logger),
-			}))
+		pluginProviders := application.PluginProviders{
+			Operations: notifierwiring.ComposeOperationProvider(
+				notifierwiring.Settings{
+					Backend:        projectCfg.Notifier.Backend,
+					DefaultChannel: projectCfg.Notifier.DefaultChannel,
+				},
+				pluginResult.Service.IsPluginEnabled("notifier"),
+				discoveredOperationProvider(cfg, pluginResult),
+			),
 		}
+		if pluginResult.RPCManager != nil {
+			pluginProviders.Validators = pluginResult.RPCManager.ValidatorProvider(0)
+			pluginProviders.StepTypes = pluginResult.RPCManager.StepTypeProvider(logger)
+		}
+		setupOpts = append(setupOpts, application.WithPluginProviders(pluginProviders))
 		if pluginResult.EventPublisher != nil {
 			setupOpts = append(setupOpts, application.WithEventPublisher(pluginResult.EventPublisher))
 		}
@@ -909,7 +918,6 @@ func runSingleStep(
 	}
 
 	// Load project config from .awf/config.yaml
-	// TODO(T027): Use projectCfg.Notify to register backends dynamically
 	projectCfg, err := loadProjectConfig(logger)
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)
@@ -971,12 +979,21 @@ func runSingleStep(
 			application.WithPluginState(pluginResult.Service),
 			application.WithPluginService(pluginResult.Service),
 		)
-		if pluginResult.RPCManager != nil {
-			stepSetupOpts = append(stepSetupOpts, application.WithPluginProviders(application.PluginProviders{
-				Operations: pluginResult.Manager,
-				StepTypes:  pluginResult.RPCManager.StepTypeProvider(logger),
-			}))
+		pluginProviders := application.PluginProviders{
+			Operations: notifierwiring.ComposeOperationProvider(
+				notifierwiring.Settings{
+					Backend:        projectCfg.Notifier.Backend,
+					DefaultChannel: projectCfg.Notifier.DefaultChannel,
+				},
+				pluginResult.Service.IsPluginEnabled("notifier"),
+				discoveredOperationProvider(cfg, pluginResult),
+			),
 		}
+		if pluginResult.RPCManager != nil {
+			pluginProviders.Validators = pluginResult.RPCManager.ValidatorProvider(0)
+			pluginProviders.StepTypes = pluginResult.RPCManager.StepTypeProvider(logger)
+		}
+		stepSetupOpts = append(stepSetupOpts, application.WithPluginProviders(pluginProviders))
 	}
 
 	stepSetupOpts = append(stepSetupOpts, cfg.ExecutionSetupOptions...)

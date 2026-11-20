@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 const (
@@ -22,9 +23,27 @@ var ValidInputTypes = []string{
 	InputTypeObject,
 }
 
+const ValidationRuleNotifierBackend = "notifier-backend"
+
 var ValidValidationRules = []string{
+	ValidationRuleNotifierBackend,
 	"url",
 	"email",
+	"nonblank",
+}
+
+// NotifierBackendNameProblem returns the reason a notifier backend name is invalid.
+func NotifierBackendNameProblem(name string) string {
+	switch {
+	case strings.TrimSpace(name) == "":
+		return "must not be blank"
+	case strings.Contains(name, "."):
+		return "must not contain dots"
+	case name == "notifier":
+		return "is reserved"
+	default:
+		return ""
+	}
 }
 
 type OperationSchema struct {

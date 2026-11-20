@@ -50,6 +50,13 @@ func initPluginSystem(ctx context.Context, cfg *Config, logger ports.Logger) (*P
 	return result, nil
 }
 
+func discoveredOperationProvider(cfg *Config, result *PluginSystemResult) ports.OperationProvider {
+	if cfg.DiscoveredOperations != nil {
+		return cfg.DiscoveredOperations
+	}
+	return result.Manager
+}
+
 // getPluginSearchPaths returns the plugin directories to search.
 // If cfg.PluginsDir is set, it takes priority over BuildPluginPaths.
 func getPluginSearchPaths(cfg *Config) []string {
@@ -136,6 +143,12 @@ func registerBuiltins(svc *application.PluginService, version string) {
 	})
 	svc.RegisterBuiltin("notify", "Notification operation provider", version, []string{
 		"notify.send",
+	})
+	svc.RegisterBuiltin("notifier", "Notifier operation provider", version, []string{
+		"notifier.send",
+		"notifier.update",
+		"notifier.react",
+		"notifier.upload",
 	})
 	svc.RegisterBuiltin("http", "HTTP operation provider", version, []string{
 		"http.request",

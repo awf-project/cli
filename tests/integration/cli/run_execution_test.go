@@ -9,15 +9,61 @@ package cli_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/awf-project/cli/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSingleStepCommandDispatchesNotifierThroughDiscoveredAdapter(t *testing.T) {
+	fixture := newNotifierRunFixture(t, []string{"send"})
+	const (
+		defaultChannel = "single-step-default-channel-canary"
+		payload        = "single-step-payload-canary"
+	)
+	fixture.writeConfig(t, fixture.pluginID, defaultChannel)
+	fixture.writeSingleOperationWorkflow(t, "notifier.send", "      text: "+payload+"\n")
+
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	cleanupOnce := sync.OnceFunc(cleanup)
+	t.Cleanup(cleanupOnce)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{
+		"--storage", fixture.storageDir,
+		"--no-color",
+		"--quiet",
+		"run", fixture.workflowName,
+		"--step=invoke",
+	})
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	err := cmd.ExecuteContext(ctx)
+	cleanupOnce()
+
+	require.NoError(t, err, stdout.String()+stderr.String())
+	records := fixture.readRecords(t)
+	require.Len(t, records, 1)
+	assert.Equal(t, fixture.pluginID, records[0].Adapter)
+	assert.Equal(t, "send", records[0].Operation)
+	assert.Equal(t, defaultChannel, records[0].Inputs["channel"])
+	assert.Equal(t, payload, records[0].Inputs["text"])
+	recordInfo, statErr := os.Stat(fixture.recordPath)
+	require.NoError(t, statErr)
+	assert.LessOrEqual(t, recordInfo.Size(), int64(64*1024))
+	fixture.assertConfidential(t, stdout.String()+stderr.String(), []string{
+		payload, defaultChannel, recordingCredential,
+	})
+}
 
 func TestRunCommand_SingleStep_WorkflowNotFound(t *testing.T) {
 	tmpDir := setupInitTestDir(t)

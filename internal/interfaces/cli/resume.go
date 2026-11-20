@@ -19,6 +19,7 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/store"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
+	"github.com/awf-project/cli/internal/interfaces/notifierwiring"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -295,13 +296,21 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 			return resolvePackWorkflow(ctx, packName, workflowName, xdg.LocalWorkflowPacksDir(), xdg.AWFWorkflowPacksDir())
 		}),
 	}
-	if pluginResult.RPCManager != nil {
-		setupOpts = append(setupOpts, application.WithPluginProviders(application.PluginProviders{
-			Operations: pluginResult.Manager,
-			Validators: pluginResult.RPCManager.ValidatorProvider(0),
-			StepTypes:  pluginResult.RPCManager.StepTypeProvider(logger),
-		}))
+	pluginProviders := application.PluginProviders{
+		Operations: notifierwiring.ComposeOperationProvider(
+			notifierwiring.Settings{
+				Backend:        projectCfg.Notifier.Backend,
+				DefaultChannel: projectCfg.Notifier.DefaultChannel,
+			},
+			pluginResult.Service.IsPluginEnabled("notifier"),
+			discoveredOperationProvider(cfg, pluginResult),
+		),
 	}
+	if pluginResult.RPCManager != nil {
+		pluginProviders.Validators = pluginResult.RPCManager.ValidatorProvider(0)
+		pluginProviders.StepTypes = pluginResult.RPCManager.StepTypeProvider(logger)
+	}
+	setupOpts = append(setupOpts, application.WithPluginProviders(pluginProviders))
 	if pluginResult.EventPublisher != nil {
 		setupOpts = append(setupOpts, application.WithEventPublisher(pluginResult.EventPublisher))
 	}
