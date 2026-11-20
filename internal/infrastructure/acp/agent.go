@@ -51,7 +51,7 @@ func (a *Agent) Initialize(_ context.Context, _ sdk.InitializeRequest) (resp sdk
 }
 
 // NewSession creates a new ACP session via the application service.
-func (a *Agent) NewSession(ctx context.Context, req sdk.NewSessionRequest) (resp sdk.NewSessionResponse, err error) {
+func (a *Agent) NewSession(ctx context.Context, req sdk.NewSessionRequest) (resp sdk.NewSessionResponse, err error) { //nolint:gocritic // hugeParam: signature fixed by sdk.Agent interface
 	defer func() {
 		if r := recover(); r != nil {
 			err = internalErr(fmt.Sprintf("panic recovered: %v", r))
@@ -143,6 +143,11 @@ func (a *Agent) Logout(_ context.Context, _ sdk.LogoutRequest) (sdk.LogoutRespon
 
 func (a *Agent) CloseSession(_ context.Context, _ sdk.CloseSessionRequest) (sdk.CloseSessionResponse, error) {
 	return sdk.CloseSessionResponse{}, methodNotFoundErr(string(sdk.AgentMethodSessionClose))
+}
+
+// DeleteSession is unsupported because AWF does not advertise session deletion.
+func (a *Agent) DeleteSession(_ context.Context, _ sdk.DeleteSessionRequest) (sdk.DeleteSessionResponse, error) {
+	return sdk.DeleteSessionResponse{}, methodNotFoundErr(string(sdk.AgentMethodSessionDelete))
 }
 
 func (a *Agent) ListSessions(_ context.Context, _ sdk.ListSessionsRequest) (sdk.ListSessionsResponse, error) {
