@@ -7,7 +7,7 @@
 //
 // # Purpose
 //
-// This package wraps github.com/coder/acp-go-sdk (pinned v0.13.0) to provide a
+// This package wraps github.com/coder/acp-go-sdk (version pinned in go.mod) to provide a
 // minimal, safe adapter between AWF's internal application services and the ACP
 // protocol. It occupies the infrastructure layer of the hexagonal architecture:
 // it depends inward on domain ports and the application layer's session service,
@@ -24,12 +24,10 @@
 //
 //   - Agent
 //     Implements sdk.Agent, delegating session lifecycle to the application-layer
-//     ACPSessionService. Four methods carry real delegation logic (Initialize,
-//     NewSession, Prompt, Cancel); seven methods return MethodNotFound stubs for
-//     optional ACP capabilities not yet implemented (Authenticate, CloseSession,
-//     ListSessions, ResumeSession, SetSessionConfigOption, SetSessionMode, and any
-//     future optional interface methods). All handler methods guard against panics
-//     with a deferred recover; see Threat Model.
+//     ACPSessionService. Initialize, NewSession, Prompt and Cancel handle the
+//     supported operations. Authenticate, Logout, CloseSession, DeleteSession,
+//     ListSessions, ResumeSession, SetSessionConfigOption and SetSessionMode
+//     return MethodNotFound.
 //
 //   - NewAgent(svc *application.ACPSessionService) *Agent
 //     Constructs an Agent backed by the provided session service. The unexported
@@ -95,11 +93,8 @@
 // Nine implementation files and one architecture test carry the detail:
 //
 //   - agent.go
-//     Agent struct and all eleven sdk.Agent method implementations. Four methods
-//     carry real logic (Initialize, NewSession, Prompt, Cancel); seven return
-//     sdk.MethodNotFound stubs (Authenticate, CloseSession, ListSessions,
-//     ResumeSession, SetSessionConfigOption, SetSessionMode). All methods wrap their
-//     body in a deferred panic-recover guard (see Threat Model). The raw prompt-body guard
+//     Agent struct and sdk.Agent method implementations. The supported handlers
+//     recover panics (see Threat Model). The raw prompt-body guard
 //     reuses application.MaxPromptBytes (1 MiB) — the single source of truth shared with the
 //     application-layer parse guard, so the two layers cannot drift apart.
 //
@@ -163,10 +158,10 @@
 //     is directed to stderr via slog. Violating this invariant corrupts the JSON-RPC
 //     framing and breaks the editor connection silently.
 //
-//   - panic-recover-with-no-stack-trace: Every sdk.Agent method in agent.go wraps
+//   - panic-recover-with-no-stack-trace: Each supported handler in agent.go wraps
 //     its body in a deferred recover(). Panics from the application layer or SDK
 //     callbacks are caught, formatted with %v (not %+v or runtime/debug), and returned
-//     as sdk.NewInternalError responses. Stack traces are never forwarded because they
+//     as JSON-RPC internal errors. Stack traces are never forwarded because they
 //     can leak internal file paths, type names, and implementation details useful for
 //     prompt-injection reconnaissance. The %v format is a deliberate choice; see
 //     the F104 MCP handler.go for the established pattern (commit 9740292).
@@ -187,16 +182,16 @@
 //
 // # Error Taxonomy
 //
-// Errors fall into three classes, each mapped to a specific SDK factory:
+// Errors fall into three classes, each mapped to a JSON-RPC code:
 //
-//	ACPHandlerError.Kind     SDK factory                  Typical triggers
+//	ACPHandlerError.Kind     JSON-RPC code                Typical triggers
 //	──────────────────────   ──────────────────────────   ────────────────────────────────
-//	ACPErrInvalidParams      sdk.NewInvalidParams         Malformed prompt body, prompt
+//	ACPErrInvalidParams      -32602                       Malformed prompt body, prompt
 //	                                                      exceeds MaxPromptBytes, missing
 //	                                                      required session fields
-//	ACPErrMethodNotFound     sdk.NewMethodNotFound        Optional ACP methods not yet
-//	                                                      implemented (7 stubs in Agent)
-//	ACPErrInternal           sdk.NewInternalError         Application errors, recovered
+//	ACPErrMethodNotFound     -32601                       Optional ACP methods not yet
+//	                                                      implemented
+//	ACPErrInternal           -32603                       Application errors, recovered
 //	                                                      panics, unexpected conditions
 //
 // Transport-level errors (connection loss, framing failures, context cancellation)
@@ -210,7 +205,7 @@
 // This package is permitted to import:
 //
 //   - Standard library (context, encoding/json, fmt, log/slog, sync, sync/atomic)
-//   - github.com/coder/acp-go-sdk (pinned v0.13.0) — The official ACP Go SDK.
+//   - github.com/coder/acp-go-sdk (version pinned in go.mod) — The official ACP Go SDK.
 //     SDK types are used only in agent.go, emitter.go, permission.go, errors.go, and
 //     server.go, never in signatures consumed by callers outside this package. This
 //     insulates callers from SDK churn and enables SDK substitution (see below).

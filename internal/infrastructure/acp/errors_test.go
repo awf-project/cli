@@ -16,7 +16,7 @@ func TestToACPError(t *testing.T) {
 		input         *application.ACPHandlerError
 		expectNil     bool
 		expectCode    int
-		expectData    any
+		expectData    string
 		expectMessage string
 	}{
 		{
@@ -40,7 +40,7 @@ func TestToACPError(t *testing.T) {
 			name:       "ACPErrMethodNotFound maps to MethodNotFound code",
 			input:      &application.ACPHandlerError{Kind: application.ACPErrMethodNotFound, Message: "method not found"},
 			expectCode: -32601, // JSON-RPC Method not found
-			expectData: map[string]any{"method": "method not found"},
+			expectData: `{"method":"method not found"}`,
 			// MethodNotFound uses the SDK constructor's generic message by design.
 			expectMessage: "Method not found",
 		},
@@ -52,7 +52,7 @@ func TestToACPError(t *testing.T) {
 				Data:    map[string]string{"code": "ERR_BAD_INPUT"},
 			},
 			expectCode:    -32602,
-			expectData:    map[string]string{"code": "ERR_BAD_INPUT"},
+			expectData:    `{"code":"ERR_BAD_INPUT"}`,
 			expectMessage: "bad input",
 		},
 	}
@@ -71,7 +71,11 @@ func TestToACPError(t *testing.T) {
 			require.True(t, ok, "result should be *acp.RequestError")
 
 			assert.Equal(t, tt.expectCode, sdkErr.Code)
-			assert.Equal(t, tt.expectData, sdkErr.Data)
+			if tt.expectData == "" {
+				assert.Nil(t, sdkErr.Data)
+			} else {
+				assert.JSONEq(t, tt.expectData, string(sdkErr.Data))
+			}
 			assert.Equal(t, tt.expectMessage, sdkErr.Message,
 				"human-readable Message must reach the editor, not be dropped for the SDK's generic string")
 		})
@@ -113,5 +117,5 @@ func TestMethodNotFoundErr(t *testing.T) {
 	require.True(t, ok, "result should be *acp.RequestError")
 
 	assert.Equal(t, -32601, sdkErr.Code)
-	assert.Equal(t, map[string]any{"method": method}, sdkErr.Data)
+	assert.JSONEq(t, `{"method":"unknown_method"}`, string(sdkErr.Data))
 }

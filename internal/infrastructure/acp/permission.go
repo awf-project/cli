@@ -69,8 +69,7 @@ func (c *PermissionClient) RequestPermission(ctx context.Context, req ports.Perm
 	if req.Prompt != "" {
 		// The SDK has no top-level prompt field; the human-readable prompt is carried
 		// as the tool call's title (the editor renders it alongside the options).
-		prompt := req.Prompt
-		toolCall.Title = &prompt
+		toolCall.Title = sdk.PatchSet(req.Prompt)
 	}
 
 	resp, err := c.conn.RequestPermission(ctx, sdk.RequestPermissionRequest{

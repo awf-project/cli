@@ -93,8 +93,9 @@ func TestPermissionClient_RoundTripMapping(t *testing.T) {
 	got := mock.capturedRequests[0]
 	assert.Equal(t, sdk.SessionId("sess-42"), got.SessionId)
 	assert.Equal(t, sdk.ToolCallId("call-99"), got.ToolCall.ToolCallId)
-	require.NotNil(t, got.ToolCall.Title)
-	assert.Equal(t, "Allow filesystem access?", *got.ToolCall.Title)
+	title, set := got.ToolCall.Title.Value()
+	require.True(t, set)
+	assert.Equal(t, "Allow filesystem access?", title)
 	require.Len(t, got.Options, 2)
 	assert.Equal(t, sdk.PermissionOptionId("allow_once"), got.Options[0].OptionId)
 	assert.Equal(t, "Allow once", got.Options[0].Name)
@@ -120,6 +121,8 @@ func TestPermissionClient_CancelledReturnsEmptyOptionID(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "", resp.OptionID)
+	require.Len(t, mock.capturedRequests, 1)
+	assert.True(t, mock.capturedRequests[0].ToolCall.Title.IsUnset())
 }
 
 // TestPermissionClient_ContextCancelled verifies a pre-cancelled context returns

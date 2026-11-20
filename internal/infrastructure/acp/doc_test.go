@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -194,7 +193,7 @@ func TestDocGo_DependencyContract(t *testing.T) {
 
 	// Should mention allowed dependencies
 	assert.Contains(t, doc, "github.com/coder/acp-go-sdk", "should document SDK import")
-	assert.Contains(t, doc, "v0.13", "should reference SDK version constraint")
+	assert.Contains(t, doc, "go.mod", "should identify the source of the SDK version")
 	assert.Contains(t, doc, "internal/application", "should allow application imports")
 	assert.Contains(t, doc, "internal/domain/ports", "should allow domain/ports imports")
 
@@ -306,14 +305,11 @@ func TestDocGo_SectionOrdering(t *testing.T) {
 	}
 }
 
-func TestDocGo_AgentMethodStubCount(t *testing.T) {
+func TestDocGo_AgentUnsupportedMethods(t *testing.T) {
 	doc := loadDocFile(t)
-
-	// Public Surface mentions 4 real + 7 stub methods
-	assert.Contains(t, doc, "Four methods", "should mention 4 real methods")
-	assert.Contains(t, doc, "seven", "should mention 7 stub methods")
-	assert.Regexp(t, regexp.MustCompile("(?i)(Authenticate|CloseSession|ListSessions|ResumeSession|SetSessionConfigOption|SetSessionMode)"),
-		doc, "should list optional stub methods")
+	for _, method := range []string{"Authenticate", "Logout", "CloseSession", "DeleteSession", "ListSessions", "ResumeSession", "SetSessionConfigOption", "SetSessionMode"} {
+		assert.Contains(t, doc, method)
+	}
 }
 
 func TestDocGo_T037AndT038References(t *testing.T) {

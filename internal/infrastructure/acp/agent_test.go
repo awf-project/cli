@@ -372,6 +372,14 @@ func TestAgent_UnsupportedMethods(t *testing.T) {
 			wantCode: -32601,
 		},
 		{
+			name: "DeleteSession returns methodNotFoundErr",
+			methodFn: func(a *Agent) error {
+				_, err := a.DeleteSession(context.Background(), sdk.DeleteSessionRequest{})
+				return err
+			},
+			wantCode: -32601,
+		},
+		{
 			name: "ListSessions returns methodNotFoundErr",
 			methodFn: func(a *Agent) error {
 				_, err := a.ListSessions(context.Background(), sdk.ListSessionsRequest{})
