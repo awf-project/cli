@@ -649,7 +649,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.27'
       - run: make test              # Unit tests only
       - run: make test-integration  # Integration tests
       - run: make test-race         # Race detection

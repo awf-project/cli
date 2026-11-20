@@ -1451,3 +1451,32 @@ func TestT078_ScheduleTick_FunctionRemovedFromTabMonitoring(t *testing.T) {
 	assert.False(t, strings.Contains(source, "func scheduleTick()"),
 		"scheduleTick function should be removed (T078: legacy polling helper)")
 }
+
+func TestMonitoringTabLiveConversationPreservesLines(t *testing.T) {
+	tab := newMonitoringTab()
+	tab.ticking = true
+	tab.stream = &StreamBuffer{}
+	tab.convBuf.WriteString("history\n")
+	_, err := tab.stream.Write([]byte("one\n\nthree\n"))
+	require.NoError(t, err)
+
+	tab.convApplyToViewport()
+
+	assert.Contains(t, tab.vp.GetContent(), "history\n")
+	assert.True(t, strings.HasSuffix(tab.vp.GetContent(), "  one\n  \n  three\n  \n"))
+	assert.Equal(t, "history\n", tab.convBuf.String())
+}
+
+func BenchmarkMonitoringTabLiveConversation(b *testing.B) {
+	tab := newMonitoringTab()
+	tab.ticking = true
+	tab.stream = &StreamBuffer{}
+	tab.convBuf.WriteString(strings.Repeat("Earlier turn\n", 256))
+	_, err := tab.stream.Write([]byte(strings.Repeat("Streamed output line\n", 512)))
+	require.NoError(b, err)
+
+	b.ReportAllocs()
+	for b.Loop() {
+		tab.convApplyToViewport()
+	}
+}

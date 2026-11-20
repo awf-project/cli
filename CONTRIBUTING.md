@@ -59,7 +59,7 @@ make lint
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.27.0+
 - golangci-lint (for linting)
 - Make
 

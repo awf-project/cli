@@ -590,11 +590,7 @@ func (t *MonitoringTab) convAppendNewTurns(conv *workflow.ConversationState) {
 			}
 			t.convBuf.WriteString(inputStyle.Render("▶ User:"))
 			t.convBuf.WriteString("\n")
-			for _, l := range strings.Split(turn.Content, "\n") {
-				t.convBuf.WriteString("  ")
-				t.convBuf.WriteString(l)
-				t.convBuf.WriteString("\n")
-			}
+			writeIndentedLines(t.convBuf, turn.Content)
 			t.convBuf.WriteString("\n")
 		case workflow.TurnRoleAssistant:
 			t.convBuf.WriteString(outputStyle.Render("◀ Agent:"))
@@ -606,15 +602,19 @@ func (t *MonitoringTab) convAppendNewTurns(conv *workflow.ConversationState) {
 				displayText = strings.TrimRight(t.stream.String(), "\n")
 				t.stream.Reset()
 			}
-			for _, l := range strings.Split(displayText, "\n") {
-				t.convBuf.WriteString("  ")
-				t.convBuf.WriteString(l)
-				t.convBuf.WriteString("\n")
-			}
+			writeIndentedLines(t.convBuf, displayText)
 			t.convBuf.WriteString("\n")
 		}
 	}
 	t.convTurnCount = len(conv.Turns)
+}
+
+func writeIndentedLines(dst *strings.Builder, content string) {
+	for line := range strings.SplitSeq(content, "\n") {
+		dst.WriteString("  ")
+		dst.WriteString(line)
+		dst.WriteByte('\n')
+	}
 }
 
 // convApplyToViewport sets the viewport content from the conversation buffer.
@@ -627,10 +627,14 @@ func (t *MonitoringTab) convApplyToViewport() {
 
 	if !t.inputActive && t.ticking {
 		if t.stream != nil && t.stream.Len() > 0 {
-			content += outputStyle.Render("◀ Agent:") + "\n"
-			for _, l := range strings.Split(t.stream.String(), "\n") {
-				content += "  " + l + "\n"
-			}
+			live := t.stream.String()
+			var view strings.Builder
+			view.Grow(len(content) + len(live))
+			view.WriteString(content)
+			view.WriteString(outputStyle.Render("◀ Agent:"))
+			view.WriteByte('\n')
+			writeIndentedLines(&view, live)
+			content = view.String()
 		} else {
 			content += dimStyle.Render("  "+t.spinner.View()+" Agent is thinking...") + "\n"
 		}
@@ -669,19 +673,11 @@ func (t *MonitoringTab) renderStepBlock(step *workflow.Step, state *workflow.Ste
 				}
 				sb.WriteString(inputStyle.Render("▶ User:"))
 				sb.WriteString("\n")
-				for _, l := range strings.Split(turn.Content, "\n") {
-					sb.WriteString("  ")
-					sb.WriteString(l)
-					sb.WriteString("\n")
-				}
+				writeIndentedLines(&sb, turn.Content)
 			case workflow.TurnRoleAssistant:
 				sb.WriteString(outputStyle.Render("◀ Agent:"))
 				sb.WriteString("\n")
-				for _, l := range strings.Split(turn.Content, "\n") {
-					sb.WriteString("  ")
-					sb.WriteString(l)
-					sb.WriteString("\n")
-				}
+				writeIndentedLines(&sb, turn.Content)
 			}
 			sb.WriteString("\n")
 			needsDivider = true
@@ -701,11 +697,7 @@ func (t *MonitoringTab) renderStepBlock(step *workflow.Step, state *workflow.Ste
 		if inputText := stepInputText(step); inputText != "" {
 			sb.WriteString(inputStyle.Render("▶ Input:"))
 			sb.WriteString("\n")
-			for _, l := range strings.Split(inputText, "\n") {
-				sb.WriteString("  ")
-				sb.WriteString(l)
-				sb.WriteString("\n")
-			}
+			writeIndentedLines(&sb, inputText)
 			sb.WriteString("\n")
 		}
 	}

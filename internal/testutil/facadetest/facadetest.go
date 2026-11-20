@@ -158,15 +158,19 @@ func (s *FakeSession) pump(ctx context.Context) {
 	defer close(s.pumpDone)
 	defer close(s.events)
 	for _, ev := range s.script {
+		var response <-chan struct{}
+		if ev.Kind == ports.EventInputRequired {
+			// A consumer can respond as soon as it receives the event.
+			response = s.activateRespond()
+		}
 		select {
 		case s.events <- ev:
 		case <-s.doneCh:
 			return
 		}
-		if ev.Kind == ports.EventInputRequired {
-			ch := s.activateRespond()
+		if response != nil {
 			select {
-			case <-ch:
+			case <-response:
 			case <-s.doneCh:
 				return
 			case <-ctx.Done():

@@ -530,11 +530,11 @@ func (p *GitHubOperationProvider) fetchExistingPR(ctx context.Context, head, rep
 // extractPRNumber extracts the PR number from a GitHub PR URL.
 // e.g., "https://github.com/owner/repo/pull/123" → "123"
 func extractPRNumber(prURL string) string {
-	parts := strings.Split(strings.TrimRight(prURL, "/\n"), "/")
-	if len(parts) > 0 {
-		return parts[len(parts)-1]
+	path := strings.TrimRight(prURL, "/\n")
+	if _, number, found := strings.CutLast(path, "/"); found {
+		return number
 	}
-	return ""
+	return path
 }
 
 // parseNumberAndURL extracts number and url from gh pr view JSON output.

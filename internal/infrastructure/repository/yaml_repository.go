@@ -90,8 +90,7 @@ func (r *YAMLRepository) Load(ctx context.Context, name string) (*workflow.Workf
 	wf, err := mapToDomain(filePath, &yamlWf)
 	if err != nil {
 		// Check if it's a ParseError and convert to StructuredError
-		var pe *ParseError
-		if errors.As(err, &pe) {
+		if pe, ok := errors.AsType[*ParseError](err); ok {
 			return nil, pe.ToStructuredError()
 		}
 		return nil, err
@@ -101,8 +100,7 @@ func (r *YAMLRepository) Load(ctx context.Context, name string) (*workflow.Workf
 	validator := expression.NewExprValidator()
 	if err := wf.Validate(validator.Compile, workflow.IsQualifiedStepType); err != nil {
 		// Convert domain StateReferenceError to StructuredError
-		var stateRefErr *workflow.StateReferenceError
-		if errors.As(err, &stateRefErr) {
+		if stateRefErr, ok := errors.AsType[*workflow.StateReferenceError](err); ok {
 			availableAny := make([]any, len(stateRefErr.AvailableStates))
 			for i, s := range stateRefErr.AvailableStates {
 				availableAny[i] = s
@@ -125,8 +123,7 @@ func (r *YAMLRepository) Load(ctx context.Context, name string) (*workflow.Workf
 		// code reaches the formatter and YAMLSyntaxHintGenerator does not
 		// fire spurious YAML-shape hints.  errors.As walks the full chain
 		// including errors.Join multi-errors.
-		var structErr *domerrors.StructuredError
-		if errors.As(err, &structErr) {
+		if _, ok := errors.AsType[*domerrors.StructuredError](err); ok {
 			return nil, err
 		}
 

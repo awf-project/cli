@@ -5,7 +5,7 @@ title: "Installation"
 ## Prerequisites
 
 **Required:**
-- Go 1.21 or later
+- Go 1.27.0 or later (for building from source)
 - Make (for building from source)
 
 **Optional (for development):**
