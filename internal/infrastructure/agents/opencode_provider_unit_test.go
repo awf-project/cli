@@ -33,27 +33,6 @@ func TestOpenCodeProvider_Execute_Success(t *testing.T) {
 			wantOutput: "function created",
 		},
 		{
-			name:       "prompt with framework option",
-			prompt:     "test",
-			options:    map[string]any{"framework": "react"},
-			mockStdout: []byte("response"),
-			wantOutput: "response",
-		},
-		{
-			name:       "prompt with verbose option",
-			prompt:     "test",
-			options:    map[string]any{"verbose": true},
-			mockStdout: []byte("verbose response"),
-			wantOutput: "verbose response",
-		},
-		{
-			name:       "prompt with output_dir option",
-			prompt:     "test",
-			options:    map[string]any{"output_dir": "/tmp/output"},
-			mockStdout: []byte("output written"),
-			wantOutput: "output written",
-		},
-		{
 			name:       "large output",
 			prompt:     "generate",
 			mockStdout: []byte("This is a very long output " + string(make([]byte, 1000))),
@@ -85,67 +64,6 @@ func TestOpenCodeProvider_Execute_Success(t *testing.T) {
 			assert.False(t, result.StartedAt.IsZero())
 			assert.False(t, result.CompletedAt.IsZero())
 			assert.True(t, result.CompletedAt.After(result.StartedAt) || result.CompletedAt.Equal(result.StartedAt))
-		})
-	}
-}
-
-func TestOpenCodeProvider_Execute_WithOptions(t *testing.T) {
-	tests := []struct {
-		name       string
-		prompt     string
-		options    map[string]any
-		mockStdout []byte
-	}{
-		{
-			name:       "framework option",
-			prompt:     "test",
-			options:    map[string]any{"framework": "react"},
-			mockStdout: []byte("ok"),
-		},
-		{
-			name:       "verbose option",
-			prompt:     "test",
-			options:    map[string]any{"verbose": true},
-			mockStdout: []byte("ok"),
-		},
-		{
-			name:       "output_dir option",
-			prompt:     "test",
-			options:    map[string]any{"output_dir": "/tmp/test"},
-			mockStdout: []byte("ok"),
-		},
-		{
-			name:       "multiple options",
-			prompt:     "test",
-			options:    map[string]any{"framework": "vue", "verbose": true, "output_dir": "/tmp"},
-			mockStdout: []byte("ok"),
-		},
-		{
-			name:       "no options",
-			prompt:     "test",
-			options:    nil,
-			mockStdout: []byte("ok"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockExec := mocks.NewMockCLIExecutor()
-			mockExec.SetOutput(tt.mockStdout, nil)
-			provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
-
-			result, err := provider.Execute(context.Background(), tt.prompt, tt.options, nil, nil)
-
-			require.NoError(t, err)
-			require.NotNil(t, result)
-			assert.Equal(t, "opencode", result.Provider)
-
-			// Verify the CLI call captured the correct arguments
-			calls := mockExec.GetCalls()
-			require.Len(t, calls, 1)
-			assert.Equal(t, "opencode", calls[0].Name)
-			assert.Contains(t, calls[0].Args, "run")
-			assert.Contains(t, calls[0].Args, tt.prompt)
 		})
 	}
 }
@@ -515,34 +433,6 @@ func TestOpenCodeProvider_Execute_CLIArguments(t *testing.T) {
 			wantCmdName: "opencode",
 			wantCmdArgs: []string{"run", "test prompt", "--format", "json"},
 		},
-		{
-			name:        "with framework option and format flag",
-			prompt:      "test",
-			options:     map[string]any{"framework": "react"},
-			wantCmdName: "opencode",
-			wantCmdArgs: []string{"run", "test", "--format", "json", "--framework", "react"},
-		},
-		{
-			name:        "with verbose option and format flag",
-			prompt:      "test",
-			options:     map[string]any{"verbose": true},
-			wantCmdName: "opencode",
-			wantCmdArgs: []string{"run", "test", "--format", "json", "--verbose"},
-		},
-		{
-			name:        "with output_dir option and format flag",
-			prompt:      "test",
-			options:     map[string]any{"output_dir": "/tmp/out"},
-			wantCmdName: "opencode",
-			wantCmdArgs: []string{"run", "test", "--format", "json", "--output", "/tmp/out"},
-		},
-		{
-			name:        "with all options and format flag",
-			prompt:      "test",
-			options:     map[string]any{"framework": "vue", "verbose": true, "output_dir": "/tmp"},
-			wantCmdName: "opencode",
-			wantCmdArgs: []string{"run", "test", "--format", "json", "--framework", "vue", "--verbose", "--output", "/tmp"},
-		},
 	}
 
 	for _, tt := range tests {
@@ -581,19 +471,9 @@ func TestOpenCodeProvider_Execute_FormatJSONFlag(t *testing.T) {
 			options: map[string]any{"model": "gpt-4o"},
 		},
 		{
-			name:    "with framework option",
-			prompt:  "test",
-			options: map[string]any{"framework": "react"},
-		},
-		{
-			name:    "with verbose option",
-			prompt:  "test",
-			options: map[string]any{"verbose": true},
-		},
-		{
 			name:    "with multiple options",
 			prompt:  "test",
-			options: map[string]any{"model": "gpt-4", "framework": "vue", "verbose": true},
+			options: map[string]any{"model": "gpt-4", "output_format": "json"},
 		},
 	}
 
@@ -891,8 +771,6 @@ func TestOpenCodeProvider_Execute_DangerouslySkipPermissions_WithOtherOptions(t 
 	options := map[string]any{
 		"dangerously_skip_permissions": true,
 		"model":                        "gpt-4o",
-		"framework":                    "react",
-		"verbose":                      true,
 	}
 
 	_, err := provider.Execute(context.Background(), "test", options, nil, nil)
@@ -904,9 +782,6 @@ func TestOpenCodeProvider_Execute_DangerouslySkipPermissions_WithOtherOptions(t 
 	assert.Contains(t, calls[0].Args, "--dangerously-skip-permissions")
 	assert.Contains(t, calls[0].Args, "--model")
 	assert.Contains(t, calls[0].Args, "gpt-4o")
-	assert.Contains(t, calls[0].Args, "--framework")
-	assert.Contains(t, calls[0].Args, "react")
-	assert.Contains(t, calls[0].Args, "--verbose")
 }
 
 // Regression: NDJSON envelope (step_start/text/step_finish) must not leak into result.Output.

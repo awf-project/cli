@@ -103,7 +103,7 @@ func (p *OpenCodeProvider) ExecuteConversation(ctx context.Context, state *workf
 }
 
 // buildExecuteArgs constructs CLI arguments for a single-turn Execute call.
-// opencode CLI syntax: opencode run "prompt" --format <json|default> [--model X] [--framework F] [--verbose] [--output DIR]
+// opencode CLI syntax: opencode run "prompt" --format <json|default> [--model X]
 func (p *OpenCodeProvider) buildExecuteArgs(prompt string, options map[string]any) ([]string, error) {
 	args := []string{"run", prompt}
 	// Always request NDJSON: session ID extraction, display filter, and raw
@@ -120,7 +120,6 @@ func (p *OpenCodeProvider) buildExecuteArgs(prompt string, options map[string]an
 		args = append(args, "--dangerously-skip-permissions")
 	}
 
-	args = applyOpenCodeCLIOptions(args, options)
 	return args, nil
 }
 
@@ -156,26 +155,7 @@ func (p *OpenCodeProvider) buildConversationArgs(state *workflow.ConversationSta
 		args = append(args, "-c")
 	}
 
-	args = applyOpenCodeCLIOptions(args, options)
 	return args, nil
-}
-
-// applyOpenCodeCLIOptions appends shared OpenCode flag mappings (framework,
-// verbose, output_dir) to an existing argv slice.
-func applyOpenCodeCLIOptions(args []string, options map[string]any) []string {
-	if options == nil {
-		return args
-	}
-	if framework, ok := options["framework"].(string); ok {
-		args = append(args, "--framework", framework)
-	}
-	if verbose, ok := options["verbose"].(bool); ok && verbose {
-		args = append(args, "--verbose")
-	}
-	if outputDir, ok := options["output_dir"].(string); ok {
-		args = append(args, "--output", outputDir)
-	}
-	return args
 }
 
 // Name returns the provider identifier.

@@ -32,52 +32,6 @@ func TestOpenCodeProvider_buildExecuteArgs_HappyPath(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name:    "prompt with framework option",
-			prompt:  "Build a web app",
-			options: map[string]any{"framework": "gin"},
-			wantArgs: []string{
-				"run", "Build a web app",
-				"--format", "json",
-				"--framework", "gin",
-			},
-			wantErr: false,
-		},
-		{
-			name:    "prompt with verbose option",
-			prompt:  "Debug this issue",
-			options: map[string]any{"verbose": true},
-			wantArgs: []string{
-				"run", "Debug this issue",
-				"--format", "json",
-				"--verbose",
-			},
-			wantErr: false,
-		},
-		{
-			name:    "prompt with output_dir option",
-			prompt:  "Generate project",
-			options: map[string]any{"output_dir": "/tmp/project"},
-			wantArgs: []string{
-				"run", "Generate project",
-				"--format", "json",
-				"--output", "/tmp/project",
-			},
-			wantErr: false,
-		},
-		{
-			name:    "prompt with all options",
-			prompt:  "Create app",
-			options: map[string]any{"framework": "fastapi", "verbose": true, "output_dir": "/tmp"},
-			wantArgs: []string{
-				"run", "Create app",
-				"--format", "json",
-				"--framework", "fastapi",
-				"--verbose",
-				"--output", "/tmp",
-			},
-			wantErr: false,
-		},
-		{
 			name:    "prompt with output_format json",
 			prompt:  "generate code",
 			options: map[string]any{"output_format": "json"},
@@ -175,20 +129,6 @@ func TestOpenCodeProvider_buildConversationArgs_HappyPath(t *testing.T) {
 				"run", "test",
 				"--format", "json",
 				"--model", "gpt-4",
-			},
-			wantErr: false,
-		},
-		{
-			name:           "conversation with framework and verbose",
-			stateSessionID: "",
-			stateTurns:     []workflow.Turn{},
-			prompt:         "test",
-			options:        map[string]any{"framework": "django", "verbose": true},
-			wantArgs: []string{
-				"run", "test",
-				"--format", "json",
-				"--framework", "django",
-				"--verbose",
 			},
 			wantErr: false,
 		},
@@ -344,7 +284,7 @@ func TestOpenCodeProvider_Execute_DelegatesCorrectly(t *testing.T) {
 		{
 			name:         "execution with options",
 			prompt:       "Build API",
-			options:      map[string]any{"framework": "fastapi"},
+			options:      map[string]any{"model": "gpt-4o"},
 			mockStdout:   []byte("API created"),
 			mockStderr:   []byte(""),
 			wantOutput:   "API created",
@@ -540,4 +480,35 @@ func TestOpenCodeProvider_validateOpenCodeOptions_InvalidTypes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Regression: `opencode run` (v2.2.5) rejects the Claude-Code flags --framework,
+// --verbose and --output, so these options must never reach argv.
+func TestOpenCodeProvider_buildExecuteArgs_IgnoresUnsupportedOptions(t *testing.T) {
+	provider := NewOpenCodeProvider()
+	unsupported := map[string]any{"framework": "gin", "verbose": true, "output_dir": "/tmp/p"}
+
+	withOptions, err := provider.buildExecuteArgs("Create a HTTP server", unsupported)
+	require.NoError(t, err)
+	withoutOptions, err := provider.buildExecuteArgs("Create a HTTP server", nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, withoutOptions, withOptions)
+}
+
+// Regression: same as above for the multi-turn builder.
+func TestOpenCodeProvider_buildConversationArgs_IgnoresUnsupportedOptions(t *testing.T) {
+	provider := NewOpenCodeProvider()
+	state := &workflow.ConversationState{
+		SessionID: "session-xyz-123",
+		Turns:     []workflow.Turn{{Role: workflow.TurnRoleUser, Content: "previous"}},
+	}
+	unsupported := map[string]any{"framework": "gin", "verbose": true, "output_dir": "/tmp/p"}
+
+	withOptions, err := provider.buildConversationArgs(state, "Continue", unsupported)
+	require.NoError(t, err)
+	withoutOptions, err := provider.buildConversationArgs(state, "Continue", nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, withoutOptions, withOptions)
 }
