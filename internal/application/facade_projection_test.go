@@ -243,12 +243,15 @@ func TestProjectPayload_StepPayload(t *testing.T) {
 // per-step output without an ExecutionContext.
 func TestProjectPayload_StepPayload_CarriesOutput(t *testing.T) {
 	payload := &transcript.StepPayload{
-		Name:    "greet",
-		Kind:    "command",
-		Result:  true,
-		Output:  "Hello, World!\n",
-		Stderr:  "warning: deprecated\n",
-		CostUSD: 0.0123,
+		Name:        "greet",
+		Kind:        "command",
+		Result:      true,
+		Output:      "Hello, World!\n",
+		Stderr:      "warning: deprecated\n",
+		CostUSD:     0.0123,
+		TokensIn:    900,
+		TokensOut:   120,
+		TokensTotal: 1020,
 	}
 
 	result := projectPayload(payload)
@@ -260,6 +263,9 @@ func TestProjectPayload_StepPayload_CarriesOutput(t *testing.T) {
 	assert.Equal(t, "Hello, World!\n", enriched.Output)
 	assert.Equal(t, "warning: deprecated\n", enriched.Stderr)
 	assert.InDelta(t, 0.0123, enriched.CostUSD, 1e-9)
+	assert.Equal(t, 900, enriched.TokensIn)
+	assert.Equal(t, 120, enriched.TokensOut)
+	assert.Equal(t, 1020, enriched.TokensTotal)
 }
 
 func TestProjectPayload_MessagePayload(t *testing.T) {

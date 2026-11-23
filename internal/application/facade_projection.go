@@ -57,13 +57,17 @@ func projectPayload(payload any) any {
 	case *transcript.StepPayload:
 		hadOutput, ok := p.Result.(bool)
 		return &ports.EnrichedStepPayload{
-			Status:    p.Status,
-			StepName:  p.Name,
-			Error:     p.Error,
-			HadOutput: ok && hadOutput,
-			Output:    p.Output,
-			Stderr:    p.Stderr,
-			CostUSD:   p.CostUSD,
+			Status:          p.Status,
+			StepName:        p.Name,
+			Error:           p.Error,
+			HadOutput:       ok && hadOutput,
+			Output:          p.Output,
+			Stderr:          p.Stderr,
+			CostUSD:         p.CostUSD,
+			TokensIn:        p.TokensIn,
+			TokensOut:       p.TokensOut,
+			TokensTotal:     p.TokensTotal,
+			TokensEstimated: p.TokensEstimated,
 		}
 	case *transcript.MessagePayload:
 		return &ports.EnrichedMessagePayload{Content: concatTextBlocks(p.Blocks)}

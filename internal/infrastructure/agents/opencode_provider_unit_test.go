@@ -811,6 +811,12 @@ func TestOpenCodeProvider_Execute_JSONFormat_NDJSONStreamEvents(t *testing.T) {
 	assert.Equal(t, agentJSON, result.Output)
 	// The provider reports what the turn cost; callers surface it as the step price.
 	assert.InDelta(t, 0.001, result.CostUSD, 1e-9)
+	// The split is kept, so a step can report input and output tokens apart from
+	// the total.
+	assert.Equal(t, 6, result.TokensInput)
+	assert.Equal(t, 4, result.TokensOutput)
+	assert.Equal(t, 10, result.Tokens)
+	assert.False(t, result.TokensEstimated)
 
 	var parsed any
 	require.NoError(t, json.Unmarshal([]byte(result.Output), &parsed))

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `step.completed` and `step.failed` events carry `tokens_in`, `tokens_out`,
+  `tokens_total` and `tokens_estimated` for an agent step, and the transcript's
+  `step.completed` payload keeps the same four fields. Providers keep reporting
+  only a total on some paths; the fields are omitted when nothing is known, as
+  `cost_usd` already is.
+
+### Fixed
+
+- A non-conversation agent step reported the provider's total token count as its
+  output and left the input count at zero. The provider's input and output
+  counts now reach `states.<step>.tokens_input` and `tokens_output`.
+
 ## [0.12.1] - 2026-11-23
 
 ## [0.12.0] - 2026-11-23

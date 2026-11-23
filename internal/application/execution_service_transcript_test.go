@@ -198,9 +198,12 @@ func TestExecutionService_EmitTranscriptStepCompleted_ConstructsEvent(t *testing
 	}
 
 	execCtx.SetStepState(step.Name, workflow.StepState{
-		Name:    step.Name,
-		Status:  workflow.StatusCompleted,
-		CostUSD: 0.0042,
+		Name:         step.Name,
+		Status:       workflow.StatusCompleted,
+		CostUSD:      0.0042,
+		TokensInput:  1200,
+		TokensOutput: 300,
+		TokensUsed:   1500,
 	})
 
 	emitTranscriptStepCompletedHelper(svc, ctx, execCtx, step)
@@ -215,6 +218,9 @@ func TestExecutionService_EmitTranscriptStepCompleted_ConstructsEvent(t *testing
 	payload, ok := event.Payload.(*transcript.StepPayload)
 	require.True(t, ok)
 	assert.InDelta(t, 0.0042, payload.CostUSD, 1e-9, "the step price must reach the transcript")
+	assert.Equal(t, 1200, payload.TokensIn, "the input token count must reach the transcript")
+	assert.Equal(t, 300, payload.TokensOut)
+	assert.Equal(t, 1500, payload.TokensTotal)
 }
 
 // TestExecutionService_EmitTranscriptAgentMessage_CarriesPromptAndSystemPrompt verifies message.user event.

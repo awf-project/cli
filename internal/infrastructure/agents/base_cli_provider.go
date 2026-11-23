@@ -313,18 +313,21 @@ func (b *baseCLIProvider) execute(ctx context.Context, prompt string, options ma
 		displayOutput = extractDisplayTextFromEvents(rawOutput, b.hooks.parseDisplayEvents)
 	}
 
-	var outputTokens int
+	var totalTokens, inputTokens, outputTokens int
 	var costUSD float64
 	hasRealTokens := false
 	if b.hooks.extractTokenUsage != nil {
 		if usage := b.hooks.extractTokenUsage(rawOutput); usage != nil {
-			outputTokens = usage.TotalTokens
+			totalTokens = usage.TotalTokens
+			inputTokens = usage.InputTokens
+			outputTokens = usage.OutputTokens
 			costUSD = usage.CostUSD
 			hasRealTokens = true
 		}
 	}
 	if !hasRealTokens {
 		outputTokens, _ = b.tokenizer.CountTokens(outputStr) //nolint:errcheck // ApproximationTokenizer never errors with a valid ratio
+		totalTokens = outputTokens
 	}
 
 	result := &workflow.AgentResult{
@@ -334,7 +337,9 @@ func (b *baseCLIProvider) execute(ctx context.Context, prompt string, options ma
 		DisplayOutput:   displayOutput,
 		StartedAt:       startedAt,
 		CompletedAt:     completedAt,
-		Tokens:          outputTokens,
+		Tokens:          totalTokens,
+		TokensInput:     inputTokens,
+		TokensOutput:    outputTokens,
 		TokensEstimated: !hasRealTokens && b.tokenizer.IsEstimate(),
 		CostUSD:         costUSD,
 	}

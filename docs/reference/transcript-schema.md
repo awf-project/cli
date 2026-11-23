@@ -70,6 +70,10 @@ Carried by `step.*` and `run.*` events.
 | `error` | string | no | Failure description on `*.completed` events; omitted on success via `omitempty`. |
 | `result` | any | no | Step result for `*.completed` events. Shape depends on the step kind (e.g., agent output, command stdout, custom step return value). Omitted via `omitempty` when nil. |
 | `cost_usd` | number | no | What the provider charged for the step, in US dollars, as reported by the provider stream. Present only on `step.completed`, and omitted when the provider reports no price (shell steps, HTTP providers without billing data). |
+| `tokens_in` | number | no | Input tokens the agent step read, as reported by the provider. Present only on `step.completed`, and omitted when the provider reports no split. |
+| `tokens_out` | number | no | Output tokens the agent step wrote. Omitted when the provider reports no split. |
+| `tokens_total` | number | no | Total tokens for the step, input plus output. Omitted when the provider reports neither. |
+| `tokens_estimated` | boolean | no | True when the counts are an approximation rather than a provider measurement. Omitted when false. |
 
 ```json
 {
