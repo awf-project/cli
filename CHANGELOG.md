@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `step.completed` and `step.failed` events carry `cost_usd`: what the provider
+  charged for the step, taken from its own stream (`part.cost` for opencode,
+  `total_cost_usd` for claude). The transcript's `step.completed` payload keeps
+  the same value as `cost_usd`, so a recorded run can be priced later. Providers
+  that report no price leave it at zero, and the field is omitted from JSON.
+
 ## [0.11.10] - 2026-11-16
 
 ## [0.11.10] - 2026-11-16

@@ -2969,6 +2969,7 @@ func (s *ExecutionService) executeAgentStep(
 			state.TokensUsed = result.Tokens
 			state.TokensOutput = result.Tokens
 			state.TokensEstimated = result.TokensEstimated
+			state.CostUSD = result.CostUSD
 
 			// F065: Apply output format post-processing
 			if formatErr := s.applyOutputFormat(step, &state, execCtx); formatErr != nil {
@@ -2999,6 +3000,7 @@ func (s *ExecutionService) executeAgentStep(
 			if result != nil {
 				state.Response = result.Response
 				state.TokensUsed = result.Tokens
+				state.CostUSD = result.CostUSD
 			}
 			execCtx.SetStepState(step.Name, state)
 			return "", fmt.Errorf("step %s: %w", step.Name, execErr)
@@ -3009,6 +3011,7 @@ func (s *ExecutionService) executeAgentStep(
 		if result != nil {
 			state.Response = result.Response
 			state.TokensUsed = result.Tokens
+			state.CostUSD = result.CostUSD
 		}
 		execCtx.SetStepState(step.Name, state)
 

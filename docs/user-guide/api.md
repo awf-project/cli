@@ -420,8 +420,8 @@ data: {"workflow_name":"code-review","status":"failed","completed_at":"2026-05-1
 | Event | Description | Fields |
 |-------|-------------|--------|
 | `step.started` | Step execution began | `step_name`, `status`, `started_at` |
-| `step.completed` | Step finished successfully | `step_name`, `status`, `output`, `completed_at` |
-| `step.failed` | Step execution failed | `step_name`, `status`, `error`, `completed_at` |
+| `step.completed` | Step finished successfully | `step_name`, `status`, `output`, `cost_usd`, `completed_at` |
+| `step.failed` | Step execution failed | `step_name`, `status`, `error`, `cost_usd`, `completed_at` |
 | `workflow.completed` | Workflow completed | `workflow_name`, `status`, `completed_at` |
 | `workflow.failed` | Workflow failed or cancelled | `workflow_name`, `status`, `error`, `completed_at` |
 | `output` | Incremental step output | `step_name`, `output` |

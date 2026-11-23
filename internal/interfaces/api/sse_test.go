@@ -147,6 +147,22 @@ func TestSSEEventDataFromEvent_InputRequiredIncludesPrompt(t *testing.T) {
 	assert.Equal(t, "> ", data.Prompt)
 }
 
+func TestSSEEventDataFromEvent_StepCompletedCarriesCost(t *testing.T) {
+	data := eventDataFromEvent(ports.Event{
+		Seq:   9,
+		Kind:  ports.EventStepCompleted,
+		RunID: "run-y",
+		Payload: &ports.EnrichedStepPayload{
+			StepName: "review",
+			CostUSD:  0.0081,
+		},
+	})
+
+	assert.Equal(t, "step.completed", data.Kind)
+	assert.Equal(t, "review", data.Step)
+	assert.InDelta(t, 0.0081, data.CostUSD, 1e-9)
+}
+
 func TestHTTPSSE_StreamConsumesRunSessionEvents(t *testing.T) {
 	// Acceptance: A seeded execution must be tracked in the bridge so that the SSE
 	// stream endpoint can resolve it. The route must be registered (no 405).

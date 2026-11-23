@@ -162,6 +162,7 @@ type ConversationResult struct {
 	TokensOutput    int                // total output tokens across all turns
 	TokensTotal     int                // sum of input + output tokens
 	TokensEstimated bool               // true if token counts are estimates
+	CostUSD         float64            // what the provider charged for the last turn, in USD (0 when unreported)
 	Error           error              // execution error, if any
 	StartedAt       time.Time
 	CompletedAt     time.Time

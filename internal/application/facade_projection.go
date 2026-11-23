@@ -63,6 +63,7 @@ func projectPayload(payload any) any {
 			HadOutput: ok && hadOutput,
 			Output:    p.Output,
 			Stderr:    p.Stderr,
+			CostUSD:   p.CostUSD,
 		}
 	case *transcript.MessagePayload:
 		return &ports.EnrichedMessagePayload{Content: concatTextBlocks(p.Blocks)}
