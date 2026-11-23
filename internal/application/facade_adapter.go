@@ -62,6 +62,12 @@ type Adapter struct {
 	// and this session subscribes to it — with no cross-run contamination a single shared
 	// recorder would cause. When nil (CLI, ACP) the Adapter uses its shared recorder.
 	runRecorderFactory func(runID string) (ports.Recorder, error)
+
+	// execMu guards runningExecutions, the IDs of the executions whose goroutine is
+	// still running. PendingExecutions reads it: `awf serve` needs that list at
+	// shutdown to report the runs a restart cut short.
+	execMu            sync.Mutex
+	runningExecutions map[string]struct{}
 }
 
 // NewAdapter constructs a new Adapter. All parameters are required; optional edge fields
@@ -591,6 +597,7 @@ func (a *Adapter) newSession(ctx context.Context, id string, rec ports.Recorder,
 	if err := a.registry.Add(session); err != nil {
 		return nil, err
 	}
+	a.markExecutionStarted(id)
 
 	// Do NOT remove the session from the registry on close. Completed sessions must
 	// remain reachable via registry.Get so that:
@@ -616,6 +623,8 @@ func (a *Adapter) newSession(ctx context.Context, id string, rec ports.Recorder,
 	ownRec := rec != nil && rec != a.recorder // per-run recorder: this session owns its lifecycle
 
 	go func() {
+		defer a.markExecutionFinished(id)
+
 		// drainDone synchronizes the background drainTranscript goroutine (if spawned).
 		// We Wait() before the deferred cleanups fire so that:
 		//   - drainTranscript has finished appending to session.events before session.Close()
