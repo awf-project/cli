@@ -2248,8 +2248,8 @@ func (s *ExecutionService) Resume(
 	// supplied to Resume has already been cancelled.
 	_, previousAttempt, _, previousRecorded := execCtx.GetHistoryAttempt()
 	if previousAttempt > 0 && !previousRecorded && isTerminalExecutionStatus(execCtx.GetStatus()) {
-		if err := s.finalizeAttemptHistory(context.WithoutCancel(ctx), execCtx, historyErrorMessage(execCtx), nil); err != nil {
-			return nil, fmt.Errorf("reconcile pending attempt history: %w", err)
+		if err := s.reconcilePendingAttempt(ctx, execCtx, previousAttempt); err != nil {
+			return nil, err
 		}
 	}
 
@@ -2316,6 +2316,52 @@ func cloneExecutionContext(execCtx *workflow.ExecutionContext) (*workflow.Execut
 
 func isTerminalExecutionStatus(status workflow.ExecutionStatus) bool {
 	return status == workflow.StatusCompleted || status == workflow.StatusFailed || status == workflow.StatusCancelled
+}
+
+// reconcilePendingAttempt writes the terminal attempt left by a run that ended
+// without saving its recorded marker. `awf serve` may already have written that
+// attempt when a shutdown cut the run short. The resulting conflict means the
+// attempt is in history, so the resume can continue from it.
+func (s *ExecutionService) reconcilePendingAttempt(
+	ctx context.Context,
+	execCtx *workflow.ExecutionContext,
+	attempt int,
+) error {
+	if err := s.finalizeAttemptHistory(context.WithoutCancel(ctx), execCtx, historyErrorMessage(execCtx), nil); err != nil {
+		if !errors.Is(err, ports.ErrHistoryRecordConflict) {
+			return fmt.Errorf("reconcile pending attempt history: %w", err)
+		}
+		recorded, lookupErr := s.previousAttemptAlreadyRecorded(ctx, execCtx.WorkflowID, execCtx.HistoryRecordID, attempt)
+		if lookupErr != nil || !recorded {
+			return fmt.Errorf("reconcile pending attempt history: %w", err)
+		}
+	}
+	return nil
+}
+
+// previousAttemptAlreadyRecorded reports whether history already holds the
+// terminal attempt identity saved in the execution state. `awf serve` writes
+// that record for a run a shutdown cut short, and the run never saved the
+// HistoryRecorded marker, so a missing marker does not mean a missing record.
+// Rewriting it would fail with a history record conflict and block the resume.
+func (s *ExecutionService) previousAttemptAlreadyRecorded(
+	ctx context.Context,
+	workflowID, recordID string,
+	attempt int,
+) (bool, error) {
+	if !s.historySvc.IsEnabled() || recordID == "" {
+		return false, nil
+	}
+	records, err := s.historySvc.List(ctx, &workflow.HistoryFilter{WorkflowID: workflowID, Limit: math.MaxInt})
+	if err != nil {
+		return false, fmt.Errorf("list workflow history: %w", err)
+	}
+	for _, record := range records {
+		if record != nil && record.ID == recordID && record.Attempt == attempt {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func historyErrorMessage(execCtx *workflow.ExecutionContext) string {

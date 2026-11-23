@@ -240,6 +240,9 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 		//     available without a facade-side WaitGroup (tracked for future work).
 		shutdownErr := srv.Shutdown(context.Background())
 		bridge.Shutdown()
+		// Let the cancelled executions record their own outcome, then record the
+		// ones still running: a restart must not look like a run that vanished.
+		recordInterruptedExecutions(cmd, httpFacade, bridge, historyStore, stateStore, logger)
 		result.Cleanup()
 		cmd.Println("Server stopped.")
 		return shutdownErr

@@ -114,10 +114,21 @@ type attemptHistoryStore struct {
 	lastFilter  *workflow.HistoryFilter
 	listCalls   int
 	recordCalls int
+	// rejectDuplicateIdentity mimics SQLite: reusing a record ID or workflow
+	// attempt with different data fails instead of overwriting.
+	rejectDuplicateIdentity bool
 }
 
-func (s *attemptHistoryStore) Record(context.Context, *workflow.ExecutionRecord) error {
+func (s *attemptHistoryStore) Record(_ context.Context, record *workflow.ExecutionRecord) error {
 	s.recordCalls++
+	if !s.rejectDuplicateIdentity {
+		return nil
+	}
+	for _, existing := range s.records {
+		if existing.ID == record.ID && existing.Attempt == record.Attempt {
+			return ports.ErrHistoryRecordConflict
+		}
+	}
 	return nil
 }
 
@@ -539,6 +550,36 @@ func TestExecutionService_ResumeNormalizesLegacyAttemptFromHistory(t *testing.T)
 		assert.Equal(t, 10, got.HistoryAttempt)
 		assert.Equal(t, "retained-9", got.PreviousHistoryRecordID)
 	})
+}
+
+func TestExecutionService_ResumeAfterInterruptedShutdownRecord(t *testing.T) {
+	// `awf serve` records the attempt a shutdown cut short. The execution state
+	// keeps HistoryRecorded=false because the run died before it could save the
+	// marker, so resume must not rewrite the record it already finds in history.
+	store := &attemptStateStore{state: &workflow.ExecutionContext{
+		WorkflowID: "interrupted-run", WorkflowName: "attempt-workflow", Status: workflow.StatusCancelled,
+		CurrentStep: "run", ExitCode: -1,
+		Inputs: map[string]any{}, States: map[string]workflow.StepState{}, Env: map[string]string{},
+		HistoryRecordID: "interrupted-record", HistoryAttempt: 1, HistoryRecorded: false,
+	}}
+	history := &attemptHistoryStore{
+		records: []*workflow.ExecutionRecord{{
+			ID: "interrupted-record", WorkflowID: "interrupted-run", WorkflowName: "attempt-workflow",
+			Attempt: 1, Status: string(workflow.StatusFailed), ExitCode: 1,
+			ErrorMessage: "server shut down before the execution finished",
+		}},
+		rejectDuplicateIdentity: true,
+	}
+	executor := &observingCommandExecutor{store: store}
+	svc := newAttemptExecutionService(attemptTestWorkflow("run"), store, executor, history)
+
+	execCtx, err := svc.Resume(context.Background(), "interrupted-run", nil, "current")
+
+	require.NoError(t, err)
+	require.NotNil(t, execCtx)
+	assert.Equal(t, 2, execCtx.HistoryAttempt)
+	assert.Equal(t, "interrupted-record", execCtx.PreviousHistoryRecordID)
+	assert.Equal(t, 1, executor.calls)
 }
 
 func TestExecutionService_ResumeRewindAllocationFailurePreservesDurableState(t *testing.T) {
