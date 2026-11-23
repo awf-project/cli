@@ -126,6 +126,7 @@ type AgentResult struct {
 	Response        map[string]any // parsed JSON response (if applicable)
 	Tokens          int            // token usage (if reported by provider)
 	TokensEstimated bool           // true if Tokens is an estimation, false if actual count
+	CostUSD         float64        // what the provider charged for this execution, in USD (0 when unreported)
 	Error           error          // execution error, if any
 	StartedAt       time.Time
 	CompletedAt     time.Time

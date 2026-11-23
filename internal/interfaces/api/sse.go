@@ -24,6 +24,9 @@ type sseEventData struct {
 	Step   string `json:"step,omitempty"`
 	Error  string `json:"error,omitempty"`
 	Prompt string `json:"prompt,omitempty"`
+	// CostUSD is what the provider charged for the step that just completed, in USD.
+	// Omitted when the provider reports no price.
+	CostUSD float64 `json:"cost_usd,omitempty"`
 }
 
 func eventDataFromEvent(ev ports.Event) sseEventData { //nolint:gocritic // Event is the public facade value type
@@ -33,6 +36,7 @@ func eventDataFromEvent(ev ports.Event) sseEventData { //nolint:gocritic // Even
 	case ports.EventStepStarted, ports.EventStepCompleted, ports.EventStepCallWorkflowStarted, ports.EventStepCallWorkflowCompleted:
 		if payload, ok := ev.Payload.(*ports.EnrichedStepPayload); ok {
 			data.Step = payload.StepName
+			data.CostUSD = payload.CostUSD
 			switch {
 			case payload.Error != "":
 				data.Error = payload.Error

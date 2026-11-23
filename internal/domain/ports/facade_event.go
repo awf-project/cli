@@ -145,6 +145,9 @@ type EnrichedStepPayload struct {
 	// them (it streams stdout directly through the output writers).
 	Output string
 	Stderr string
+	// CostUSD is what the provider charged for an agent step, in USD. Zero for shell
+	// steps and for providers that report no price.
+	CostUSD float64
 }
 
 // EnrichedMessagePayload carries message content for both EventMessageUser and

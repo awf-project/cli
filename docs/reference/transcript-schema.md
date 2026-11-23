@@ -69,6 +69,7 @@ Carried by `step.*` and `run.*` events.
 | `kind` | string | yes | Step type discriminator (`agent`, `command`, `operation`, `terminal`, `parallel`, `for_each`, `while`, `call_workflow`, or a custom type name). Reflects the actual `step.Type` field. |
 | `error` | string | no | Failure description on `*.completed` events; omitted on success via `omitempty`. |
 | `result` | any | no | Step result for `*.completed` events. Shape depends on the step kind (e.g., agent output, command stdout, custom step return value). Omitted via `omitempty` when nil. |
+| `cost_usd` | number | no | What the provider charged for the step, in US dollars, as reported by the provider stream. Present only on `step.completed`, and omitted when the provider reports no price (shell steps, HTTP providers without billing data). |
 
 ```json
 {

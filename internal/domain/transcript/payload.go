@@ -12,6 +12,9 @@ type StepPayload struct {
 	Kind   string `json:"kind"`
 	Error  string `json:"error,omitempty"`
 	Result any    `json:"result,omitempty"`
+	// CostUSD is what the provider charged for an agent step, in USD. Zero when the
+	// provider reports no price (shell steps, HTTP providers without billing data).
+	CostUSD float64 `json:"cost_usd,omitempty"`
 	// Output and Stderr carry the step's captured stdout/stderr for live, event-only
 	// consumers (TUI monitoring, SSE) that have no ExecutionContext to poll. They are
 	// json:"-" on purpose: stdout is intentionally NOT persisted in the canonical

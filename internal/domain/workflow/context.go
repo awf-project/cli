@@ -43,6 +43,7 @@ type StepState struct {
 	TokensInput     int                // input tokens (from provider JSON or estimation)
 	TokensOutput    int                // output tokens (from provider JSON or estimation)
 	TokensEstimated bool               // true if token counts are estimates, false if from provider
+	CostUSD         float64            // what the provider charged for this step, in USD (0 when unreported)
 
 	// C019: Output streaming fields for memory management
 	OutputPath string // Path to temp file if output was streamed (empty if in-memory)

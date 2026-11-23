@@ -796,7 +796,7 @@ func TestOpenCodeProvider_Execute_JSONFormat_NDJSONStreamEvents(t *testing.T) {
 	ndjson := strings.Join([]string{
 		`{"type":"step_start","sessionID":"ses_1","part":{}}`,
 		string(textPart),
-		`{"type":"step_finish","sessionID":"ses_1","part":{"tokens":10,"cost":0.001}}`,
+		`{"type":"step_finish","sessionID":"ses_1","part":{"tokens":{"input":6,"output":4,"total":10},"cost":0.001}}`,
 	}, "\n")
 
 	mockExec := mocks.NewMockCLIExecutor()
@@ -809,6 +809,8 @@ func TestOpenCodeProvider_Execute_JSONFormat_NDJSONStreamEvents(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, agentJSON, result.Output)
+	// The provider reports what the turn cost; callers surface it as the step price.
+	assert.InDelta(t, 0.001, result.CostUSD, 1e-9)
 
 	var parsed any
 	require.NoError(t, json.Unmarshal([]byte(result.Output), &parsed))

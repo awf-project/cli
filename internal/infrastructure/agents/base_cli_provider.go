@@ -314,10 +314,12 @@ func (b *baseCLIProvider) execute(ctx context.Context, prompt string, options ma
 	}
 
 	var outputTokens int
+	var costUSD float64
 	hasRealTokens := false
 	if b.hooks.extractTokenUsage != nil {
 		if usage := b.hooks.extractTokenUsage(rawOutput); usage != nil {
 			outputTokens = usage.TotalTokens
+			costUSD = usage.CostUSD
 			hasRealTokens = true
 		}
 	}
@@ -334,6 +336,7 @@ func (b *baseCLIProvider) execute(ctx context.Context, prompt string, options ma
 		CompletedAt:     completedAt,
 		Tokens:          outputTokens,
 		TokensEstimated: !hasRealTokens && b.tokenizer.IsEstimate(),
+		CostUSD:         costUSD,
 	}
 
 	return result, rawOutput, nil
@@ -432,11 +435,13 @@ func (b *baseCLIProvider) executeConversation(ctx context.Context, state *workfl
 	assistantTurn := workflow.NewTurn(workflow.TurnRoleAssistant, outputStr)
 
 	var assistantTokens, inputTokens int
+	var costUSD float64
 	hasRealTokens := false
 	if b.hooks.extractTokenUsage != nil {
 		if usage := b.hooks.extractTokenUsage(rawOutput); usage != nil {
 			assistantTokens = usage.OutputTokens
 			inputTokens = usage.InputTokens
+			costUSD = usage.CostUSD
 			hasRealTokens = true
 		}
 	}
@@ -479,6 +484,7 @@ func (b *baseCLIProvider) executeConversation(ctx context.Context, state *workfl
 		TokensOutput:    assistantTurn.Tokens,
 		TokensTotal:     inputTokens + assistantTurn.Tokens,
 		TokensEstimated: !hasRealTokens && b.tokenizer.IsEstimate(),
+		CostUSD:         costUSD,
 		StartedAt:       startedAt,
 		CompletedAt:     completedAt,
 	}
