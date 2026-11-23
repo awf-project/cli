@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/spf13/cobra"
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -22,6 +23,26 @@ const inFlightPollInterval = 25 * time.Millisecond
 
 // interruptedExitCode is the exit code stored on an execution a shutdown cut short.
 const interruptedExitCode = 1
+
+// recordInterruptedExecutions waits for the executions `awf serve` cancelled to
+// record their own outcome, then records the ones still running so a restart
+// does not look like a run that vanished.
+func recordInterruptedExecutions(
+	cmd *cobra.Command,
+	facade *application.Adapter,
+	bridge *api.Bridge,
+	historyStore ports.HistoryStore,
+	stateStore ports.StateStore,
+	logger ports.Logger,
+) {
+	ids := waitForExecutions(facade, inFlightDrainTimeout)
+	if len(ids) == 0 {
+		return
+	}
+	recorded := recordInterrupted(context.Background(), historyStore, stateStore, logger,
+		interruptedExecutions(bridge, ids), time.Now())
+	cmd.Printf("Recorded %d interrupted execution(s)\n", recorded)
+}
 
 // waitForExecutions blocks until the facade reports no running execution, or
 // timeout elapses. It returns the IDs still running when it gives up.

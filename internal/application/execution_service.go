@@ -2224,17 +2224,8 @@ func (s *ExecutionService) Resume(
 	// supplied to Resume has already been cancelled.
 	_, previousAttempt, _, previousRecorded := execCtx.GetHistoryAttempt()
 	if previousAttempt > 0 && !previousRecorded && isTerminalExecutionStatus(execCtx.GetStatus()) {
-		if err := s.finalizeAttemptHistory(context.WithoutCancel(ctx), execCtx, historyErrorMessage(execCtx), nil); err != nil {
-			// `awf serve` may already have written this attempt when a shutdown cut
-			// the run short, without saving the recorded marker. The conflict means
-			// the attempt is in history, so the resume can continue from it.
-			if !errors.Is(err, ports.ErrHistoryRecordConflict) {
-				return nil, fmt.Errorf("reconcile pending attempt history: %w", err)
-			}
-			recorded, lookupErr := s.previousAttemptAlreadyRecorded(ctx, execCtx.WorkflowID, execCtx.HistoryRecordID, previousAttempt)
-			if lookupErr != nil || !recorded {
-				return nil, fmt.Errorf("reconcile pending attempt history: %w", err)
-			}
+		if err := s.reconcilePendingAttempt(ctx, execCtx, previousAttempt); err != nil {
+			return nil, err
 		}
 	}
 
@@ -2300,6 +2291,27 @@ func cloneExecutionContext(execCtx *workflow.ExecutionContext) (*workflow.Execut
 
 func isTerminalExecutionStatus(status workflow.ExecutionStatus) bool {
 	return status == workflow.StatusCompleted || status == workflow.StatusFailed || status == workflow.StatusCancelled
+}
+
+// reconcilePendingAttempt writes the terminal attempt left by a run that ended
+// without saving its recorded marker. `awf serve` may already have written that
+// attempt when a shutdown cut the run short. The resulting conflict means the
+// attempt is in history, so the resume can continue from it.
+func (s *ExecutionService) reconcilePendingAttempt(
+	ctx context.Context,
+	execCtx *workflow.ExecutionContext,
+	attempt int,
+) error {
+	if err := s.finalizeAttemptHistory(context.WithoutCancel(ctx), execCtx, historyErrorMessage(execCtx), nil); err != nil {
+		if !errors.Is(err, ports.ErrHistoryRecordConflict) {
+			return fmt.Errorf("reconcile pending attempt history: %w", err)
+		}
+		recorded, lookupErr := s.previousAttemptAlreadyRecorded(ctx, execCtx.WorkflowID, execCtx.HistoryRecordID, attempt)
+		if lookupErr != nil || !recorded {
+			return fmt.Errorf("reconcile pending attempt history: %w", err)
+		}
+	}
+	return nil
 }
 
 // previousAttemptAlreadyRecorded reports whether history already holds the

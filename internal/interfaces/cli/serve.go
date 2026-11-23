@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
@@ -226,11 +225,7 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 		bridge.Shutdown()
 		// Let the cancelled executions record their own outcome, then record the
 		// ones still running: a restart must not look like a run that vanished.
-		if ids := waitForExecutions(httpFacade, inFlightDrainTimeout); len(ids) > 0 {
-			recorded := recordInterrupted(context.Background(), historyStore, stateStore, logger,
-				interruptedExecutions(bridge, ids), time.Now())
-			cmd.Printf("Recorded %d interrupted execution(s)\n", recorded)
-		}
+		recordInterruptedExecutions(cmd, httpFacade, bridge, historyStore, stateStore, logger)
 		result.Cleanup()
 		cmd.Println("Server stopped.")
 		return shutdownErr
