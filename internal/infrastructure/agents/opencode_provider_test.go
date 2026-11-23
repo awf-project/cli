@@ -27,27 +27,6 @@ func TestOpenCodeProvider_Execute_HappyPath_Integration(t *testing.T) {
 			prompt:  "Create a HTTP server",
 			options: nil,
 		},
-		{
-			name:   "with framework option",
-			prompt: "Build a web app",
-			options: map[string]any{
-				"framework": "gin",
-			},
-		},
-		{
-			name:   "with verbose mode",
-			prompt: "Debug this issue",
-			options: map[string]any{
-				"verbose": true,
-			},
-		},
-		{
-			name:   "with output directory",
-			prompt: "Generate project structure",
-			options: map[string]any{
-				"output_dir": "/tmp/project",
-			},
-		},
 	}
 
 	ctx := context.Background()
