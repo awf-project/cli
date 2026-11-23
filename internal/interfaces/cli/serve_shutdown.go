@@ -49,34 +49,36 @@ func interruptedExecutions(bridge *api.Bridge, ids []string) []*api.ActiveExecut
 }
 
 // recordInterrupted writes one failed history record per execution a shutdown cut
-// short, so the dashboard and `awf history` show the run instead of losing it. The
-// record claims attempt 1 with no predecessor, because the attempt the live run
-// allocated is not visible outside the execution.
+// short, so the dashboard and `awf history` show the run instead of losing it.
 //
-// The write happens after the drain wait, so an execution that did finish already
-// wrote its own record; this insert then fails on the identity constraint and the
-// existing record is kept.
+// The record reuses the history identity the execution persisted before its
+// attempt started: a resumed run owns a later attempt and a predecessor, so
+// claiming attempt 1 here would collide with the predecessor and leave the live
+// attempt out of history. An execution that already finalized its own record is
+// skipped, and one that finalizes after this write keeps the record below: both
+// writes claim the same attempt, so one of them wins and the other is a no-op.
 func recordInterrupted(
 	ctx context.Context,
 	store ports.HistoryStore,
+	stateStore ports.StateStore,
 	logger ports.Logger,
 	executions []*api.ActiveExecution,
 	now time.Time,
 ) int {
 	recorded := 0
 	for _, execution := range executions {
-		record := &workflow.ExecutionRecord{
-			ID:           uuid.NewString(),
-			WorkflowID:   execution.ExecutionID,
-			Attempt:      1,
-			WorkflowName: execution.WorkflowName,
-			Status:       string(workflow.StatusFailed),
-			ExitCode:     interruptedExitCode,
-			StartedAt:    execution.StartedAt,
-			CompletedAt:  now,
-			DurationMs:   now.Sub(execution.StartedAt).Milliseconds(),
-			ErrorMessage: "server shut down before the execution finished",
+		state, err := stateStore.Load(ctx, execution.ExecutionID)
+		if err != nil {
+			logger.Warn("failed to read interrupted execution state",
+				"execution_id", execution.ExecutionID,
+				"error", err,
+			)
+			state = nil
 		}
+		if state != nil && state.HistoryRecorded {
+			continue
+		}
+		record := interruptedRecord(execution, state, now)
 		if err := store.Record(ctx, record); err != nil {
 			logger.Warn("failed to record interrupted execution",
 				"execution_id", execution.ExecutionID,
@@ -87,4 +89,35 @@ func recordInterrupted(
 		recorded++
 	}
 	return recorded
+}
+
+// interruptedRecord builds the failed record for one execution, using the
+// persisted attempt identity when the state is readable and a fresh first
+// attempt otherwise so an unreadable state never costs the run its record.
+func interruptedRecord(
+	execution *api.ActiveExecution,
+	state *workflow.ExecutionContext,
+	now time.Time,
+) *workflow.ExecutionRecord {
+	record := &workflow.ExecutionRecord{
+		ID:           uuid.NewString(),
+		WorkflowID:   execution.ExecutionID,
+		Attempt:      1,
+		WorkflowName: execution.WorkflowName,
+		Status:       string(workflow.StatusFailed),
+		ExitCode:     interruptedExitCode,
+		StartedAt:    execution.StartedAt,
+		CompletedAt:  now,
+		ErrorMessage: "server shut down before the execution finished",
+	}
+	if state != nil && state.HistoryRecordID != "" && state.HistoryAttempt > 0 {
+		record.ID = state.HistoryRecordID
+		record.Attempt = state.HistoryAttempt
+		record.ResumedFromID = state.PreviousHistoryRecordID
+		if !state.StartedAt.IsZero() {
+			record.StartedAt = state.StartedAt
+		}
+	}
+	record.DurationMs = now.Sub(record.StartedAt).Milliseconds()
+	return record
 }
