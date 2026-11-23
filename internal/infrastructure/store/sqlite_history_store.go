@@ -12,6 +12,7 @@ import (
 
 	_ "modernc.org/sqlite" // SQLite driver for database/sql
 
+	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
@@ -22,8 +23,9 @@ const (
 )
 
 // ErrHistoryRecordConflict reports reuse of a record ID or workflow attempt
-// identity with different persisted data.
-var ErrHistoryRecordConflict = errors.New("history record conflict")
+// identity with different persisted data. It aliases the ports sentinel so the
+// application layer can test the error without importing this package.
+var ErrHistoryRecordConflict = ports.ErrHistoryRecordConflict
 
 const (
 	sqliteConstraintPrimaryKey = 1555
