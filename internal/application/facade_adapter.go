@@ -157,9 +157,11 @@ func (a *Adapter) Validate(ctx context.Context, req ports.RunRequest) (ports.Val
 	// it to ExitWorkflow — distinct from the not-found USER error above.
 	if a.workflowSvc != nil {
 		if verr := a.workflowSvc.ValidateLoadedWorkflow(ctx, wf, req.Identifier, req.ValidateOpts); verr != nil {
+			var notifierErr *notifierOperationError
 			ve := ports.ValidationError{
-				Code:    MapError(verr),
-				Message: verr.Error(),
+				Code:                    MapError(verr),
+				Message:                 verr.Error(),
+				PreserveStructuredError: errors.As(verr, &notifierErr),
 			}
 			return ports.ValidationReport{Valid: false, Errors: []ports.ValidationError{ve}}, nil
 		}

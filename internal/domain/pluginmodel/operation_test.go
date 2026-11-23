@@ -36,7 +36,9 @@ func TestValidValidationRules_ContainsAllRules(t *testing.T) {
 	// Happy path: Verify all expected validation rules are present
 	assert.Contains(t, pluginmodel.ValidValidationRules, "url")
 	assert.Contains(t, pluginmodel.ValidValidationRules, "email")
-	assert.Len(t, pluginmodel.ValidValidationRules, 2)
+	assert.Contains(t, pluginmodel.ValidValidationRules, "nonblank")
+	assert.Contains(t, pluginmodel.ValidValidationRules, pluginmodel.ValidationRuleNotifierBackend)
+	assert.Len(t, pluginmodel.ValidValidationRules, 4)
 }
 
 func TestValidValidationRules_IsSlice(t *testing.T) {

@@ -20,6 +20,7 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/api"
+	"github.com/awf-project/cli/internal/interfaces/notifierwiring"
 	"github.com/spf13/cobra"
 )
 
@@ -52,7 +53,7 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 		cmd.PrintErrf("warning: binding to non-loopback address %s — ensure access control is in place\n", host)
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	storagePath := xdg.AWFDataDir()
@@ -67,7 +68,7 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 		xdg.LocalPluginsDir(),
 		xdg.AWFPluginsDir(),
 	}
-	pluginResult, pluginErr := pluginmgr.InitSystem(ctx, pluginDirs, filepath.Join(storagePath, "plugins"), "", logger)
+	pluginResult, pluginErr := serveInitPluginSystem(ctx, pluginDirs, filepath.Join(storagePath, "plugins"), "", logger)
 
 	otelEndpoint := ""
 	otelServiceName := ""
@@ -128,13 +129,23 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 			application.WithPluginState(pluginResult.Service),
 			application.WithPluginService(pluginResult.Service),
 		)
-		if pluginResult.RPCManager != nil {
-			setupOpts = append(setupOpts, application.WithPluginProviders(application.PluginProviders{
-				Operations: pluginResult.Manager,
-				Validators: pluginResult.RPCManager.ValidatorProvider(0),
-				StepTypes:  pluginResult.RPCManager.StepTypeProvider(logger),
-			}))
+		notifierSettings := notifierwiring.Settings{}
+		if projectCfg != nil {
+			notifierSettings.Backend = projectCfg.Notifier.Backend
+			notifierSettings.DefaultChannel = projectCfg.Notifier.DefaultChannel
 		}
+		pluginProviders := application.PluginProviders{
+			Operations: notifierwiring.ComposeOperationProvider(
+				notifierSettings,
+				pluginResult.Service.IsPluginEnabled("notifier"),
+				pluginResult.Manager,
+			),
+		}
+		if pluginResult.RPCManager != nil {
+			pluginProviders.Validators = pluginResult.RPCManager.ValidatorProvider(0)
+			pluginProviders.StepTypes = pluginResult.RPCManager.StepTypeProvider(logger)
+		}
+		setupOpts = append(setupOpts, application.WithPluginProviders(pluginProviders))
 	}
 
 	setupOpts = append(setupOpts, application.WithTracer(tracer))
@@ -234,6 +245,8 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 		return shutdownErr
 	}
 }
+
+var serveInitPluginSystem = pluginmgr.InitSystem
 
 // buildHTTPFacade constructs a run-capable ports.WorkflowFacade for the HTTP serve path
 // (F108). It mirrors buildRunCapableFacade from run.go and wires a PER-RUN transcript

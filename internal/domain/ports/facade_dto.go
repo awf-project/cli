@@ -129,9 +129,10 @@ type WorkflowSummary struct {
 // Field names the workflow element that failed validation (may be empty for
 // top-level errors). Message is the human-readable explanation.
 type ValidationError struct {
-	Code    domerrors.ErrorCode
-	Field   string
-	Message string
+	Code                    domerrors.ErrorCode
+	Field                   string
+	Message                 string
+	PreserveStructuredError bool
 }
 
 // ValidationReport is returned by WorkflowFacade.Validate.

@@ -11,6 +11,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/infrastructure/analyzer"
 	"github.com/awf-project/cli/internal/infrastructure/expression"
+	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/skills"
 	"github.com/awf-project/cli/internal/infrastructure/store"
@@ -18,6 +19,7 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/internal/interfaces/cli/ui"
+	"github.com/awf-project/cli/internal/interfaces/notifierwiring"
 )
 
 // OutputMode defines how command output is displayed.
@@ -60,6 +62,7 @@ func ParseOutputMode(s string) (OutputMode, error) {
 type Config struct {
 	ExecutionSetupOptions []application.SetupOption
 	CommandExecutor       ports.CommandExecutor
+	DiscoveredOperations  ports.OperationProvider
 	Verbose               bool
 	Quiet                 bool
 	NoColor               bool
@@ -172,7 +175,17 @@ func buildFacade(cfg *Config) (facade ports.WorkflowFacade, cleanup func()) {
 	builtins := application.NewBuiltinOperationProvider(
 		logger, application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend},
 	)
-	workflowSvc.SetPluginOperationProvider(builtins)
+	notifierProvider := notifierwiring.ComposeOperationProvider(
+		notifierwiring.Settings{
+			Backend:        projectCfg.Notifier.Backend,
+			DefaultChannel: projectCfg.Notifier.DefaultChannel,
+		},
+		true,
+		nil,
+	)
+	workflowSvc.SetPluginOperationProvider(
+		pluginmgr.NewCompositeOperationProvider(builtins, notifierProvider),
+	)
 	workflowSvc.SetSkillRepository(skills.NewFilesystemSkillRepository(&cliLogger{silent: cfg.Quiet}))
 
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
@@ -224,6 +237,11 @@ func buildValidationFacadeWithDependencies(cfg *Config, deps validationFacadeDep
 	if pluginCleanup == nil {
 		pluginCleanup = noop
 	}
+	projectCfg, err := loadProjectConfig(logger)
+	if err != nil {
+		pluginCleanup()
+		return nil, noop, err
+	}
 	historyStore, err := deps.openHistory(filepath.Join(cfg.StoragePath, "history.db"))
 	if err != nil {
 		pluginCleanup()
@@ -235,7 +253,15 @@ func buildValidationFacadeWithDependencies(cfg *Config, deps validationFacadeDep
 	workflowSvc := application.NewWorkflowService(repo, nil, nil, nil, expression.NewExprValidator())
 	workflowSvc.SetPackDiscoverer(discoverer)
 	workflowSvc.SetTemplateAnalyzer(analyzer.NewInterpolationAnalyzer())
-	workflowSvc.SetPluginOperationProvider(buildValidationOperationProvider(plugins.Service, plugins.Manager, logger))
+	workflowSvc.SetPluginOperationProvider(buildValidationOperationProvider(
+		plugins.Service,
+		plugins.Manager,
+		logger,
+		notifierwiring.Settings{
+			Backend:        projectCfg.Notifier.Backend,
+			DefaultChannel: projectCfg.Notifier.DefaultChannel,
+		},
+	))
 	if plugins.RPCManager != nil {
 		workflowSvc.SetValidatorProvider(plugins.RPCManager.ValidatorProvider(0))
 		workflowSvc.SetStepTypeProvider(plugins.RPCManager.StepTypeProvider(logger))

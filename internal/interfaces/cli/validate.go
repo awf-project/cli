@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/awf-project/cli/internal/application"
+	domainerrors "github.com/awf-project/cli/internal/domain/errors"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/skills"
@@ -116,7 +117,13 @@ func runValidateViaFacade(cmd *cobra.Command, cfg *Config, writer *ui.OutputWrit
 
 	var validationErr error
 	if !report.Valid && len(errMessages) > 0 {
-		validationErr = fmt.Errorf("%s", strings.Join(errMessages, "\n  "))
+		message := strings.Join(errMessages, "\n  ")
+		validationErr = fmt.Errorf("%s", message)
+		if report.Errors[0].PreserveStructuredError {
+			validationErr = domainerrors.NewStructuredError(
+				report.Errors[0].Code, message, nil, nil,
+			)
+		}
 	}
 
 	if cfg.OutputFormat == ui.FormatJSON || cfg.OutputFormat == ui.FormatQuiet {

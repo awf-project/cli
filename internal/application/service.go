@@ -815,9 +815,10 @@ func operationValidationError(
 	cause error,
 ) error {
 	message := fmt.Sprintf("invalid inputs for operation %q in step %q", operationName, stepName)
-	if errors.Is(cause, operation.ErrOperationNotFound) {
+	switch {
+	case errors.Is(cause, operation.ErrOperationNotFound):
 		message = fmt.Sprintf("operation %q not found in step %q", operationName, stepName)
-	} else if len(requiredFields) > 0 {
+	case len(requiredFields) > 0:
 		reasons := make([]string, len(requiredFields))
 		for i, field := range requiredFields {
 			reasons[i] = fmt.Sprintf("required field %q is missing or empty", field)
@@ -827,10 +828,16 @@ func operationValidationError(
 			}
 		}
 		message += ": " + strings.Join(reasons, "; ")
+	case strings.HasPrefix(operationName, "notifier.") && len(fieldPaths) > 0:
+		message += ": invalid field " + strings.Join(fieldPaths, ", ")
 	}
-	return domerrors.NewStructuredError(domerrors.ErrorCodeUserInputValidationFailed,
+	validationErr := domerrors.NewStructuredError(domerrors.ErrorCodeUserInputValidationFailed,
 		message,
 		map[string]any{"operation": operationName, "step": stepName, "field_paths": fieldPaths}, cause)
+	if strings.HasPrefix(operationName, "notifier.") {
+		return &notifierOperationError{cause: validationErr}
+	}
+	return validationErr
 }
 
 func operationFieldPath(stepName, suffix string) string {

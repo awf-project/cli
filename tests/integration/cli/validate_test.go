@@ -93,6 +93,192 @@ capabilities:
 	assert.NotContains(t, negativeDiagnostic, "USER.MCP_PROXY.UNKNOWN_PLUGIN")
 }
 
+func TestValidateCommand_OwnsDiscoveredNotifierAdapterLifecycle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	root := t.TempDir()
+	pluginsDir := filepath.Join(root, "plugins")
+	pluginDir := filepath.Join(pluginsDir, validationPluginName)
+	workflowsDir := filepath.Join(root, "workflows")
+	storageDir := filepath.Join(root, "storage")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o755))
+	require.NoError(t, os.MkdirAll(workflowsDir, 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, ".awf"), 0o755))
+	installCurrentTestExecutable(t, filepath.Join(pluginDir, validationPluginName))
+	const adapterCredentialCanary = "adapter-credential-output-canary"
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "plugin.yaml"), []byte(`name: awf-plugin-validation-test
+version: 1.0.0
+awf_version: ">=0.1.0"
+capabilities:
+  - operations
+config:
+  adapter_credential:
+    type: string
+    default: adapter-credential-output-canary
+`), 0o600))
+
+	repoRoot, err := findRepoRoot()
+	require.NoError(t, err)
+	fixture := string(requireReadFile(t, filepath.Join(repoRoot, "tests", "fixtures", "workflows", "http-get-test.yaml")))
+	fixture = strings.Replace(fixture, "name: http-get-test", "name: notifier-validation", 1)
+	fixture = strings.Replace(fixture, "operation: http.request", "operation: notifier.send", 1)
+	fixture = strings.Replace(
+		fixture,
+		"      method: GET\n      url: \"{{inputs.url}}\"",
+		"      text: workflow-text-output-canary\n      rich:\n        marker: workflow-rich-output-canary",
+		1,
+	)
+	workflowPath := filepath.Join(workflowsDir, "notifier-validation.yaml")
+	require.NoError(t, os.WriteFile(workflowPath, []byte(fixture), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".awf", "config.yaml"), []byte(`notifier:
+  backend: awf-plugin-validation-test
+  default_channel: notifier-channel-output-canary
+`), 0o600))
+
+	lifecycleRecord := filepath.Join(root, "lifecycle.log")
+	dispatchRecord := filepath.Join(root, "dispatch.log")
+	t.Setenv("AWF_PLUGINS_PATH", pluginsDir)
+	t.Setenv("AWF_WORKFLOWS_PATH", workflowsDir)
+	t.Setenv("AWF_VALIDATION_LIFECYCLE_RECORD", lifecycleRecord)
+	t.Setenv("AWF_VALIDATION_DISPATCH_RECORD", dispatchRecord)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg-config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "xdg-data"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "xdg-state"))
+	t.Chdir(root)
+	hostLog, err := os.CreateTemp(root, "validation-host-*.log")
+	require.NoError(t, err)
+	previousStderr := os.Stderr
+	os.Stderr = hostLog
+	t.Cleanup(func() {
+		os.Stderr = previousStderr
+		require.NoError(t, hostLog.Close())
+	})
+
+	cmd, cleanup := cli.NewRootCommandAutoFacade()
+	cleanupCommand := sync.OnceFunc(cleanup)
+	t.Cleanup(cleanupCommand)
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	cmd.SetOut(stdout)
+	cmd.SetErr(stderr)
+	cmd.SetArgs([]string{"--no-color", "--storage=" + storageDir, "validate", "notifier-validation"})
+
+	require.NoError(t, cmd.Execute())
+	cleanupDone := make(chan struct{})
+	go func() {
+		cleanupCommand()
+		close(cleanupDone)
+	}()
+	select {
+	case <-cleanupDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("adapter cleanup did not complete within 5s")
+	}
+
+	assert.Equal(t, "Workflow 'notifier-validation' is valid\n", stdout.String())
+	assert.Empty(t, stderr.String())
+	require.NoError(t, hostLog.Sync())
+	hostLogContents, readErr := os.ReadFile(hostLog.Name()) //nolint:gosec // test-owned host-log destination
+	require.NoError(t, readErr)
+	for _, canary := range []string{"workflow-text-output-canary", "workflow-rich-output-canary", "notifier-channel-output-canary", adapterCredentialCanary} {
+		assert.NotContains(t, stdout.String(), canary)
+		assert.NotContains(t, stderr.String(), canary)
+		assert.NotContains(t, string(hostLogContents), canary)
+	}
+	lifecycle := string(requireReadFile(t, lifecycleRecord))
+	assert.Equal(t, 1, strings.Count(lifecycle, "start:"))
+	assert.Equal(t, 1, strings.Count(lifecycle, "exit:"))
+	dispatches, readErr := os.ReadFile(dispatchRecord) //nolint:gosec // test-owned record path
+	if !os.IsNotExist(readErr) {
+		require.NoError(t, readErr)
+	}
+	assert.Empty(t, dispatches)
+
+	t.Run("skip plugins keeps the notifier schema", func(t *testing.T) {
+		output, err := executeAutoFacadeCommand(t, []string{
+			"--no-color", "--storage=" + storageDir,
+			"validate", "notifier-validation", "--skip-plugins",
+		})
+		require.NoError(t, err, "%s", output)
+		assert.Equal(t, "Workflow 'notifier-validation' is valid\n", output)
+		assert.Equal(t, lifecycle, string(requireReadFile(t, lifecycleRecord)))
+	})
+}
+
+func TestValidateCommand_ChecksNotifierBackend(t *testing.T) {
+	const workflow = `name: notifier-backend-validation
+version: "1.0.0"
+states:
+  initial: send
+  send:
+    type: operation
+    operation: notifier.send
+    inputs:
+      channel: general
+      text: hello
+    on_success: done
+  done:
+    type: terminal
+    status: success
+`
+	tests := []struct {
+		name         string
+		config       string
+		backendInput string
+		wantError    bool
+	}{
+		{name: "project default", config: "notifier:\n  backend: slack\n"},
+		{name: "explicit override", config: "notifier:\n  backend: x.y\n", backendInput: "slack"},
+		{name: "missing backend", config: "{}\n", wantError: true},
+		{name: "dotted explicit backend", config: "notifier:\n  backend: slack\n", backendInput: "x.y", wantError: true},
+		{name: "dotted project default", config: "notifier:\n  backend: x.y\n", wantError: true},
+		{name: "explicit null", config: "notifier:\n  backend: slack\n", backendInput: "null", wantError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			configPath := filepath.Join(root, "config.yaml")
+			require.NoError(t, os.WriteFile(configPath, []byte(tt.config), 0o600))
+			definition := workflow
+			if tt.backendInput != "" {
+				definition = strings.Replace(workflow, "      channel:", "      backend: "+tt.backendInput+"\n      channel:", 1)
+			}
+			require.NoError(t, os.WriteFile(filepath.Join(root, "notifier-backend-validation.yaml"), []byte(definition), 0o600))
+
+			t.Setenv("AWF_CONFIG_PATH", configPath)
+			t.Setenv("AWF_WORKFLOWS_PATH", root)
+			t.Setenv("AWF_PLUGINS_PATH", filepath.Join(root, "plugins"))
+			t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg-config"))
+			t.Setenv("XDG_DATA_HOME", filepath.Join(root, "xdg-data"))
+			t.Chdir(root)
+
+			for _, mode := range []struct {
+				name  string
+				flags []string
+			}{
+				{name: "default"},
+				{name: "skip plugins", flags: []string{"--skip-plugins"}},
+			} {
+				t.Run(mode.name, func(t *testing.T) {
+					args := []string{"--no-color", "--storage=" + filepath.Join(root, "storage"), "validate", "notifier-backend-validation"}
+					output, err := executeAutoFacadeCommand(t, append(args, mode.flags...))
+					if tt.wantError {
+						require.Error(t, err, "%s", output)
+						assert.Contains(t, output, `operation "notifier.send"`)
+						assert.Regexp(t, `inputs\.backend|required field "backend"`, output)
+						return
+					}
+					require.NoError(t, err, "%s", output)
+					assert.Contains(t, output, "Workflow 'notifier-backend-validation' is valid")
+				})
+			}
+		})
+	}
+}
+
 func executeAutoFacadeCommand(t *testing.T, args []string) (string, error) {
 	t.Helper()
 	cmd, cleanup := cli.NewRootCommandAutoFacade()
