@@ -173,6 +173,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case refreshMsg:
 		return m, m.reload()
 
+	case showHistoryMsg:
+		m.activeTab = TabHistory
+		m.history.setWorkflowScope(msg.Workflow)
+		return m, nil
+
 	case loadRunDetailMsg:
 		return m.loadRunDetail(msg.Record)
 

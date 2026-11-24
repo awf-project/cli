@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under back-pressure so it cannot crowd out lifecycle events.
 - The TUI run view can cancel a run (`c`), repeat the last launch (`r`) and copy the
   selected step's output to the clipboard (`y`).
+- TUI: `h` on a workflow opens History on that workflow's runs (exact name), and `r` in an
+  execution's detail runs it again with the inputs it was started with (`R` reloads).
 - The TUI History screen opens a step detail (`enter`): every step of a past execution
   with its status, duration, error, stderr and output (or conversation), the run's inputs
   with secrets masked, scrolling, and copy. It reads the state AWF saved for the run, and

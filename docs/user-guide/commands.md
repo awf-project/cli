@@ -694,6 +694,7 @@ Workflows run in the same process through the workflow facade, so the TUI sees e
 | `/` | Filter the list |
 | `x` / `enter` | Run the selected workflow (Workflows) |
 | `v` | Validate the selected workflow (Workflows) |
+| `h` | Show the selected workflow's history (Workflows) |
 | `s` | Cycle the status filter (History) |
 | `enter` | Open the step detail of an execution (History) |
 | `r` | Reload; in the run view, run again |

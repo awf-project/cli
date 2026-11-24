@@ -366,7 +366,7 @@ func TestModel_HistoryDetail_ReloadReadsTheStateAgain(t *testing.T) {
 	states := &fakeStates{ec: sampleExecution(time.Now())}
 	m := openDetail(t, historyModel(t, states))
 
-	m, cmd := send(m, press("r"))
+	m, cmd := send(m, press("R"))
 	m = settle(m, cmd)
 
 	assert.Len(t, states.loadedIDs, 2)

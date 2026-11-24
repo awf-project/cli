@@ -45,6 +45,7 @@ The list on the left shows each workflow with the icon and age of its last run (
 | `/` | Filter by name or description (`enter` keeps the filter, `esc` clears it) |
 | `x` or `enter` | Run the selected workflow |
 | `v` | Validate the selected workflow (the result appears in the header) |
+| `h` | Open the History screen on this workflow's runs |
 | `r` | Reload workflows and history |
 
 ### Running with inputs
@@ -118,7 +119,10 @@ The list shows executions newest first, with the outcome icon, workflow and age.
 | `enter` | Open the step detail of the selected execution |
 | `/` | Filter by workflow name |
 | `s` | Cycle the status filter: all, success, failed |
+| `esc` | Clear the text filter, then the workflow scope |
 | `r` | Reload |
+
+When you arrive with `h` from the Workflows screen, the list is limited to that workflow (exact name, so `deploy` does not include `deploy-prod`) and the title reads *History · deploy*. Press `esc` to see every workflow again.
 
 The list footer shows totals (runs, successes, failures).
 
@@ -147,8 +151,11 @@ Press `enter` on an execution to see what each of its steps did, read from the s
 | `pgup` / `pgdn`, mouse wheel | Scroll the output |
 | `home` / `end` | Jump to the start / end of the output |
 | `y` | Copy the step's error, stderr and output to the clipboard |
-| `r` | Reload the detail |
+| `r` | Run the workflow again with the inputs this execution was started with |
+| `R` | Reload the detail |
 | `esc` | Back to the list |
+
+`r` reads the inputs back from the saved state; if that state is gone, nothing is started and the header says the inputs are not available.
 
 The detail comes from the state file AWF keeps for each run. If that file was removed, or the run saved no step data, the screen says so instead of showing steps. A run that was resumed keeps a single state, so its detail reflects the latest attempt.
 

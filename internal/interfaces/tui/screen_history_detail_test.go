@@ -293,7 +293,7 @@ func TestHistoryDetail_CopyAndReload(t *testing.T) {
 		assert.Equal(t, flashMsg{Text: labelRunNothingToCopy}, cmd())
 	})
 	t.Run("reload requests the load again", func(t *testing.T) {
-		s2, cmd := s.Update(press("r"))
+		s2, cmd := s.Update(press("R"))
 		assert.True(t, s2.open.loading)
 		require.NotNil(t, cmd)
 		_, ok := cmd().(loadRunDetailMsg)
@@ -307,7 +307,7 @@ func TestHistoryDetail_KeyBars(t *testing.T) {
 
 	s := openHistoryScreen(t)
 	bar := ansi.Strip(s.keys(120))
-	for _, want := range []string{"pick a step", "scroll", "copy", "reload", "back"} {
+	for _, want := range []string{"pick a step", "scroll", "copy", "run again", "reload", "back"} {
 		assert.Contains(t, bar, want)
 	}
 }
@@ -341,5 +341,72 @@ func TestHistoryDetail_LongLinesAreClippedToTheBox(t *testing.T) {
 
 	for _, l := range lines(s.view(100, 27)) {
 		assert.Equal(t, 100, ansiWidth(l))
+	}
+}
+
+func TestHistoryDetail_RerunLaunchesWithTheSavedInputs(t *testing.T) {
+	s := openHistoryScreen(t)
+
+	_, cmd := s.Update(press("r"))
+
+	require.NotNil(t, cmd)
+	launch, ok := cmd().(LaunchWorkflowMsg)
+	require.True(t, ok, "r runs the execution again")
+	assert.Equal(t, "deploy", launch.Workflow.Name)
+	assert.Equal(t, map[string]any{"env": "prod", "API_KEY": "s3cr3t"}, launch.Inputs, "inputs are the ones the run was started with")
+}
+
+func TestHistoryDetail_RerunWithoutALoadedDetailExplainsWhy(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(HistoryScreen) HistoryScreen
+	}{
+		{"still loading", func(s HistoryScreen) HistoryScreen { return s }},
+		{"state was removed", func(s HistoryScreen) HistoryScreen {
+			s, _ = s.Update(RunDetailLoadedMsg{RecordID: s.open.record.ID, Err: labelDetailGone})
+			return s
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := loadedHistory()
+			s, _ = s.Update(press("enter"))
+			s = tt.setup(s)
+
+			_, cmd := s.Update(press("r"))
+
+			require.NotNil(t, cmd)
+			assert.Equal(t, flashMsg{Text: labelHistoryNoInputs, Err: true}, cmd(), "no run is started with guessed inputs")
+		})
+	}
+}
+
+func TestHistoryDetail_RerunOfARunWithoutInputsStillStarts(t *testing.T) {
+	s := loadedHistory()
+	s, _ = s.Update(press("enter"))
+	s, _ = s.Update(RunDetailLoadedMsg{RecordID: s.open.record.ID, Detail: &RunDetail{}})
+
+	_, cmd := s.Update(press("r"))
+
+	launch, ok := cmd().(LaunchWorkflowMsg)
+	require.True(t, ok)
+	assert.Empty(t, launch.Inputs)
+}
+
+func TestInputString(t *testing.T) {
+	tests := []struct {
+		in   any
+		want string
+	}{
+		{"prod", "prod"},
+		{float64(3), "3"},             // JSON numbers are float64: no "3.0"
+		{float64(1000000), "1000000"}, // and no exponent
+		{float64(2.5), "2.5"},
+		{float64(-7), "-7"},
+		{true, "true"},
+		{nil, "<nil>"},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, inputString(tt.in), "%v", tt.in)
 	}
 }

@@ -63,6 +63,8 @@ const (
 	labelHistorySelect     = "Select an execution."
 	labelHistorySummaryFmt = "%d runs · %d ok · %d failed"
 	labelHistoryCountFmt   = "%d runs"
+	labelHistoryScopedFmt  = "History · %s"
+	labelHistoryNoInputs   = "inputs of this run are not available"
 )
 
 // Detail panels (shared by Workflows and History).
@@ -97,6 +99,8 @@ const (
 	labelDetailTruncated   = "(output was truncated when it was saved)"
 	labelKeyOpen           = "step detail"
 	labelKeyBack           = "back"
+	labelKeyHistory        = "history"
+	labelKeyAllWorkflows   = "all workflows"
 	labelKeyReload         = "reload"
 )
 

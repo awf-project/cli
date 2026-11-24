@@ -78,6 +78,9 @@ type HistoryScreen struct {
 	filtering bool
 	status    statusFilter
 	sel       int
+	// scope restricts the list to one workflow, by exact name (set by `h` on the
+	// Workflows screen). Unlike the text filter it never matches "deploy-prod" for "deploy".
+	scope string
 
 	// open is the detail of one execution, nil while the list is showing.
 	open *historyDetail
@@ -101,11 +104,25 @@ func (s *HistoryScreen) setRecords(records []*workflow.ExecutionRecord, stats *w
 	s.clampSelection()
 }
 
-// visible returns the records passing the name filter and the status filter.
+// setWorkflowScope shows only the runs of the named workflow and leaves any open detail.
+func (s *HistoryScreen) setWorkflowScope(name string) {
+	s.scope = name
+	s.filter.Reset()
+	s.filtering = false
+	s.filter.Blur()
+	s.open = nil
+	s.sel = 0
+	s.clampSelection()
+}
+
+// visible returns the records passing the workflow scope, the name filter and the status filter.
 func (s *HistoryScreen) visible() []*workflow.ExecutionRecord {
 	needle := strings.ToLower(strings.TrimSpace(s.filter.Value()))
 	var out []*workflow.ExecutionRecord
 	for _, r := range s.records {
+		if s.scope != "" && r.WorkflowName != s.scope {
+			continue
+		}
 		if !s.status.matches(r.Status) {
 			continue
 		}
@@ -198,10 +215,14 @@ func (s HistoryScreen) updateKey(keyMsg tea.KeyPressMsg) (HistoryScreen, tea.Cmd
 		s.status = s.status.next()
 		s.clampSelection()
 	case "esc":
-		if s.filter.Value() != "" {
+		// Clear the text filter first, then the workflow scope.
+		switch {
+		case s.filter.Value() != "":
 			s.filter.Reset()
-			s.clampSelection()
+		case s.scope != "":
+			s.scope = ""
 		}
+		s.clampSelection()
 	case "r":
 		return s, func() tea.Msg { return refreshMsg{} }
 	}
@@ -235,9 +256,14 @@ func (s *HistoryScreen) keys(w int) string {
 	if s.filtering {
 		return keyBar(w, keyHint{"enter", labelKeyApply}, keyHint{"esc", labelKeyClear})
 	}
-	return keyBar(w,
-		keyHint{"tab", labelKeyTabs}, keyHint{"↑↓", labelKeyNavigate}, keyHint{"enter", labelKeyOpen}, keyHint{"/", labelKeyFilter},
-		keyHint{"s", fmt.Sprintf(labelKeyStatusFmt, s.status.label())}, keyHint{"r", labelKeyRefresh}, keyHint{"q", labelKeyQuit})
+	hints := []keyHint{
+		{"tab", labelKeyTabs}, {"↑↓", labelKeyNavigate}, {"enter", labelKeyOpen}, {"/", labelKeyFilter},
+		{"s", fmt.Sprintf(labelKeyStatusFmt, s.status.label())}, {"r", labelKeyRefresh},
+	}
+	if s.scope != "" {
+		hints = append(hints, keyHint{"esc", labelKeyAllWorkflows})
+	}
+	return keyBar(w, append(hints, keyHint{"q", labelKeyQuit})...)
 }
 
 func (s *HistoryScreen) view(w, h int) string {
@@ -282,7 +308,15 @@ func (s *HistoryScreen) listBox(w, h int) string {
 		pos = s.sel + 1
 	}
 	lines = append(lines[:h-3], row(sDim.Render(s.summary()), sDim.Render(fmt.Sprintf("%d/%d", pos, len(v))), inner))
-	return box(labelHistoryTitle, lines, w, h, !s.filtering)
+	return box(s.title(), lines, w, h, !s.filtering)
+}
+
+// title is the list box title: the workflow name when the list is scoped to one.
+func (s *HistoryScreen) title() string {
+	if s.scope != "" {
+		return fmt.Sprintf(labelHistoryScopedFmt, s.scope)
+	}
+	return labelHistoryTitle
 }
 
 // summary is the list footer: totals from the stats when available.

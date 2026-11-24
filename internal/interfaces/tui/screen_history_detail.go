@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -120,6 +121,31 @@ func (d *historyDetail) loadRequest() tea.Cmd {
 	return func() tea.Msg { return loadRunDetailMsg{Record: rec} }
 }
 
+// rerunCmd launches the execution again with the inputs it was started with, read back
+// from its saved state. Without a loaded detail the inputs are unknown and nothing starts.
+func (d *historyDetail) rerunCmd() tea.Cmd {
+	if d.detail == nil {
+		return func() tea.Msg { return flashMsg{Text: labelHistoryNoInputs, Err: true} }
+	}
+	name := d.record.WorkflowName
+	inputs := make(map[string]any, len(d.detail.Inputs))
+	for k, v := range d.detail.Inputs {
+		inputs[k] = inputString(v)
+	}
+	return func() tea.Msg {
+		return LaunchWorkflowMsg{Workflow: &workflow.Workflow{Name: name}, Inputs: inputs}
+	}
+}
+
+// inputString renders a saved input as the text the form would have submitted. JSON turns
+// every number into a float64, so integral values are printed without an exponent.
+func inputString(v any) string {
+	if f, ok := v.(float64); ok {
+		return strconv.FormatFloat(f, 'f', -1, 64)
+	}
+	return fmt.Sprint(v)
+}
+
 // copyText is the selected step's error, stderr and output as plain text.
 func (d *historyDetail) copyText() string {
 	step, ok := d.selected()
@@ -155,9 +181,11 @@ func (s HistoryScreen) updateDetail(msg tea.KeyPressMsg) (HistoryScreen, tea.Cmd
 		d.offset = 0
 	case "end", "G":
 		d.offset = len(d.lines())
-	case "r":
+	case "R":
 		d.loading, d.err = true, ""
 		return s, d.loadRequest()
+	case "r":
+		return s, d.rerunCmd()
 	case "y":
 		return s, copyCmd(d.copyText())
 	}
@@ -188,7 +216,7 @@ func copyCmd(text string) tea.Cmd {
 func (s *HistoryScreen) detailKeys(w int) string {
 	return keyBar(w,
 		keyHint{"↑↓", labelKeyPickStep}, keyHint{"pgup/dn", labelKeyScroll},
-		keyHint{"y", labelKeyCopy}, keyHint{"r", labelKeyReload}, keyHint{"esc", labelKeyBack})
+		keyHint{"y", labelKeyCopy}, keyHint{"r", labelKeyRerun}, keyHint{"R", labelKeyReload}, keyHint{"esc", labelKeyBack})
 }
 
 // detailView draws the open detail: a summary line over the Steps and Output boxes.

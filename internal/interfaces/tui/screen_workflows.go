@@ -153,11 +153,19 @@ func (s WorkflowsScreen) updateList(msg tea.KeyPressMsg) (WorkflowsScreen, tea.C
 			name := e.Name
 			return s, func() tea.Msg { return validateRequestMsg{Name: name} }
 		}
+	case "h":
+		if e, ok := s.selected(); ok {
+			name := e.Name
+			return s, func() tea.Msg { return showHistoryMsg{Workflow: name} }
+		}
 	case "r":
 		return s, func() tea.Msg { return refreshMsg{} }
 	}
 	return s, nil
 }
+
+// showHistoryMsg asks the Model to open the History screen on one workflow's runs.
+type showHistoryMsg struct{ Workflow string }
 
 // validateRequestMsg asks the Model to validate a workflow through the Bridge.
 type validateRequestMsg struct{ Name string }
@@ -226,7 +234,7 @@ func (s *WorkflowsScreen) keys(w int) string {
 	}
 	return keyBar(w,
 		keyHint{"tab", labelKeyTabs}, keyHint{"↑↓", labelKeyNavigate}, keyHint{"x", labelKeyRun},
-		keyHint{"v", labelKeyValidate}, keyHint{"/", labelKeyFilter}, keyHint{"r", labelKeyRefresh}, keyHint{"q", labelKeyQuit})
+		keyHint{"v", labelKeyValidate}, keyHint{"h", labelKeyHistory}, keyHint{"/", labelKeyFilter}, keyHint{"r", labelKeyRefresh}, keyHint{"q", labelKeyQuit})
 }
 
 // view draws the list and the detail panel side by side.
