@@ -116,6 +116,9 @@ func (t *RunScreen) applyFacadeEvent(ev ports.Event) {
 
 	case ports.EventWorkflowFailed:
 		t.finalStatus = workflow.StatusFailed
+		if term, ok := ev.Payload.(*ports.EnrichedTerminal); ok && term != nil && term.Error != "" {
+			t.runErr = term.Error
+		}
 		t.rebuildTree()
 		t.updateViewportContent()
 	}

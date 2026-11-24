@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -535,4 +536,178 @@ func TestRunScreen_KeyBarDependsOnState(t *testing.T) {
 
 	running.inputActive = true
 	assert.Contains(t, ansi.Strip(running.keys(120)), "reply")
+}
+
+// failRun delivers the terminal failure event the way the facade does.
+func failRun(tab RunScreen, message string) RunScreen {
+	tab, _ = tab.Update(facadeEventMsg{Event: ports.Event{
+		Kind: ports.EventWorkflowFailed, Payload: &ports.EnrichedTerminal{Error: message},
+	}})
+	return tab
+}
+
+func TestRunScreen_WorkflowErrorNotTiedToAStepIsShown(t *testing.T) {
+	tab := runningScreen(t) // build is running, nothing failed
+	tab = failRun(tab, "invalid input: env is required")
+	tab, _ = tab.Update(ExecutionFinishedMsg{})
+
+	out := ansi.Strip(tab.renderSelectedStepChat("build"))
+
+	assert.Contains(t, out, labelRunFailure)
+	assert.Contains(t, out, "invalid input: env is required")
+}
+
+func TestRunScreen_WorkflowErrorIsShownUnderTheFailedStepOnly(t *testing.T) {
+	tab := runningScreen(t)
+	tab, _ = tab.Update(facadeEventMsg{Event: ports.Event{
+		Kind: ports.EventStepCompleted, Payload: &ports.EnrichedStepPayload{StepName: "build", Error: "exit status 2"},
+	}})
+	tab = failRun(tab, "step build failed")
+	tab, _ = tab.Update(ExecutionFinishedMsg{})
+
+	assert.Contains(t, ansi.Strip(tab.renderSelectedStepChat("build")), "step build failed", "shown under the step that failed")
+	assert.NotContains(t, ansi.Strip(tab.renderSelectedStepChat("test")), labelRunFailure, "not repeated under unrelated steps")
+}
+
+func TestRunScreen_WorkflowErrorIsHiddenWhenItShouldNotBeShown(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(RunScreen) RunScreen
+	}{
+		{"run still in flight", func(tab RunScreen) RunScreen { return failRun(tab, "boom") }},
+		{"run cancelled by the user", func(tab RunScreen) RunScreen {
+			tab.activeSession = &cancellableSession{}
+			tab.RequestCancel()
+			tab = failRun(tab, "cancelled")
+			tab, _ = tab.Update(ExecutionFinishedMsg{})
+			return tab
+		}},
+		{"run succeeded", func(tab RunScreen) RunScreen {
+			tab, _ = tab.Update(facadeEventMsg{Event: ports.Event{Kind: ports.EventWorkflowCompleted}})
+			tab.runErr = "stale"
+			tab, _ = tab.Update(ExecutionFinishedMsg{})
+			return tab
+		}},
+		{"failure without a message", func(tab RunScreen) RunScreen {
+			tab = failRun(tab, "")
+			tab, _ = tab.Update(ExecutionFinishedMsg{})
+			return tab
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tab := tt.setup(runningScreen(t))
+			assert.NotContains(t, ansi.Strip(tab.renderSelectedStepChat("build")), labelRunFailure)
+		})
+	}
+}
+
+func TestRunScreen_SessionErrorIsTheFallbackWhenTheEventHadNone(t *testing.T) {
+	t.Run("used when the terminal event carried no message", func(t *testing.T) {
+		tab := failRun(runningScreen(t), "")
+		tab, _ = tab.Update(ExecutionFinishedMsg{Err: errors.New("session failed: disk full")})
+
+		assert.Contains(t, ansi.Strip(tab.renderSelectedStepChat("build")), "session failed: disk full")
+	})
+	t.Run("the event message wins over the session error", func(t *testing.T) {
+		tab := failRun(runningScreen(t), "the real reason")
+		tab, _ = tab.Update(ExecutionFinishedMsg{Err: errors.New("generic")})
+
+		out := ansi.Strip(tab.renderSelectedStepChat("build"))
+		assert.Contains(t, out, "the real reason")
+		assert.NotContains(t, out, "generic")
+	})
+}
+
+func TestRunScreen_WorkflowErrorIsClearedByTheNextRun(t *testing.T) {
+	tab := failRun(runningScreen(t), "old failure")
+	tab, _ = tab.Update(ExecutionFinishedMsg{})
+
+	tab, _ = tab.Update(ExecutionStartedMsg{Workflow: tab.wf, Session: &mockRunSession{}})
+
+	assert.Empty(t, tab.runErr)
+}
+
+func TestRunScreen_StepsNeverReachedAreSkippedOnceTheRunIsOver(t *testing.T) {
+	tab := runningScreen(t) // build running, test and done pending
+
+	running := ansi.Strip(tab.stepsBox(38, 20))
+	assert.Contains(t, running, "○ 2 test")
+	assert.Contains(t, running, "pending")
+	assert.NotContains(t, running, "skipped", "while the run is in flight a pending step is simply pending")
+
+	tab = failRun(tab, "boom")
+	tab, _ = tab.Update(ExecutionFinishedMsg{})
+	over := ansi.Strip(tab.stepsBox(38, 20))
+
+	assert.Contains(t, over, "– 2 test")
+	assert.Contains(t, over, "skipped")
+	assert.NotContains(t, over, "pending")
+}
+
+func TestRunScreen_NothingIsSkippedBeforeAnyRunStarted(t *testing.T) {
+	tab := monitoringTabWithSize(100, 30)
+	tab.SetWorkflow(sampleWorkflow())
+	tab.rebuildTree()
+
+	out := ansi.Strip(tab.stepsBox(38, 20))
+
+	assert.NotContains(t, out, "skipped")
+	assert.Contains(t, out, "pending")
+}
+
+func TestTerminalMatches(t *testing.T) {
+	tests := []struct {
+		declared workflow.TerminalStatus
+		outcome  workflow.ExecutionStatus
+		want     bool
+	}{
+		{workflow.TerminalSuccess, workflow.StatusCompleted, true},
+		{workflow.TerminalSuccess, workflow.StatusFailed, false},
+		{workflow.TerminalFailure, workflow.StatusFailed, true},
+		{workflow.TerminalFailure, workflow.StatusCompleted, false},
+		{"", workflow.StatusCompleted, true},
+		{"", workflow.StatusFailed, true},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, terminalMatches(tt.declared, tt.outcome), "%q vs %q", tt.declared, tt.outcome)
+	}
+}
+
+func TestRunScreen_OnlyTheTerminalMatchingTheOutcomeIsMarked(t *testing.T) {
+	// The execution tree only lists the default path, so it normally holds one terminal;
+	// the steps are set directly to exercise every kind of terminal at once.
+	steps := []workflow.Step{
+		{Name: "work", Type: workflow.StepTypeCommand, Command: "true"},
+		{Name: "ok", Type: workflow.StepTypeTerminal, Status: workflow.TerminalSuccess},
+		{Name: "bad", Type: workflow.StepTypeTerminal, Status: workflow.TerminalFailure},
+		{Name: "unknown", Type: workflow.StepTypeTerminal},
+	}
+	statusOf := func(tab RunScreen, name string) workflow.ExecutionStatus {
+		for _, n := range tab.flatNodes {
+			if n.Name == name {
+				return n.Status
+			}
+		}
+		t.Fatalf("no node %q", name)
+		return ""
+	}
+	run := func(event ports.EventKind) RunScreen {
+		tab := monitoringTabWithSize(100, 30)
+		tab.steps = steps
+		tab.wf = &workflow.Workflow{Name: "wf"}
+		tab, _ = tab.Update(ExecutionStartedMsg{Workflow: tab.wf, Session: &mockRunSession{}})
+		tab, _ = tab.Update(facadeEventMsg{Event: ports.Event{Kind: event}})
+		tab, _ = tab.Update(ExecutionFinishedMsg{})
+		return tab
+	}
+
+	failed := run(ports.EventWorkflowFailed)
+	assert.Equal(t, workflow.StatusFailed, statusOf(failed, "bad"))
+	assert.Equal(t, workflow.StatusPending, statusOf(failed, "ok"), "a failed run did not reach the success terminal")
+	assert.Equal(t, workflow.StatusFailed, statusOf(failed, "unknown"), "a terminal without an outcome is still inferred")
+
+	done := run(ports.EventWorkflowCompleted)
+	assert.Equal(t, workflow.StatusCompleted, statusOf(done, "ok"))
+	assert.Equal(t, workflow.StatusPending, statusOf(done, "bad"), "a successful run did not reach the failure terminal")
 }

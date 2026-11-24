@@ -67,6 +67,9 @@ type RunScreen struct {
 	// cancelledRun records that the run that just ended was cancelled by the user, so the
 	// header can say "cancelled" instead of "failed".
 	cancelledRun bool
+	// runErr is why the workflow failed when that is not tied to a step: the message of the
+	// terminal event, or the session's error when the event carried none.
+	runErr string
 	// notice is a transient one-line message (copy confirmation) cleared on the next key.
 	notice string
 
@@ -152,6 +155,9 @@ func (t RunScreen) Update(msg tea.Msg) (RunScreen, tea.Cmd) {
 		return t, nil
 
 	case ExecutionFinishedMsg:
+		if t.runErr == "" && msg.Err != nil {
+			t.runErr = msg.Err.Error()
+		}
 		t.finishRun()
 		return t, nil
 
@@ -208,6 +214,7 @@ func (t *RunScreen) startRun(msg ExecutionStartedMsg) {
 	t.autoScroll = true
 	t.cancelling = false
 	t.cancelledRun = false
+	t.runErr = ""
 	t.notice = ""
 	t.inputActive = false
 	t.inputField.Reset()
@@ -508,10 +515,16 @@ func (t *RunScreen) view(w, h int) string {
 func (t *RunScreen) stepsBox(w, h int) string {
 	inner := w - 4
 	lines := make([]string, 0, h)
+	over := t.runIsOver()
 	for i, n := range t.flatNodes {
 		icon := statusIcon(string(n.Status))
 		right := sDim.Render(labelRunStepPending)
 		switch n.Status { //nolint:exhaustive // other statuses fall through to the pending label
+		case workflow.StatusPending:
+			if over {
+				// The run ended without ever reaching this step.
+				icon, right = statusIcon("skipped"), sDim.Render(labelRunStepSkipped)
+			}
 		case workflow.StatusRunning:
 			icon = sRun.Render(spinnerFrame(t.tick))
 			right = sRun.Render(fmtDur(time.Since(t.begin[n.Name])))
@@ -545,6 +558,9 @@ func (t *RunScreen) stepsBox(w, h int) string {
 	}
 	return box(labelRunStepsTitle, lines, w, h, false)
 }
+
+// runIsOver reports whether a run was started and has ended.
+func (t *RunScreen) runIsOver() bool { return !t.running && !t.startedAt.IsZero() }
 
 func (t *RunScreen) stepDuration(name string) time.Duration {
 	b, ok := t.begin[name]

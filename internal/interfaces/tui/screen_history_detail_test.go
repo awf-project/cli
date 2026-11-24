@@ -181,7 +181,7 @@ func TestHistoryDetail_ViewShowsStepsOutputAndMaskedInputs(t *testing.T) {
 
 	for _, want := range []string{
 		"deploy", "run-aaaa", // summary line
-		"✓ 1 build", "5.0s", "✗ 2 test", "3.0s", "○ 3 done", "pending", // steps
+		"✓ 1 build", "5.0s", "✗ 2 test", "3.0s", "– 3 done", "skipped", // a step that never ran is skipped, not pending
 		"Output · test", "exit status 2", "FAIL: TestX", "test output line", // selected step
 		"env prod", "API_KEY ***", // inputs
 	} {

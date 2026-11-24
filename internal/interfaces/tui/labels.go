@@ -121,6 +121,8 @@ const (
 	labelRunReplyTitle        = "Your message"
 	labelRunLiveSuffix        = "(live)"
 	labelRunStepPending       = "pending"
+	labelRunStepSkipped       = "skipped"
+	labelRunFailure           = "✗ Workflow failed:"
 	labelRunProgressFmt       = "%d/%d steps"
 	labelRunIDFmt             = "run %s"
 	labelRunWaitingReplyFmt   = "⏸ waiting for your reply · %s"

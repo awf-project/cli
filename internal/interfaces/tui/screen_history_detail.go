@@ -216,11 +216,16 @@ func (s *HistoryScreen) stepsBox(w, h int) string {
 	}
 	for i := range d.steps() {
 		step := &d.steps()[i]
-		right := sDim.Render(string(step.State.Status))
+		status := string(step.State.Status)
+		right := sDim.Render(status)
+		if step.State.Status == workflow.StatusPending {
+			// A recorded run is over: a step still pending never ran.
+			status, right = "skipped", sDim.Render(labelRunStepSkipped)
+		}
 		if step.Duration > 0 {
 			right = sDim.Render(fmtDur(step.Duration))
 		}
-		line := row(fmt.Sprintf("%s %d %s", statusIcon(string(step.State.Status)), i+1, step.State.Name), right, inner)
+		line := row(fmt.Sprintf("%s %d %s", statusIcon(status), i+1, step.State.Name), right, inner)
 		if i == d.sel {
 			line = selRow(line, inner, cSelBg, true)
 		}

@@ -106,7 +106,7 @@ func (t *RunScreen) rebuildTree() {
 			if _, hasState := t.states[node.Name]; hasState {
 				continue
 			}
-			if step, ok := t.findStep(node.Name); ok && step.Type == workflow.StepTypeTerminal {
+			if step, ok := t.findStep(node.Name); ok && step.Type == workflow.StepTypeTerminal && terminalMatches(step.Status, outcome) {
 				node.Status = outcome
 			}
 		}
@@ -119,6 +119,20 @@ func (t *RunScreen) rebuildTree() {
 	case t.selectedIdx >= len(t.flatNodes):
 		t.selectedIdx = len(t.flatNodes) - 1
 	}
+}
+
+// terminalMatches reports whether a terminal step with the given declared outcome is the
+// one a run that ended with outcome would have reached. Terminal steps never emit events,
+// so the screen infers it; without this a failed run would also mark the success terminal
+// as failed. A terminal that declares no outcome keeps being inferred.
+func terminalMatches(declared workflow.TerminalStatus, outcome workflow.ExecutionStatus) bool {
+	switch declared {
+	case workflow.TerminalSuccess:
+		return outcome == workflow.StatusCompleted
+	case workflow.TerminalFailure:
+		return outcome == workflow.StatusFailed
+	}
+	return true
 }
 
 // findStep returns the step definition by name.
@@ -153,7 +167,33 @@ func (t *RunScreen) renderSelectedStepChat(name string) string {
 		state = workflow.StepState{Name: name, Status: t.finalStatus}
 		hasState = true
 	}
-	return t.renderStepBlock(step, &state, hasState)
+	return t.renderStepBlock(step, &state, hasState) + t.runErrorBlock(name)
+}
+
+// runErrorBlock renders why the workflow failed when that is not just one step's error: it
+// is shown under the failed step, or under any step when none failed (a failure that is not
+// tied to a step, such as invalid inputs). It is empty while the run is in flight, after a
+// cancellation (the header already says so) and when the run did not fail.
+func (t *RunScreen) runErrorBlock(selected string) string {
+	if t.running || t.cancelledRun || t.finalStatus != workflow.StatusFailed || t.runErr == "" {
+		return ""
+	}
+	anyFailed, selectedFailed := false, false
+	for _, n := range t.flatNodes {
+		if n.Status == workflow.StatusFailed {
+			anyFailed = true
+			selectedFailed = selectedFailed || n.Name == selected
+		}
+	}
+	if anyFailed && !selectedFailed {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("\n")
+	sb.WriteString(StyleBlockError.Render(labelRunFailure))
+	sb.WriteString("\n")
+	writeIndented(&sb, strings.Split(t.runErr, "\n"))
+	return sb.String()
 }
 
 // renderStepBlock builds the chat-style view for a single step.
