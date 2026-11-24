@@ -24,6 +24,8 @@ type Backend interface {
 	LoadRunDetail(ctx context.Context, recordID, workflowID string) tea.Cmd
 	// LoadWorkflowSource emits WorkflowSourceLoadedMsg with a workflow's YAML split into blocks.
 	LoadWorkflowSource(ctx context.Context, name string) tea.Cmd
+	// LoadConfig emits ConfigLoadedMsg with the project configuration.
+	LoadConfig(ctx context.Context) tea.Cmd
 	// RunWorkflowViaFacade starts a run and emits ExecutionStartedMsg, or ErrMsg.
 	RunWorkflowViaFacade(ctx context.Context, name string, inputs map[string]any) tea.Cmd
 }

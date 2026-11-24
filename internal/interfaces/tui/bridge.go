@@ -39,6 +39,8 @@ type Bridge struct {
 	states StateReader
 	// sources reads workflow YAML for the Workflows config view (optional).
 	sources SourceReader
+	// config reads the project configuration for the Config screen (optional).
+	config ConfigReader
 
 	// facade is the optional ports.WorkflowFacade used by RunWorkflowViaFacade.
 	// When set, RunWorkflowViaFacade returns an ExecutionStartedMsg that includes

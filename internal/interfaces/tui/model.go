@@ -22,6 +22,8 @@ const (
 	TabWorkflows Tab = iota
 	// TabHistory is the execution history screen (key "2").
 	TabHistory
+	// TabConfig is the read-only project configuration screen (key "3").
+	TabConfig
 	tabCount
 )
 
@@ -65,6 +67,7 @@ type Model struct {
 
 	workflows WorkflowsScreen
 	history   HistoryScreen
+	config    ConfigScreen
 	run       RunScreen
 
 	// tick is the animation frame shared with the run screen.
@@ -82,6 +85,7 @@ func New() Model {
 		dir:       tildePath(workingDir()),
 		workflows: newWorkflowsScreen(),
 		history:   newHistoryScreen(),
+		config:    newConfigScreen(),
 		run:       newRunScreen(),
 	}
 	return m.resize(tea.WindowSizeMsg{Width: minTermWidth, Height: minTermHeight})
@@ -128,6 +132,9 @@ func (m Model) reload() tea.Cmd {
 	if m.bridge.history != nil {
 		cmds = append(cmds, m.bridge.LoadHistory(m.ctx))
 	}
+	if m.bridge.config != nil {
+		cmds = append(cmds, m.bridge.LoadConfig(m.ctx))
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -172,6 +179,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case refreshMsg:
 		return m, m.reload()
+
+	case ConfigLoadedMsg:
+		m.config, _ = m.config.Update(msg)
+		return m, nil
 
 	case showHistoryMsg:
 		m.activeTab = TabHistory
@@ -257,6 +268,8 @@ func (m Model) routeToScreen(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.run, cmd = m.run.Update(msg)
 	case m.activeTab == TabHistory:
 		m.history, cmd = m.history.Update(msg)
+	case m.activeTab == TabConfig:
+		m.config, cmd = m.config.Update(msg)
 	default:
 		m.workflows, cmd = m.workflows.Update(msg)
 	}
@@ -300,6 +313,7 @@ func (m Model) resize(msg tea.WindowSizeMsg) Model {
 	m.run, _ = m.run.Update(tea.WindowSizeMsg{Width: m.w, Height: m.runBodyHeight()})
 	m.history.SetSize(m.w, max(m.h-3, 0))
 	m.workflows.SetSize(m.w, max(m.h-3, 0))
+	m.config.SetSize(m.w, max(m.h-3, 0))
 	return m
 }
 
@@ -405,6 +419,9 @@ func (m Model) updateKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "2":
 		m.activeTab = TabHistory
 		return m, nil
+	case "3":
+		m.activeTab = TabConfig
+		return m, nil
 	case "o":
 		if m.run.HasRun() {
 			m.mode = modeRun
@@ -418,8 +435,11 @@ func (m Model) updateKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 //
 //nolint:gocritic // Bubbletea convention: value receivers
 func (m Model) screenInDetail() bool {
-	if m.activeTab == TabHistory {
+	switch m.activeTab {
+	case TabHistory:
 		return m.history.InDetail()
+	case TabConfig:
+		return false
 	}
 	return m.workflows.InConfig()
 }
@@ -429,8 +449,11 @@ func (m Model) screenInDetail() bool {
 //
 //nolint:gocritic // Bubbletea convention: value receivers
 func (m Model) screenCapturesKeys() bool {
-	if m.activeTab == TabHistory {
+	switch m.activeTab {
+	case TabHistory:
 		return m.history.InputActive()
+	case TabConfig:
+		return false
 	}
 	return m.workflows.InputActive()
 }
@@ -483,9 +506,12 @@ func (m Model) renderTabs() string {
 
 	bodyH := m.h - 3
 	var body, keys, popup string
-	if m.activeTab == TabHistory {
+	switch m.activeTab {
+	case TabHistory:
 		body, keys = m.history.view(m.w, bodyH), m.history.keys(m.w)
-	} else {
+	case TabConfig:
+		body, keys = m.config.view(m.w, bodyH), m.config.keys(m.w)
+	default:
 		body, keys = m.workflows.view(m.w, bodyH), m.workflows.keys(m.w)
 		popup = m.workflows.popup()
 	}
@@ -512,6 +538,7 @@ func (m Model) tabBar() string {
 	}{
 		{fmt.Sprintf(labelTabWorkflowsFmt, 1, len(m.workflows.entries)), TabWorkflows},
 		{fmt.Sprintf(labelTabHistoryFmt, 2, len(m.history.records)), TabHistory},
+		{fmt.Sprintf(labelTabConfigFmt, 3), TabConfig},
 	}
 	parts := make([]string, len(items))
 	for i, it := range items {

@@ -11,6 +11,7 @@ package tui
 const (
 	labelTabWorkflowsFmt = "%d Workflows (%d)"
 	labelTabHistoryFmt   = "%d History (%d)"
+	labelTabConfigFmt    = "%d Config"
 )
 
 // Shared key bar descriptions.
@@ -115,6 +116,17 @@ const (
 	labelConfigStepsTitle   = "Steps"
 	labelDetailsTitleConfig = "Configuration"
 	labelKeyConfig          = "config"
+)
+
+// Config screen.
+const (
+	labelConfigScreenNoReader = "project configuration is not available without a configuration reader"
+	labelConfigScreenFile     = "File"
+	labelConfigScreenStatus   = "Status"
+	labelConfigScreenFound    = "found"
+	labelConfigScreenMissing  = "not found (no inputs are pre-filled)"
+	labelConfigScreenNoInputs = "no inputs configured"
+	labelConfigScreenHint     = "These values pre-fill workflow inputs; inputs given when running take precedence."
 )
 
 // Input form popup.

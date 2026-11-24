@@ -17,15 +17,16 @@ The TUI needs a real terminal of at least **80x24**. In a smaller terminal it sh
 
 ## Screens
 
-The TUI has two screens, shown under a header with the **AWF** badge, the tab bar (with item counts) and the working directory. A third view, the **run view**, opens full-frame when a run starts.
+The TUI has three screens, shown under a header with the **AWF** badge, the tab bar (with item counts) and the working directory. A fourth view, the **run view**, opens full-frame when a run starts.
 
 | Screen | Keys | Shows |
 |--------|------|-------|
 | **Workflows** | `1` | The workflow list and the selected workflow's details |
 | **History** | `2` | Past executions and the selected execution's details |
+| **Config** | `3` | The project configuration (`.awf/config.yaml`), read-only |
 | **Run** | opens automatically | A run's steps, progress and output |
 
-Move between the two tabs with `tab` / `shift+tab`, or press `1` / `2`. Press `q` to quit.
+Move between the tabs with `tab` / `shift+tab`, or press `1`, `2` or `3`. Press `q` to quit.
 
 ---
 
@@ -180,9 +181,22 @@ The detail comes from the state file AWF keeps for each run. If that file was re
 
 ---
 
+## The Config Screen
+
+The Config screen shows what `awf config show` prints: the project configuration file, whether it exists, and the workflow inputs it pre-fills. Input values whose name starts with `SECRET_`, `API_KEY` or `PASSWORD` are masked. Inputs you give when running a workflow take precedence over these values.
+
+| Key | Action |
+|-----|--------|
+| `↑` `↓`, `pgup` / `pgdn`, mouse wheel | Scroll when there are many inputs |
+| `r` | Reload |
+
+A missing file is not an error: nothing is pre-filled. An invalid file shows its error. The screen is read-only; edit `.awf/config.yaml` with your editor.
+
+---
+
 ## Secret Handling
 
-Input values that look like secrets (names starting with `SECRET_`, `API_KEY` or `PASSWORD`) are masked in the input form, the workflow details and the run's inputs list. The TUI shows **step output exactly as the step produced it**, so a step that prints a secret will display it.
+Input values that look like secrets (names starting with `SECRET_`, `API_KEY` or `PASSWORD`) are masked in the input form, the workflow details, the run's inputs list and the Config screen. The TUI shows **step output exactly as the step produced it**, so a step that prints a secret will display it.
 
 ---
 

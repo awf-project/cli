@@ -677,10 +677,11 @@ awf tui
 
 ### Description
 
-Launches a full-screen Bubble Tea terminal UI with two screens and a run view:
+Launches a full-screen Bubble Tea terminal UI with three screens and a run view:
 
 - **Workflows** (`1`): Filterable workflow list with a detail panel (inputs, steps, last runs); run (`x`), validate (`v`)
 - **History** (`2`): Past executions with a detail panel; filter by name (`/`) and status (`s`); `enter` opens the saved output of every step
+- **Config** (`3`): The project configuration (`.awf/config.yaml`) and the inputs it pre-fills, read-only
 - **Run view**: Opens when a run starts. Shows progress, each step's status and duration, and the selected step's output, **live** while it runs. Cancel with `c`, repeat with `r`, copy with `y`, go back with `esc` (the run keeps going)
 
 Workflows run in the same process through the workflow facade, so the TUI sees every step's output, conversation turns and input prompts as they happen.
@@ -689,7 +690,7 @@ Workflows run in the same process through the workflow facade, so the TUI sees e
 
 | Key | Action |
 |-----|--------|
-| `tab` / `shift+tab`, `1`, `2` | Switch screens |
+| `tab` / `shift+tab`, `1`, `2`, `3` | Switch screens |
 | `↑` `↓` / `j` `k` | Move the selection |
 | `/` | Filter the list |
 | `enter` | Open the selected workflow's configuration (Workflows) |

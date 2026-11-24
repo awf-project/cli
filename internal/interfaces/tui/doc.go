@@ -28,14 +28,15 @@
 // The Model (model.go) owns the page chrome and switches between two modes:
 //
 // Tabs mode shows a header (the AWF badge, the tab bar with item counts and the working
-// directory) over one of two screens, reached with tab, shift+tab, 1 and 2:
+// directory) over one of three screens, reached with tab, shift+tab, 1, 2 and 3:
 //
 //   - Workflows (screen_workflows.go): the workflow list on the left, with the status icon
 //     and age of each workflow's last run, and a detail panel on the right showing source,
 //     inputs (secret defaults masked), the ordered steps and the last runs. Keys: up/down,
-//     / to filter, x or enter to run, v to validate, r to refresh. A workflow that declares
-//     inputs opens a popup form first (form_inputs.go); required inputs are enforced and
-//     SECRET_*, API_KEY* and PASSWORD* inputs are masked while typing.
+//     / to filter, enter to open the configuration, x to run, v to validate, h for the
+//     workflow's history, r to refresh. A workflow that declares inputs opens a popup form
+//     first (form_inputs.go); required inputs are enforced and SECRET_*, API_KEY* and
+//     PASSWORD* inputs are masked while typing.
 //   - History (screen_history.go): past executions, newest first, with a detail panel for
 //     the selected one. Keys: / to filter by workflow name, s to cycle the status filter
 //     (all, success, failed), r to refresh, enter to open the step detail.
@@ -53,6 +54,24 @@
 // of showing the live run view's waiting placeholders. Step rendering is shared with the
 // run view through pure functions (writeStepResult, writeConversation, stepCopyText).
 // A missing state (a nil result from the store) is reported, not treated as an error.
+//
+//   - Config (screen_config.go): the project configuration, read-only, like `awf config
+//     show`: the file, whether it exists and the inputs it pre-fills (secrets masked). It
+//     reads through the ConfigReader port (project_config.go), implemented in command.go
+//     over the same loader as the CLI. A missing file is an empty setup, not an error.
+//
+// The workflow configuration view (screen_workflow_config.go) opens from a workflow with
+// enter. It shows the workflow file split into a general block (every top-level key except
+// `states`, plus the entry point) and one block per state, comments kept. The raw file is
+// read through the SourceReader port (workflow_source.go), implemented over
+// ports.WorkflowRepository.ListWithSource, because workflow.Workflow cannot be marshalled
+// back to what the author wrote. Pack workflows are not listed by the repository, so the
+// view says they are not supported. The scrolling and wrapping helpers (scrollWindow,
+// wrapText) are shared with the History detail.
+//
+// History can be scoped to one workflow with `h` from the Workflows screen (an exact name
+// match, separate from the text filter), and an execution's detail can run it again with
+// `r`, using the inputs read back from its saved state.
 //
 // Run mode is a full-frame view of a run, opened as soon as a run starts and left with esc
 // (the run keeps going; `o` reopens it). It is documented below.

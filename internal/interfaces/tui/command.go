@@ -238,6 +238,7 @@ func buildBridge(ctx context.Context) (*Bridge, *TUIInputReader, func(), error) 
 	bridge.SetStateReader(stateStore)
 	// The workflow config view reads each workflow's YAML through the same repository.
 	bridge.SetSourceReader(NewRepositorySourceReader(repo))
+	bridge.SetConfigReader(projectConfigReader{})
 
 	// Wire the facade for event-driven execution (T061, D27, FR-011).
 	// The facade uses the same services already wired into the bridge so there is no
@@ -339,6 +340,24 @@ func buildTUIFacade(result *application.SetupResult, storagePath string, inputRe
 		return infraTranscript.NewRecorder(filepath.Join(dir, runID+".jsonl"))
 	})
 	return adapter
+}
+
+// projectConfigReader reads .awf/config.yaml the way `awf config show` does.
+type projectConfigReader struct{}
+
+// ReadProjectConfig implements ConfigReader. A missing file is not an error: it simply
+// pre-fills nothing.
+func (projectConfigReader) ReadProjectConfig(context.Context) (ConfigInfo, error) {
+	path := xdg.LocalConfigPath()
+	_, statErr := os.Stat(path)
+	info := ConfigInfo{Path: path, Exists: statErr == nil}
+
+	cfg, err := config.NewYAMLConfigLoader(path).Load()
+	if err != nil {
+		return info, fmt.Errorf("config error: %w", err)
+	}
+	info.Inputs = cfg.Inputs
+	return info, nil
 }
 
 // nopLogger satisfies ports.Logger for silent TUI operation.

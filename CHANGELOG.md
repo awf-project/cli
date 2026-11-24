@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under back-pressure so it cannot crowd out lifecycle events.
 - The TUI run view can cancel a run (`c`), repeat the last launch (`r`) and copy the
   selected step's output to the clipboard (`y`).
+- TUI: a read-only Config tab (`3`) shows the project configuration and the inputs it
+  pre-fills, as `awf config show` does, with secret-looking values masked.
 - TUI: `enter` on a workflow opens its configuration step by step (the YAML as written,
   comments included, split into a general block and one block per state); `x` runs it.
   Pack workflows are not supported yet.

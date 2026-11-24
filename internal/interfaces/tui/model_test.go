@@ -39,8 +39,10 @@ func TestModel_TabSwitching(t *testing.T) {
 		{"digit 2 opens history", []string{"2"}, TabHistory},
 		{"digit 1 returns to workflows", []string{"2", "1"}, TabWorkflows},
 		{"tab moves forward", []string{"tab"}, TabHistory},
-		{"tab wraps around", []string{"tab", "tab"}, TabWorkflows},
-		{"shift+tab wraps backwards", []string{"shift+tab"}, TabHistory},
+		{"digit 3 opens config", []string{"3"}, TabConfig},
+		{"tab reaches config", []string{"tab", "tab"}, TabConfig},
+		{"tab wraps around", []string{"tab", "tab", "tab"}, TabWorkflows},
+		{"shift+tab wraps backwards", []string{"shift+tab"}, TabConfig},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -109,6 +111,11 @@ func TestModel_RenderFillsTheTerminalExactly(t *testing.T) {
 			return m
 		},
 		"run": func(t *testing.T, m Model) Model { return startedRun(t, m, &mockRunSession{}) },
+		"config tab": func(_ *testing.T, m Model) Model {
+			m, _ = send(m, press("3"))
+			m, _ = send(m, ConfigLoadedMsg{Info: ConfigInfo{Path: ".awf/config.yaml", Exists: true, Inputs: map[string]any{"env": "prod"}}})
+			return m
+		},
 		"workflow config": func(t *testing.T, m Model) Model {
 			b := NewBridge(nil, nil)
 			b.SetSourceReader(&fakeSources{data: []byte(sampleYAML), path: "/proj/deploy.yaml"})
@@ -167,6 +174,7 @@ func TestModel_TabBarShowsCounts(t *testing.T) {
 
 	assert.Contains(t, out, "1 Workflows (3)")
 	assert.Contains(t, out, "2 History (3)")
+	assert.Contains(t, out, "3 Config")
 	assert.Contains(t, out, "~/project", "the working directory is shown in the header")
 }
 
