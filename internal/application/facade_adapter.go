@@ -63,6 +63,11 @@ type Adapter struct {
 	// recorder would cause. When nil (CLI, ACP) the Adapter uses its shared recorder.
 	runRecorderFactory func(runID string) (ports.Recorder, error)
 
+	// stepOutputEvents, when true, makes every session publish live
+	// ports.EventStepOutput chunks. It is opt-in because only interactive front ends
+	// (TUI) render them; CLI, ACP and HTTP keep their existing event streams unchanged.
+	stepOutputEvents bool
+
 	// execMu guards runningExecutions, the IDs of the executions whose goroutine is
 	// still running. PendingExecutions reads it: `awf serve` needs that list at
 	// shutdown to report the runs a restart cut short.
@@ -107,6 +112,21 @@ func (a *Adapter) SetRunRecorderFactory(f func(runID string) (ports.Recorder, er
 	a.mu.Lock()
 	a.runRecorderFactory = f
 	a.mu.Unlock()
+}
+
+// SetStepOutputEvents enables or disables live ports.EventStepOutput events on the
+// sessions this Adapter creates. It affects runs started after the call.
+func (a *Adapter) SetStepOutputEvents(enabled bool) {
+	a.mu.Lock()
+	a.stepOutputEvents = enabled
+	a.mu.Unlock()
+}
+
+// getStepOutputEvents returns the stepOutputEvents flag under a read lock.
+func (a *Adapter) getStepOutputEvents() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.stepOutputEvents
 }
 
 // getUserInputReader returns the userInputReader under a read lock.
@@ -666,6 +686,11 @@ func (a *Adapter) newSession(ctx context.Context, id string, rec ports.Recorder,
 		execCtx := session.ctx
 		if a.getUserInputReader() != nil {
 			execCtx = withUserInputReader(session.ctx, newSessionInputReader(session))
+		}
+		// Live step output is routed per run through the context (never through shared
+		// ExecutionService state) so concurrent runs cannot see each other's output.
+		if a.getStepOutputEvents() {
+			execCtx = withStepOutputSink(execCtx, session.appendStepOutput)
 		}
 
 		// Execution is started here (not before the goroutine) so the recorder's already-

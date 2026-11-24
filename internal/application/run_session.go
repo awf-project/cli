@@ -196,6 +196,48 @@ func (s *RunSession) appendEvent(ev ports.Event) { //nolint:gocritic // hugePara
 	}
 }
 
+// stepOutputHighWater is the fraction of the events channel (numerator/denominator)
+// above which live output chunks are dropped. Output is high volume and best effort;
+// the headroom guarantees lifecycle, message and terminal events still find room.
+const (
+	stepOutputHighWaterNum = 3
+	stepOutputHighWaterDen = 4
+)
+
+// appendStepOutput publishes a live output chunk as ports.EventStepOutput.
+//
+// Unlike appendEvent it never touches the replay buffer: a chatty step would otherwise
+// evict lifecycle events a reconnecting consumer needs. The event carries Seq 0 because
+// it takes no part in the transcript sequence. Chunks are dropped when the channel is
+// above its high-water mark or the session is closed; EventStepCompleted still carries
+// the complete output, so a drop only costs live fidelity.
+//
+// It follows the same locking contract as appendEvent: the send happens under s.mu so
+// it is serialized against close(s.events) in Close().
+func (s *RunSession) appendStepOutput(stepName, stream, text string) {
+	if text == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return
+	}
+	if len(s.events)*stepOutputHighWaterDen >= cap(s.events)*stepOutputHighWaterNum {
+		return
+	}
+	select {
+	case s.events <- ports.Event{
+		Kind:      ports.EventStepOutput,
+		RunID:     s.id,
+		Timestamp: time.Now(),
+		Payload:   &ports.EnrichedStepOutput{StepName: stepName, Stream: stream, Text: text},
+	}:
+	default:
+	}
+}
+
 // ReplayFromSeq is the exported form of replayFromSeq consumed at the interface boundary —
 // the SSE handler type-asserts this method on ports.RunSession to replay buffered events on
 // a Last-Event-ID reconnect. Without it the assertion silently fails and replay is a no-op.

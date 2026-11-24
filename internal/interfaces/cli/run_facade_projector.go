@@ -64,7 +64,8 @@ func RenderFacadeEventsToTextWithOptions(events []ports.Event, opts facadeRender
 			ports.EventMessageUser,
 			ports.EventToolCall,
 			ports.EventToolResult,
-			ports.EventInputRequired:
+			ports.EventInputRequired,
+			ports.EventStepOutput:
 			// no visible output for these kinds in default (non-verbose) mode
 		}
 	}
