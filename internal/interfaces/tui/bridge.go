@@ -1,55 +1,15 @@
 package tui
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
-
-// StreamBuffer is a thread-safe byte buffer implementing io.Writer.
-// It captures streaming output from step execution for real-time TUI display.
-type StreamBuffer struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
-}
-
-func (s *StreamBuffer) Write(p []byte) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	n, err := s.buf.Write(p)
-	if err != nil {
-		return n, fmt.Errorf("stream buffer write: %w", err)
-	}
-	return n, nil
-}
-
-// String returns the accumulated content.
-func (s *StreamBuffer) String() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.buf.String()
-}
-
-// Len returns the current buffer length.
-func (s *StreamBuffer) Len() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.buf.Len()
-}
-
-// Reset clears the buffer for a new execution.
-func (s *StreamBuffer) Reset() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.buf.Reset()
-}
 
 // WorkflowLister is the driven port for listing and loading workflow definitions.
 // It is satisfied by *application.WorkflowService.
@@ -75,7 +35,8 @@ type HistoryProvider interface {
 type Bridge struct {
 	workflows WorkflowLister
 	history   HistoryProvider
-	stream    *StreamBuffer
+	// states reads persisted run state for the History detail view (optional).
+	states StateReader
 
 	// facade is the optional ports.WorkflowFacade used by RunWorkflowViaFacade.
 	// When set, RunWorkflowViaFacade returns an ExecutionStartedMsg that includes
@@ -92,7 +53,6 @@ func NewBridge(workflows WorkflowLister, history HistoryProvider) *Bridge {
 	return &Bridge{
 		workflows: workflows,
 		history:   history,
-		stream:    &StreamBuffer{},
 	}
 }
 
@@ -198,7 +158,7 @@ func (b *Bridge) RunWorkflowViaFacade(ctx context.Context, name string, inputs m
 			ExecutionID: name,
 			Workflow:    wf,
 			Session:     sess,
-			// State is driven entirely by Session.Events() via MonitoringTab.StartEventLoop;
+			// State is driven entirely by Session.Events() via RunScreen.StartEventLoop;
 			// the event loop emits ExecutionFinishedMsg on the terminal event.
 		}
 	}

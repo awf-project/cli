@@ -11,7 +11,7 @@ func TestThemeColors_AreLipglossColors(t *testing.T) {
 	colors := []color.Color{
 		ColorPrimary, ColorPrimaryLight, ColorSuccess,
 		ColorError, ColorWarning, ColorRunning,
-		ColorMuted, ColorSurface, ColorText,
+		ColorMuted, ColorText,
 	}
 	for _, c := range colors {
 		r, g, b, a := c.RGBA()
@@ -21,13 +21,10 @@ func TestThemeColors_AreLipglossColors(t *testing.T) {
 }
 
 func TestThemeStyles_AreNonZero(t *testing.T) {
-	assert.NotEmpty(t, StyleStatusBar.String())
-	assert.NotEmpty(t, StyleTabActive.String())
-	assert.NotEmpty(t, StyleTabInactive.String())
-	assert.NotEmpty(t, StyleSelectedRow.String())
 	assert.NotEmpty(t, StyleEmptyState.String())
-	assert.NotEmpty(t, StyleHeader.String())
-	assert.NotEmpty(t, StyleInputLabel.String())
-	assert.NotEmpty(t, StyleInputHint.String())
-	assert.NotEmpty(t, StyleErrorBanner.String())
+	assert.NotEmpty(t, StyleBlockInput.String())
+	assert.NotEmpty(t, StyleBlockOutput.String())
+	assert.NotEmpty(t, StyleBlockError.String())
+	assert.NotEmpty(t, StyleBlockWarn.String())
+	assert.NotEmpty(t, StyleBlockDim.String())
 }

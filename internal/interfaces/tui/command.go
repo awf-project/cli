@@ -39,15 +39,18 @@ func NewCommand() *cobra.Command {
 		Short: "Launch the interactive terminal UI",
 		Long: `Launch the awf interactive terminal user interface.
 
-The TUI provides a multi-tab view for browsing workflows, monitoring live
-executions, inspecting execution history, reading agent conversations, and
-tailing external JSONL log files.
+Browse workflows, run them with live step output, and review past executions.
+
+Screens:
+  1  Workflows  Workflow list with details; run (x), validate (v), filter (/)
+  2  History    Past executions; filter (/), cycle status (s)
+  Run           Full-screen view of a run; esc returns and the run keeps going
 
 Keyboard shortcuts:
-  1-5   Switch tabs (Workflows, Monitoring, History, Agent, Logs)
-  /     Start filtering (in Workflows or History tab)
-  q     Quit
-  ctrl+c  Force quit`,
+  tab / 1 / 2   Switch screens
+  o             Reopen the current run
+  q             Quit
+  ctrl+c        Cancel the running workflow, or quit when none is running`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runTUI(cmd)
 		},
@@ -68,16 +71,16 @@ func runTUI(_ *cobra.Command) error {
 	}
 	defer cleanup()
 
-	model := NewWithBridge(bridge, ctx, findAWFAuditLog())
-	model.tabMonitoring.SetInputReader(inputReader)
+	model := NewWithBridge(bridge, ctx)
+	model.run.SetInputReader(inputReader)
 	p := tea.NewProgram(model)
 
 	inputReader.SetSender(p.Send)
-	// Wire the monitoring tab's event dispatcher so StartEventLoop can push facade events
-	// into the update loop. Without this the Monitoring tab stays blank: the event goroutine
-	// has no sender. The tab's senderRef is a shared pointer created before NewProgram, so
+	// Wire the run screen's event dispatcher so StartEventLoop can push facade events into
+	// the update loop. Without this the run view stays blank: the event goroutine has no
+	// sender. The screen's senderRef is a shared pointer created before NewProgram, so
 	// setting it here reaches the program's model copy (same mechanism as inputReader).
-	model.tabMonitoring.SetSender(p.Send)
+	model.run.SetSender(p.Send)
 
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("tui: %w", err)
@@ -195,16 +198,17 @@ func buildBridge(ctx context.Context) (*Bridge, *TUIInputReader, func(), error) 
 	}
 
 	// Streaming output buffer — shared between execution and monitoring viewport.
-	streamBuf := &StreamBuffer{}
 
 	// Channel-based conversation input reader for multi-turn agent conversations.
 	inputReader := NewTUIInputReader(nil)
 
-	// Conversation reader + streaming output.
+	// Conversation reader. Step output is not collected through writers: the facade
+	// publishes it as ports.EventStepOutput (see buildTUIFacade), so the writers only
+	// have to swallow what the services print directly.
 	setupOpts = append(
 		setupOpts,
 		application.WithUserInputReader(inputReader),
-		application.WithOutputWriters(streamBuf, io.Discard),
+		application.WithOutputWriters(io.Discard, io.Discard),
 	)
 
 	result, buildErr := application.NewExecutionSetup(repo, stateStore, shellExecutor, logger, setupOpts...).Build(context.Background())
@@ -230,7 +234,8 @@ func buildBridge(ctx context.Context) (*Bridge, *TUIInputReader, func(), error) 
 	}
 
 	bridge := NewBridge(result.WorkflowSvc, result.HistorySvc)
-	bridge.stream = streamBuf
+	// History detail reads the per-step state AWF persisted for each run.
+	bridge.SetStateReader(stateStore)
 
 	// Wire the facade for event-driven execution (T061, D27, FR-011).
 	// The facade uses the same services already wired into the bridge so there is no
@@ -267,28 +272,6 @@ func buildWorkflowPaths() []repository.SourcedPath {
 	)
 
 	return paths
-}
-
-// findAWFAuditLog returns the AWF audit log path if the file exists.
-// Checks AWF_AUDIT_LOG env var first, then the default XDG location.
-// Returns "" if audit logging is disabled or the file does not exist.
-func findAWFAuditLog() string {
-	if envPath := os.Getenv("AWF_AUDIT_LOG"); envPath != "" {
-		if envPath == "off" {
-			return ""
-		}
-		cleaned := filepath.Clean(envPath)
-		if _, err := os.Stat(cleaned); err == nil { //nolint:gosec // G703: AWF_AUDIT_LOG intentionally selects a user-configured path outside any fixed base directory.
-			return cleaned
-		}
-		return ""
-	}
-
-	path := filepath.Join(xdg.AWFDataDir(), "audit.jsonl")
-	if _, err := os.Stat(path); err == nil {
-		return path
-	}
-	return ""
 }
 
 // buildTUIFacade constructs a ports.WorkflowFacade from the already-built services in
@@ -341,6 +324,9 @@ func buildTUIFacade(result *application.SetupResult, storagePath string, inputRe
 	if inputReader != nil {
 		adapter.SetUserInputReader(inputReader)
 	}
+	// Live step output: stream stdout/stderr chunks as ports.EventStepOutput so the run
+	// view shows output while a step is still running instead of only at completion.
+	adapter.SetStepOutputEvents(true)
 	// Per-run transcript recorder: each run owns its recorder so live step/message events
 	// reach this session's stream (monitoring tab) without contaminating concurrent runs.
 	adapter.SetRunRecorderFactory(func(runID string) (ports.Recorder, error) {

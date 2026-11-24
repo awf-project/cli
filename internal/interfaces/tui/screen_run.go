@@ -1,10 +1,9 @@
 package tui
 
 import (
-	"bytes"
-	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
@@ -17,81 +16,19 @@ import (
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
 
-// stepInputText returns a short human-readable description of a step's input
-// for display in the chat-style conversation view.
-func stepInputText(step *workflow.Step) string {
-	switch {
-	case step.Agent != nil:
-		if step.Agent.Prompt != "" {
-			return step.Agent.Prompt
-		}
-		if step.Agent.PromptFile != "" {
-			return "📄 " + step.Agent.PromptFile
-		}
-		return ""
-	case step.Command != "":
-		return "$ " + step.Command
-	case step.ScriptFile != "":
-		return "📄 " + step.ScriptFile
-	case step.Operation != "":
-		if strings.HasPrefix(step.Operation, "notifier.") {
-			return step.Operation
-		}
-		text := step.Operation
-		if len(step.OperationInputs) > 0 {
-			parts := make([]string, 0, len(step.OperationInputs))
-			for k, v := range step.OperationInputs {
-				parts = append(parts, fmt.Sprintf("%s=%v", k, v))
-			}
-			text += " (" + strings.Join(parts, ", ") + ")"
-		}
-		return text
-	case step.Type == workflow.StepTypeParallel:
-		return "branches: " + strings.Join(step.Branches, ", ")
-	case step.Type == workflow.StepTypeTerminal:
-		if step.Message != "" {
-			return step.Message
-		}
-		return string(step.Status)
-	default:
-		return ""
-	}
-}
-
-// renderTruncated returns lines capped at maxLines, appending a muted
-// "… (N more lines)" indicator when the input exceeds the limit.
-func renderTruncated(lines []string, maxLines int) []string {
-	if len(lines) <= maxLines {
-		return lines
-	}
-	result := make([]string, maxLines+1)
-	copy(result, lines[:maxLines])
-	result[maxLines] = lipgloss.NewStyle().Foreground(ColorMuted).Render(
-		fmt.Sprintf("… (%d more lines)", len(lines)-maxLines),
-	)
-	return result
-}
-
-// Lipgloss styles for the monitoring tab.
-var (
-	monitoringSelectedStyle = StyleSelectedRow
-
-	monitoringEmptyStyle = StyleEmptyState
-)
-
-// MonitoringTab displays live execution metrics and history for the TUI monitoring view.
-// It renders a two-panel layout: execution tree (left) and a log viewport (right).
+// RunScreen displays a live (or just finished) workflow run: the step tree on the left
+// and the selected step's input, conversation and output on the right.
+//
+// The screen is split across three files by responsibility:
+//   - screen_run.go         state, Update, View and layout
+//   - screen_run_events.go  facade event consumption and live step output
+//   - screen_run_render.go  pure rendering of steps, conversations and the tree
+//
 // State updates are event-driven: StartEventLoop consumes ports.RunSession.Events() and
-// forwards each facade event into the update loop as a facadeEventMsg (the former 200 ms
-// ExecutionContext polling loop has been removed, F108/D27).
-type MonitoringTab struct {
+// forwards each facade event into the update loop as a facadeEventMsg.
+type RunScreen struct {
 	width  int
 	height int
-
-	// Legacy fields preserved for model.go and model_test.go compatibility.
-	stats   *workflow.HistoryStats
-	history []*workflow.ExecutionRecord
-	active  *executionState
 
 	// Execution state for tree rendering.
 	wf     *workflow.Workflow // running workflow (for step ordering in BuildTree)
@@ -102,33 +39,55 @@ type MonitoringTab struct {
 	// reached terminal step completed/failed once the workflow ends.
 	finalStatus workflow.ExecutionStatus
 
+	// live holds the stdout/stderr streamed by ports.EventStepOutput for steps that have
+	// not completed yet. A completed step's authoritative output replaces its live entry.
+	live map[string]*liveOutput
+
 	// Tree navigation.
 	flatNodes   []*TreeNode
 	selectedIdx int
 
-	// Streaming output from execution.
-	stream     *StreamBuffer
-	lastStream int // byte offset already rendered
-
-	// Log viewport.
+	// Output viewport.
 	vp         viewport.Model
 	autoScroll bool
 
-	// Tick management.
-	ticking bool
+	// running is true while a run is in flight (between ExecutionStartedMsg and
+	// ExecutionFinishedMsg); the status bar and tree inference both depend on it.
+	// It never drives a timer: updates are pushed by events, not polled.
+	running bool
 
 	// Spinner shown while waiting for the first facade event after ExecutionStartedMsg.
 	spinner     spinner.Model
 	showSpinner bool
 
-	// Conversation input and streaming display.
+	// lastLaunch remembers the most recent launch request so the run can be repeated.
+	lastLaunch LaunchWorkflowMsg
+	// cancelling is true once the user asked to cancel and the terminal event is pending.
+	cancelling bool
+	// cancelledRun records that the run that just ended was cancelled by the user, so the
+	// header can say "cancelled" instead of "failed".
+	cancelledRun bool
+	// notice is a transient one-line message (copy confirmation) cleared on the next key.
+	notice string
+
+	// runID is the facade session identifier, shown in the header.
+	runID string
+	// startedAt/endedAt bound the run for the elapsed clock in the header.
+	startedAt time.Time
+	endedAt   time.Time
+	// begin/end record when each step started and finished, for per-step durations.
+	begin map[string]time.Time
+	end   map[string]time.Time
+	// inputs are the values the run was launched with (shown masked in the Steps box).
+	inputs map[string]any
+	// tick is the animation frame, advanced by the Model while a run is in flight.
+	tick int
+
+	// Conversation input.
 	inputReader   *TUIInputReader
 	activeSession ports.RunSession
 	inputField    textinput.Model
 	inputActive   bool
-	convBuf       *strings.Builder
-	convStep      string
-	convTurnCount int
 	// agentStep names the currently-running agent/conversation step. Facade message events
 	// (EventMessageUser/Assistant) carry no step name, so they are attributed to this step
 	// to build its conversation view on the event-driven path.
@@ -138,32 +97,31 @@ type MonitoringTab struct {
 	// It is a POINTER holder so it survives the value copy tea.NewProgram makes of the Model:
 	// SetSender is called AFTER the program is created (p.Send is only available then), and
 	// only a shared-pointer field (like inputReader) reaches the program's model copy. A bare
-	// func field set post-NewProgram would be lost on the copy — the bug that left Monitoring
-	// blank because StartEventLoop's sender was nil.
+	// func field set post-NewProgram would be lost on the copy.
 	senderRef *msgSenderRef
 }
 
 // msgSenderRef holds the Bubble Tea message dispatcher behind a pointer (see senderRef).
 type msgSenderRef struct{ fn func(tea.Msg) }
 
-func newMonitoringTab() MonitoringTab {
-	vp := viewport.New()
-
+func newRunScreen() RunScreen {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(ColorRunning)
 
 	ti := textinput.New()
-	ti.Placeholder = "Type your message (empty to end conversation)..."
+	ti.Placeholder = labelRunInputPlaceholder
 	ti.CharLimit = 4096
 
-	return MonitoringTab{
-		vp:         vp,
+	return RunScreen{
+		vp:         viewport.New(),
 		autoScroll: true,
 		states:     make(map[string]workflow.StepState),
+		live:       make(map[string]*liveOutput),
+		begin:      make(map[string]time.Time),
+		end:        make(map[string]time.Time),
 		spinner:    sp,
 		inputField: ti,
-		convBuf:    &strings.Builder{},
 		senderRef:  &msgSenderRef{},
 	}
 }
@@ -171,14 +129,14 @@ func newMonitoringTab() MonitoringTab {
 // Init implements the Bubbletea sub-model convention.
 //
 //nolint:gocritic // Bubbletea convention: value receivers return a new model on each update
-func (t MonitoringTab) Init() tea.Cmd {
+func (t RunScreen) Init() tea.Cmd {
 	return nil
 }
 
 // Update implements the Bubbletea sub-model convention.
 //
 //nolint:gocritic // Bubbletea convention: value receivers return a new model on each update
-func (t MonitoringTab) Update(msg tea.Msg) (MonitoringTab, tea.Cmd) { //nolint:cyclop,gocognit // Monitoring tab handles many message types by design; conversation input adds necessary branching
+func (t RunScreen) Update(msg tea.Msg) (RunScreen, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		t.width = msg.Width
@@ -190,28 +148,15 @@ func (t MonitoringTab) Update(msg tea.Msg) (MonitoringTab, tea.Cmd) { //nolint:c
 		return t, nil
 
 	case ExecutionStartedMsg:
-		t.selectedIdx = 0
-		t.states = make(map[string]workflow.StepState)
-		t.finalStatus = "" // clear any previous run's outcome so terminal steps start pending
-		t.activeSession = msg.Session
-		t.agentStep = ""
-		t.autoScroll = true
-		t.showSpinner = false
-		t.convReset()
-		t.rebuildTree()
-		// Push-event path (F108): StartEventLoop (called by model) drives state updates
-		// via facadeEventMsg (FR-002, D27). There is no polling fallback.
+		t.startRun(msg)
 		return t, nil
 
 	case ExecutionFinishedMsg:
-		// Terminal step rendering is already finalized by applyFacadeEvent on the
-		// EventWorkflowCompleted/Failed event; this only clears the in-flight indicators.
-		t.ticking = false
-		t.showSpinner = false
-		t.activeSession = nil
+		t.finishRun()
 		return t, nil
 
 	case facadeEventMsg:
+		t.showSpinner = false
 		t.applyFacadeEvent(msg.Event)
 		if msg.Event.Kind == ports.EventInputRequired {
 			t.beginInputRequest()
@@ -231,63 +176,8 @@ func (t MonitoringTab) Update(msg tea.Msg) (MonitoringTab, tea.Cmd) { //nolint:c
 		return t, nil
 
 	case tea.KeyPressMsg:
-		if t.inputActive {
-			switch {
-			case key.Matches(msg, keySelect):
-				text := t.inputField.Value()
-				t.inputField.Reset()
-				t.inputActive = false
-				t.inputField.Blur()
-				t.resizeViewport()
-				if t.stream != nil {
-					t.stream.Reset()
-				}
-				t.convApplyToViewport()
-				if t.activeSession != nil {
-					if err := t.activeSession.Respond(ports.InputResponse{Value: text}); err != nil {
-						return t, nil
-					}
-				} else if t.inputReader != nil {
-					t.inputReader.Respond(text)
-				}
-				return t, nil
-			case msg.Code == tea.KeyUp:
-				if t.selectedIdx > 0 {
-					t.selectedIdx--
-					t.updateViewportContent()
-				}
-				return t, nil
-			case msg.Code == tea.KeyDown:
-				if t.selectedIdx < len(t.flatNodes)-1 {
-					t.selectedIdx++
-					t.updateViewportContent()
-				}
-				return t, nil
-			}
-			var cmd tea.Cmd
-			t.inputField, cmd = t.inputField.Update(msg)
-			return t, cmd
-		}
-
-		switch {
-		case key.Matches(msg, keyUp):
-			if t.selectedIdx > 0 {
-				t.selectedIdx--
-				t.updateViewportContent()
-			}
-			return t, nil
-
-		case key.Matches(msg, keyDown):
-			if t.selectedIdx < len(t.flatNodes)-1 {
-				t.selectedIdx++
-				t.updateViewportContent()
-			}
-			return t, nil
-
-		case key.Matches(msg, keyFollow):
-			t.autoScroll = true
-			t.vp.GotoBottom()
-			return t, nil
+		if next, cmd, handled := t.handleKey(msg); handled {
+			return next, cmd
 		}
 	}
 
@@ -297,712 +187,438 @@ func (t MonitoringTab) Update(msg tea.Msg) (MonitoringTab, tea.Cmd) { //nolint:c
 	return t, vpCmd
 }
 
-// SetWorkflow wires the running workflow so the monitoring tab can order steps and
-// render the execution tree. State updates arrive via facadeEventMsg (StartEventLoop).
-// Called by the Model when it receives ExecutionStartedMsg.
-func (t *MonitoringTab) SetWorkflow(wf *workflow.Workflow) {
+// startRun resets the screen for a new run. State updates then arrive through
+// facadeEventMsg (see StartEventLoop); there is no polling fallback.
+func (t *RunScreen) startRun(msg ExecutionStartedMsg) {
+	t.selectedIdx = 0
+	t.states = make(map[string]workflow.StepState)
+	t.live = make(map[string]*liveOutput)
+	t.begin = make(map[string]time.Time)
+	t.end = make(map[string]time.Time)
+	t.runID = ""
+	if msg.Session != nil {
+		t.runID = msg.Session.ID()
+	}
+	t.inputs = t.lastLaunch.Inputs
+	t.startedAt = time.Now()
+	t.endedAt = time.Time{}
+	t.finalStatus = "" // clear any previous run's outcome so terminal steps start pending
+	t.activeSession = msg.Session
+	t.agentStep = ""
+	t.autoScroll = true
+	t.cancelling = false
+	t.cancelledRun = false
+	t.notice = ""
+	t.inputActive = false
+	t.inputField.Reset()
+	t.inputField.Blur()
+	t.running = msg.Session != nil
+	t.showSpinner = msg.Session != nil
+	t.rebuildTree()
+	t.resizeViewport()
+	t.updateViewportContent()
+}
+
+// finishRun clears the in-flight indicators and re-renders so the terminal outcome
+// (applied by applyFacadeEvent on the terminal event) is reflected in the tree.
+func (t *RunScreen) finishRun() {
+	if t.running {
+		t.endedAt = time.Now()
+	}
+	if t.cancelling {
+		t.cancelledRun = true
+	}
+	t.running = false
+	t.showSpinner = false
+	t.cancelling = false
+	t.activeSession = nil
+	t.inputActive = false
+	t.inputField.Blur()
+	t.resizeViewport()
+	t.rebuildTree()
+	t.updateViewportContent()
+}
+
+// handleKey processes a key press. handled is false when the key should fall through to
+// the viewport (page up/down and the like).
+//
+//nolint:gocritic // Bubbletea convention: value receivers return a new model on each update
+func (t RunScreen) handleKey(msg tea.KeyPressMsg) (RunScreen, tea.Cmd, bool) {
+	if t.inputActive {
+		next, cmd := t.handleInputKey(msg)
+		return next, cmd, true
+	}
+	t.notice = ""
+
+	switch {
+	case key.Matches(msg, keyUp):
+		t.moveSelection(-1)
+		return t, nil, true
+
+	case key.Matches(msg, keyDown):
+		t.moveSelection(1)
+		return t, nil, true
+
+	case key.Matches(msg, keyFollow):
+		t.autoScroll = true
+		t.vp.GotoBottom()
+		return t, nil, true
+
+	case key.Matches(msg, keyCancel):
+		t.RequestCancel()
+		return t, nil, true
+
+	case key.Matches(msg, keyRerun):
+		if t.running || t.lastLaunch.Workflow == nil {
+			return t, nil, true
+		}
+		launch := t.lastLaunch
+		return t, func() tea.Msg { return launch }, true
+
+	case key.Matches(msg, keyCopy):
+		text := t.copyText()
+		if text == "" {
+			t.notice = labelRunNothingToCopy
+			return t, nil, true
+		}
+		t.notice = fmt.Sprintf(labelRunCopiedFmt, len(text))
+		return t, tea.SetClipboard(text), true
+	}
+	return t, nil, false
+}
+
+// handleInputKey routes keys while the conversation text field is focused.
+//
+//nolint:gocritic // Bubbletea convention: value receivers return a new model on each update
+func (t RunScreen) handleInputKey(msg tea.KeyPressMsg) (RunScreen, tea.Cmd) {
+	switch {
+	case key.Matches(msg, keySelect):
+		text := t.inputField.Value()
+		t.inputField.Reset()
+		t.inputActive = false
+		t.inputField.Blur()
+		t.resizeViewport()
+		if t.activeSession != nil {
+			if err := t.activeSession.Respond(ports.InputResponse{Value: text}); err != nil {
+				return t, nil
+			}
+		} else if t.inputReader != nil {
+			t.inputReader.Respond(text)
+		}
+		t.updateViewportContent()
+		return t, nil
+	case msg.Code == tea.KeyUp:
+		t.moveSelection(-1)
+		return t, nil
+	case msg.Code == tea.KeyDown:
+		t.moveSelection(1)
+		return t, nil
+	}
+	var cmd tea.Cmd
+	t.inputField, cmd = t.inputField.Update(msg)
+	return t, cmd
+}
+
+// moveSelection moves the tree cursor by delta and refreshes the output panel.
+func (t *RunScreen) moveSelection(delta int) {
+	next := t.selectedIdx + delta
+	if next < 0 || next >= len(t.flatNodes) {
+		return
+	}
+	t.selectedIdx = next
+	t.updateViewportContent()
+}
+
+// cancelSession asks the run to stop. It mirrors the HTTP bridge: a session that can
+// publish a terminal "cancelled" event is cancelled that way; otherwise it is closed.
+// It reports whether the session was closed directly (no terminal event will follow).
+func cancelSession(sess ports.RunSession) (closedDirectly bool) {
+	if sess == nil {
+		return true
+	}
+	if c, ok := sess.(interface{ CancelWithEvent(reason string) error }); ok {
+		_ = c.CancelWithEvent("cancelled") //nolint:errcheck // best-effort: the terminal event reports the outcome
+		return false
+	}
+	_ = sess.Close() //nolint:errcheck // Close is idempotent; the run is being abandoned
+	return true
+}
+
+// RequestCancel asks the running run to stop. It does nothing when no run is in flight
+// or a cancellation is already pending.
+func (t *RunScreen) RequestCancel() {
+	if !t.running || t.cancelling {
+		return
+	}
+	t.cancelling = true
+	if cancelSession(t.activeSession) {
+		// The session was closed directly, so no terminal event will arrive.
+		t.finishRun()
+	}
+}
+
+// SetWorkflow wires the running workflow so the screen can order steps and render the
+// execution tree. Called by the Model when it receives ExecutionStartedMsg.
+func (t *RunScreen) SetWorkflow(wf *workflow.Workflow) {
 	t.wf = wf
 	if wf != nil {
 		t.steps = workflow.ExecutionOrder(wf)
 	}
 }
 
-// SetStream wires the streaming output buffer for live viewport display.
-func (t *MonitoringTab) SetStream(s *StreamBuffer) {
-	t.stream = s
-	t.lastStream = 0
+// SetLaunch records the launch request so the run can be repeated with `r`.
+func (t *RunScreen) SetLaunch(msg LaunchWorkflowMsg) {
+	t.lastLaunch = msg
 }
 
-// SetInputReader wires the TUIInputReader so the tab can respond to conversation
+// SetInputReader wires the TUIInputReader so the screen can respond to conversation
 // input requests and route user replies back to the blocked ReadInput call.
-func (t *MonitoringTab) SetInputReader(r *TUIInputReader) {
+func (t *RunScreen) SetInputReader(r *TUIInputReader) {
 	t.inputReader = r
 }
 
 // SetSender wires the tea.Msg dispatcher so StartEventLoop can forward facade events
 // into the Bubble Tea update loop. Call this after tea.NewProgram, passing p.Send.
-func (t *MonitoringTab) SetSender(send func(tea.Msg)) {
+func (t *RunScreen) SetSender(send func(tea.Msg)) {
 	if t.senderRef == nil {
 		t.senderRef = &msgSenderRef{}
 	}
 	t.senderRef.fn = send
 }
 
-// StartEventLoop spawns a goroutine that ranges over sess.Events() and forwards each
-// event to the Bubble Tea program as a facadeEventMsg, replacing the 200 ms tick loop (D27).
-//
-// Terminal events (EventWorkflowCompleted, EventWorkflowFailed) are forwarded as
-// facadeEventMsg first, then an ExecutionFinishedMsg is sent to finalize the monitoring
-// tab (clears ticking/showSpinner and renders final state). This allows callers that use
-// RunWorkflowViaFacade (which supplies no Done channel) to still receive the finished
-// signal.
-//
-// ctx must be the context derived from the Bubble Tea program's lifetime (or a parent that
-// is cancelled when the TUI stops). When ctx is done the goroutine exits cleanly without
-// calling p.Send, preventing panics or dropped messages after the program has halted.
-func (t *MonitoringTab) StartEventLoop(ctx context.Context, sess ports.RunSession) {
-	ref := t.senderRef
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				// TUI has stopped; exit without sending further messages.
-				return
-			case e, ok := <-sess.Events():
-				if !ok {
-					// Events channel closed (session finished); exit the loop.
-					return
-				}
-				if ref == nil || ref.fn == nil {
-					continue
-				}
-				ref.fn(facadeEventMsg{Event: e})
-				switch e.Kind { //nolint:exhaustive // only terminal events require a follow-up message; all others are fully handled by facadeEventMsg
-				case ports.EventWorkflowCompleted:
-					ref.fn(ExecutionFinishedMsg{Err: nil})
-				case ports.EventWorkflowFailed:
-					ref.fn(ExecutionFinishedMsg{Err: sess.Err()})
-				}
-			}
-		}
-	}()
-}
-
 // InputActive reports whether the conversation text input is focused.
-func (t MonitoringTab) InputActive() bool { //nolint:gocritic // read-only
+func (t RunScreen) InputActive() bool { //nolint:gocritic // read-only
 	return t.inputActive
 }
 
-func (t *MonitoringTab) beginInputRequest() {
+func (t *RunScreen) beginInputRequest() {
 	t.inputActive = true
 	t.resizeInputField()
 	t.resizeViewport()
 	_ = t.inputField.Focus()
 	t.autoSelectRunning()
-	// Only append new turns during an active conversation; never restart
-	// tracking (convStart resets convTurnCount, duplicating user messages
-	// already rendered by convAppendUser).
-	if t.convStep != "" {
-		if state, ok := t.states[t.convStep]; ok && state.Conversation != nil {
-			t.convAppendNewTurns(state.Conversation)
-		}
-	} else if len(t.flatNodes) > 0 && t.selectedIdx >= 0 && t.selectedIdx < len(t.flatNodes) {
-		name := t.flatNodes[t.selectedIdx].Name
-		if state, ok := t.states[name]; ok && state.Conversation != nil {
-			t.convStart(name, state.Conversation)
-		}
-	}
-	t.convApplyToViewport()
-}
-
-// View renders the monitoring tab.
-//
-//nolint:gocritic // Bubbletea convention: value receivers return a new model on each update
-func (t MonitoringTab) View() string {
-	if t.active == nil && t.wf == nil && !t.inputActive {
-		return EmptyStateView("📡", "No active execution", "Launch a workflow from the Workflows tab.")
-	}
-
-	if t.width <= 0 || t.height <= 0 {
-		return monitoringEmptyStyle.Render("Waiting for terminal dimensions…")
-	}
-
-	leftWidth, rightWidth := t.panelWidths()
-	fullHeight := t.panelHeight()
-
-	// Progress calculation.
-	completed := 0
-	total := len(t.flatNodes)
-	for _, node := range t.flatNodes {
-		switch node.Status { //nolint:exhaustive // only counting terminal statuses
-		case workflow.StatusCompleted, workflow.StatusFailed, workflow.StatusCancelled:
-			completed++
-		}
-	}
-	treeTitle := fmt.Sprintf("Execution (%d/%d)", completed, total)
-
-	logTitle := "Output"
-	if len(t.flatNodes) > 0 && t.selectedIdx >= 0 && t.selectedIdx < len(t.flatNodes) {
-		selected := t.flatNodes[t.selectedIdx]
-		logTitle = selected.Name + " " + StatusBadge(selected.Status)
-	}
-
-	treeContent := t.renderTreeWithSelection()
-	leftPanel := Panel(treeTitle, treeContent, leftWidth, fullHeight, true)
-
-	if t.inputActive {
-		// Right panel is shorter; input field fills the remaining space.
-		// Input renders 3 lines (border-top + content + border-bottom).
-		// Panel border adds 2 to the Height value, so: rightHeight + 2 + 3 = fullHeight + 2.
-		const inputRows = 3
-		rightHeight := fullHeight - inputRows
-		if rightHeight < 3 {
-			rightHeight = 3
-		}
-		rightPanel := Panel(logTitle, t.vp.View(), rightWidth, rightHeight, false)
-		inputStyle := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(ColorPrimaryLight).
-			Width(rightWidth - 2)
-		rightColumn := lipgloss.JoinVertical(lipgloss.Left, rightPanel, inputStyle.Render(t.inputField.View()))
-		return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightColumn)
-	}
-
-	rightPanel := Panel(logTitle, t.vp.View(), rightWidth, fullHeight, false)
-	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
-}
-
-// RenderEventsToTUIMsgs projects facade events to their TUI tea.Msg representation.
-func RenderEventsToTUIMsgs(events []ports.Event) []byte {
-	var buf bytes.Buffer
-	for _, ev := range events {
-		fmt.Fprintf(&buf, "facadeEventMsg{Seq:%d Kind:%q RunID:%q}\n",
-			ev.Seq, ev.Kind.String(), ev.RunID)
-	}
-	return buf.Bytes()
-}
-
-// rebuildTree reconstructs flatNodes from the current steps and states.
-func (t *MonitoringTab) rebuildTree() {
-	nodes := BuildTree(t.steps, t.states)
-	t.flatNodes = flattenTree(nodes)
-
-	// Infer terminal step status from the workflow outcome when not tracked in states.
-	// Source it from finalStatus (set by applyFacadeEvent on the terminal event);
-	// terminal steps never emit their own step events.
-	outcome := t.finalStatus
-	if outcome != "" && !t.ticking {
-		for _, node := range t.flatNodes {
-			if _, hasState := t.states[node.Name]; hasState {
-				continue
-			}
-			if step, ok := t.findStep(node.Name); ok && step.Type == workflow.StepTypeTerminal {
-				switch outcome {
-				case workflow.StatusCompleted:
-					node.Status = workflow.StatusCompleted
-				case workflow.StatusFailed:
-					node.Status = workflow.StatusFailed
-				default:
-					node.Status = outcome
-				}
-			}
-		}
-	}
-
-	// Clamp selectedIdx within new bounds.
-	if len(t.flatNodes) == 0 {
-		t.selectedIdx = 0
-	} else if t.selectedIdx >= len(t.flatNodes) {
-		t.selectedIdx = len(t.flatNodes) - 1
-	}
-}
-
-// findStep returns the step definition by name.
-func (t *MonitoringTab) findStep(name string) (*workflow.Step, bool) {
-	for i := range t.steps {
-		if t.steps[i].Name == name {
-			return &t.steps[i], true
-		}
-	}
-	return nil, false
-}
-
-// updateViewportContent refreshes the right-panel viewport with the selected step's chat view.
-func (t *MonitoringTab) updateViewportContent() {
-	if len(t.flatNodes) == 0 || t.selectedIdx < 0 || t.selectedIdx >= len(t.flatNodes) {
-		t.vp.SetContent("")
-		return
-	}
-
-	name := t.flatNodes[t.selectedIdx].Name
-	state, ok := t.states[name]
-
-	// Auto-start or continue incremental conversation rendering.
-	if ok && state.Conversation != nil && len(state.Conversation.Turns) > 0 {
-		if name != t.convStep {
-			t.convStart(name, state.Conversation)
-		} else {
-			t.convAppendNewTurns(state.Conversation)
-		}
-		t.convApplyToViewport()
-		return
-	}
-
-	// Non-conversation step: full rebuild.
-	if t.convStep != "" {
-		t.convReset()
-	}
-	content := t.renderSelectedStepChat(name)
-	t.vp.SetContent(content)
-	if t.autoScroll {
-		t.vp.GotoBottom()
-	}
-}
-
-// renderSelectedStepChat builds the chat view for a given step.
-func (t *MonitoringTab) renderSelectedStepChat(name string) string {
-	step, _ := t.findStep(name)
-	state, hasState := t.states[name]
-
-	if !hasState && step != nil && step.Type == workflow.StepTypeTerminal && t.finalStatus != "" && !t.ticking {
-		state = workflow.StepState{
-			Name:   name,
-			Status: t.finalStatus,
-		}
-		hasState = true
-	}
-
-	if t.ticking && t.stream != nil && t.stream.Len() > 0 && hasState && state.Status == workflow.StatusRunning {
-		return t.renderStepBlock(step, &state, hasState) + "\n" + t.stream.String()
-	}
-
-	return t.renderStepBlock(step, &state, hasState)
-}
-
-// --- Conversation streaming helpers ---
-
-// convReset clears the conversation buffer when switching away from a conversation step.
-func (t *MonitoringTab) convReset() {
-	t.convBuf.Reset()
-	t.convStep = ""
-	t.convTurnCount = 0
-}
-
-// convStart initializes incremental conversation rendering for the given step.
-func (t *MonitoringTab) convStart(stepName string, conv *workflow.ConversationState) {
-	t.convReset()
-	t.convStep = stepName
-	t.convAppendNewTurns(conv)
-}
-
-// convAppendNewTurns renders only turns that haven't been rendered yet and appends to the buffer.
-func (t *MonitoringTab) convAppendNewTurns(conv *workflow.ConversationState) {
-	inputStyle := lipgloss.NewStyle().Bold(true).Foreground(ColorPrimaryLight)
-	outputStyle := lipgloss.NewStyle().Bold(true).Foreground(ColorSuccess)
-	dividerStyle := lipgloss.NewStyle().Foreground(ColorMuted)
-
-	for i := t.convTurnCount; i < len(conv.Turns); i++ {
-		turn := &conv.Turns[i]
-		switch turn.Role {
-		case workflow.TurnRoleSystem:
-			// skip
-		case workflow.TurnRoleUser:
-			if t.convBuf.Len() > 0 {
-				t.convBuf.WriteString(dividerStyle.Render("────────────────────────────"))
-				t.convBuf.WriteString("\n\n")
-			}
-			t.convBuf.WriteString(inputStyle.Render("▶ User:"))
-			t.convBuf.WriteString("\n")
-			for _, l := range strings.Split(turn.Content, "\n") {
-				t.convBuf.WriteString("  ")
-				t.convBuf.WriteString(l)
-				t.convBuf.WriteString("\n")
-			}
-			t.convBuf.WriteString("\n")
-		case workflow.TurnRoleAssistant:
-			t.convBuf.WriteString(outputStyle.Render("◀ Agent:"))
-			t.convBuf.WriteString("\n")
-			// Prefer filtered stream content (human-readable) over raw turn
-			// content which may contain unparsed JSONL from the provider CLI.
-			displayText := turn.Content
-			if t.stream != nil && t.stream.Len() > 0 {
-				displayText = strings.TrimRight(t.stream.String(), "\n")
-				t.stream.Reset()
-			}
-			for _, l := range strings.Split(displayText, "\n") {
-				t.convBuf.WriteString("  ")
-				t.convBuf.WriteString(l)
-				t.convBuf.WriteString("\n")
-			}
-			t.convBuf.WriteString("\n")
-		}
-	}
-	t.convTurnCount = len(conv.Turns)
-}
-
-// convApplyToViewport sets the viewport content from the conversation buffer.
-// During agent execution, live streaming output is shown as the in-progress response.
-func (t *MonitoringTab) convApplyToViewport() {
-	dimStyle := lipgloss.NewStyle().Foreground(ColorMuted)
-	outputStyle := lipgloss.NewStyle().Bold(true).Foreground(ColorSuccess)
-
-	content := t.convBuf.String()
-
-	if !t.inputActive && t.ticking {
-		if t.stream != nil && t.stream.Len() > 0 {
-			content += outputStyle.Render("◀ Agent:") + "\n"
-			for _, l := range strings.Split(t.stream.String(), "\n") {
-				content += "  " + l + "\n"
-			}
-		} else {
-			content += dimStyle.Render("  "+t.spinner.View()+" Agent is thinking...") + "\n"
-		}
-	}
-
-	t.vp.SetContent(content)
-	if t.autoScroll {
-		t.vp.GotoBottom()
-	}
-}
-
-// renderStepBlock builds the chat-style view for a single step.
-//
-//nolint:cyclop,gocognit // Chat rendering traverses all step types and output variants; complexity is inherent.
-func (t *MonitoringTab) renderStepBlock(step *workflow.Step, state *workflow.StepState, hasState bool) string {
-	inputStyle := lipgloss.NewStyle().Bold(true).Foreground(ColorPrimaryLight)
-	outputStyle := lipgloss.NewStyle().Bold(true).Foreground(ColorSuccess)
-	errorLabel := lipgloss.NewStyle().Bold(true).Foreground(ColorError)
-	stderrLabel := lipgloss.NewStyle().Bold(true).Foreground(ColorWarning)
-	dimStyle := lipgloss.NewStyle().Foreground(ColorMuted)
-
-	var sb strings.Builder
-
-	// Conversation-mode agent steps: render turns as a chat thread.
-	if hasState && state.Conversation != nil && len(state.Conversation.Turns) > 0 {
-		dividerLine := lipgloss.NewStyle().Foreground(ColorMuted).Render("────────────────────────────")
-		needsDivider := false
-		for _, turn := range state.Conversation.Turns {
-			switch turn.Role {
-			case workflow.TurnRoleSystem:
-				continue
-			case workflow.TurnRoleUser:
-				if needsDivider {
-					sb.WriteString(dividerLine)
-					sb.WriteString("\n\n")
-				}
-				sb.WriteString(inputStyle.Render("▶ User:"))
-				sb.WriteString("\n")
-				for _, l := range strings.Split(turn.Content, "\n") {
-					sb.WriteString("  ")
-					sb.WriteString(l)
-					sb.WriteString("\n")
-				}
-			case workflow.TurnRoleAssistant:
-				sb.WriteString(outputStyle.Render("◀ Agent:"))
-				sb.WriteString("\n")
-				for _, l := range strings.Split(turn.Content, "\n") {
-					sb.WriteString("  ")
-					sb.WriteString(l)
-					sb.WriteString("\n")
-				}
-			}
-			sb.WriteString("\n")
-			needsDivider = true
-		}
-		if state.Status == workflow.StatusRunning {
-			lastTurn := state.Conversation.Turns[len(state.Conversation.Turns)-1]
-			if lastTurn.Role == workflow.TurnRoleUser {
-				sb.WriteString(dimStyle.Render("  " + t.spinner.View() + " Agent is thinking..."))
-				sb.WriteString("\n")
-			}
-		}
-		return sb.String()
-	}
-
-	// Non-conversation steps: show input then output.
-	if step != nil {
-		if inputText := stepInputText(step); inputText != "" {
-			sb.WriteString(inputStyle.Render("▶ Input:"))
-			sb.WriteString("\n")
-			for _, l := range strings.Split(inputText, "\n") {
-				sb.WriteString("  ")
-				sb.WriteString(l)
-				sb.WriteString("\n")
-			}
-			sb.WriteString("\n")
-		}
-	}
-
-	if hasState {
-		if state.Error != "" {
-			sb.WriteString(errorLabel.Render("✗ Error:"))
-			sb.WriteString("\n")
-			sb.WriteString("  ")
-			sb.WriteString(state.Error)
-			sb.WriteString("\n\n")
-		}
-		if state.Stderr != "" {
-			sb.WriteString(stderrLabel.Render("⚠ Stderr:"))
-			sb.WriteString("\n")
-			for _, l := range renderTruncated(strings.Split(state.Stderr, "\n"), 20) {
-				sb.WriteString("  ")
-				sb.WriteString(l)
-				sb.WriteString("\n")
-			}
-			sb.WriteString("\n")
-		}
-		if state.Output != "" {
-			sb.WriteString(outputStyle.Render("◀ Output:"))
-			sb.WriteString("\n")
-			for _, l := range renderTruncated(strings.Split(state.Output, "\n"), 50) {
-				sb.WriteString("  ")
-				sb.WriteString(l)
-				sb.WriteString("\n")
-			}
-			sb.WriteString("\n")
-		}
-		if state.Output == "" && state.Error == "" && state.Stderr == "" {
-			switch state.Status { //nolint:exhaustive // only running/pending need placeholder text
-			case workflow.StatusRunning:
-				sb.WriteString(dimStyle.Render("  ⟳ Running…"))
-				sb.WriteString("\n")
-			case workflow.StatusPending:
-				sb.WriteString(dimStyle.Render("  ⏳ Pending"))
-				sb.WriteString("\n")
-			}
-		}
-	} else {
-		sb.WriteString(dimStyle.Render("  ⏳ Waiting…"))
-		sb.WriteString("\n")
-	}
-
-	return sb.String()
-}
-
-// applyFacadeEvent translates a facade ports.Event into a step-state update and
-// rebuilds the tree. Step-level events (EventStepStarted, EventStepCompleted) use
-// the StepPayload.Name to locate the step; non-step events are ignored for state
-// purposes. This replaces direct ExecutionContext polling for event-driven updates (D27).
-//
-//nolint:gocritic // hugeParam: Event is part of the ports contract; pointer indirection would couple TUI to *ports.Event
-func (t *MonitoringTab) applyFacadeEvent(ev ports.Event) {
-	switch ev.Kind { //nolint:exhaustive // only step-level events drive state updates; all others are intentionally ignored
-	case ports.EventStepStarted:
-		payload, ok := ev.Payload.(*ports.EnrichedStepPayload)
-		if !ok || payload == nil || payload.StepName == "" {
-			return
-		}
-		existing := t.states[payload.StepName]
-		existing.Name = payload.StepName
-		existing.Status = workflow.StatusRunning
-		t.states[payload.StepName] = existing
-		// Track the running agent/conversation step so subsequent message events
-		// (which carry no step name) attach to the right step's conversation view.
-		if step, ok := t.findStep(payload.StepName); ok && step.Agent != nil {
-			t.agentStep = payload.StepName
-		}
-		t.rebuildTree()
-		t.updateViewportContent()
-
-	case ports.EventMessageUser:
-		if p, ok := ev.Payload.(*ports.EnrichedMessagePayload); ok && p != nil {
-			t.appendConversationTurn(workflow.TurnRoleUser, p.Content)
-		}
-
-	case ports.EventMessageAssistant:
-		if p, ok := ev.Payload.(*ports.EnrichedMessagePayload); ok && p != nil {
-			t.appendConversationTurn(workflow.TurnRoleAssistant, p.Content)
-		}
-
-	case ports.EventStepCompleted:
-		payload, ok := ev.Payload.(*ports.EnrichedStepPayload)
-		if !ok || payload == nil || payload.StepName == "" {
-			return
-		}
-		existing := t.states[payload.StepName]
-		existing.Name = payload.StepName
-		// Shell-step stdout is streamed out-of-band, so the completed event carries the
-		// captured output/stderr (derived from step state at emit time). Store it so the
-		// detail panel can render per-step output for any selected completed step.
-		existing.Output = payload.Output
-		existing.Stderr = payload.Stderr
-		if payload.Error != "" {
-			existing.Status = workflow.StatusFailed
-			existing.Error = payload.Error
-		} else {
-			existing.Status = workflow.StatusCompleted
-		}
-		t.states[payload.StepName] = existing
-		t.rebuildTree()
-		t.updateViewportContent()
-		t.autoSelectFailed()
-
-	case ports.EventWorkflowCompleted:
-		// Terminal steps never emit step events, so the reached terminal node stays
-		// pending until the workflow ends. Record the outcome so rebuildTree marks it.
-		t.finalStatus = workflow.StatusCompleted
-		t.rebuildTree()
-		t.updateViewportContent()
-
-	case ports.EventWorkflowFailed:
-		t.finalStatus = workflow.StatusFailed
-		t.rebuildTree()
-		t.updateViewportContent()
-	}
-}
-
-// appendConversationTurn attaches a conversation turn (the agent's question or the user's
-// answer) to the running agent step's state, building the ConversationState the detail panel
-// renders. Facade message events carry no step name, so turns are attributed to agentStep
-// (the last agent/conversation step that started). The running step is auto-selected so the
-// live conversation is what the user sees while the workflow is parked for input.
-func (t *MonitoringTab) appendConversationTurn(role workflow.TurnRole, content string) {
-	name := t.agentStep
-	if name == "" {
-		return
-	}
-	st := t.states[name]
-	st.Name = name
-	if st.Conversation == nil {
-		st.Conversation = &workflow.ConversationState{}
-	}
-	st.Conversation.Turns = append(st.Conversation.Turns, workflow.Turn{Role: role, Content: content})
-	st.Conversation.TotalTurns = len(st.Conversation.Turns)
-	t.states[name] = st
-	t.autoSelectRunning()
-	t.rebuildTree()
 	t.updateViewportContent()
 }
 
-// autoSelectRunning switches selectedIdx to the first running node.
-func (t *MonitoringTab) autoSelectRunning() {
-	for i, node := range t.flatNodes {
-		if node.Status == workflow.StatusRunning {
-			t.selectedIdx = i
-			return
-		}
+// SetTick sets the animation frame (spinner glyph, elapsed clock refresh).
+func (t *RunScreen) SetTick(n int) { t.tick = n }
+
+// Running reports whether a run is in flight.
+func (t *RunScreen) Running() bool { return t.running }
+
+// HasRun reports whether the screen has a run (live or finished) to show.
+func (t *RunScreen) HasRun() bool { return t.wf != nil }
+
+// View renders the run body at the screen's own size.
+//
+//nolint:gocritic // Bubbletea convention: value receivers return a new model on each update
+func (t RunScreen) View() string {
+	if t.wf == nil && !t.inputActive {
+		return EmptyStateView("📡", labelRunEmptyTitle, labelRunEmptySubtitle)
 	}
+	if t.width <= 0 || t.height <= 0 {
+		return StyleEmptyState.Render(labelRunWaitingDimensions)
+	}
+	return t.view(t.width, t.height)
 }
 
-// autoSelectFailed switches selectedIdx to the first failed node, if any.
-func (t *MonitoringTab) autoSelectFailed() {
-	for i, node := range t.flatNodes {
-		if node.Status == workflow.StatusFailed {
-			t.selectedIdx = i
-			t.autoScroll = false
-			t.updateViewportContent()
-			return
-		}
+// title is the header title: the workflow name and the run identifier.
+func (t *RunScreen) title() string {
+	name := labelRunOutputTitle
+	if t.wf != nil {
+		name = t.wf.Name
 	}
+	if t.runID == "" {
+		return name
+	}
+	return name + " " + sDim.Render(fmt.Sprintf(labelRunIDFmt, shortID(t.runID)))
 }
 
-// selectedStepOutput returns the relevant output text for the currently selected node.
-func (t MonitoringTab) selectedStepOutput() string { //nolint:gocritic // value receiver: read-only view
-	if len(t.flatNodes) == 0 || t.selectedIdx < 0 || t.selectedIdx >= len(t.flatNodes) {
-		return ""
+func (t *RunScreen) elapsed() time.Duration {
+	if t.startedAt.IsZero() {
+		return 0
 	}
-	name := t.flatNodes[t.selectedIdx].Name
-	state, ok := t.states[name]
-	if !ok {
-		return StyleEmptyState.Render(fmt.Sprintf("Step %q has not started yet.", name))
+	if !t.endedAt.IsZero() {
+		return t.endedAt.Sub(t.startedAt)
 	}
-
-	errorLabel := lipgloss.NewStyle().Bold(true).Foreground(ColorError)
-	stderrLabel := lipgloss.NewStyle().Bold(true).Foreground(ColorWarning)
-
-	var sb strings.Builder
-	if state.Error != "" {
-		fmt.Fprintf(&sb, "%s %s\n\n", errorLabel.Render("Error:"), state.Error)
-	}
-	if state.Stderr != "" {
-		fmt.Fprintf(&sb, "%s\n%s\n\n", stderrLabel.Render("Stderr:"), state.Stderr)
-	}
-	if state.Output != "" {
-		fmt.Fprintf(&sb, "Output:\n%s", state.Output)
-	}
-	if sb.Len() == 0 {
-		return fmt.Sprintf("Step %q: %s", name, StatusBadge(state.Status))
-	}
-	return sb.String()
+	return time.Since(t.startedAt)
 }
 
-// renderTreeWithSelection renders the execution tree with the selected line highlighted.
-func (t MonitoringTab) renderTreeWithSelection() string { //nolint:gocritic // value receiver: read-only view
-	if len(t.flatNodes) == 0 {
-		if t.active != nil {
-			return fmt.Sprintf("Active: %s (%s)\n", t.active.id, t.active.status)
-		}
-		return "Waiting for execution to start…"
+// statusText is the right side of the header: outcome or live state with the clock.
+func (t *RunScreen) statusText() string {
+	clock := fmtClock(t.elapsed())
+	switch {
+	case t.running && t.inputActive:
+		return sRun.Render(fmt.Sprintf(labelRunWaitingReplyFmt, clock))
+	case t.running && t.cancelling:
+		return sRun.Render(fmt.Sprintf(labelRunCancellingFmt, clock))
+	case t.running:
+		return sRun.Render(fmt.Sprintf(labelRunRunningFmt, spinnerFrame(t.tick), clock))
+	case t.finalStatus == workflow.StatusCompleted:
+		return sOK.Render(fmt.Sprintf(labelRunDoneFmt, clock))
+	case t.cancelledRun:
+		return sDim.Render(fmt.Sprintf(labelRunCancelledFmt, clock))
+	case t.finalStatus == workflow.StatusFailed:
+		return sBad.Render(fmt.Sprintf(labelRunFailedFmt, clock))
 	}
-
-	lines := strings.Split(strings.TrimRight(RenderTree(treesFromFlat(t.flatNodes)), "\n"), "\n")
-	var sb strings.Builder
-	for i, line := range lines {
-		if i < len(t.flatNodes) && i == t.selectedIdx {
-			sb.WriteString(monitoringSelectedStyle.Render(line))
-		} else {
-			sb.WriteString(line)
-		}
-		sb.WriteString("\n")
-	}
-	return sb.String()
+	return ""
 }
 
-// resizeInputField sets the textinput width to fill the right panel.
-func (t *MonitoringTab) resizeInputField() {
-	_, rightWidth := t.panelWidths()
-	// Border (2) + padding inside border (2) = 4 chars consumed by the container.
-	w := rightWidth - 4
-	if w < 1 {
-		w = 1
-	}
-	t.inputField.SetWidth(w)
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+func spinnerFrame(tick int) string {
+	return spinnerFrames[((tick%len(spinnerFrames))+len(spinnerFrames))%len(spinnerFrames)]
 }
 
-// resizeViewport updates the viewport dimensions based on the current terminal size.
-func (t *MonitoringTab) resizeViewport() {
-	_, rightWidth := t.panelWidths()
-	panelH := t.panelHeight()
+// keys is the key bar for the current state.
+func (t *RunScreen) keys(w int) string {
 	if t.inputActive {
-		panelH -= 3 // input field steals from right panel height
-		if panelH < 3 {
-			panelH = 3
+		return keyBar(w, keyHint{"enter", labelKeyReply}, keyHint{"esc", labelKeyBackRunContinues})
+	}
+	items := []keyHint{{"↑↓", labelKeyPickStep}, {"f", labelKeyFollow}, {"pgup/dn", labelKeyScroll}}
+	if t.running {
+		items = append(items, keyHint{"c", labelKeyCancelRun})
+	} else {
+		items = append(items, keyHint{"r", labelKeyRerun}, keyHint{"y", labelKeyCopy})
+	}
+	items = append(items, keyHint{"esc", labelKeyBackRunContinues})
+	return keyBar(w, items...)
+}
+
+// view draws the progress line and the Steps and Output boxes in a w x h area.
+func (t *RunScreen) view(w, h int) string {
+	total := max(1, len(t.steps))
+	done := 0
+	for _, n := range t.flatNodes {
+		if n.Status == workflow.StatusCompleted {
+			done++
 		}
 	}
-	// Border (2) + panel title row (1) + horizontal padding (2 via Padding(0,1) on width only).
-	vpWidth := rightWidth - 4
-	vpHeight := panelH - 3
-	if vpWidth < 1 {
-		vpWidth = 1
-	}
-	if vpHeight < 1 {
-		vpHeight = 1
-	}
-	t.vp.SetWidth(vpWidth)
-	t.vp.SetHeight(vpHeight)
+	label := fmt.Sprintf(labelRunProgressFmt, done, len(t.steps)) + "  " + sDim.Render(fmt.Sprintf("%d%%", done*100/total))
+	barW := max(10, w-lipgloss.Width(label)-2)
+	progress := progressBar(barW, float64(done)/float64(total)) + "  " + label
+
+	lw, rw := t.panelWidths()
+	bh := max(h-1, 3)
+	out := t.outputBox(rw, bh)
+	return progress + "\n" + joinH(t.stepsBox(lw, bh), out, 1)
 }
 
-// panelWidths returns (leftWidth, rightWidth) based on 40/60 split.
-func (t MonitoringTab) panelWidths() (int, int) { //nolint:gocritic // value receiver: read-only
-	left := (t.width * 40) / 100
-	right := t.width - left
-	if left < 1 {
-		left = 1
+// stepsBox lists the steps with their status, number and duration, then the run inputs.
+func (t *RunScreen) stepsBox(w, h int) string {
+	inner := w - 4
+	lines := make([]string, 0, h)
+	for i, n := range t.flatNodes {
+		icon := statusIcon(string(n.Status))
+		right := sDim.Render(labelRunStepPending)
+		switch n.Status { //nolint:exhaustive // other statuses fall through to the pending label
+		case workflow.StatusRunning:
+			icon = sRun.Render(spinnerFrame(t.tick))
+			right = sRun.Render(fmtDur(time.Since(t.begin[n.Name])))
+		case workflow.StatusCompleted, workflow.StatusFailed, workflow.StatusCancelled:
+			right = sDim.Render(fmtDur(t.stepDuration(n.Name)))
+		}
+		line := row(fmt.Sprintf("%s%s %d %s", strings.Repeat("  ", n.Depth), icon, i+1, n.Name), right, inner)
+		if i == t.selectedIdx {
+			line = selRow(line, inner, cSelBg, true)
+		}
+		lines = append(lines, line)
 	}
-	if right < 1 {
-		right = 1
+	if len(lines) == 0 {
+		msg := labelRunWaitingStart
+		if t.showSpinner {
+			msg = spinnerFrame(t.tick) + " " + labelRunStarting
+		}
+		lines = append(lines, sDim.Render(msg))
 	}
-	return left, right
-}
 
-// panelHeight returns the available height for the content panels.
-func (t MonitoringTab) panelHeight() int { //nolint:gocritic // value receiver: read-only
-	// Reserve 4 lines: tab bar (1) + separator (1) + help bar (1) + margins (1).
-	h := t.height - 4
-	if h < 1 {
-		h = 1
+	keys := sortedKeys(t.inputs)
+	room := h - 2 - len(keys) - 1
+	for len(lines) < room {
+		lines = append(lines, "")
 	}
-	return h
-}
-
-// flattenTree converts a tree of TreeNodes into a flat slice for keyboard navigation.
-func flattenTree(nodes []*TreeNode) []*TreeNode {
-	result := make([]*TreeNode, 0, len(nodes))
-	for _, node := range nodes {
-		result = append(result, node)
-		result = append(result, flattenTree(node.Children)...)
-	}
-	return result
-}
-
-// treesFromFlat reconstructs a minimal top-level slice from a flat list for RenderTree.
-// Since flatNodes already mirrors the tree structure, we extract root-level nodes only.
-func treesFromFlat(flat []*TreeNode) []*TreeNode {
-	var roots []*TreeNode
-	for _, n := range flat {
-		if n.Depth == 0 {
-			roots = append(roots, n)
+	if len(keys) > 0 {
+		lines = append(lines, sDim.Render(labelRunInputsTitle))
+		for _, k := range keys {
+			lines = append(lines, sPurple.Render(k)+" "+maskValue(k, fmt.Sprint(t.inputs[k])))
 		}
 	}
-	return roots
+	return box(labelRunStepsTitle, lines, w, h, false)
+}
+
+func (t *RunScreen) stepDuration(name string) time.Duration {
+	b, ok := t.begin[name]
+	if !ok {
+		return 0
+	}
+	e, ok := t.end[name]
+	if !ok {
+		return 0
+	}
+	return e.Sub(b)
+}
+
+// outputBox shows the selected step's input, conversation and output, with the reply field
+// underneath while the run waits for the user.
+func (t *RunScreen) outputBox(w, h int) string {
+	title := labelRunOutputTitle
+	if name := t.selectedStepName(); name != "" {
+		title = fmt.Sprintf("%s · %s", labelRunOutputTitle, name)
+		if live := t.live[name]; live != nil && t.running {
+			title += " " + labelRunLiveSuffix
+		}
+	}
+	switch {
+	case t.cancelling && t.running:
+		title += " · " + labelRunCancelling
+	case t.notice != "":
+		title += " · " + t.notice
+	}
+
+	if !t.inputActive {
+		return box(title, strings.Split(t.vp.View(), "\n"), w, h, true)
+	}
+	const inputRows = 3
+	top := box(title, strings.Split(t.vp.View(), "\n"), w, max(h-inputRows, 3), false)
+	reply := box(labelRunReplyTitle, []string{t.inputField.View()}, w, inputRows, true)
+	return top + "\n" + reply
+}
+
+// resizeInputField sets the textinput width to fill the output box.
+func (t *RunScreen) resizeInputField() {
+	_, rw := t.panelWidths()
+	t.inputField.SetWidth(max(rw-6, 1))
+}
+
+// resizeViewport updates the viewport dimensions to the output box's inner area.
+func (t *RunScreen) resizeViewport() {
+	_, rw := t.panelWidths()
+	h := t.panelHeight()
+	if t.inputActive {
+		h = max(h-3, 3)
+	}
+	t.vp.SetWidth(max(rw-4, 1))
+	t.vp.SetHeight(max(h-2, 1))
+}
+
+// panelWidths returns the Steps and Output box widths.
+func (t RunScreen) panelWidths() (int, int) { //nolint:gocritic // value receiver: read-only
+	left := max(min(38, t.width/3), 1)
+	return left, max(t.width-left-1, 1)
+}
+
+// panelHeight returns the height of the two boxes (the progress line sits above them).
+func (t RunScreen) panelHeight() int { //nolint:gocritic // value receiver: read-only
+	return max(t.height-1, 3)
+}
+
+// RenderEventsToTUIMsgs projects facade events to their TUI tea.Msg representation.
+// It backs the facade conformance golden (tests/fixtures/facade/tui-tea-msg.golden).
+func RenderEventsToTUIMsgs(events []ports.Event) []byte {
+	var b strings.Builder
+	for _, ev := range events {
+		fmt.Fprintf(&b, "facadeEventMsg{Seq:%d Kind:%q RunID:%q}\n",
+			ev.Seq, ev.Kind.String(), ev.RunID)
+	}
+	return []byte(b.String())
 }

@@ -1,11 +1,7 @@
 package tui
 
 import (
-	"fmt"
-	"strings"
 	"time"
-
-	"charm.land/lipgloss/v2"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
@@ -18,42 +14,6 @@ type TreeNode struct {
 	Depth      int
 	Children   []*TreeNode
 	IsParallel bool
-}
-
-// StatusIcon returns the display icon for the given execution status.
-func StatusIcon(status workflow.ExecutionStatus) string {
-	switch status {
-	case workflow.StatusPending:
-		return "⏳"
-	case workflow.StatusRunning:
-		return "⟳"
-	case workflow.StatusCompleted:
-		return "✓"
-	case workflow.StatusFailed:
-		return "✗"
-	case workflow.StatusCancelled:
-		return "⏭"
-	default:
-		return "⏳"
-	}
-}
-
-// StatusBadgeIcon returns a colored icon string for the given execution status using theme colors.
-func StatusBadgeIcon(status workflow.ExecutionStatus) string {
-	switch status {
-	case workflow.StatusPending:
-		return lipgloss.NewStyle().Foreground(ColorMuted).Render("⏳")
-	case workflow.StatusRunning:
-		return lipgloss.NewStyle().Foreground(ColorRunning).Render("⟳")
-	case workflow.StatusCompleted:
-		return lipgloss.NewStyle().Foreground(ColorSuccess).Render("✓")
-	case workflow.StatusFailed:
-		return lipgloss.NewStyle().Foreground(ColorError).Render("✗")
-	case workflow.StatusCancelled:
-		return lipgloss.NewStyle().Foreground(ColorWarning).Render("⏭")
-	default:
-		return lipgloss.NewStyle().Foreground(ColorMuted).Render("⏳")
-	}
 }
 
 // BuildTree constructs a slice of TreeNodes from an ordered step slice and a states map.
@@ -122,86 +82,4 @@ func resolveDuration(name string, states map[string]workflow.StepState) time.Dur
 		return 0
 	}
 	return state.CompletedAt.Sub(state.StartedAt)
-}
-
-// RenderTree produces a formatted string representing the execution tree.
-// Each node is rendered with a status icon, its name, and optionally its duration.
-// Parallel children are prefixed with "║" while sequential nodes use "│".
-// Depth indentation is 2 spaces per level.
-func RenderTree(nodes []*TreeNode) string {
-	var sb strings.Builder
-	for i, node := range nodes {
-		isLast := i == len(nodes)-1
-		renderNode(&sb, node, "", isLast, false)
-	}
-	return sb.String()
-}
-
-// renderNode writes a single node and its children into the builder.
-// When parentIsParallel is true, parallel box-drawing connectors (╠══/╚══) and
-// the double vertical bar (║) are used instead of the sequential equivalents.
-func renderNode(sb *strings.Builder, node *TreeNode, prefix string, last, parentIsParallel bool) {
-	var connector string
-	switch {
-	case prefix == "":
-		connector = ""
-	case parentIsParallel && last:
-		connector = "╚══ "
-	case parentIsParallel:
-		connector = "╠══ "
-	case last:
-		connector = "└── "
-	default:
-		connector = "├── "
-	}
-
-	icon := StatusBadgeIcon(node.Status)
-
-	namePrefix := ""
-	if node.IsParallel {
-		namePrefix = "⑊ "
-	}
-
-	durationStr := ""
-	if node.Duration > 0 {
-		durationStr = " " + lipgloss.NewStyle().Foreground(ColorMuted).Render("("+formatDuration(node.Duration)+")")
-	}
-
-	line := prefix + connector + icon + " " + namePrefix + node.Name + durationStr
-	sb.WriteString(line)
-	sb.WriteString("\n")
-
-	for i, child := range node.Children {
-		isLast := i == len(node.Children)-1
-
-		// Build child prefix: extend parent prefix based on position and parallel context.
-		var childPrefix string
-		switch {
-		case prefix == "" && connector == "":
-			childPrefix = "  "
-		case parentIsParallel && last:
-			childPrefix = prefix + "    "
-		case parentIsParallel:
-			childPrefix = prefix + "║   "
-		case last:
-			childPrefix = prefix + "    "
-		default:
-			childPrefix = prefix + "│   "
-		}
-
-		renderNode(sb, child, childPrefix, isLast, node.IsParallel)
-	}
-}
-
-// formatDuration formats a duration for display.
-func formatDuration(d time.Duration) string {
-	if d < time.Second {
-		return fmt.Sprintf("%dms", d.Milliseconds())
-	}
-	if d < time.Minute {
-		return fmt.Sprintf("%.1fs", d.Seconds())
-	}
-	minutes := int(d.Minutes())
-	seconds := int(d.Seconds()) % 60
-	return fmt.Sprintf("%dm%ds", minutes, seconds)
 }

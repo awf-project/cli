@@ -669,92 +669,52 @@ See [HTTP API Documentation](api.md) for endpoint reference, client libraries, a
 
 ## awf tui
 
-Open an interactive terminal user interface for browsing, executing, and monitoring workflows.
+Open an interactive terminal user interface for browsing, running and reviewing workflows.
 
 ```bash
-awf tui [flags]
+awf tui
 ```
 
 ### Description
 
-Launches a full-screen Bubble Tea terminal UI with tab-based navigation providing:
+Launches a full-screen Bubble Tea terminal UI with two screens and a run view:
 
-- **Workflows Tab**: Filterable list of available workflows with launch and validation actions
-- **Monitoring Tab**: Real-time execution tree visualization with step statuses, durations, and live log streaming
-- **History Tab**: Browse past execution records with filtering by workflow name, status, and date range
-- **Agent Conversations Tab**: View multi-turn agent interactions with Markdown-formatted responses
-- **External Logs Tab**: Live tail of Claude Code JSONL session files for monitoring development sessions
+- **Workflows** (`1`): Filterable workflow list with a detail panel (inputs, steps, last runs); run (`x`), validate (`v`)
+- **History** (`2`): Past executions with a detail panel; filter by name (`/`) and status (`s`); `enter` opens the saved output of every step
+- **Run view**: Opens when a run starts. Shows progress, each step's status and duration, and the selected step's output, **live** while it runs. Cancel with `c`, repeat with `r`, copy with `y`, go back with `esc` (the run keeps going)
 
-The TUI bridges to existing CLI workflows while providing enhanced visibility into real-time execution and historical data without requiring raw command-line interaction.
+Workflows run in the same process through the workflow facade, so the TUI sees every step's output, conversation turns and input prompts as they happen.
 
 ### Keyboard Navigation
 
 | Key | Action |
 |-----|--------|
-| `Tab` | Cycle through tabs (next) |
-| `Shift+Tab` | Cycle through tabs (previous) |
-| `q` / `Ctrl+C` | Quit the TUI (prompts for confirmation if workflow is running) |
-| `↑` / `↓` | Navigate list items |
-| `Enter` | Select/activate item, launch workflow, or open details |
-| `f` | Filter list (Workflows/History tabs) |
-| `v` | Validate selected workflow |
-| Space | Toggle selection in multi-select lists |
+| `tab` / `shift+tab`, `1`, `2` | Switch screens |
+| `↑` `↓` / `j` `k` | Move the selection |
+| `/` | Filter the list |
+| `x` / `enter` | Run the selected workflow (Workflows) |
+| `v` | Validate the selected workflow (Workflows) |
+| `s` | Cycle the status filter (History) |
+| `enter` | Open the step detail of an execution (History) |
+| `r` | Reload; in the run view, run again |
+| `c` | Cancel the run (run view) |
+| `y` | Copy the selected step's output (run view) |
+| `f` | Follow the running step (run view) |
+| `esc` | Leave the run view; the run continues |
+| `o` | Reopen the current run |
+| `q` | Quit |
+| `ctrl+c` | Cancel the running run, or quit when none is running |
 
-### Features
-
-#### Workflow Filtering
-
-In the **Workflows** tab, use the search filter to quickly find workflows:
-
-- Filter by workflow name or description
-- Sub-second response time
-- Match highlighting in results
-
-#### Real-Time Monitoring
-
-In the **Monitoring** tab while a workflow is running:
-
-- Tree visualization with status icons (⏳ pending, ▶ running, ✓ success, ✗ failed)
-- Auto-scrolling log viewport showing real-time step output
-- Manual scroll-lock to pause auto-scroll
-- Step duration tracking
-- Auto-selection of failed steps in the tree for immediate error visibility
-
-#### History Exploration
-
-In the **History** tab:
-
-- Chronologically sorted execution records from `history.db`
-- Filter by workflow name, execution status (success/failed/cancelled), and date range
-- Inspect past execution details including full tree state, timing breakdown, and step outputs
-
-#### Agent Conversations
-
-In the **Agent Conversations** tab:
-
-- View multi-turn agent interactions during workflow execution
-- Markdown-formatted responses with proper heading, code block, and list rendering
-- Approval prompts (if applicable) with keyboard shortcuts
-
-#### External Logs
-
-In the **External Logs** tab:
-
-- Live tailing of Claude Code JSONL session files
-- Automatic detection of latest session file in `~/.claude/projects/...`
-- Formatted message display with timestamps
-- Graceful fallback if no session is active
+See the [TUI guide](tui.md) for details.
 
 ### Examples
 
 ```bash
 # Open the TUI
 awf tui
-
-# Launch from a script or CI/CD (non-interactive)
-# Note: TUI requires a terminal; use `awf run` or `awf history` in non-interactive contexts
-awf tui
 ```
+
+The TUI needs a terminal. In scripts and CI use `awf run`, `awf history` and `awf status`.
 
 ### Environment
 
@@ -765,14 +725,15 @@ awf tui
 
 ### Notes
 
-- **Terminal requirements**: Minimum 80x24 character dimensions recommended
-- **Color support**: Automatically detects terminal color capabilities (true color, 256-color, basic ANSI)
-- **Terminal state**: TUI restores terminal state cleanly on exit, panic recovery, or signal termination (SIGINT/SIGTERM)
-- **Secret masking**: All sensitive values (variables starting with `SECRET_`, `API_KEY`, `PASSWORD`) are automatically masked in TUI views
-- **Non-interactive contexts**: TUI requires a terminal with TTY support. Use `awf run`, `awf history`, and `awf status` commands for non-interactive automation
+- **Terminal size**: Minimum 80x24
+- **Color support**: Uses true color when available and falls back to 256-color or basic ANSI
+- **Terminal state**: The terminal is restored on exit
+- **Secret masking**: Input values named `SECRET_*`, `API_KEY*` or `PASSWORD*` are masked in the form, the details and the run inputs. Step output is shown as produced
+- **Non-interactive contexts**: The TUI requires a TTY
 
 ### See Also
 
+- [TUI guide](tui.md) - Screens, keys and the run view
 - [Workflow Execution](workflow-syntax.md) - Workflow syntax and configuration
 - [Commands](commands.md) - Full command reference
 - [Interactive Inputs](interactive-inputs.md) - Terminal-based input prompting
