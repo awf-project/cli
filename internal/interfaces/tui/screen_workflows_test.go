@@ -120,7 +120,7 @@ func TestWorkflowsScreen_RunWithoutInputsLaunchesImmediately(t *testing.T) {
 func TestWorkflowsScreen_RunWithInputsOpensFormThenSubmits(t *testing.T) {
 	s := loadedWorkflows()
 
-	s, _ = s.Update(press("enter"))
+	s, _ = s.Update(press("x"))
 	require.NotNil(t, s.form, "a workflow with inputs asks for them first")
 	assert.True(t, s.InputActive())
 	assert.Contains(t, ansi.Strip(lines(s.popup())[0]), "Run deploy")

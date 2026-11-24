@@ -273,3 +273,41 @@ func shortID(id string) string {
 	}
 	return id
 }
+
+// scrollWindow returns the lines of a panel of rows lines scrolled to offset. The offset is
+// clamped to the content, so a stale offset (after a resize or a shorter step) still shows
+// a full panel. start and end are the zero-based bounds of the visible range.
+func scrollWindow(lines []string, offset, rows int) (win []string, start, end int) {
+	rows = max(rows, 1)
+	start = min(max(offset, 0), max(0, len(lines)-rows))
+	end = min(start+rows, len(lines))
+	return append([]string(nil), lines[start:end]...), start, end
+}
+
+// scrollTitle appends the visible range to a box title when the content overflows.
+func scrollTitle(title string, start, end, total, rows int) string {
+	if total <= rows {
+		return title
+	}
+	return title + " " + sDim.Render(fmt.Sprintf("(%d–%d/%d)", start+1, end, total))
+}
+
+// wrapText breaks text into lines of at most width cells, so a long message stays readable
+// inside a box instead of being cut off by an ellipsis.
+func wrapText(text string, width int) []string {
+	wrapped := lipgloss.NewStyle().Width(max(width, 1)).Render(text)
+	out := strings.Split(wrapped, "\n")
+	for i := range out {
+		out[i] = strings.TrimRight(out[i], " ")
+	}
+	return out
+}
+
+// styleAll applies a style to every line.
+func styleAll(lines []string, style func(...string) string) []string {
+	out := make([]string, len(lines))
+	for i, l := range lines {
+		out[i] = style(l)
+	}
+	return out
+}

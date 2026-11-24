@@ -8,7 +8,6 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/awf-project/cli/internal/domain/workflow"
 )
@@ -352,10 +351,7 @@ func (s *HistoryScreen) detailBox(w, h int) string {
 	}
 	if r.ErrorMessage != "" {
 		lines = append(lines, "", sPurple.Bold(true).Render(labelDetailsError))
-		wrapped := lipgloss.NewStyle().Width(max(inner, 1)).Render(r.ErrorMessage)
-		for _, l := range strings.Split(wrapped, "\n") {
-			lines = append(lines, sBad.Render(strings.TrimRight(l, " ")))
-		}
+		lines = append(lines, styleAll(wrapText(r.ErrorMessage, inner), sBad.Render)...)
 	}
 	return box(labelDetailsTitle, lines, w, h, false)
 }

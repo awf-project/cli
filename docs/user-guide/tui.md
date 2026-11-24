@@ -43,10 +43,29 @@ The list on the left shows each workflow with the icon and age of its last run (
 | `↑` `↓` / `j` `k` | Move the selection |
 | `g` / `G` | Jump to the first / last workflow |
 | `/` | Filter by name or description (`enter` keeps the filter, `esc` clears it) |
-| `x` or `enter` | Run the selected workflow |
+| `enter` | Open the workflow's configuration, step by step |
+| `x` | Run the selected workflow |
 | `v` | Validate the selected workflow (the result appears in the header) |
 | `h` | Open the History screen on this workflow's runs |
 | `r` | Reload workflows and history |
+
+### Workflow configuration
+
+`enter` opens the workflow's YAML, split by step:
+
+- The **Steps** box on the left lists a *general* block (the workflow's name, version, inputs and entry point) followed by one entry per state, numbered, with its type
+- The right box shows the YAML of the selected block, exactly as written in the file, comments included
+
+| Key | Action |
+|-----|--------|
+| `↑` `↓` | Pick a block |
+| `pgup` / `pgdn`, mouse wheel, `home` / `end` | Scroll the YAML |
+| `x` | Run the workflow (asks for its inputs first, if it has some) |
+| `y` | Copy the block to the clipboard |
+| `R` | Reload the file |
+| `esc` | Back to the list |
+
+The view is read-only. Workflows that come from a pack are not supported yet: the screen says so instead of showing a file.
 
 ### Running with inputs
 

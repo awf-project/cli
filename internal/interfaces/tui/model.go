@@ -181,6 +181,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case loadRunDetailMsg:
 		return m.loadRunDetail(msg.Record)
 
+	case loadWorkflowSourceMsg:
+		return m.loadWorkflowSource(msg.Name)
+
+	case WorkflowSourceLoadedMsg:
+		m.workflows, _ = m.workflows.Update(msg)
+		return m, nil
+
 	case RunDetailLoadedMsg:
 		m.history, _ = m.history.Update(msg)
 		return m, nil
@@ -271,6 +278,18 @@ func (m Model) loadRunDetail(rec *workflow.ExecutionRecord) (tea.Model, tea.Cmd)
 	return m, m.bridge.LoadRunDetail(m.ctx, rec.ID, rec.WorkflowID)
 }
 
+// loadWorkflowSource asks the bridge for a workflow's YAML. Without a bridge the screen is
+// told why there is nothing to show.
+//
+//nolint:gocritic // Bubbletea convention: value receivers return a new model on each update
+func (m Model) loadWorkflowSource(name string) (tea.Model, tea.Cmd) {
+	if m.bridge == nil {
+		m.workflows, _ = m.workflows.Update(WorkflowSourceLoadedMsg{Name: name, Err: labelConfigNoReader})
+		return m, nil
+	}
+	return m, m.bridge.LoadWorkflowSource(m.ctx, name)
+}
+
 // resize recomputes the content area and tells the run screen its body size.
 //
 //nolint:gocritic // Bubbletea convention: value receivers return a new model on each update
@@ -280,6 +299,7 @@ func (m Model) resize(msg tea.WindowSizeMsg) Model {
 	m.h = max(m.sh-2*marginY, 0)
 	m.run, _ = m.run.Update(tea.WindowSizeMsg{Width: m.w, Height: m.runBodyHeight()})
 	m.history.SetSize(m.w, max(m.h-3, 0))
+	m.workflows.SetSize(m.w, max(m.h-3, 0))
 	return m
 }
 
@@ -358,8 +378,9 @@ func (m Model) updateKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// An open execution detail owns the keys (esc leaves it); only quit stays global.
-	if m.activeTab == TabHistory && m.history.InDetail() {
+	// An open detail (an execution's steps, a workflow's config) owns the keys: esc leaves
+	// it and only quit stays global.
+	if m.screenInDetail() {
 		if k == "q" {
 			return m, tea.Quit
 		}
@@ -391,6 +412,16 @@ func (m Model) updateKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m.routeToScreen(msg)
+}
+
+// screenInDetail reports whether the active screen has a detail view open.
+//
+//nolint:gocritic // Bubbletea convention: value receivers
+func (m Model) screenInDetail() bool {
+	if m.activeTab == TabHistory {
+		return m.history.InDetail()
+	}
+	return m.workflows.InConfig()
 }
 
 // screenCapturesKeys reports whether the active screen is in a text-entry state (filter or

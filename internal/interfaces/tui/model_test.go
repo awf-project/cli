@@ -109,6 +109,12 @@ func TestModel_RenderFillsTheTerminalExactly(t *testing.T) {
 			return m
 		},
 		"run": func(t *testing.T, m Model) Model { return startedRun(t, m, &mockRunSession{}) },
+		"workflow config": func(t *testing.T, m Model) Model {
+			b := NewBridge(nil, nil)
+			b.SetSourceReader(&fakeSources{data: []byte(sampleYAML), path: "/proj/deploy.yaml"})
+			m.bridge = b
+			return openConfig(t, m)
+		},
 		"history detail": func(t *testing.T, m Model) Model {
 			b := NewBridge(nil, nil)
 			b.SetStateReader(&fakeStates{ec: sampleExecution(time.Now())})

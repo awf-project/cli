@@ -236,6 +236,8 @@ func buildBridge(ctx context.Context) (*Bridge, *TUIInputReader, func(), error) 
 	bridge := NewBridge(result.WorkflowSvc, result.HistorySvc)
 	// History detail reads the per-step state AWF persisted for each run.
 	bridge.SetStateReader(stateStore)
+	// The workflow config view reads each workflow's YAML through the same repository.
+	bridge.SetSourceReader(NewRepositorySourceReader(repo))
 
 	// Wire the facade for event-driven execution (T061, D27, FR-011).
 	// The facade uses the same services already wired into the bridge so there is no

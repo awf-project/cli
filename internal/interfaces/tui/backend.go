@@ -22,6 +22,8 @@ type Backend interface {
 	ValidateWorkflow(ctx context.Context, name string) tea.Cmd
 	// LoadRunDetail emits RunDetailLoadedMsg with the persisted per-step detail of a run.
 	LoadRunDetail(ctx context.Context, recordID, workflowID string) tea.Cmd
+	// LoadWorkflowSource emits WorkflowSourceLoadedMsg with a workflow's YAML split into blocks.
+	LoadWorkflowSource(ctx context.Context, name string) tea.Cmd
 	// RunWorkflowViaFacade starts a run and emits ExecutionStartedMsg, or ErrMsg.
 	RunWorkflowViaFacade(ctx context.Context, name string, inputs map[string]any) tea.Cmd
 }

@@ -94,7 +94,8 @@ states:
 	require.NoError(t, cmd.Start())
 
 	waitForTUI(t, 10*time.Second, func() bool { return strings.Contains(output.String(), workflowName) }, "workflow readiness")
-	_, err = io.WriteString(stdin, "\r")
+	// x runs the selected workflow; enter opens its configuration.
+	_, err = io.WriteString(stdin, "x")
 	require.NoError(t, err)
 	waitForTUI(t, 10*time.Second, func() bool {
 		records := readTUIAdapterRecords(t, recordPath, false)

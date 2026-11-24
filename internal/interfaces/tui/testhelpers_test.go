@@ -175,3 +175,71 @@ func openDetail(t *testing.T, m Model) Model {
 	m, cmd := send(m, press("enter"))
 	return settle(m, cmd)
 }
+
+// fakeSources is a SourceReader returning canned YAML (or an error).
+type fakeSources struct {
+	data []byte
+	path string
+	err  error
+	// requested records the names asked for.
+	requested []string
+}
+
+func (f *fakeSources) WorkflowSource(_ context.Context, name string) ([]byte, string, error) {
+	f.requested = append(f.requested, name)
+	return f.data, f.path, f.err
+}
+
+// sampleYAML is a small workflow file with a comment, inputs and three states.
+const sampleYAML = `# deploys the app
+name: deploy
+version: "1.2.0"
+inputs:
+  env:
+    type: string
+    required: true
+
+states:
+  initial: build
+
+  build:
+    type: step
+    command: make build   # compile
+    on_success: test
+
+  test:
+    type: step
+    command: make test
+    on_success: done
+
+  done:
+    type: terminal
+    status: success
+`
+
+// configModel returns a model on the Workflows tab wired to the given source reader, with
+// "deploy" selected.
+func configModel(t *testing.T, src SourceReader) Model {
+	t.Helper()
+	m := loadedModel(t, 110, 30)
+	b := NewBridge(nil, nil)
+	b.SetSourceReader(src)
+	m.bridge = b
+	return m
+}
+
+// openConfig presses enter on the selected workflow and settles the load.
+func openConfig(t *testing.T, m Model) Model {
+	t.Helper()
+	m, cmd := send(m, press("enter"))
+	return settle(m, cmd)
+}
+
+// stripANSI removes terminal escape sequences.
+func stripANSI(s string) string { return ansi.Strip(s) }
+
+// flatText collapses a rendered screen into its words: box borders removed and every run of
+// whitespace (including line breaks from wrapping) turned into one space.
+func flatText(s string) string {
+	return strings.Join(strings.Fields(strings.ReplaceAll(ansi.Strip(s), "│", " ")), " ")
+}

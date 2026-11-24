@@ -104,6 +104,19 @@ const (
 	labelKeyReload         = "reload"
 )
 
+// Workflow config view.
+const (
+	labelConfigGeneral      = "general"
+	labelConfigLoading      = "loading…"
+	labelConfigNoReader     = "workflow source is not available without a workflow repository"
+	labelConfigNoSource     = "the source file of this workflow was not found (pack workflows are not supported yet)"
+	labelConfigEmpty        = "the workflow file is empty"
+	labelConfigNotAWorkflow = "the file is not a workflow: expected a YAML mapping"
+	labelConfigStepsTitle   = "Steps"
+	labelDetailsTitleConfig = "Configuration"
+	labelKeyConfig          = "config"
+)
+
 // Input form popup.
 const (
 	labelFormTitleFmt    = "Run %s"

@@ -692,7 +692,8 @@ Workflows run in the same process through the workflow facade, so the TUI sees e
 | `tab` / `shift+tab`, `1`, `2` | Switch screens |
 | `↑` `↓` / `j` `k` | Move the selection |
 | `/` | Filter the list |
-| `x` / `enter` | Run the selected workflow (Workflows) |
+| `enter` | Open the selected workflow's configuration (Workflows) |
+| `x` | Run the selected workflow (Workflows) |
 | `v` | Validate the selected workflow (Workflows) |
 | `h` | Show the selected workflow's history (Workflows) |
 | `s` | Cycle the status filter (History) |

@@ -37,6 +37,8 @@ type Bridge struct {
 	history   HistoryProvider
 	// states reads persisted run state for the History detail view (optional).
 	states StateReader
+	// sources reads workflow YAML for the Workflows config view (optional).
+	sources SourceReader
 
 	// facade is the optional ports.WorkflowFacade used by RunWorkflowViaFacade.
 	// When set, RunWorkflowViaFacade returns an ExecutionStartedMsg that includes

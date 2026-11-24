@@ -777,6 +777,8 @@ deps:
       - go-stdlib
       - cobra
       - bubbletea
+      # The workflow config view splits a workflow file into its states, keeping comments.
+      - yaml
       - zap
 
   interfaces-api:

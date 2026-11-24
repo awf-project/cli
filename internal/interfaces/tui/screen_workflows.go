@@ -30,6 +30,12 @@ type WorkflowsScreen struct {
 	form *inputForm
 	// validating is true while a validation request is in flight.
 	validating bool
+
+	// cfg is the open config view of one workflow, nil while the list is showing.
+	cfg *workflowConfig
+	// w/h are the size of the screen body, set by the Model; the config view needs the
+	// height to bound its scrolling.
+	w, h int
 }
 
 func newWorkflowsScreen() WorkflowsScreen {
@@ -101,6 +107,17 @@ func (s *WorkflowsScreen) lastRuns(name string, n int) []*workflow.ExecutionReco
 	return out
 }
 
+// InConfig reports whether a workflow's config view is open.
+func (s *WorkflowsScreen) InConfig() bool { return s.cfg != nil }
+
+// SetSize tells the screen the size of its body.
+func (s *WorkflowsScreen) SetSize(w, h int) {
+	s.w, s.h = w, h
+	if s.cfg != nil {
+		s.cfg.clampOffset(outputRows(h))
+	}
+}
+
 // InputActive reports whether keys must reach this screen (typing a filter or a form
 // field) instead of being treated as global shortcuts.
 func (s *WorkflowsScreen) InputActive() bool { return s.filtering || s.form != nil }
@@ -113,10 +130,27 @@ func (s WorkflowsScreen) Update(msg tea.Msg) (WorkflowsScreen, tea.Cmd) {
 	case ValidationResultMsg:
 		s.validating = false
 		return s, nil
+	case WorkflowSourceLoadedMsg:
+		// A late reply for a workflow the user already left is dropped.
+		if s.cfg != nil && s.cfg.entry.Name == msg.Name {
+			s.cfg.loaded(msg)
+			s.cfg.clampOffset(outputRows(s.h))
+		}
+		return s, nil
+	case tea.MouseWheelMsg:
+		switch tea.Mouse(msg).Button {
+		case tea.MouseWheelUp:
+			s.scrollConfig(-wheelStep)
+		case tea.MouseWheelDown:
+			s.scrollConfig(wheelStep)
+		}
+		return s, nil
 	case tea.KeyPressMsg:
 		switch {
 		case s.form != nil:
 			return s.updateForm(msg)
+		case s.cfg != nil:
+			return s.updateConfig(msg)
 		case s.filtering:
 			return s.updateFilter(msg)
 		}
@@ -145,8 +179,15 @@ func (s WorkflowsScreen) updateList(msg tea.KeyPressMsg) (WorkflowsScreen, tea.C
 			s.filter.Reset()
 			s.clampSelection()
 		}
-	case "enter", "x":
-		return s.launchSelected()
+	case "enter":
+		if e, ok := s.selected(); ok {
+			s.cfg = newWorkflowConfig(e)
+			return s, s.cfg.loadRequest()
+		}
+	case "x":
+		if e, ok := s.selected(); ok {
+			return s.launchEntry(e)
+		}
 	case "v":
 		if e, ok := s.selected(); ok {
 			s.validating = true
@@ -190,14 +231,10 @@ func (s WorkflowsScreen) updateFilter(msg tea.KeyPressMsg) (WorkflowsScreen, tea
 	return s, cmd
 }
 
-// launchSelected runs the selected workflow, asking for its inputs first when it has some.
+// launchEntry runs a workflow, asking for its inputs first when it has some.
 //
 //nolint:gocritic // Bubbletea convention: value receivers return a new model on each update
-func (s WorkflowsScreen) launchSelected() (WorkflowsScreen, tea.Cmd) {
-	e, ok := s.selected()
-	if !ok {
-		return s, nil
-	}
+func (s WorkflowsScreen) launchEntry(e workflow.WorkflowEntry) (WorkflowsScreen, tea.Cmd) {
 	wf := s.wfs[e.Name]
 	if wf == nil {
 		wf = &workflow.Workflow{Name: e.Name}
@@ -227,18 +264,23 @@ func (s WorkflowsScreen) updateForm(msg tea.KeyPressMsg) (WorkflowsScreen, tea.C
 // keys returns the key bar for the current state.
 func (s *WorkflowsScreen) keys(w int) string {
 	switch {
+	case s.form == nil && s.cfg != nil:
+		return s.configKeys(w)
 	case s.filtering:
 		return keyBar(w, keyHint{"enter", labelKeyApply}, keyHint{"esc", labelKeyClear})
 	case s.form != nil:
 		return keyBar(w, keyHint{"enter", labelFormNextOrRun}, keyHint{"tab", labelFormField}, keyHint{"esc", labelFormCancel})
 	}
 	return keyBar(w,
-		keyHint{"tab", labelKeyTabs}, keyHint{"↑↓", labelKeyNavigate}, keyHint{"x", labelKeyRun},
+		keyHint{"tab", labelKeyTabs}, keyHint{"↑↓", labelKeyNavigate}, keyHint{"enter", labelKeyConfig}, keyHint{"x", labelKeyRun},
 		keyHint{"v", labelKeyValidate}, keyHint{"h", labelKeyHistory}, keyHint{"/", labelKeyFilter}, keyHint{"r", labelKeyRefresh}, keyHint{"q", labelKeyQuit})
 }
 
 // view draws the list and the detail panel side by side.
 func (s *WorkflowsScreen) view(w, h int) string {
+	if s.cfg != nil {
+		return s.configView(w, h)
+	}
 	lw := min(44, w*2/5)
 	return joinH(s.listBox(lw, h), s.detailBox(w-lw-1, h), 1)
 }

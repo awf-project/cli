@@ -284,18 +284,13 @@ func (s *HistoryScreen) outputBox(w, h int) string {
 	case d.loading:
 		return box(title, []string{sDim.Render(labelDetailLoading)}, w, h, true)
 	case d.err != "":
-		return box(title, []string{sBad.Render(d.err)}, w, h, true)
+		return box(title, styleAll(wrapText(d.err, w-4), sBad.Render), w, h, true)
 	case len(d.steps()) == 0:
 		return box(title, []string{sDim.Render(labelDetailNoStepsHint)}, w, h, true)
 	}
 
 	all := d.lines()
 	rows := max(1, h-2)
-	start := min(max(d.offset, 0), max(0, len(all)-rows))
-	end := min(start+rows, len(all))
-	visible := append([]string(nil), all[start:end]...)
-	if len(all) > rows {
-		title += " " + sDim.Render(fmt.Sprintf("(%d–%d/%d)", start+1, end, len(all)))
-	}
-	return box(title, visible, w, h, true)
+	visible, start, end := scrollWindow(all, d.offset, rows)
+	return box(scrollTitle(title, start, end, len(all), rows), visible, w, h, true)
 }
