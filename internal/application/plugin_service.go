@@ -285,6 +285,16 @@ func (s *PluginService) GetPlugin(name string) (*pluginmodel.PluginInfo, bool) {
 	return s.manager.Get(name)
 }
 
+// EnabledPluginVersion returns the version of an installed and enabled plugin, built-ins included.
+// It implements ports.PluginVersionLookup for the `requires.plugins` check of a workflow.
+func (s *PluginService) EnabledPluginVersion(name string) (string, bool) {
+	info, found := s.GetPlugin(name)
+	if !found || info == nil || info.Manifest == nil || !s.IsPluginEnabled(name) {
+		return "", false
+	}
+	return info.Manifest.Version, true
+}
+
 // ListPlugins returns all known plugins.
 func (s *PluginService) ListPlugins() []*pluginmodel.PluginInfo {
 	var result []*pluginmodel.PluginInfo

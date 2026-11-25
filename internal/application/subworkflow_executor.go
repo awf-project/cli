@@ -98,6 +98,14 @@ func (s *ExecutionService) executeCallWorkflowStep(
 		}
 	}
 
+	// The child has not gone through the validation of `awf run`, which only sees the top-level workflow: check its
+	// `requires:` block here, before its hooks and its steps run.
+	if s.workflowSvc != nil {
+		if err := s.workflowSvc.validateRequirements(ctx, subWf, ports.ValidateOptions{}); err != nil {
+			return "", fmt.Errorf("step %s: sub-workflow %q: %w", step.Name, config.Workflow, err)
+		}
+	}
+
 	// T050: construct child recorder for transcript linkage (one Recorder per sub-run)
 	childRunID := uuid.New().String()
 	var childRecorder ports.Recorder

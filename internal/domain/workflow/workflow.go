@@ -29,6 +29,7 @@ type Workflow struct {
 	Steps       map[string]*Step  // state name -> step
 	Hooks       WorkflowHooks     // workflow-level hooks
 	Plugins     map[string]string // alias → manifest name (e.g. "pg" → "database")
+	Requires    Requirements      // plugins of awf and of agent CLIs that the workflow needs
 	SourceDir   string            // workflow file directory for path resolution (runtime metadata)
 }
 

@@ -21,6 +21,25 @@ type Manifest struct {
 	AWFVersion  string            `yaml:"awf_version"`
 	Workflows   []string          `yaml:"workflows"`
 	Plugins     map[string]string `yaml:"plugins"`
+	Requires    ManifestRequires  `yaml:"requires"`
+}
+
+// ManifestRequires is the `requires:` block of a manifest: what the workflows of the pack need outside awf.
+type ManifestRequires struct {
+	Plugins      map[string]string   `yaml:"plugins"`
+	AgentPlugins map[string][]string `yaml:"agent_plugins"`
+}
+
+// RequiredPlugins merges `plugins` and `requires.plugins`; `requires.plugins` wins on a name in both.
+func (m *Manifest) RequiredPlugins() map[string]string {
+	merged := make(map[string]string, len(m.Plugins)+len(m.Requires.Plugins))
+	for name, constraint := range m.Plugins {
+		merged[name] = constraint
+	}
+	for name, constraint := range m.Requires.Plugins {
+		merged[name] = constraint
+	}
+	return merged
 }
 
 // ParseManifest parses manifest.yaml bytes into a Manifest.

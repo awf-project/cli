@@ -20,6 +20,13 @@ type yamlWorkflow struct {
 	States      yamlStates         `yaml:"states"`
 	Hooks       *yamlWorkflowHooks `yaml:"hooks"`
 	Plugins     map[string]string  `yaml:"plugins"` // alias → manifest name (e.g. pg: database)
+	Requires    *yamlRequirements  `yaml:"requires"`
+}
+
+// yamlRequirements is the `requires:` block of a workflow.
+type yamlRequirements struct {
+	Plugins      map[string]string   `yaml:"plugins"`
+	AgentPlugins map[string][]string `yaml:"agent_plugins"`
 }
 
 // yamlStates holds the initial state and step definitions.
