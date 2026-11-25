@@ -31,6 +31,7 @@ type InteractiveExecutor struct {
 	stdoutWriter     io.Writer
 	stderrWriter     io.Writer
 	awfPaths         map[string]string
+	process          processSnapshot // environment, working dir, user and hostname, read once
 }
 
 // NewInteractiveExecutor creates a new interactive executor.
@@ -405,7 +406,7 @@ func (e *InteractiveExecutor) interpolateTerminalMessage(message string, intCtx 
 func (e *InteractiveExecutor) buildInterpolationContext(
 	execCtx *workflow.ExecutionContext,
 ) *interpolation.Context {
-	return buildInterpolationContext(execCtx, e.awfPaths)
+	return buildInterpolationContext(execCtx, e.awfPaths, &e.process)
 }
 
 // executeStep executes a single command step.

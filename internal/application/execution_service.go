@@ -71,6 +71,7 @@ type ExecutionService struct {
 	conversationMgr        ConversationExecutor
 	outputLimiter          *OutputLimiter
 	awfPaths               map[string]string
+	process                processSnapshot // environment, working dir, user and hostname, read once
 	auditTrailWriter       ports.AuditTrailWriter
 	packWorkflowLoader     PackWorkflowLoader
 	tracer                 ports.Tracer
@@ -1207,7 +1208,7 @@ func buildLoopDataChain(domainLoop *workflow.LoopContext) *interpolation.LoopDat
 func (s *ExecutionService) buildInterpolationContext(
 	execCtx *workflow.ExecutionContext,
 ) *interpolation.Context {
-	return buildInterpolationContext(execCtx, s.awfPaths)
+	return buildInterpolationContext(execCtx, s.awfPaths, &s.process)
 }
 
 // executeWithRetry executes a command with retry logic.

@@ -1,20 +1,59 @@
 package application
 
 import (
+	"maps"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/pkg/interpolation"
 )
 
+// processSnapshot holds the facts of the awf process that every interpolation
+// context exposes: its environment, working directory, user and hostname.
+//
+// buildInterpolationContext runs several times per step. Reading these facts
+// on each call copied the whole environment into a new map and made two
+// system calls every time, which made it the first source of allocations of a
+// workflow run. awf never changes its own environment or working directory
+// while a workflow runs, so each executor reads them once, on first use.
+//
+// The zero value is ready to use. It must not be copied after first use.
+type processSnapshot struct {
+	once     sync.Once
+	env      map[string]string
+	wd       string
+	user     string
+	hostname string
+}
+
+// get reads the process facts on the first call and returns them afterwards.
+func (p *processSnapshot) get() *processSnapshot {
+	p.once.Do(func() {
+		p.env = make(map[string]string)
+		for _, e := range os.Environ() {
+			if key, value, ok := strings.Cut(e, "="); ok {
+				p.env[key] = value
+			}
+		}
+		p.wd, _ = os.Getwd()
+		p.hostname, _ = os.Hostname()
+		p.user = os.Getenv("USER")
+	})
+	return p
+}
+
 // buildInterpolationContext converts ExecutionContext to interpolation.Context.
 // Used by both ExecutionService and InteractiveExecutor to ensure consistent context building.
 // awfPaths is injected via SetAWFPaths() to provide XDG directory variables (F063/T012).
+// process holds the executor's snapshot of the process environment; the
+// returned context's Env may be that snapshot's map, and must not be modified.
 func buildInterpolationContext(
 	execCtx *workflow.ExecutionContext,
 	awfPaths map[string]string,
+	process *processSnapshot,
 ) *interpolation.Context {
 	// Convert step states - use thread-safe method.
 	// Use explicit index iteration to avoid copying the large StepState struct.
@@ -36,19 +75,14 @@ func buildInterpolationContext(
 		}
 	}
 
-	// Get runtime context.
-	wd, _ := os.Getwd()
-	hostname, _ := os.Hostname()
+	proc := process.get()
 
-	// Build environment map (merge os env first, then override with workflow-specific env).
-	env := make(map[string]string)
-	for _, e := range os.Environ() {
-		if parts := strings.SplitN(e, "=", 2); len(parts) == 2 {
-			env[parts[0]] = parts[1]
-		}
-	}
-	for k, v := range execCtx.Env {
-		env[k] = v
+	// Environment: the process's, overridden by the workflow's. Without workflow
+	// variables, the snapshot is shared rather than copied: templates only read it.
+	env := proc.env
+	if len(execCtx.Env) > 0 {
+		env = maps.Clone(proc.env)
+		maps.Copy(env, execCtx.Env)
 	}
 
 	// Populate AWF context with XDG directory paths.
@@ -70,9 +104,9 @@ func buildInterpolationContext(
 		},
 		Env: env,
 		Context: interpolation.ContextData{
-			WorkingDir: wd,
-			User:       os.Getenv("USER"),
-			Hostname:   hostname,
+			WorkingDir: proc.wd,
+			User:       proc.user,
+			Hostname:   proc.hostname,
 		},
 		Error: nil, // Set in error hooks (F008)
 		AWF:   awfContext,
