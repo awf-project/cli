@@ -440,6 +440,7 @@ func (m Model) screenInDetail() bool {
 		return m.history.InDetail()
 	case TabConfig:
 		return false
+	default:
 	}
 	return m.workflows.InConfig()
 }
@@ -454,6 +455,7 @@ func (m Model) screenCapturesKeys() bool {
 		return m.history.InputActive()
 	case TabConfig:
 		return false
+	default:
 	}
 	return m.workflows.InputActive()
 }

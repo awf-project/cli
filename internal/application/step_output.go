@@ -27,7 +27,10 @@ func withStepOutputSink(ctx context.Context, sink stepOutputSink) context.Contex
 }
 
 func stepOutputSinkFrom(ctx context.Context) stepOutputSink {
-	sink, _ := ctx.Value(stepOutputCtxKey{}).(stepOutputSink)
+	sink, ok := ctx.Value(stepOutputCtxKey{}).(stepOutputSink)
+	if !ok {
+		return nil
+	}
 	return sink
 }
 

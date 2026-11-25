@@ -64,7 +64,7 @@
 // enter. It shows the workflow file split into a general block (every top-level key except
 // `states`, plus the entry point) and one block per state, comments kept. The raw file is
 // read through the SourceReader port (workflow_source.go), implemented over
-// ports.WorkflowRepository.ListWithSource, because workflow.Workflow cannot be marshalled
+// ports.WorkflowRepository.ListWithSource, because workflow.Workflow cannot be marshaled
 // back to what the author wrote. Pack workflows are not listed by the repository, so the
 // view says they are not supported. The scrolling and wrapping helpers (scrollWindow,
 // wrapText) are shared with the History detail.

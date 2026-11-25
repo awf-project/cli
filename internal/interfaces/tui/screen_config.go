@@ -73,6 +73,8 @@ func (s ConfigScreen) Update(msg tea.Msg) (ConfigScreen, tea.Cmd) {
 			s.offset -= wheelStep
 		case tea.MouseWheelDown:
 			s.offset += wheelStep
+		default:
+			// Other buttons are ignored.
 		}
 		s.clampOffset()
 		return s, nil

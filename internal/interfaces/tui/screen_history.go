@@ -177,6 +177,8 @@ func (s HistoryScreen) Update(msg tea.Msg) (HistoryScreen, tea.Cmd) {
 			s.scrollDetail(-wheelStep)
 		case tea.MouseWheelDown:
 			s.scrollDetail(wheelStep)
+		default:
+			// Other buttons are ignored.
 		}
 		return s, nil
 	case tea.KeyPressMsg:
@@ -256,8 +258,12 @@ func (s *HistoryScreen) keys(w int) string {
 		return keyBar(w, keyHint{"enter", labelKeyApply}, keyHint{"esc", labelKeyClear})
 	}
 	hints := []keyHint{
-		{"tab", labelKeyTabs}, {"↑↓", labelKeyNavigate}, {"enter", labelKeyOpen}, {"/", labelKeyFilter},
-		{"s", fmt.Sprintf(labelKeyStatusFmt, s.status.label())}, {"r", labelKeyRefresh},
+		{"tab", labelKeyTabs},
+		{"↑↓", labelKeyNavigate},
+		{"enter", labelKeyOpen},
+		{"/", labelKeyFilter},
+		{"s", fmt.Sprintf(labelKeyStatusFmt, s.status.label())},
+		{"r", labelKeyRefresh},
 	}
 	if s.scope != "" {
 		hints = append(hints, keyHint{"esc", labelKeyAllWorkflows})

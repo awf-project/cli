@@ -391,22 +391,26 @@ func TestRunScreen_StepContentView(t *testing.T) {
 		{
 			"completed step shows its input and output",
 			map[string]workflow.StepState{"build": {Name: "build", Status: workflow.StatusCompleted, Output: "build successful"}},
-			[]string{"$ make", "build successful", labelRunOutput}, nil,
+			[]string{"$ make", "build successful", labelRunOutput},
+			nil,
 		},
 		{
 			"failed step shows error and stderr",
 			map[string]workflow.StepState{"build": {Name: "build", Status: workflow.StatusFailed, Error: "connection refused", Stderr: "fatal error"}},
-			[]string{"connection refused", "fatal error", labelRunError, labelRunStderr}, []string{labelRunOutput},
+			[]string{"connection refused", "fatal error", labelRunError, labelRunStderr},
+			[]string{labelRunOutput},
 		},
 		{
 			"step that has not started yet waits",
 			map[string]workflow.StepState{},
-			[]string{labelRunWaiting}, []string{labelRunOutput},
+			[]string{labelRunWaiting},
+			[]string{labelRunOutput},
 		},
 		{
 			"running step without output says so",
 			map[string]workflow.StepState{"build": {Name: "build", Status: workflow.StatusRunning}},
-			[]string{labelRunRunning}, nil,
+			[]string{labelRunRunning},
+			nil,
 		},
 	}
 	for _, tt := range tests {
@@ -440,7 +444,7 @@ func TestRunScreen_StepsBox(t *testing.T) {
 	assert.Contains(t, out, "✓ 1 build")
 	assert.Contains(t, out, "1m05s", "a finished step shows its duration")
 	assert.Contains(t, out, "3 done")
-	assert.Contains(t, out, "pending", "steps that have not started are labelled")
+	assert.Contains(t, out, "pending", "steps that have not started are labeled")
 	assert.Contains(t, out, "env prod")
 	assert.Contains(t, out, "API_KEY ***", "secret inputs are masked")
 	assert.NotContains(t, out, "s3cr3t")

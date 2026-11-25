@@ -24,7 +24,7 @@ const maxSourceBytes = 1 << 20
 var ErrSourceNotFound = errors.New("workflow source not found")
 
 // SourceReader is the driven port for reading a workflow's raw YAML. The parsed
-// workflow.Workflow cannot stand in for it: it has no YAML tags, so marshalling it would
+// workflow.Workflow cannot stand in for it: it has no YAML tags, so marshaling it would
 // not give back what the author wrote (comments, key order, field names).
 type SourceReader interface {
 	// WorkflowSource returns the file content and its path.
@@ -43,7 +43,7 @@ func NewRepositorySourceReader(repo ports.WorkflowRepository) *RepositorySourceR
 }
 
 // WorkflowSource implements SourceReader.
-func (r *RepositorySourceReader) WorkflowSource(ctx context.Context, name string) ([]byte, string, error) {
+func (r *RepositorySourceReader) WorkflowSource(ctx context.Context, name string) (data []byte, path string, err error) {
 	infos, err := r.repo.ListWithSource(ctx)
 	if err != nil {
 		return nil, "", fmt.Errorf("listing workflows: %w", err)
@@ -52,22 +52,26 @@ func (r *RepositorySourceReader) WorkflowSource(ctx context.Context, name string
 		if infos[i].Name != name {
 			continue
 		}
-		path := filepath.Clean(infos[i].Path)
-		f, err := os.Open(path) //nolint:gosec // path comes from the workflow repository, cleaned above
-		if err != nil {
-			return nil, path, fmt.Errorf("opening workflow file: %w", err)
-		}
-		defer f.Close() //nolint:errcheck // read-only file
-		data, err := io.ReadAll(io.LimitReader(f, maxSourceBytes+1))
-		if err != nil {
-			return nil, path, fmt.Errorf("reading workflow file: %w", err)
-		}
-		if len(data) > maxSourceBytes {
-			return nil, path, fmt.Errorf("workflow file is larger than %d bytes", maxSourceBytes)
-		}
-		return data, path, nil
+		return readSourceFile(filepath.Clean(infos[i].Path))
 	}
 	return nil, "", ErrSourceNotFound
+}
+
+// readSourceFile reads a workflow file, refusing anything larger than maxSourceBytes.
+func readSourceFile(path string) (data []byte, p string, err error) {
+	f, err := os.Open(path) //nolint:gosec // path comes from the workflow repository, cleaned by the caller
+	if err != nil {
+		return nil, path, fmt.Errorf("opening workflow file: %w", err)
+	}
+	defer f.Close() //nolint:errcheck // read-only file
+	data, err = io.ReadAll(io.LimitReader(f, maxSourceBytes+1))
+	if err != nil {
+		return nil, path, fmt.Errorf("reading workflow file: %w", err)
+	}
+	if len(data) > maxSourceBytes {
+		return nil, path, fmt.Errorf("workflow file is larger than %d bytes", maxSourceBytes)
+	}
+	return data, path, nil
 }
 
 // ConfigItem is one block of a workflow's configuration: the general section, or a state.
@@ -162,7 +166,8 @@ func parseWorkflowConfig(src []byte) ([]ConfigItem, error) {
 		}
 	}
 
-	items := []ConfigItem{{Name: labelConfigGeneral, Lines: marshalYAML(general)}}
+	items := make([]ConfigItem, 0, 1+len(stateItems))
+	items = append(items, ConfigItem{Name: labelConfigGeneral, Lines: marshalYAML(general)})
 	return append(items, stateItems...), nil
 }
 

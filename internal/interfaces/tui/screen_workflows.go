@@ -143,6 +143,8 @@ func (s WorkflowsScreen) Update(msg tea.Msg) (WorkflowsScreen, tea.Cmd) {
 			s.scrollConfig(-wheelStep)
 		case tea.MouseWheelDown:
 			s.scrollConfig(wheelStep)
+		default:
+			// Other buttons are ignored.
 		}
 		return s, nil
 	case tea.KeyPressMsg:
@@ -181,7 +183,7 @@ func (s WorkflowsScreen) updateList(msg tea.KeyPressMsg) (WorkflowsScreen, tea.C
 		}
 	case "enter":
 		if e, ok := s.selected(); ok {
-			s.cfg = newWorkflowConfig(e)
+			s.cfg = newWorkflowConfig(&e)
 			return s, s.cfg.loadRequest()
 		}
 	case "x":
@@ -257,6 +259,7 @@ func (s WorkflowsScreen) updateForm(msg tea.KeyPressMsg) (WorkflowsScreen, tea.C
 		wf, inputs := s.form.wf, s.form.values()
 		s.form = nil
 		return s, func() tea.Msg { return LaunchWorkflowMsg{Workflow: wf, Inputs: inputs} }
+	default:
 	}
 	return s, cmd
 }

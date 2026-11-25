@@ -104,7 +104,7 @@ func TestStepOutputWriter_Write(t *testing.T) {
 			if buf != nil {
 				assert.Equal(t, tt.wantDst, buf.String())
 			}
-			var got []string
+			var got []string //nolint:prealloc // want is compared with nil when nothing is reported
 			for _, c := range col.all() {
 				assert.Equal(t, "build", c.step)
 				assert.Equal(t, ports.StepOutputStdout, c.stream)

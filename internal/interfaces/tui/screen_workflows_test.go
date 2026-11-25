@@ -187,8 +187,10 @@ func TestWorkflowsScreen_DetailShowsInputsStepsAndRuns(t *testing.T) {
 
 	out := ansi.Strip(s.detailBox(70, 24))
 
-	for _, want := range []string{"deploy", "Build and deploy the app", "local · v1.2.0", "env=staging",
-		"1 build · command", "3 done · terminal", "Last runs", "12.4s"} {
+	for _, want := range []string{
+		"deploy", "Build and deploy the app", "local · v1.2.0", "env=staging",
+		"1 build · command", "3 done · terminal", "Last runs", "12.4s",
+	} {
 		assert.Contains(t, out, want)
 	}
 	assert.Contains(t, out, "API_KEY=***", "secret defaults are masked")

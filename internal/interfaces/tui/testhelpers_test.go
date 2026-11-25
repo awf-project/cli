@@ -36,15 +36,6 @@ func press(name string) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Code: r[0], Text: name}
 }
 
-// typeText sends each rune of s as a key press to the model.
-func typeText(m Model, s string) Model {
-	for _, r := range s {
-		next, _ := m.Update(press(string(r)))
-		m = next.(Model)
-	}
-	return m
-}
-
 func send(m Model, msg tea.Msg) (Model, tea.Cmd) {
 	next, cmd := m.Update(msg)
 	return next.(Model), cmd

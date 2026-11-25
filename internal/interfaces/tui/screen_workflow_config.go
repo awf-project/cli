@@ -24,8 +24,8 @@ type workflowConfig struct {
 	offset int
 }
 
-func newWorkflowConfig(e workflow.WorkflowEntry) *workflowConfig {
-	return &workflowConfig{entry: e, loading: true}
+func newWorkflowConfig(e *workflow.WorkflowEntry) *workflowConfig {
+	return &workflowConfig{entry: *e, loading: true}
 }
 
 // loaded applies a load result.
@@ -84,6 +84,8 @@ func (c *workflowConfig) loadRequest() tea.Cmd {
 }
 
 // yamlKeyRe matches the indentation, optional list dash and key of a YAML line.
+//
+//nolint:gocritic // regexpSimplify's suggested rewrite is not equivalent: the trailing group must capture the rest of the line
 var yamlKeyRe = regexp.MustCompile(`^(\s*(?:- )?)([^\s#:][^:#]*?)(:)(\s.*|)$`)
 
 // styleYAMLLine colors keys and dims comments. It only decorates: the text is unchanged.
