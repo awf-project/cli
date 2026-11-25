@@ -9,6 +9,7 @@ import (
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/infrastructure/agents"
 	"github.com/awf-project/cli/internal/infrastructure/analyzer"
 	"github.com/awf-project/cli/internal/infrastructure/expression"
 	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
@@ -187,6 +188,7 @@ func buildFacade(cfg *Config) (facade ports.WorkflowFacade, cleanup func()) {
 		pluginmgr.NewCompositeOperationProvider(builtins, notifierProvider),
 	)
 	workflowSvc.SetSkillRepository(skills.NewFilesystemSkillRepository(&cliLogger{silent: cfg.Quiet}))
+	workflowSvc.SetAgentPluginRegistry(agents.NewClaudePluginRegistry())
 
 	historyStore, err := store.NewSQLiteHistoryStore(filepath.Join(cfg.StoragePath, "history.db"))
 	if err != nil {
@@ -267,6 +269,10 @@ func buildValidationFacadeWithDependencies(cfg *Config, deps validationFacadeDep
 		workflowSvc.SetStepTypeProvider(plugins.RPCManager.StepTypeProvider(logger))
 	}
 	workflowSvc.SetSkillRepository(skills.NewFilesystemSkillRepository(logger))
+	workflowSvc.SetAgentPluginRegistry(agents.NewClaudePluginRegistry())
+	if plugins.Service != nil {
+		workflowSvc.SetPluginVersionLookup(plugins.Service)
+	}
 
 	adapter := application.NewAdapter(
 		workflowSvc,

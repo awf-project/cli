@@ -229,6 +229,7 @@ plugins:
 | `awf_version` | string | Yes | AWF CLI version constraint (semver range) |
 | `workflows` | array | Yes | List of workflow names (must have corresponding `.yaml` files) |
 | `plugins` | object | No | Required plugins with version constraints |
+| `requires` | object | No | `plugins` (as above) and `agent_plugins` (agent provider → plugins of that agent CLI, e.g. `claude: ["egm@egm"]`) required by the workflows of the pack. `awf workflow install` warns about each one that is missing. To have `awf validate` and `awf run` check a requirement, declare it in the workflow that needs it ([Requirements](workflow-syntax.md#requirements)). |
 
 ### Pack Directory Structure
 
