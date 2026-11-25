@@ -620,7 +620,6 @@ func TestAutoFacade_ValidationSetupErrorPreventsRunE(t *testing.T) {
 
 	t.Run("successful setup cleanup", func(t *testing.T) {
 		cleanupCalls := 0
-		runCalls := 0
 		home := t.TempDir()
 		t.Setenv("HOME", home)
 		require.NoError(t, os.Mkdir(filepath.Join(home, ".awf"), 0o700))
@@ -642,21 +641,37 @@ func TestAutoFacade_ValidationSetupErrorPreventsRunE(t *testing.T) {
 				return routingTestFacade{}, func() { cleanupCalls++ }, nil
 			},
 		)
-		validateCmd, _, findErr := cmd.Find([]string{"validate"})
-		require.NoError(t, findErr)
-		validateCmd.RunE = func(*cobra.Command, []string) error {
-			runCalls++
-			return nil
-		}
 		output := new(bytes.Buffer)
 		cmd.SetOut(output)
 		cmd.SetErr(output)
 		cmd.SetArgs([]string{"--format", "json", "validate", "workflow"})
 
 		require.NoError(t, cmd.Execute())
-		assert.Equal(t, 1, runCalls)
 		assert.Equal(t, ui.FormatJSON, cfg.OutputFormat)
 		assert.Equal(t, 1, strings.Count(output.String(), "NOTICE: Legacy ~/.awf directory detected"))
+		assert.Zero(t, cleanupCalls)
+		cleanup()
+		cleanup()
+		assert.Equal(t, 1, cleanupCalls)
+	})
+
+	t.Run("command error cleanup", func(t *testing.T) {
+		cleanupCalls := 0
+		cfg := DefaultConfig()
+		cfg.StoragePath = t.TempDir()
+		cmd, cleanup := newRootCommandWithBuilders(
+			cfg,
+			true,
+			func(*Config) (ports.WorkflowFacade, func()) { return routingTestFacade{}, func() {} },
+			func(*Config) (ports.WorkflowFacade, func(), error) {
+				return routingTestFacade{}, func() { cleanupCalls++ }, nil
+			},
+		)
+		cmd.SetOut(new(bytes.Buffer))
+		cmd.SetErr(new(bytes.Buffer))
+		cmd.SetArgs([]string{"validate"})
+
+		require.Error(t, cmd.Execute())
 		assert.Zero(t, cleanupCalls)
 		cleanup()
 		cleanup()

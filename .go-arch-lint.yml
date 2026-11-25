@@ -264,6 +264,9 @@ components:
   infra-notifier:
     in: infrastructure/notifier
 
+  infra-tracker:
+    in: infrastructure/tracker
+
   infra-expression:
     in: infrastructure/expression
 
@@ -403,6 +406,7 @@ deps:
       - infra-github
       - infra-http
       - infra-notify
+      - infra-tracker
       - infra-repository
       - infra-roles
       - infra-skills
@@ -528,6 +532,14 @@ deps:
       - go-sync
 
   infra-notifier:
+    mayDependOn:
+      - domain-ports
+      - domain-plugin
+    canUse:
+      - go-stdlib
+
+  infra-tracker:
+    # Tracker source imports only the provider contracts and operation schemas.
     mayDependOn:
       - domain-ports
       - domain-plugin
@@ -721,6 +733,7 @@ deps:
       - infra-logger
       - infra-mcp
       - infra-notify
+      - infra-tracker
       - infra-otel
       - infra-plugin
       - infra-repository

@@ -1,0 +1,38 @@
+name: tracker-comment
+description: Add a comment through the configured tracker backend
+
+inputs:
+  - name: backend
+    type: string
+    required: false
+    default: ""
+    description: Optional tracker backend override
+  - name: key
+    type: string
+    required: true
+    description: Human-readable issue key
+  - name: body
+    type: string
+    required: true
+    description: Comment body
+
+states:
+  initial: add_comment
+
+  add_comment:
+    type: operation
+    operation: tracker.add_comment
+    inputs:
+      backend: "{{inputs.backend}}"
+      key: "{{inputs.key}}"
+      body: "{{inputs.body}}"
+    on_success: success
+    on_failure: failure
+
+  success:
+    type: terminal
+    status: success
+
+  failure:
+    type: terminal
+    status: failure

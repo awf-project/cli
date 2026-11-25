@@ -110,10 +110,7 @@ func buildBridge(ctx context.Context) (*Bridge, *TUIInputReader, func(), error) 
 	}
 
 	// Initialize plugin system (same as CLI).
-	pluginDirs := []string{
-		xdg.LocalPluginsDir(),
-		xdg.AWFPluginsDir(),
-	}
+	pluginDirs := buildPluginPaths()
 	// Use the caller's cancellable ctx (mirrors the M8 fix in cli/serve.go) so plugin
 	// initialization is interruptible rather than tied to context.Background().
 	pluginResult, pluginErr := pluginmgr.InitSystem(ctx, pluginDirs, filepath.Join(storagePath, "plugins"), "", &nopLogger{})
@@ -157,6 +154,7 @@ func buildBridge(ctx context.Context) (*Bridge, *TUIInputReader, func(), error) 
 	setupOpts := []application.SetupOption{
 		application.WithAgentAliases(agentAliases),
 		application.WithNotifyConfig(application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend}),
+		application.WithTrackerConfig(application.TrackerConfig{DefaultBackend: projectCfg.Tracker.DefaultBackend}),
 		application.WithHistoryStore(historyStore),
 		application.WithTemplatePaths([]string{
 			".awf/templates",
@@ -242,6 +240,14 @@ func buildBridge(ctx context.Context) (*Bridge, *TUIInputReader, func(), error) 
 	}
 
 	return bridge, inputReader, cleanup, nil
+}
+
+func buildPluginPaths() []string {
+	if envPath := os.Getenv("AWF_PLUGINS_PATH"); envPath != "" {
+		return []string{envPath}
+	}
+
+	return []string{xdg.LocalPluginsDir(), xdg.AWFPluginsDir()}
 }
 
 func buildWorkflowPaths() []repository.SourcedPath {

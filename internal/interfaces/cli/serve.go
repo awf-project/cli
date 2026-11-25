@@ -113,9 +113,10 @@ func runServe(cmd *cobra.Command, host string, port int) error {
 		}),
 	}
 	if projectCfg != nil {
-		setupOpts = append(setupOpts, application.WithNotifyConfig(application.NotifyConfig{
-			DefaultBackend: projectCfg.Notify.DefaultBackend,
-		}))
+		setupOpts = append(setupOpts,
+			application.WithNotifyConfig(application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend}),
+			application.WithTrackerConfig(application.TrackerConfig{DefaultBackend: projectCfg.Tracker.DefaultBackend}),
+		)
 	}
 	agentAliases, aliasErr := agents.LoadAliases(projectCfg)
 	if aliasErr != nil {

@@ -23,6 +23,10 @@ import (
 
 func TestMain(m *testing.M) {
 	if os.Getenv("AWF_PLUGIN") == "awf-plugin-v1" {
+		if os.Getenv("AWF_TRACKER_CALLS") != "" {
+			serveTrackerTransportPlugin()
+			return
+		}
 		if os.Getenv("AWF_TIMEOUT_FIXTURE_DIR") != "" {
 			serveTimeoutPlugin()
 			return

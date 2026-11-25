@@ -15,6 +15,7 @@ import (
 	"github.com/awf-project/cli/internal/infrastructure/repository"
 	"github.com/awf-project/cli/internal/infrastructure/skills"
 	"github.com/awf-project/cli/internal/infrastructure/store"
+	"github.com/awf-project/cli/internal/infrastructure/tracker"
 	infraTranscript "github.com/awf-project/cli/internal/infrastructure/transcript"
 	"github.com/awf-project/cli/internal/infrastructure/workflowpkg"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
@@ -183,8 +184,9 @@ func buildFacade(cfg *Config) (facade ports.WorkflowFacade, cleanup func()) {
 		true,
 		nil,
 	)
+	trackerProvider := tracker.NewProvider(nil, projectCfg.Tracker.DefaultBackend, logger)
 	workflowSvc.SetPluginOperationProvider(
-		pluginmgr.NewCompositeOperationProvider(builtins, notifierProvider),
+		pluginmgr.NewCompositeOperationProvider(builtins, notifierProvider, trackerProvider),
 	)
 	workflowSvc.SetSkillRepository(skills.NewFilesystemSkillRepository(&cliLogger{silent: cfg.Quiet}))
 

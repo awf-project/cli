@@ -377,6 +377,7 @@ func runWorkflow(cmd *cobra.Command, cfg *Config, workflowName string, inputFlag
 	setupOpts := []application.SetupOption{
 		application.WithAgentAliases(agentAliases),
 		application.WithNotifyConfig(application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend}),
+		application.WithTrackerConfig(application.TrackerConfig{DefaultBackend: projectCfg.Tracker.DefaultBackend}),
 		application.WithHistoryStore(historyStore),
 		application.WithTemplatePaths(templatePaths),
 		application.WithTracer(tracer),
@@ -966,6 +967,7 @@ func runSingleStep(
 	stepSetupOpts := []application.SetupOption{
 		application.WithAgentAliases(stepAliases),
 		application.WithNotifyConfig(application.NotifyConfig{DefaultBackend: projectCfg.Notify.DefaultBackend}),
+		application.WithTrackerConfig(application.TrackerConfig{DefaultBackend: projectCfg.Tracker.DefaultBackend}),
 		application.WithHistoryStore(historyStore),
 		application.WithTemplatePaths(templatePaths),
 		application.WithUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout)),

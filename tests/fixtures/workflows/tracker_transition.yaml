@@ -1,0 +1,38 @@
+name: tracker-transition
+description: Transition an issue through the configured tracker backend
+
+inputs:
+  - name: backend
+    type: string
+    required: false
+    default: ""
+    description: Optional tracker backend override
+  - name: id
+    type: string
+    required: true
+    description: Provider issue identifier
+  - name: transition
+    type: string
+    required: true
+    description: Transition to apply
+
+states:
+  initial: transition_issue
+
+  transition_issue:
+    type: operation
+    operation: tracker.transition
+    inputs:
+      backend: "{{inputs.backend}}"
+      id: "{{inputs.id}}"
+      transition: "{{inputs.transition}}"
+    on_success: success
+    on_failure: failure
+
+  success:
+    type: terminal
+    status: success
+
+  failure:
+    type: terminal
+    status: failure

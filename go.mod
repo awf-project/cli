@@ -7,6 +7,7 @@ require (
 	charm.land/bubbletea/v2 v2.1.2
 	charm.land/lipgloss/v2 v2.1.1
 	github.com/coder/acp-go-sdk v0.20.0
+	github.com/creack/pty v1.1.24
 	github.com/expr-lang/expr v1.18.0
 	github.com/fatih/color v1.19.0
 	github.com/google/uuid v1.6.0

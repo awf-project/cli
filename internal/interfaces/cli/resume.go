@@ -286,6 +286,7 @@ func buildResumeFacade(cmd *cobra.Command, cfg *Config, formatter *ui.Formatter)
 
 	setupOpts := []application.SetupOption{
 		application.WithAgentAliases(agentAliases),
+		application.WithTrackerConfig(application.TrackerConfig{DefaultBackend: projectCfg.Tracker.DefaultBackend}),
 		application.WithHistoryStore(historyStore),
 		application.WithAgentRoleRepository(roles.NewFilesystemAgentRoleRepository(logger)),
 		application.WithUserInputReader(ui.NewStdinInputReader(os.Stdin, os.Stdout)),

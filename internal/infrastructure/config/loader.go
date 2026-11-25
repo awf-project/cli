@@ -14,6 +14,7 @@ var knownConfigKeys = map[string]bool{
 	"log_level":     true,
 	"output_format": true,
 	"notify":        true,
+	"tracker":       true,
 	"telemetry":     true,
 	"agents":        true,
 }
