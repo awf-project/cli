@@ -821,3 +821,51 @@ func TestOpenCodeProvider_Execute_JSONFormat_NDJSONStreamEvents(t *testing.T) {
 	var parsed any
 	require.NoError(t, json.Unmarshal([]byte(result.Output), &parsed))
 }
+
+// Regression: opencode's step_finish carries no total, only the input/output split
+// and a cache block. The total must come from the split, not stay at zero.
+func TestOpenCodeProvider_Execute_JSONFormat_StepFinishWithoutTotal(t *testing.T) {
+	ndjson := strings.Join([]string{
+		`{"type":"step_start","sessionID":"ses_1","part":{}}`,
+		`{"type":"text","sessionID":"ses_1","part":{"type":"text","text":"{\"answer\":\"ok\"}"}}`,
+		`{"type":"step_finish","sessionID":"ses_1","part":{"reason":"stop","cost":0,"tokens":{"input":16917,"output":6,"reasoning":105,"cache":{"read":104,"write":0}}}}`,
+	}, "\n")
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "say ok",
+		map[string]any{"output_format": "json"}, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 16917, result.TokensInput)
+	assert.Equal(t, 6, result.TokensOutput)
+	assert.Equal(t, 16923, result.Tokens, "the total is derived from the split when opencode omits it")
+	assert.False(t, result.TokensEstimated)
+}
+
+// opencode 1.15 omits "total" from step_finish; the total must be derived, or a
+// later step sees total=0 and fails.
+func TestOpenCodeProvider_Execute_StepFinishWithoutTotal(t *testing.T) {
+	ndjson := strings.Join([]string{
+		`{"type":"step_start","sessionID":"ses_1","part":{}}`,
+		`{"type":"text","part":{"text":"{\"answer\":\"ok\"}"}}`,
+		`{"type":"step_finish","sessionID":"ses_1","part":{"reason":"stop","cost":0,"tokens":{"input":16917,"output":6,"reasoning":105,"cache":{"read":104,"write":0}}}}`,
+	}, "\n")
+
+	mockExec := mocks.NewMockCLIExecutor()
+	mockExec.SetOutput([]byte(ndjson), nil)
+	provider := NewOpenCodeProviderWithOptions(WithOpenCodeExecutor(mockExec))
+
+	result, err := provider.Execute(context.Background(), "reply ok",
+		map[string]any{"output_format": "json"}, nil, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, 16917, result.TokensInput)
+	assert.Equal(t, 6, result.TokensOutput)
+	assert.Equal(t, 16923, result.Tokens)
+	assert.False(t, result.TokensEstimated)
+}
