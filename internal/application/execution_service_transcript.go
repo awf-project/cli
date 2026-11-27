@@ -72,6 +72,10 @@ func (s *ExecutionService) emitTranscriptStep(ctx context.Context, ec *workflow.
 			payload.Stderr = state.Stderr
 			payload.Error = state.Error
 			payload.CostUSD = state.CostUSD
+			payload.TokensIn = state.TokensInput
+			payload.TokensOut = state.TokensOutput
+			payload.TokensTotal = state.TokensUsed
+			payload.TokensEstimated = state.TokensEstimated
 		}
 	}
 	s.emitTranscriptEvent(ctx, transcript.ExchangeEvent{

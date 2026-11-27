@@ -27,6 +27,12 @@ type sseEventData struct {
 	// CostUSD is what the provider charged for the step that just completed, in USD.
 	// Omitted when the provider reports no price.
 	CostUSD float64 `json:"cost_usd,omitempty"`
+	// TokensIn, TokensOut and TokensTotal are the step's token counts, omitted when
+	// the provider reports none. TokensEstimated marks them as an estimate.
+	TokensIn        int  `json:"tokens_in,omitempty"`
+	TokensOut       int  `json:"tokens_out,omitempty"`
+	TokensTotal     int  `json:"tokens_total,omitempty"`
+	TokensEstimated bool `json:"tokens_estimated,omitempty"`
 }
 
 func eventDataFromEvent(ev ports.Event) sseEventData { //nolint:gocritic // Event is the public facade value type
@@ -37,6 +43,10 @@ func eventDataFromEvent(ev ports.Event) sseEventData { //nolint:gocritic // Even
 		if payload, ok := ev.Payload.(*ports.EnrichedStepPayload); ok {
 			data.Step = payload.StepName
 			data.CostUSD = payload.CostUSD
+			data.TokensIn = payload.TokensIn
+			data.TokensOut = payload.TokensOut
+			data.TokensTotal = payload.TokensTotal
+			data.TokensEstimated = payload.TokensEstimated
 			switch {
 			case payload.Error != "":
 				data.Error = payload.Error

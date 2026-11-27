@@ -3060,7 +3060,12 @@ func (s *ExecutionService) executeAgentStep(
 			state.Response = result.Response
 			// AC6: Token usage in states.step_name.tokens_used
 			state.TokensUsed = result.Tokens
-			state.TokensOutput = result.Tokens
+			state.TokensInput = result.TokensInput
+			state.TokensOutput = result.TokensOutput
+			if state.TokensOutput == 0 {
+				// A provider that reports only a total leaves the split empty.
+				state.TokensOutput = result.Tokens
+			}
 			state.TokensEstimated = result.TokensEstimated
 			state.CostUSD = result.CostUSD
 

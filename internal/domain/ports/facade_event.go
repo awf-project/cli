@@ -136,6 +136,12 @@ type EnrichedStepPayload struct {
 	// stream, because shell-step stdout is streamed out-of-band via the output writers
 	// and never appears as a facade event.
 	HadOutput bool
+	// TokensIn, TokensOut and TokensTotal are the agent step's token counts, zero
+	// when the provider reports none. TokensEstimated marks them as an estimate.
+	TokensIn        int
+	TokensOut       int
+	TokensTotal     int
+	TokensEstimated bool
 	// Output and Stderr carry the step's captured stdout/stderr at completion time.
 	// Like HadOutput they are derived from the step state at emit time (shell-step
 	// stdout is streamed out-of-band via the output writers and is not otherwise

@@ -337,12 +337,17 @@ func (p *OpenCodeProvider) extractOpenCodeTokenUsage(rawOutput string) *tokenUsa
 		return nil
 	}
 	cost, _ := part["cost"].(float64) //nolint:errcheck // type assertion; zero-value fallback is intentional
-	return &tokenUsage{
+	usage := &tokenUsage{
 		InputTokens:  intFromMap(tokens, "input"),
 		OutputTokens: intFromMap(tokens, "output"),
 		TotalTokens:  intFromMap(tokens, "total"),
 		CostUSD:      cost,
 	}
+	if usage.TotalTokens == 0 {
+		// opencode 1.15 emits no total in step_finish; derive it from the split.
+		usage.TotalTokens = usage.InputTokens + usage.OutputTokens
+	}
+	return usage
 }
 
 func (p *OpenCodeProvider) opencodeMCPInjector(_ context.Context, args []string, cfg *workflow.MCPProxyConfig, mcpConfigPath string, options map[string]any) (newArgs []string, newOptions map[string]any, cleanup func() error, err error) {

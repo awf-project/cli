@@ -153,14 +153,20 @@ func TestSSEEventDataFromEvent_StepCompletedCarriesCost(t *testing.T) {
 		Kind:  ports.EventStepCompleted,
 		RunID: "run-y",
 		Payload: &ports.EnrichedStepPayload{
-			StepName: "review",
-			CostUSD:  0.0081,
+			StepName:    "review",
+			CostUSD:     0.0081,
+			TokensIn:    4200,
+			TokensOut:   380,
+			TokensTotal: 4580,
 		},
 	})
 
 	assert.Equal(t, "step.completed", data.Kind)
 	assert.Equal(t, "review", data.Step)
 	assert.InDelta(t, 0.0081, data.CostUSD, 1e-9)
+	assert.Equal(t, 4200, data.TokensIn)
+	assert.Equal(t, 380, data.TokensOut)
+	assert.Equal(t, 4580, data.TokensTotal)
 }
 
 func TestHTTPSSE_StreamConsumesRunSessionEvents(t *testing.T) {

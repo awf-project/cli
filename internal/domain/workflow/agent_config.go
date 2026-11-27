@@ -124,7 +124,9 @@ type AgentResult struct {
 	RawOutput       string         // unmodified provider stream (NDJSON for CLI providers); source for transcript normalization (F106 US2). Empty for providers with no raw stream (e.g. openai_compatible HTTP).
 	DisplayOutput   string         // filtered human-readable output for display (empty when output_format=json or no parser)
 	Response        map[string]any // parsed JSON response (if applicable)
-	Tokens          int            // token usage (if reported by provider)
+	Tokens          int            // total token usage (if reported by provider)
+	TokensInput     int            // input tokens, when the provider reports the split
+	TokensOutput    int            // output tokens, when the provider reports the split
 	TokensEstimated bool           // true if Tokens is an estimation, false if actual count
 	CostUSD         float64        // what the provider charged for this execution, in USD (0 when unreported)
 	Error           error          // execution error, if any
