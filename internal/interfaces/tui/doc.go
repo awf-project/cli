@@ -1,233 +1,153 @@
-// Package tui provides a terminal user interface for AWF workflows.
+// Package tui implements the interactive terminal user interface for AWF, launched with
+// `awf tui`.
 //
-// The TUI layer is an interface adapter in the hexagonal architecture, sitting
-// at the same level as the CLI package. It translates Bubbletea v2 events and
-// user keystrokes into application service calls and renders responses as
-// styled terminal output via Lipgloss v2 and Glamour v2. No domain logic or
-// infrastructure details reside here—only presentation, routing, and
-// coordination between the domain model and the view.
+// The TUI is a full-screen Bubble Tea (v2) application. It is a thin interface adapter: it
+// renders state and turns key presses into requests, and leaves every decision to the
+// application layer. Workflows run in-process through ports.WorkflowFacade, so the TUI
+// receives the complete event stream (step lifecycle, live output, conversation turns,
+// input requests) without going through the HTTP API.
 //
-// # Architecture Role
+// # Look and feel
 //
-// In the hexagonal architecture:
-//   - The TUI Model receives user input from Bubbletea key/mouse events
-//   - The Bridge adapter translates between service interfaces and tea.Cmd factories
-//   - Tab sub-models encapsulate per-tab state and rendering
-//   - The Model delegates business operations to application service ports
-//     (WorkflowLister, WorkflowFacade, HistoryProvider)
+// The page is a dark violet canvas painted over the whole terminal with a one-cell margin
+// (see paintPage). Content is drawn with a small set of primitives in chrome.go, shared by
+// every screen:
 //
-// The TUI depends on application service ports defined in bridge.go; it never
-// imports infrastructure packages directly. Service implementations are injected
-// via NewCommand and buildBridge at CLI startup. All workflow execution routes
-// through the WorkflowFacade port (ports.WorkflowFacade) — the legacy
-// WorkflowRunner port has been removed (F108 TUI-DC-001/002/003).
+//   - box(title, lines, w, h, focused): a rounded frame with the title on its top border
+//   - row(left, right, w): left and right text on one line of exact width
+//   - selRow(line, w, bg, bold): a solid full-width highlight for the selected row
+//   - keyBar(w, hints...): the rule and key chips that close every screen
+//   - overlay(base, popup, w, h): a centered popup drawn over the page
 //
-// # Bubbletea Model-Update-View Pattern
+// All of them measure and truncate in terminal cells (ANSI aware, wide runes counted as
+// two), which is what keeps every row exactly as wide as the terminal. The palette lives
+// in theme.go. The minimum supported size is 80x24; below it a short message is shown.
 //
-// The package follows the Elm architecture as implemented by Bubbletea:
+// # Screens
 //
-//   - Init() returns an initial tea.Cmd (typically LoadWorkflows via Bridge)
-//   - Update(msg) dispatches incoming messages to the appropriate handler,
-//     returns a new Model and an optional tea.Cmd for side effects
-//   - View() renders the full screen string from current model state
+// The Model (model.go) owns the page chrome and switches between two modes:
 //
-// All sub-models (tab types) follow the same convention: value receivers that
-// return (TabType, tea.Cmd). The root Model delegates unhandled messages to
-// the active tab's Update method.
+// Tabs mode shows a header (the AWF badge, the tab bar with item counts and the working
+// directory) over one of three screens, reached with tab, shift+tab, 1, 2 and 3:
 //
-// # Tab Architecture
+//   - Workflows (screen_workflows.go): the workflow list on the left, with the status icon
+//     and age of each workflow's last run, and a detail panel on the right showing source,
+//     inputs (secret defaults masked), the ordered steps and the last runs. Keys: up/down,
+//     / to filter, enter to open the configuration, x to run, v to validate, h for the
+//     workflow's history, r to refresh. A workflow that declares inputs opens a popup form
+//     first (form_inputs.go); required inputs are enforced and SECRET_*, API_KEY* and
+//     PASSWORD* inputs are masked while typing.
+//   - History (screen_history.go): past executions, newest first, with a detail panel for
+//     the selected one. Keys: / to filter by workflow name, s to cycle the status filter
+//     (all, success, failed), r to refresh, enter to open the step detail.
 //
-// The Model hosts four tabs (Tab enum: TabWorkflows, TabMonitoring, TabHistory,
-// TabExternalLogs; labels in tabLabels [4]string), each implemented as a standalone
-// sub-model:
+// The step detail (screen_history_detail.go) shows what each step of a past execution did.
+// Pressing enter makes the Model read the state AWF persisted for the run through the
+// Bridge (run_detail.go): StateReader is satisfied by ports.StateStore and is called with
+// ExecutionRecord.WorkflowID, the key the state was saved under, not the history record ID.
+// The reply, RunDetailLoadedMsg, echoes the record ID so a late reply for an execution the
+// user already left is dropped. Steps are ordered by start time, steps that never started
+// come last, and the first failed step is preselected. The output panel scrolls with
+// pgup/pgdn, home/end and the mouse wheel; offsets are clamped to the content, which is why
+// the screen is told its body size through SetSize. A step with no captured output explains
+// why (it did not run, the run stopped while it was running, or it printed nothing) instead
+// of showing the live run view's waiting placeholders. Step rendering is shared with the
+// run view through pure functions (writeStepResult, writeConversation, stepCopyText).
+// A missing state (a nil result from the store) is reported, not treated as an error.
 //
-// ## Tab 1: Workflows (tab_workflows.go)
+//   - Config (screen_config.go): the project configuration, read-only, like `awf config
+//     show`: the file, whether it exists and the inputs it pre-fills (secrets masked). It
+//     reads through the ConfigReader port (project_config.go), implemented in command.go
+//     over the same loader as the CLI. A missing file is an empty setup, not an error.
 //
-// Filterable, keyboard-navigable list of available workflow definitions.
-// Backed by a bubbles list.Model with a DefaultDelegate for two-line rows
-// (workflow name + description and step count). Supports:
-//   - Enter: launch selected workflow (emits LaunchWorkflowMsg)
-//   - 'v': validate selected workflow via Bridge.ValidateWorkflow
-//   - Esc: dismiss validation overlay or clear filter
-//   - /: enter filter mode (delegated to list.Model)
+// The workflow configuration view (screen_workflow_config.go) opens from a workflow with
+// enter. It shows the workflow file split into a general block (every top-level key except
+// `states`, plus the entry point) and one block per state, comments kept. The raw file is
+// read through the SourceReader port (workflow_source.go), implemented over
+// ports.WorkflowRepository.ListWithSource, because workflow.Workflow cannot be marshaled
+// back to what the author wrote. Pack workflows are not listed by the repository, so the
+// view says they are not supported. The scrolling and wrapping helpers (scrollWindow,
+// wrapText) are shared with the History detail.
 //
-// ## Tab 2: Monitoring (tab_monitoring.go)
+// History can be scoped to one workflow with `h` from the Workflows screen (an exact name
+// match, separate from the text filter), and an execution's detail can run it again with
+// `r`, using the inputs read back from its saved state.
 //
-// Live execution dashboard with a two-panel layout:
-//   - Left panel (40%): execution tree with step status icons (see tree.go)
-//   - Right panel (60%): scrollable viewport showing selected step output
+// Run mode is a full-frame view of a run, opened as soon as a run starts and left with esc
+// (the run keeps going; `o` reopens it). It is documented below.
 //
-// State is updated event-driven, not by polling: MonitoringTab.StartEventLoop
-// spawns a goroutine that ranges over ports.RunSession.Events() and forwards each
-// facade event into the Bubbletea update loop as a facadeEventMsg (terminal events
-// also emit an ExecutionFinishedMsg). The earlier 200 ms tick loop that polled
-// ExecutionContext.GetAllStepStates() has been removed. Navigation keys (up/k,
-// down/j) move the tree selection; 'f' jumps to the bottom and re-enables
-// auto-scroll. The tab auto-selects the first failed node to surface errors
-// immediately.
+// # The run view
 //
-// ## Tab 3: History (tab_history.go)
+// RunScreen is split by responsibility: screen_run.go (state, Update, View, layout),
+// screen_run_events.go (event consumption and live output) and screen_run_render.go (pure
+// rendering of steps and conversations).
 //
-// Filterable execution history list with a detail view:
-//   - Text filter: substring match on workflow name (case-insensitive)
-//   - Tab key: cycles status filter (all → success → failed → all)
-//   - Enter: opens detail view for selected record
-//   - Esc: returns to list view from detail
+// Layout: a progress bar, a Steps box (status icon, number, name and duration per step,
+// with the run's inputs listed below, secrets masked) and an Output box for the selected
+// step. While the run waits for a reply, a message field appears under the Output box. The
+// header shows the workflow, the run identifier and a live status: spinner and elapsed
+// clock, or the outcome (done, failed, cancelled).
 //
-// Statistics footer shows total, success, failed, cancelled counts and average
-// duration in milliseconds.
+// State is event-driven, never polled. StartEventLoop spawns a goroutine that ranges over
+// ports.RunSession.Events() and forwards each event to the update loop as a facadeEventMsg;
+// terminal events also emit an ExecutionFinishedMsg. The only timer is clockMsg, which
+// animates the spinner and the clock and stops by itself when no run is in flight.
 //
-// Agent conversation turns are NOT a separate tab: they are surfaced inline by
-// the Monitoring tab (tab_monitoring.go), which buffers agent_step events from
-// the facade RunSession stream and renders them alongside step progress. An
-// earlier design sketched a dedicated "Agent Conversations (tab_agent.go)" tab;
-// it was never implemented and the responsibility folded into Monitoring.
+// Live step output: the TUI facade enables Adapter.SetStepOutputEvents, so a running step
+// streams its stdout and stderr as ports.EventStepOutput chunks. RunScreen keeps them per
+// step, capped at maxLiveOutputBytes with the newest bytes winning, and shows them while
+// the step runs. Chunks are raw and may end mid-line. When the step completes, the
+// authoritative output carried by EventStepCompleted replaces the streamed copy. Chunks are
+// best effort: the session drops them under back-pressure, which only costs live fidelity.
 //
-// ## Tab 4: External Logs (tab_logs.go)
+// The tree cursor follows the step that starts, unless the user moved away from the tail.
+// Selecting a step shows its input, its conversation or its output. The first failed step
+// is selected automatically so errors surface immediately.
 //
-// Tailed view of the AWF audit JSONL log file.
-// An offset-based Tailer reads one line per poll interval from the AWF
-// audit.jsonl file and emits LogLineMsg. Each entry shows the event type,
-// workflow name, status, duration, and any error message.
-// File rotation is detected automatically and surfaces a notice; the tab
-// re-watches the path on each tick until the file reappears.
-// Supports up to 1000 log entries (maxLogEntries) with auto-scroll; 'f' jumps
-// to the bottom and re-enables auto-scroll after manual upward scroll.
+// Keys in the run view: up/down pick a step; f follows the tail; pgup/pgdn scroll; c
+// cancels the run; r repeats the last launch once the run has ended; y copies the selected
+// step's error, stderr and output to the clipboard; esc goes back. ctrl+c cancels a run in
+// flight and quits once there is none. While the reply field is focused every key is typed
+// text, so none of these actions fire.
 //
-// # Bridge Adapter Pattern
+// Cancellation mirrors the HTTP bridge: a session that implements CancelWithEvent(reason)
+// is cancelled that way and publishes its own terminal event; any other session is closed
+// directly and the screen finishes immediately.
 //
-// Bridge (bridge.go) is the anti-corruption layer between the Bubbletea event
-// loop and application service interfaces. It exposes factory methods that
-// return tea.Cmd closures:
+// # Conversations
 //
-//   - Bridge.LoadWorkflows: fetches all workflow definitions → WorkflowsLoadedMsg
-//   - Bridge.LoadHistory: fetches execution records and stats → HistoryLoadedMsg
-//   - Bridge.RunWorkflowViaFacade: starts a workflow execution via facade → ExecutionStartedMsg
-//   - Bridge.ValidateWorkflow: validates a workflow by name → ValidationResultMsg or ErrMsg
+// An agent step in conversation mode emits EventMessageUser and EventMessageAssistant
+// events, which RunScreen attributes to the running agent step and renders as a chat
+// thread. When the workflow needs the user, the facade publishes EventInputRequired; the
+// Model switches to the run view, the reply field takes focus and enter answers through
+// RunSession.Respond. TUIInputReader (bridge.go) is the blocking ports.UserInputReader
+// handed to the execution services; it signals the program with InputRequestedMsg.
 //
-// Bridge fields may be nil independently; a nil dependency returns ErrMsg with
-// a descriptive error. This enables partial service wiring without panics.
+// # Architecture
 //
-// When CommandConfig is nil or all fields are nil (bridgeless mode), the Model
-// initializes without a Bridge. Init() returns a no-op WorkflowsLoadedMsg so
-// the update loop starts cleanly. Bridgeless mode is suitable for read-only
-// display of local state without live service calls.
+//   - command.go is the composition root: cobra command, terminal validation, and
+//     buildBridge, which builds configuration, repositories, state store, executor, plugins
+//     and notifier wiring, then the facade. It is the only file here that imports
+//     infrastructure.
+//   - backend.go declares Backend, the single contract between the screens and the
+//     application layer. *Bridge (bridge.go) implements it over the facade, and every
+//     method returns a tea.Cmd so screens never block.
+//   - run_detail.go holds the History detail view model and the StateReader port.
+//   - messages.go lists the messages exchanged between the Bridge and the Model.
+//   - model.go routes messages, handles global keys and draws the chrome.
+//   - labels.go holds every user-visible string. The interface is English-only, and
+//     TestLabels_AreEnglish parses the file to enforce it.
 //
-// All workflow execution is facade-driven. Bridge.RunWorkflowViaFacade (F108) is
-// the sole execution entry point; the WorkflowRunner port and the legacy
-// RunWorkflowAsync path have been removed. SetFacade must be called before any
-// execution command is issued.
+// Bridgeless mode: with a nil Bridge the Model still starts and each screen renders its
+// empty state. Preview modes must stay free of optional infrastructure.
 //
-// # Message Flow
+// # Testing
 //
-// Messages flow through the Update loop in this order:
+// Screens are plain values with Update and view methods, so tests drive them with key
+// presses and assert on ANSI-stripped output. TestModel_RenderFillsTheTerminalExactly
+// checks that every screen fills the terminal to the exact cell at several sizes. The
+// integration tests in tests/integration/tui run the real binary in a pseudo-terminal.
 //
-//  1. Global key messages (1–4 for tab switching, q/ctrl+c to quit) are handled
-//     by the root Model before delegation.
-//  2. tea.WindowSizeMsg is propagated to all four tab sub-models simultaneously
-//     so each can reflow its layout.
-//  3. Domain messages (WorkflowsLoadedMsg, ExecutionStartedMsg, etc.) are
-//     handled by the root Model and update the relevant tab's state fields.
-//  4. Unhandled messages are forwarded to the active tab via updateActiveTab.
-//  5. Tab sub-models return (NewTab, tea.Cmd); the root Model embeds the updated
-//     tab and schedules any returned command for the next event loop iteration.
-//
-// # Tree Rendering System
-//
-// tree.go provides BuildTree and RenderTree for visualizing workflow execution:
-//
-//   - BuildTree(steps, states): constructs a []*TreeNode hierarchy from ordered
-//     workflow steps and their current StepState snapshots
-//   - RenderTree(roots): produces a UTF-8 tree string with box-drawing characters
-//     and status icons (✓ completed, ✗ failed, ⟳ running, ○ pending)
-//   - TreeNode carries Name, Status, Depth, Output, and Children for recursive
-//     rendering and keyboard navigation in MonitoringTab
-//
-// # JSONL Tailer System
-//
-// tailer.go provides offset-based JSONL file tailing:
-//
-//   - NewTailer(path): creates a Tailer at the given path with offset=0
-//   - Tailer.Next(): returns a tea.Cmd that reads exactly one new line per call;
-//     returns nil tea.Msg at EOF, logRotationMsg on file-not-found/OS errors
-//   - parseLine: maps AWF audit JSONL keys (event, timestamp, workflow_name,
-//     execution_id, status, duration_ms, user, error) to LogEntry fields
-//
-// The 1 MB scanner buffer (1024*1024 bytes) accommodates large single-line JSON
-// objects from verbose agent outputs without truncation.
-//
-// # Key Bindings (keys.go)
-//
-// All key bindings are declared as package-level key.Binding variables in
-// keys.go using bubbles/key. Update methods use key.Matches(msg, keyXxx)
-// instead of raw msg.String() switch statements. This enables:
-//   - Semantic key binding names (keyFollow, keyValidate) over string literals
-//   - Composable multi-key bindings (keyUp matches both "up" and "k")
-//   - Integration with bubbles/help for contextual help display
-//
-// Global (handled by root Model):
-//   - 1–4: switch to the corresponding tab (keyTab1–keyTab4)
-//   - q: quit (keyQuit), ctrl+c: force quit (keyForceQuit)
-//   - ?: toggle help bar (keyHelp)
-//
-// Workflows tab:
-//   - enter: launch selected workflow (keySelect)
-//   - v: validate selected workflow (keyValidate)
-//   - /: enter filter mode (keyFilter)
-//   - esc: dismiss overlay or clear filter (keyBack)
-//
-// Monitoring tab:
-//   - ↑/k, ↓/j: navigate execution tree (keyUp, keyDown)
-//   - f: jump to bottom and re-enable auto-scroll (keyFollow)
-//   - PageUp/PageDown: scroll log viewport (delegated to viewport)
-//
-// History tab (using bubbles/table for cursor and scroll management):
-//   - ↑/↓: navigate record table (delegated to table.Model)
-//   - tab: cycle status filter (keyCycleFilter)
-//   - enter: open detail view (keySelect)
-//   - esc: close detail view (keyBack)
-//   - /: focus text filter (keyFilter)
-//
-// Monitoring/Logs tabs (scrollable viewports):
-//   - f: jump to bottom and re-enable auto-scroll (keyFollow)
-//   - PageUp/PageDown, ↑/↓: scroll viewport (delegated to viewport)
-//
-// # Help System (bubbles/help)
-//
-// The root Model holds a help.Model that renders a contextual help bar at the
-// bottom of the screen. Each tab provides its own help.KeyMap implementation
-// (workflowsHelpKeys, monitoringHelpKeys, etc.) returned by activeHelpKeys().
-// Pressing "?" toggles between short and full help display.
-//
-// # Spinner Integration (bubbles/spinner)
-//
-// MonitoringTab and WorkflowsTab embed a spinner.Model for async operation
-// feedback. The monitoring spinner is visible while waiting for the execution to
-// begin emitting events; showSpinner is cleared once execution state arrives
-// (ExecutionStartedMsg / ExecutionFinishedMsg on the event-driven path). The
-// workflows spinner is visible during validation
-// (validating=true between handleValidate and ValidationResultMsg).
-//
-// # Auto-Scroll Helper (viewportscroll.go)
-//
-// viewportAutoScroll(vp, &autoScroll, msg) wraps vp.Update(msg) and clears
-// the autoScroll flag when the user scrolls away from the bottom. Used by
-// MonitoringTab and LogsTab to eliminate duplicated scroll-tracking
-// logic. The follow key (keyFollow) re-enables auto-scroll and jumps to bottom.
-//
-// # Design Principles
-//
-//   - Thin adapter layer: all business logic in application/domain layers
-//   - Bridgeless mode: TUI is functional without any service wiring
-//   - Value receiver convention: all Update/View methods use value receivers
-//     following Bubbletea's immutable model pattern
-//   - Zero infrastructure imports: Bridge wraps service interfaces; no direct
-//     repository, executor, or logger imports in this package
-//   - Native Bubbles components: use key.Binding, help.Model, table.Model,
-//     spinner.Model, list.Model, viewport.Model, and textinput.Model from
-//     the Bubbles ecosystem rather than reimplementing their functionality
-//   - Graceful degradation: nil bridge fields, missing files, and malformed
-//     JSON all produce informative messages rather than crashes
-//   - Context propagation: all Bridge methods accept context.Context for
-//     cancellation and deadline support
+// The facade conformance golden (tests/fixtures/facade/tui-tea-msg.golden) is produced by
+// RenderEventsToTUIMsgs and pins the projection of facade events to TUI messages.
 package tui

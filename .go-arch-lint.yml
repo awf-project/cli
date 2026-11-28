@@ -141,6 +141,8 @@ vendors:
       - charm.land/bubbletea/**
       - charm.land/bubbles/**
       - charm.land/lipgloss/**
+      # ANSI-aware truncation and stripping used by the TUI page chrome.
+      - github.com/charmbracelet/x/ansi
 
   otel:
     in:
@@ -775,6 +777,8 @@ deps:
       - go-stdlib
       - cobra
       - bubbletea
+      # The workflow config view splits a workflow file into its states, keeping comments.
+      - yaml
       - zap
 
   interfaces-api:

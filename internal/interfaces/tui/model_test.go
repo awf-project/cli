@@ -1,536 +1,418 @@
 package tui
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/domain/workflow"
-	"github.com/awf-project/cli/internal/testutil/facadetest"
 )
 
-// --- Tab constants ---
-
-func TestTab_Constants_HaveCorrectIotaValues(t *testing.T) {
-	assert.Equal(t, Tab(0), TabWorkflows, "TabWorkflows must be iota 0")
-	assert.Equal(t, Tab(1), TabMonitoring, "TabMonitoring must be iota 1")
-	assert.Equal(t, Tab(2), TabHistory, "TabHistory must be iota 2")
-	assert.Equal(t, Tab(3), TabExternalLogs, "TabExternalLogs must be iota 3")
+func isQuit(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	_, ok := cmd().(tea.QuitMsg)
+	return ok
 }
 
-// --- New ---
-
-func TestNew_ReturnsZeroValueModel(t *testing.T) {
-	m := New()
-
-	assert.Zero(t, m.width, "width should be zero-initialized")
-	assert.Zero(t, m.height, "height should be zero-initialized")
-	assert.Equal(t, TabWorkflows, m.activeTab, "should start on workflows tab")
-	assert.Nil(t, m.bridge, "bridge should be nil when not provided")
-}
-
-func TestModel_ImplementsTeaModel(t *testing.T) {
-	m := New()
-	var _ tea.Model = m
-}
-
-// --- Init ---
-
-func TestModel_Init_ReturnsCommandToLoadWorkflows(t *testing.T) {
-	m := New()
-
-	cmd := m.Init()
-
-	require.NotNil(t, cmd, "Init should return a command to load workflows")
-}
-
-func TestModel_Init_WithNoBridge_ReturnsCommandEmittingWorkflowsLoadedMsg(t *testing.T) {
-	m := New()
-
-	cmd := m.Init()
+func TestModel_InitWithoutBridgeEmitsEmptyWorkflows(t *testing.T) {
+	cmd := New().Init()
 	require.NotNil(t, cmd)
-
-	msg := cmd()
-	_, ok := msg.(WorkflowsLoadedMsg)
-	assert.True(t, ok, "Init without bridge should emit WorkflowsLoadedMsg")
+	assert.Equal(t, WorkflowsLoadedMsg{}, cmd())
 }
 
-// --- Update: tab switching via numeric keys ---
-
-func TestModel_Update_Key1_SwitchesToWorkflowsTab(t *testing.T) {
-	m := New()
-	m.activeTab = TabHistory // start elsewhere
-
-	result, _ := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
-
-	updated := result.(Model)
-	assert.Equal(t, TabWorkflows, updated.activeTab)
-}
-
-func TestModel_Update_Key2_SwitchesToMonitoringTab(t *testing.T) {
-	m := New()
-
-	result, _ := m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
-
-	updated := result.(Model)
-	assert.Equal(t, TabMonitoring, updated.activeTab)
-}
-
-func TestModel_Update_Key3_SwitchesToHistoryTab(t *testing.T) {
-	m := New()
-
-	result, _ := m.Update(tea.KeyPressMsg{Code: '3', Text: "3"})
-
-	updated := result.(Model)
-	assert.Equal(t, TabHistory, updated.activeTab)
-}
-
-func TestModel_Update_Key4_SwitchesToLogsTab(t *testing.T) {
-	m := New()
-
-	result, _ := m.Update(tea.KeyPressMsg{Code: '4', Text: "4"})
-
-	updated := result.(Model)
-	assert.Equal(t, TabExternalLogs, updated.activeTab)
-}
-
-func TestModel_Update_KeyQ_ReturnsQuitCmd(t *testing.T) {
-	m := New()
-
-	_, cmd := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
-
-	require.NotNil(t, cmd, "pressing 'q' must return a quit command")
-	// Verify it is a quit command by executing it and checking the message type.
-	msg := cmd()
-	assert.IsType(t, tea.QuitMsg{}, msg)
-}
-
-func TestModel_Update_CtrlC_ReturnsQuitCmd(t *testing.T) {
-	m := New()
-
-	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-
-	require.NotNil(t, cmd, "pressing ctrl+c must return a quit command")
-	msg := cmd()
-	assert.IsType(t, tea.QuitMsg{}, msg)
-}
-
-// --- Update: window size ---
-
-func TestModel_Update_WindowSizeMsg_StoresWidthAndHeight(t *testing.T) {
-	m := New()
-
-	result, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-
-	updated := result.(Model)
-	assert.Equal(t, 120, updated.width, "should update width on window resize")
-	assert.Equal(t, 40, updated.height, "should update height on window resize")
-}
-
-func TestModel_Update_WindowSizeMsg_PropagatesZeroDimensions(t *testing.T) {
-	m := New()
-	m.width = 80
-	m.height = 24
-
-	result, _ := m.Update(tea.WindowSizeMsg{Width: 0, Height: 0})
-
-	updated := result.(Model)
-	assert.Equal(t, 0, updated.width)
-	assert.Equal(t, 0, updated.height)
-}
-
-// --- Update: domain messages ---
-
-func TestModel_Update_WorkflowsLoadedMsg_PopulatesWorkflowsTab(t *testing.T) {
-	m := New()
-	workflows := []*workflow.Workflow{
-		{Name: "workflow-1"},
-		{Name: "workflow-2"},
-	}
-	entries := []workflow.WorkflowEntry{
-		{Name: "workflow-1", Source: "local"},
-		{Name: "workflow-2", Source: "local"},
-	}
-
-	result, _ := m.Update(WorkflowsLoadedMsg{Workflows: workflows, Entries: entries})
-
-	updated := result.(Model)
-	assert.Len(t, updated.tabWorkflows.entries, 2)
-}
-
-func TestModel_Update_HistoryLoadedMsg_PopulatesHistoryTab(t *testing.T) {
-	m := New()
-	records := []*workflow.ExecutionRecord{
-		{ID: "exec-1", WorkflowName: "wf1", Status: "success"},
-	}
-	stats := &workflow.HistoryStats{TotalExecutions: 1, SuccessCount: 1}
-
-	result, _ := m.Update(HistoryLoadedMsg{Records: records, Stats: stats})
-
-	updated := result.(Model)
-	assert.Len(t, updated.tabHistory.history, 1)
-	assert.Equal(t, stats, updated.tabHistory.stats)
-	// Also propagated to monitoring tab.
-	assert.Len(t, updated.tabMonitoring.history, 1)
-	assert.Equal(t, stats, updated.tabMonitoring.stats)
-}
-
-func TestModel_Update_ExecutionStartedMsg_SetsWorkflowOnMonitoringTab(t *testing.T) {
-	m := New()
-	wf := &workflow.Workflow{Name: "test-wf", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-
-	result, _ := m.Update(ExecutionStartedMsg{ExecutionID: "exec-abc", Workflow: wf})
-
-	updated := result.(Model)
-	assert.Equal(t, wf, updated.tabMonitoring.wf)
-}
-
-func TestModel_Update_ExecutionFinishedMsg_StopsTicking(t *testing.T) {
-	m := New()
-	wf := &workflow.Workflow{
-		Name:    "test-wf",
-		Initial: "s1",
-		Steps:   map[string]*workflow.Step{"s1": {Name: "s1", Type: workflow.StepTypeTerminal}},
-	}
-	// Start a run so the monitoring tab builds its step tree from the workflow.
-	result, _ := m.Update(ExecutionStartedMsg{ExecutionID: "exec-1", Workflow: wf})
-	m = result.(Model)
-	m.tabMonitoring.ticking = true
-
-	result, _ = m.Update(ExecutionFinishedMsg{Err: nil})
-
-	updated := result.(Model)
-	assert.False(t, updated.tabMonitoring.ticking)
-	assert.NotEmpty(t, updated.tabMonitoring.flatNodes)
-}
-
-func TestModel_Update_ExecutionFinishedMsg_WithError_SetsLastErr(t *testing.T) {
-	m := New()
-	m.tabMonitoring.ticking = true
-
-	result, _ := m.Update(ExecutionFinishedMsg{Err: errors.New("step failed")})
-
-	updated := result.(Model)
-	assert.Equal(t, "step failed", updated.lastErr)
-	assert.False(t, updated.tabMonitoring.ticking)
-}
-
-func TestModel_Update_ErrMsg_DoesNotPanic(t *testing.T) {
-	m := New()
-
-	require.NotPanics(t, func() {
-		_, _ = m.Update(ErrMsg{Err: nil})
-	})
-}
-
-func TestModel_Update_LogLineMsg_AppendsToLogsTab(t *testing.T) {
-	m := New()
-	entry := LogEntry{Timestamp: "2026-01-01T00:00:00Z", Event: "workflow.started", WorkflowName: "deploy"}
-
-	result, _ := m.Update(LogLineMsg{Entry: entry})
-
-	updated := result.(Model)
-	require.Len(t, updated.tabLogs.entries, 1)
-	assert.Equal(t, entry, updated.tabLogs.entries[0])
-}
-
-func TestModel_Update_LogLineMsg_CapsAtMaxLogEntries(t *testing.T) {
-	m := New()
-	// Pre-fill with maxLogEntries entries.
-	m.tabLogs.entries = make([]LogEntry, maxLogEntries)
-	for i := range m.tabLogs.entries {
-		m.tabLogs.entries[i] = LogEntry{Event: "workflow.started", WorkflowName: "old"}
-	}
-
-	newEntry := LogEntry{Event: "workflow.completed", WorkflowName: "new"}
-	result, _ := m.Update(LogLineMsg{Entry: newEntry})
-
-	updated := result.(Model)
-	assert.Len(t, updated.tabLogs.entries, maxLogEntries, "entries must not exceed maxLogEntries")
-	assert.Equal(t, newEntry, updated.tabLogs.entries[len(updated.tabLogs.entries)-1])
-}
-
-// --- View ---
-
-func TestModel_View_ReturnsNonEmptyString(t *testing.T) {
-	m := New()
-
-	output := m.View().Content
-
-	assert.NotEmpty(t, output)
-	assert.IsType(t, "", output)
-}
-
-func TestModel_View_RendersAllFourTabLabels(t *testing.T) {
-	m := New()
-
-	output := m.View().Content
-
-	assert.Contains(t, output, "1:Workflows")
-	assert.Contains(t, output, "2:Monitoring")
-	assert.Contains(t, output, "3:History")
-	assert.Contains(t, output, "4:Logs")
-}
-
-func TestModel_View_ActiveTabIsRendered(t *testing.T) {
+func TestModel_TabSwitching(t *testing.T) {
 	tests := []struct {
-		name      string
-		activeTab Tab
-		label     string
-	}{
-		{"workflows tab", TabWorkflows, "1:Workflows"},
-		{"monitoring tab", TabMonitoring, "2:Monitoring"},
-		{"history tab", TabHistory, "3:History"},
-		{"logs tab", TabExternalLogs, "4:Logs"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := New()
-			m.activeTab = tt.activeTab
-
-			output := m.View().Content
-
-			assert.Contains(t, output, tt.label)
-		})
-	}
-}
-
-func TestModel_View_TabSwitching_ChangesContentArea(t *testing.T) {
-	m := New()
-	// Place distinct content in each tab.
-	m.tabWorkflows.entries = []workflow.WorkflowEntry{{Name: "my-distinct-workflow", Source: "local"}}
-
-	m.activeTab = TabWorkflows
-	workflowsView := m.View().Content
-
-	m.activeTab = TabMonitoring
-	monitoringView := m.View().Content
-
-	// Both views contain the tab bar, but the content area should differ.
-	assert.NotEqual(t, workflowsView, monitoringView)
-}
-
-// --- T061: facadeEventMsg routing ---
-
-// TestModel_Update_FacadeEventMsg_RoutesToMonitoringTabRegardlessOfActiveTab verifies
-// that facadeEventMsg is always forwarded to the monitoring tab regardless of which
-// tab is currently active. This mirrors the tickMsg / executionPollMsg routing pattern.
-func TestModel_Update_FacadeEventMsg_RoutesToMonitoringTabRegardlessOfActiveTab(t *testing.T) {
-	tabs := []struct {
 		name string
-		tab  Tab
+		keys []string
+		want Tab
 	}{
-		{"workflows", TabWorkflows},
-		{"history", TabHistory},
-		{"logs", TabExternalLogs},
-		{"monitoring", TabMonitoring},
+		{"starts on workflows", nil, TabWorkflows},
+		{"digit 2 opens history", []string{"2"}, TabHistory},
+		{"digit 1 returns to workflows", []string{"2", "1"}, TabWorkflows},
+		{"tab moves forward", []string{"tab"}, TabHistory},
+		{"digit 3 opens config", []string{"3"}, TabConfig},
+		{"tab reaches config", []string{"tab", "tab"}, TabConfig},
+		{"tab wraps around", []string{"tab", "tab", "tab"}, TabWorkflows},
+		{"shift+tab wraps backwards", []string{"shift+tab"}, TabConfig},
 	}
-
-	for _, tt := range tabs {
-		t.Run(tt.name+" active", func(t *testing.T) {
-			m := New()
-			m.activeTab = tt.tab
-			m.tabMonitoring.steps = []workflow.Step{
-				{Name: "step-a", Type: workflow.StepTypeCommand},
-			}
-
-			payload := &ports.EnrichedStepPayload{StepName: "step-a"}
-			event := ports.Event{
-				Seq:     1,
-				Kind:    ports.EventStepStarted,
-				Payload: payload,
-			}
-
-			result, _ := m.Update(facadeEventMsg{Event: event})
-
-			updated := result.(Model)
-			state, ok := updated.tabMonitoring.states["step-a"]
-			require.True(t, ok, "monitoring tab must receive facade event when %s tab is active", tt.name)
-			assert.Equal(t, workflow.StatusRunning, state.Status)
-		})
-	}
-}
-
-// TestModel_Update_ExecutionStartedMsg_WithSession_StartsEventLoop verifies that
-// when ExecutionStartedMsg carries a non-nil RunSession, the monitoring tab's
-// event-loop goroutine is started and events are forwarded to the program.
-func TestModel_Update_ExecutionStartedMsg_WithSession_StartsEventLoop(t *testing.T) {
-	m := New()
-
-	eventChan := make(chan ports.Event, 1)
-	defer close(eventChan)
-
-	sentChan := make(chan tea.Msg, 1)
-	m.tabMonitoring.SetSender(func(msg tea.Msg) {
-		sentChan <- msg
-	})
-
-	mockSess := &mockRunSession{eventsChan: eventChan}
-	wf := &workflow.Workflow{Name: "wf", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-
-	m.Update(ExecutionStartedMsg{
-		ExecutionID: "exec-1",
-		Workflow:    wf,
-		Session:     mockSess,
-	})
-
-	// Send an event; the goroutine must forward it via sender.
-	testEvent := ports.Event{Seq: 1, Kind: ports.EventRunStarted, RunID: "exec-1"}
-	eventChan <- testEvent
-
-	select {
-	case msg := <-sentChan:
-		fMsg, ok := msg.(facadeEventMsg)
-		require.True(t, ok, "event loop must forward events as facadeEventMsg, got %T", msg)
-		assert.Equal(t, uint64(1), fMsg.Event.Seq)
-	case <-time.After(200 * time.Millisecond):
-		t.Fatal("event loop did not forward event within 200ms")
-	}
-}
-
-// TestModel_Update_ExecutionStartedMsg_WithSession_DoesNotPanic verifies that the
-// facade-driven path (RunWorkflowViaFacade) can emit an ExecutionStartedMsg carrying a
-// live RunSession without causing a panic or blocking the Bubble Tea event loop.
-// ExecutionFinishedMsg arrives via StartEventLoop when a terminal event is received.
-func TestModel_Update_ExecutionStartedMsg_WithSession_DoesNotPanic(t *testing.T) {
-	m := New()
-
-	eventChan := make(chan ports.Event, 1)
-	defer close(eventChan)
-
-	sentChan := make(chan tea.Msg, 2)
-	m.tabMonitoring.SetSender(func(msg tea.Msg) {
-		sentChan <- msg
-	})
-
-	mockSess := &mockRunSession{eventsChan: eventChan}
-	wf := &workflow.Workflow{Name: "wf", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-
-	require.NotPanics(t, func() {
-		_, cmd := m.Update(ExecutionStartedMsg{
-			ExecutionID: "exec-1",
-			Workflow:    wf,
-			Session:     mockSess,
-		})
-		// cmd must not be nil (at minimum the tick command from the monitoring tab)
-		assert.NotNil(t, cmd, "monCmd must be returned for the facade-driven path")
-	})
-}
-
-// TestModel_Update_ExecutionStartedMsg_WithSession_FinishesViaEventLoop verifies the
-// full flow: Session → StartEventLoop → terminal event → ExecutionFinishedMsg.
-func TestModel_Update_ExecutionStartedMsg_WithSession_FinishesViaEventLoop(t *testing.T) {
-	m := New()
-
-	eventChan := make(chan ports.Event, 2)
-	finishedChan := make(chan ExecutionFinishedMsg, 1)
-
-	// Wire sender: capture ExecutionFinishedMsg sent by the event-loop goroutine.
-	m.tabMonitoring.SetSender(func(msg tea.Msg) {
-		if fm, ok := msg.(ExecutionFinishedMsg); ok {
-			finishedChan <- fm
-		}
-	})
-
-	mockSess := &mockRunSession{eventsChan: eventChan}
-	wf := &workflow.Workflow{Name: "wf", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
-
-	m.Update(ExecutionStartedMsg{
-		ExecutionID: "exec-1",
-		Workflow:    wf,
-		Session:     mockSess,
-	})
-
-	// The event-loop goroutine is now running; send a terminal event.
-	eventChan <- ports.Event{Seq: 1, Kind: ports.EventWorkflowCompleted, RunID: "exec-1"}
-	close(eventChan)
-
-	select {
-	case fm := <-finishedChan:
-		assert.Nil(t, fm.Err, "ExecutionFinishedMsg.Err must be nil for completed workflow")
-	case <-time.After(300 * time.Millisecond):
-		t.Fatal("StartEventLoop did not send ExecutionFinishedMsg within 300ms")
-	}
-}
-
-// --- Help toggle ---
-
-func TestModel_Update_HelpToggle_TogglesShowFullHelp(t *testing.T) {
-	m := New()
-	require.False(t, m.showFullHelp, "showFullHelp must start false")
-
-	result, _ := m.Update(tea.KeyPressMsg{Code: '?', Text: "?"})
-	updated := result.(Model)
-	assert.True(t, updated.showFullHelp, "pressing '?' should enable full help")
-	assert.True(t, updated.help.ShowAll)
-
-	result2, _ := updated.Update(tea.KeyPressMsg{Code: '?', Text: "?"})
-	toggled := result2.(Model)
-	assert.False(t, toggled.showFullHelp, "pressing '?' again should disable full help")
-	assert.False(t, toggled.help.ShowAll)
-}
-
-func TestModel_View_ShowsHelpBar(t *testing.T) {
-	m := New()
-
-	output := m.View().Content
-
-	// The short help bar must contain at least the quit key hint.
-	assert.Contains(t, output, "q", "View should include help bar with quit keybinding")
-}
-
-func TestModel_ActiveHelpKeys_ReturnsCorrectKeyMap(t *testing.T) {
-	tests := []struct {
-		name      string
-		activeTab Tab
-		wantType  string
-	}{
-		{"workflows", TabWorkflows, "workflowsHelpKeys"},
-		{"monitoring", TabMonitoring, "monitoringHelpKeys"},
-		{"history", TabHistory, "historyHelpKeys"},
-		{"logs", TabExternalLogs, "logsHelpKeys"},
-	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := New()
-			m.activeTab = tt.activeTab
-			km := m.activeHelpKeys()
-			// Each help.KeyMap must return at least one short binding.
-			assert.NotEmpty(t, km.ShortHelp(), "ShortHelp for %s should be non-empty", tt.name)
-			// Each help.KeyMap must return at least one full help group.
-			assert.NotEmpty(t, km.FullHelp(), "FullHelp for %s should be non-empty", tt.name)
+			m := loadedModel(t, 100, 30)
+			for _, k := range tt.keys {
+				m, _ = send(m, press(k))
+			}
+			assert.Equal(t, tt.want, m.activeTab)
 		})
 	}
 }
 
-// --- T071: LaunchWorkflowMsg dispatches RunWorkflowViaFacade ---
+func TestModel_QuitKey(t *testing.T) {
+	m := loadedModel(t, 100, 30)
+	_, cmd := send(m, press("q"))
+	assert.True(t, isQuit(cmd))
+}
 
-// TestModel_LaunchWorkflowMsg_DispatchesRunWorkflowViaFacade verifies that
-// sending a LaunchWorkflowMsg to the Model produces a tea.Cmd whose result is an
-// ExecutionStartedMsg with a non-nil Session field — confirming the facade path is used.
-func TestModel_LaunchWorkflowMsg_DispatchesRunWorkflowViaFacade(t *testing.T) {
-	fake := facadetest.New().WithTerminalCompleted()
-	bridge := NewBridge(nil, nil)
-	bridge.SetFacade(fake)
+func TestModel_TextEntryOwnsKeys(t *testing.T) {
+	m := loadedModel(t, 100, 30)
 
-	m := NewWithBridge(bridge, context.Background(), "")
-	wf := &workflow.Workflow{Name: "deploy", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
+	m, _ = send(m, press("/"))
+	for _, k := range []string{"q", "2", "o"} {
+		var cmd tea.Cmd
+		m, cmd = send(m, press(k))
+		assert.False(t, isQuit(cmd), "typing %q in the filter must not quit", k)
+	}
 
-	_, cmd := m.Update(LaunchWorkflowMsg{Workflow: wf, Inputs: nil})
-	require.NotNil(t, cmd, "LaunchWorkflowMsg must return a cmd")
+	assert.Equal(t, TabWorkflows, m.activeTab, "digits typed in the filter must not switch tabs")
+	assert.Equal(t, "q2o", m.workflows.filter.Value())
+}
 
-	msg := cmd()
+func TestModel_CtrlC(t *testing.T) {
+	t.Run("quits when idle", func(t *testing.T) {
+		_, cmd := send(loadedModel(t, 100, 30), press("ctrl+c"))
+		assert.True(t, isQuit(cmd))
+	})
+	t.Run("cancels a running run instead of quitting", func(t *testing.T) {
+		sess := &cancellableSession{}
+		m := startedRun(t, loadedModel(t, 100, 30), sess)
 
-	started, ok := msg.(ExecutionStartedMsg)
-	require.True(t, ok, "expected ExecutionStartedMsg, got %T", msg)
-	assert.NotNil(t, started.Session, "Session must be non-nil for facade-driven run")
-	assert.Equal(t, "deploy", started.ExecutionID)
+		m, cmd := send(m, press("ctrl+c"))
+
+		assert.False(t, isQuit(cmd), "ctrl+c must not quit while a run is in flight")
+		assert.Equal(t, []string{"cancelled"}, sess.cancelReasons)
+		assert.Equal(t, modeRun, m.mode)
+		assert.Contains(t, plain(m), "cancelling")
+	})
+	t.Run("quits from the run view once the run ended", func(t *testing.T) {
+		m := startedRun(t, loadedModel(t, 100, 30), &mockRunSession{})
+		m, _ = send(m, ExecutionFinishedMsg{})
+
+		_, cmd := send(m, press("ctrl+c"))
+
+		assert.True(t, isQuit(cmd))
+	})
+}
+
+func TestModel_RenderFillsTheTerminalExactly(t *testing.T) {
+	sizes := [][2]int{{80, 24}, {110, 30}, {200, 50}}
+	views := map[string]func(*testing.T, Model) Model{
+		"workflows": func(_ *testing.T, m Model) Model { return m },
+		"history":   func(_ *testing.T, m Model) Model { m, _ = send(m, press("2")); return m },
+		"form": func(_ *testing.T, m Model) Model {
+			m, _ = send(m, press("x"))
+			return m
+		},
+		"run": func(t *testing.T, m Model) Model { return startedRun(t, m, &mockRunSession{}) },
+		"config tab": func(_ *testing.T, m Model) Model {
+			m, _ = send(m, press("3"))
+			m, _ = send(m, ConfigLoadedMsg{Info: ConfigInfo{Path: ".awf/config.yaml", Exists: true, Inputs: map[string]any{"env": "prod"}}})
+			return m
+		},
+		"workflow config": func(t *testing.T, m Model) Model {
+			b := NewBridge(nil, nil)
+			b.SetSourceReader(&fakeSources{data: []byte(sampleYAML), path: "/proj/deploy.yaml"})
+			m.bridge = b
+			return openConfig(t, m)
+		},
+		"history detail": func(t *testing.T, m Model) Model {
+			b := NewBridge(nil, nil)
+			b.SetStateReader(&fakeStates{ec: sampleExecution(time.Now())})
+			m.bridge = b
+			m, _ = send(m, press("2"))
+			m, _ = send(m, press("down"))
+			return openDetail(t, m)
+		},
+	}
+	for name, setup := range views {
+		for _, sz := range sizes {
+			t.Run(name, func(t *testing.T) {
+				m := setup(t, loadedModel(t, sz[0], sz[1]))
+
+				out := lines(plain(m))
+
+				require.Len(t, out, sz[1], "%s at %dx%d must fill every row", name, sz[0], sz[1])
+				for i, l := range out {
+					assert.Equal(t, sz[0], ansiWidth(l), "%s row %d at %dx%d", name, i, sz[0], sz[1])
+				}
+			})
+		}
+	}
+}
+
+// ansiWidth is the number of terminal cells of s (wide runes such as emoji count twice).
+func ansiWidth(s string) int { return lipgloss.Width(ansi.Strip(s)) }
+
+func TestModel_TerminalTooSmall(t *testing.T) {
+	for _, sz := range [][2]int{{79, 24}, {80, 23}, {40, 10}} {
+		m := New()
+		m, _ = send(m, tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
+
+		assert.Contains(t, plain(m), "Terminal too small", "%dx%d", sz[0], sz[1])
+	}
+}
+
+func TestModel_RendersAtMinimumSizeBeforeTheFirstWindowSizeMsg(t *testing.T) {
+	out := lines(plain(New()))
+
+	require.Len(t, out, minTermHeight)
+	for i, l := range out {
+		assert.Equal(t, minTermWidth, ansiWidth(l), "row %d", i)
+	}
+	assert.Contains(t, plain(New()), "1 Workflows")
+}
+
+func TestModel_TabBarShowsCounts(t *testing.T) {
+	out := plain(loadedModel(t, 100, 30))
+
+	assert.Contains(t, out, "1 Workflows (3)")
+	assert.Contains(t, out, "2 History (3)")
+	assert.Contains(t, out, "3 Config")
+	assert.Contains(t, out, "~/project", "the working directory is shown in the header")
+}
+
+func TestModel_RunLifecycle(t *testing.T) {
+	m := loadedModel(t, 110, 30)
+
+	t.Run("launching without a backend explains why", func(t *testing.T) {
+		got, cmd := send(m, LaunchWorkflowMsg{Workflow: sampleWorkflow()})
+		assert.Nil(t, cmd)
+		assert.Contains(t, plain(got), labelNoBackend)
+		assert.Equal(t, modeTabs, got.mode, "a failed start leaves the user on the list")
+	})
+
+	t.Run("a started run opens the full-frame view", func(t *testing.T) {
+		got := startedRun(t, m, &mockRunSession{})
+
+		assert.Equal(t, modeRun, got.mode)
+		out := plain(got)
+		assert.Contains(t, out, "deploy")
+		assert.Contains(t, out, "Steps")
+		assert.Contains(t, out, "pick a step")
+		assert.NotContains(t, out, "1 Workflows", "the tab bar is replaced by the run header")
+	})
+
+	t.Run("esc returns to the tabs and o reopens the run", func(t *testing.T) {
+		got := startedRun(t, m, &mockRunSession{})
+
+		got, _ = send(got, press("esc"))
+		assert.Equal(t, modeTabs, got.mode)
+		assert.True(t, got.run.Running(), "leaving the view does not stop the run")
+
+		got, _ = send(got, press("o"))
+		assert.Equal(t, modeRun, got.mode)
+	})
+
+	t.Run("o without a run does nothing", func(t *testing.T) {
+		got, _ := send(m, press("o"))
+		assert.Equal(t, modeTabs, got.mode)
+	})
+
+	t.Run("a finished run reports its outcome in the header", func(t *testing.T) {
+		got := startedRun(t, m, &mockRunSession{})
+		got, _ = send(got, facadeEventMsg{Event: ports.Event{Kind: ports.EventWorkflowCompleted}})
+		got, _ = send(got, ExecutionFinishedMsg{})
+
+		assert.Contains(t, plain(got), "done")
+		assert.False(t, got.run.Running())
+	})
+}
+
+func TestModel_InputRequestPullsUserToTheRun(t *testing.T) {
+	t.Run("facade event", func(t *testing.T) {
+		m := startedRun(t, loadedModel(t, 110, 30), &mockRunSession{})
+		m, _ = send(m, press("esc"))
+
+		m, _ = send(m, facadeEventMsg{Event: ports.Event{
+			Kind:    ports.EventInputRequired,
+			Payload: &ports.EnrichedInputRequest{Prompt: "> "},
+		}})
+
+		assert.Equal(t, modeRun, m.mode)
+		assert.True(t, m.run.InputActive())
+		assert.Contains(t, plain(m), "Your message")
+	})
+	t.Run("legacy input request", func(t *testing.T) {
+		m, _ := send(loadedModel(t, 110, 30), InputRequestedMsg{})
+		assert.Equal(t, modeRun, m.mode)
+	})
+}
+
+func TestModel_ErrorFlashIsClearedByNextKey(t *testing.T) {
+	m, _ := send(loadedModel(t, 110, 30), ErrMsg{Err: errors.New("boom")})
+	assert.Contains(t, plain(m), "boom")
+
+	m, _ = send(m, press("down"))
+
+	assert.NotContains(t, plain(m), "boom")
+}
+
+func TestModel_ValidationResultFlash(t *testing.T) {
+	m := loadedModel(t, 110, 30)
+
+	ok, _ := send(m, ValidationResultMsg{Name: "deploy", Success: true})
+	bad, _ := send(m, ValidationResultMsg{Name: "deploy", Error: "unknown step"})
+
+	assert.Contains(t, plain(ok), "deploy is valid")
+	assert.Contains(t, plain(bad), "deploy: unknown step")
+}
+
+func TestModel_ClockAdvancesOnlyWhileRunning(t *testing.T) {
+	m := loadedModel(t, 110, 30)
+
+	idle, cmd := send(m, clockMsg{})
+	assert.Equal(t, 0, idle.tick)
+	assert.Nil(t, cmd, "an idle model stops the clock")
+
+	running := startedRun(t, m, &mockRunSession{})
+	running, cmd = send(running, clockMsg{})
+	assert.Equal(t, 1, running.tick)
+	assert.Equal(t, 1, running.run.tick, "the run screen shares the frame")
+	assert.NotNil(t, cmd, "a running model re-arms the clock")
+}
+
+func TestModel_RefreshWithoutBridgeIsHarmless(t *testing.T) {
+	m := loadedModel(t, 110, 30)
+
+	got, cmd := send(m, refreshMsg{})
+
+	assert.Equal(t, len(m.workflows.entries), len(got.workflows.entries))
+	if cmd != nil {
+		assert.NotPanics(t, func() { cmd() })
+	}
+}
+
+func TestModel_ValidateWithoutBridgeSaysSo(t *testing.T) {
+	m := loadedModel(t, 110, 30)
+
+	m, _ = send(m, press("v"))
+	m, _ = send(m, m.workflowsValidateMsg(t))
+
+	assert.Contains(t, plain(m), labelNoBackend)
+}
+
+// workflowsValidateMsg runs the command produced by the "v" key to obtain its message.
+func (m Model) workflowsValidateMsg(t *testing.T) tea.Msg {
+	t.Helper()
+	_, cmd := m.workflows.updateList(press("v"))
+	require.NotNil(t, cmd)
+	return cmd()
+}
+
+func TestModel_HistoryLoadFeedsBothScreens(t *testing.T) {
+	m := loadedModel(t, 110, 30)
+
+	assert.Len(t, m.history.records, 3)
+	assert.Len(t, m.workflows.records, 3)
+	assert.True(t, m.history.records[0].StartedAt.After(m.history.records[1].StartedAt), "history is newest first")
+	_ = workflow.StatusPending // keep the domain import used if assertions change
+}
+
+func TestModel_HistoryDetail_OpensWithThePersistedStepsOfTheSelectedRun(t *testing.T) {
+	states := &fakeStates{ec: sampleExecution(time.Now())}
+	m := historyModel(t, states)
+
+	m = openDetail(t, m)
+
+	out := plain(m)
+	for _, want := range []string{"✓ 1 build", "✗ 2 test", "exit status 2", "FAIL: TestX", "API_KEY ***", "back"} {
+		assert.Contains(t, out, want)
+	}
+	assert.Equal(t, []string{"wf-state-aaa"}, states.loadedIDs, "the state is read under the record's workflow ID")
+	assert.True(t, m.history.InDetail())
+}
+
+func TestModel_HistoryDetail_ShowsLoadingBeforeTheReplyArrives(t *testing.T) {
+	m := historyModel(t, &fakeStates{ec: sampleExecution(time.Now())})
+
+	m, cmd := send(m, press("enter"))
+
+	require.NotNil(t, cmd)
+	assert.Contains(t, plain(m), labelDetailLoading)
+}
+
+func TestModel_HistoryDetail_OwnsTheKeysExceptQuit(t *testing.T) {
+	m := openDetail(t, historyModel(t, &fakeStates{ec: sampleExecution(time.Now())}))
+
+	for _, k := range []string{"tab", "shift+tab", "1", "2", "o"} {
+		m, _ = send(m, press(k))
+		assert.Equal(t, TabHistory, m.activeTab, "%q must not leave the open detail", k)
+		assert.True(t, m.history.InDetail(), "%q must not close the detail", k)
+	}
+
+	_, cmd := send(m, press("q"))
+	assert.True(t, isQuit(cmd), "q still quits")
+
+	m, _ = send(m, press("esc"))
+	assert.False(t, m.history.InDetail())
+	m, _ = send(m, press("1"))
+	assert.Equal(t, TabWorkflows, m.activeTab, "navigation works again once the detail is closed")
+}
+
+func TestModel_HistoryDetail_WithoutAStateStoreExplainsWhy(t *testing.T) {
+	m := loadedModel(t, 110, 30) // no bridge
+	m, _ = send(m, press("2"))
+	m, _ = send(m, press("down"))
+
+	m = openDetail(t, m)
+
+	assert.Contains(t, plain(m), labelDetailNoStore)
+}
+
+func TestModel_HistoryDetail_MissingStateExplainsWhy(t *testing.T) {
+	m := openDetail(t, historyModel(t, &fakeStates{})) // Load returns (nil, nil)
+	assert.Contains(t, plain(m), labelDetailGone)
+}
+
+func TestModel_HistoryDetail_ReadFailureIsShown(t *testing.T) {
+	m := openDetail(t, historyModel(t, &fakeStates{err: errors.New("permission denied")}))
+	assert.Contains(t, plain(m), "permission denied")
+}
+
+func TestModel_HistoryDetail_ReloadReadsTheStateAgain(t *testing.T) {
+	states := &fakeStates{ec: sampleExecution(time.Now())}
+	m := openDetail(t, historyModel(t, states))
+
+	m, cmd := send(m, press("R"))
+	m = settle(m, cmd)
+
+	assert.Len(t, states.loadedIDs, 2)
+	assert.Contains(t, plain(m), "exit status 2")
+}
+
+func TestModel_HistoryDetail_CopyShowsConfirmationInTheHeader(t *testing.T) {
+	m := openDetail(t, historyModel(t, &fakeStates{ec: sampleExecution(time.Now())}))
+
+	m, flash := send(m, flashMsg{Text: "copied 12 bytes"})
+
+	assert.Nil(t, flash)
+	assert.Contains(t, plain(m), "copied 12 bytes")
+}
+
+func TestModel_HistoryDetail_MouseWheelScrollsTheOutput(t *testing.T) {
+	m := openDetail(t, historyModel(t, &fakeStates{ec: sampleExecution(time.Now())}))
+	before := plain(m)
+
+	m, _ = send(m, tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+
+	assert.NotEqual(t, before, plain(m), "the output moved")
+	assert.Equal(t, wheelStep, m.history.open.offset)
+}
+
+func TestModel_HistoryDetail_ResizeKeepsTheDetailUsable(t *testing.T) {
+	m := openDetail(t, historyModel(t, &fakeStates{ec: sampleExecution(time.Now())}))
+	m, _ = send(m, press("end"))
+
+	m, _ = send(m, tea.WindowSizeMsg{Width: 160, Height: 60})
+
+	out := lines(plain(m))
+	require.Len(t, out, 60)
+	assert.Contains(t, plain(m), "exit status 2")
 }

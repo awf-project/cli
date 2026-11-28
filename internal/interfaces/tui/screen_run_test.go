@@ -18,24 +18,25 @@
 //	       → TestMonitoringTab_FKey_ReenablesAutoScroll
 //	AC9:  Step failure auto-selects failed node
 //	       → TestMonitoringTab_AutoSelectFailed_SelectsFailedNode
-//	AC11: ExecutionFinishedMsg stops ticking
+//	AC11: ExecutionFinishedMsg stops running
 //	       → TestMonitoringTab_ExecutionFinishedMsg_StopsTicking
 //	AC12: ExecutionStartedMsg starts tick loop
 //	       → TestMonitoringTab_ExecutionStartedMsg_StartsTicking
 //
 // T078 cleanup criteria covered:
 //
-//	tickMsg type declaration removed from tab_monitoring.go
+//	tickMsg type declaration removed from the run screen sources
 //	       → TestT078_TickMsg_TypeRemovedFromTabMonitoring
-//	executionPollMsg type declaration removed from tab_monitoring.go
+//	executionPollMsg type declaration removed from the run screen sources
 //	       → TestT078_ExecutionPollMsg_TypeRemovedFromTabMonitoring
-//	scheduleTick function removed from tab_monitoring.go
+//	scheduleTick function removed from the run screen sources
 //	       → TestT078_ScheduleTick_FunctionRemovedFromTabMonitoring
 package tui
 
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -77,40 +78,37 @@ func (m *mockRunSession) Close() error {
 	return nil
 }
 
-func monitoringTabWithSize(w, h int) MonitoringTab {
-	tab := newMonitoringTab()
+func monitoringTabWithSize(w, h int) RunScreen {
+	tab := newRunScreen()
 	tab.width = w
 	tab.height = h
 	tab.resizeViewport()
 	return tab
 }
 
-// --- newMonitoringTab ---
+// --- newRunScreen ---
 
 func TestNewMonitoringTab_ReturnsZeroValue(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 
 	assert.Zero(t, tab.width, "width should be zero-initialized")
 	assert.Zero(t, tab.height, "height should be zero-initialized")
-	assert.Nil(t, tab.stats, "stats should be nil")
-	assert.Nil(t, tab.history, "history should be nil")
-	assert.Nil(t, tab.active, "active execution state should be nil")
 }
 
 func TestNewMonitoringTab_AutoScrollEnabledByDefault(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	assert.True(t, tab.autoScroll, "auto-scroll must be enabled by default")
 }
 
 func TestNewMonitoringTab_StatesInitialized(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	assert.NotNil(t, tab.states, "states map must be initialized")
 }
 
 // --- Init ---
 
 func TestMonitoringTab_Init_ReturnsNil(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	cmd := tab.Init()
 	assert.Nil(t, cmd, "Init() should return nil per Bubbletea convention")
 }
@@ -118,7 +116,7 @@ func TestMonitoringTab_Init_ReturnsNil(t *testing.T) {
 // --- WindowSizeMsg ---
 
 func TestMonitoringTab_Update_WithWindowSizeMsg_UpdatesDimensions(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 
 	msg := tea.WindowSizeMsg{Width: 80, Height: 24}
 	updatedTab, cmd := tab.Update(msg)
@@ -129,7 +127,7 @@ func TestMonitoringTab_Update_WithWindowSizeMsg_UpdatesDimensions(t *testing.T) 
 }
 
 func TestMonitoringTab_Update_MultipleWindowSizeMsg_TracksDimensions(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab, _ = tab.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	tab, _ = tab.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
@@ -138,7 +136,7 @@ func TestMonitoringTab_Update_MultipleWindowSizeMsg_TracksDimensions(t *testing.
 }
 
 func TestMonitoringTab_Update_WithZeroSizeMsg_SetsZeroDimensions(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.width = 80
 	tab.height = 24
 
@@ -150,7 +148,7 @@ func TestMonitoringTab_Update_WithZeroSizeMsg_SetsZeroDimensions(t *testing.T) {
 }
 
 func TestMonitoringTab_Update_WithNegativeDimensions_StoresRawValues(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 
 	updatedTab, cmd := tab.Update(tea.WindowSizeMsg{Width: -1, Height: -1})
 
@@ -162,7 +160,7 @@ func TestMonitoringTab_Update_WithNegativeDimensions_StoresRawValues(t *testing.
 // --- ExecutionStartedMsg ---
 
 func TestMonitoringTab_ExecutionStartedMsg_ResetsState(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.selectedIdx = 5
 	tab.states["old"] = workflow.StepState{Name: "old"}
 
@@ -176,7 +174,7 @@ func TestMonitoringTab_ExecutionStartedMsg_ResetsState(t *testing.T) {
 // --- ExecutionFinishedMsg ---
 
 func TestMonitoringTab_ExecutionFinishedMsg_StopsTicking(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	wf := &workflow.Workflow{
 		Name:    "test",
 		Initial: "s1",
@@ -187,18 +185,18 @@ func TestMonitoringTab_ExecutionFinishedMsg_StopsTicking(t *testing.T) {
 	// Start a run (facade path) so the step tree is built from the workflow.
 	tab.SetWorkflow(wf)
 	tab, _ = tab.Update(ExecutionStartedMsg{ExecutionID: "exec-1", Workflow: wf})
-	tab.ticking = true
+	tab.running = true
 
 	tab, _ = tab.Update(ExecutionFinishedMsg{Err: nil})
 
-	assert.False(t, tab.ticking, "ticking must stop on ExecutionFinishedMsg")
+	assert.False(t, tab.running, "running must stop on ExecutionFinishedMsg")
 	assert.NotEmpty(t, tab.flatNodes, "tree built from the workflow must persist after finish")
 }
 
 // --- Arrow-key navigation ---
 
 func TestMonitoringTab_Update_ArrowKeys_ChangesSelection(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.flatNodes = []*TreeNode{
 		{Name: "a", Status: workflow.StatusCompleted, Children: []*TreeNode{}},
 		{Name: "b", Status: workflow.StatusRunning, Children: []*TreeNode{}},
@@ -226,7 +224,7 @@ func TestMonitoringTab_Update_ArrowKeys_ChangesSelection(t *testing.T) {
 }
 
 func TestMonitoringTab_Update_JKKeys_ChangesSelection(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.flatNodes = []*TreeNode{
 		{Name: "step-1", Status: workflow.StatusCompleted, Children: []*TreeNode{}},
 		{Name: "step-2", Status: workflow.StatusPending, Children: []*TreeNode{}},
@@ -241,7 +239,7 @@ func TestMonitoringTab_Update_JKKeys_ChangesSelection(t *testing.T) {
 }
 
 func TestMonitoringTab_Update_ArrowKeys_WithEmptyNodes_DoesNotPanic(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.flatNodes = nil
 
 	require.NotPanics(t, func() {
@@ -265,14 +263,14 @@ func TestMonitoringTab_FKey_ReenablesAutoScroll(t *testing.T) {
 // --- AutoScroll enabled by default ---
 
 func TestMonitoringTab_AutoScroll_EnabledByDefault(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	assert.True(t, tab.autoScroll)
 }
 
 // --- Auto-select failed node ---
 
 func TestMonitoringTab_AutoSelectFailed_SelectsFailedNode(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.flatNodes = []*TreeNode{
 		{Name: "step-a", Status: workflow.StatusCompleted, Children: []*TreeNode{}},
 		{Name: "step-b", Status: workflow.StatusFailed, Children: []*TreeNode{}},
@@ -292,7 +290,7 @@ func TestMonitoringTab_AutoSelectFailed_SelectsFailedNode(t *testing.T) {
 }
 
 func TestMonitoringTab_AutoSelectFailed_WithNoFailedNode_DoesNotChangeSelection(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.flatNodes = []*TreeNode{
 		{Name: "step-a", Status: workflow.StatusCompleted, Children: []*TreeNode{}},
 		{Name: "step-b", Status: workflow.StatusRunning, Children: []*TreeNode{}},
@@ -304,132 +302,16 @@ func TestMonitoringTab_AutoSelectFailed_WithNoFailedNode_DoesNotChangeSelection(
 	assert.Equal(t, 1, tab.selectedIdx, "selection unchanged when no failed node")
 }
 
-// --- selectedStepOutput ---
-
-func TestMonitoringTab_SelectedStepOutput_ReturnsStepOutput(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.flatNodes = []*TreeNode{
-		{Name: "build", Status: workflow.StatusCompleted, Children: []*TreeNode{}},
-	}
-	tab.states = map[string]workflow.StepState{
-		"build": {Name: "build", Status: workflow.StatusCompleted, Output: "build successful"},
-	}
-	tab.selectedIdx = 0
-
-	output := tab.selectedStepOutput()
-
-	assert.Contains(t, output, "build successful")
-}
-
-func TestMonitoringTab_SelectedStepOutput_WithError_IncludesErrorText(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.flatNodes = []*TreeNode{
-		{Name: "deploy", Status: workflow.StatusFailed, Children: []*TreeNode{}},
-	}
-	tab.states = map[string]workflow.StepState{
-		"deploy": {Name: "deploy", Status: workflow.StatusFailed, Error: "connection refused", Stderr: "fatal error"},
-	}
-	tab.selectedIdx = 0
-
-	output := tab.selectedStepOutput()
-
-	assert.Contains(t, output, "connection refused")
-	assert.Contains(t, output, "fatal error")
-}
-
-func TestMonitoringTab_SelectedStepOutput_WithNoState_ReturnsNotStartedMsg(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.flatNodes = []*TreeNode{
-		{Name: "pending-step", Status: workflow.StatusPending, Children: []*TreeNode{}},
-	}
-	tab.states = map[string]workflow.StepState{} // no state for pending-step
-	tab.selectedIdx = 0
-
-	output := tab.selectedStepOutput()
-
-	assert.Contains(t, output, "pending-step")
-}
-
-func TestMonitoringTab_SelectedStepOutput_WithEmptyFlatNodes_ReturnsEmptyString(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.flatNodes = nil
-	tab.selectedIdx = 0
-
-	output := tab.selectedStepOutput()
-
-	assert.Equal(t, "", output)
-}
-
-// --- renderTreeWithSelection ---
-
-func TestMonitoringTab_RenderTreeWithSelection_HighlightsSelected(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.flatNodes = []*TreeNode{
-		{Name: "step-a", Status: workflow.StatusCompleted, Depth: 0, Children: []*TreeNode{}},
-		{Name: "step-b", Status: workflow.StatusRunning, Depth: 0, Children: []*TreeNode{}},
-	}
-	tab.selectedIdx = 0
-
-	rendered := tab.renderTreeWithSelection()
-
-	// The rendered output must contain both step names.
-	assert.Contains(t, rendered, "step-a")
-	assert.Contains(t, rendered, "step-b")
-	// The rendered output must be non-empty.
-	assert.NotEmpty(t, rendered)
-}
-
-func TestMonitoringTab_RenderTreeWithSelection_WithEmptyNodes_ReturnsWaitingMsg(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.flatNodes = nil
-
-	rendered := tab.renderTreeWithSelection()
-
-	assert.Contains(t, rendered, "Waiting")
-}
-
-func TestMonitoringTab_RenderTreeWithSelection_WithActiveAndEmptyNodes_RendersActiveInfo(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.flatNodes = nil
-	tab.active = &executionState{
-		id:     "exec-active",
-		status: workflow.StatusRunning,
-		steps:  make(map[string]*workflow.StepState),
-	}
-
-	rendered := tab.renderTreeWithSelection()
-
-	assert.Contains(t, rendered, "exec-active")
-}
-
 // --- View ---
 
 func TestMonitoringTab_View_WithNilExecCtx_RendersEmptyState(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	// execCtx is nil, active is nil.
 
 	view := tab.View()
 
 	assert.Contains(t, view, "No active execution")
 	assert.Contains(t, view, "Workflows tab")
-}
-
-func TestMonitoringTab_View_WithActiveButNilExecCtx_StillRendersEmptyState(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.active = &executionState{
-		id:     "exec-1",
-		status: workflow.StatusRunning,
-		steps:  make(map[string]*workflow.StepState),
-	}
-	// execCtx is still nil — active comes from model.go's executionState not the real context.
-	// In this case View should render something (not the empty state) because active != nil.
-	tab.width = 80
-	tab.height = 24
-
-	view := tab.View()
-
-	// Since active != nil, the empty state message must not appear.
-	assert.NotContains(t, view, "No active execution")
 }
 
 func TestMonitoringTab_View_WithWorkflow_RendersTwoPanels(t *testing.T) {
@@ -446,7 +328,7 @@ func TestMonitoringTab_View_WithWorkflow_RendersTwoPanels(t *testing.T) {
 }
 
 func TestMonitoringTab_View_WithZeroDimensions_DoesNotPanic(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.SetWorkflow(&workflow.Workflow{Name: "wf-1"})
 	tab.width = 0
 	tab.height = 0
@@ -457,59 +339,15 @@ func TestMonitoringTab_View_WithZeroDimensions_DoesNotPanic(t *testing.T) {
 }
 
 func TestMonitoringTab_View_ReturnsString(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	view := tab.View()
 	require.IsType(t, "", view)
-}
-
-// --- View with stats/history (legacy fields) ---
-
-func TestMonitoringTab_View_WithStats_DoesNotPanic(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.stats = &workflow.HistoryStats{
-		TotalExecutions: 10,
-		SuccessCount:    7,
-		FailedCount:     3,
-	}
-	tab.width = 80
-	tab.height = 24
-
-	require.NotPanics(t, func() {
-		_ = tab.View()
-	})
-}
-
-func TestMonitoringTab_View_WithHistory_DoesNotPanic(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.history = []*workflow.ExecutionRecord{
-		{ID: "exec-1", WorkflowName: "my-workflow", Status: "success"},
-	}
-	tab.width = 80
-	tab.height = 24
-
-	require.NotPanics(t, func() {
-		_ = tab.View()
-	})
-}
-
-func TestMonitoringTab_View_WithActiveExecution_RendersActiveState(t *testing.T) {
-	tab := monitoringTabWithSize(80, 24)
-	tab.active = &executionState{
-		id:     "exec-active",
-		status: workflow.StatusRunning,
-		steps:  make(map[string]*workflow.StepState),
-	}
-
-	view := tab.View()
-
-	assert.NotEmpty(t, view, "View() must render active execution state when an execution is in progress")
-	assert.NotContains(t, view, "No active execution")
 }
 
 // --- SetWorkflow ---
 
 func TestMonitoringTab_SetWorkflow_WiresWorkflow(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	wf := &workflow.Workflow{
 		Name:  "wf-1",
 		Steps: map[string]*workflow.Step{},
@@ -521,7 +359,7 @@ func TestMonitoringTab_SetWorkflow_WiresWorkflow(t *testing.T) {
 }
 
 func TestMonitoringTab_SetWorkflow_WithNilWorkflow_DoesNotPanic(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 
 	require.NotPanics(t, func() {
 		tab.SetWorkflow(nil)
@@ -562,18 +400,32 @@ func TestFlattenTree_NilInput_ReturnsEmpty(t *testing.T) {
 
 // --- panelWidths ---
 
-func TestMonitoringTab_PanelWidths_40_60Split(t *testing.T) {
-	tab := newMonitoringTab()
-	tab.width = 100
+func TestRunScreen_PanelWidths(t *testing.T) {
+	tests := []struct {
+		name        string
+		width       int
+		left, right int
+	}{
+		{"wide terminal caps the steps box at 38", 120, 38, 81},
+		{"narrow terminal gives steps a third", 90, 30, 59},
+		{"minimum supported width", 76, 25, 50},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tab := newRunScreen()
+			tab.width = tt.width
 
-	left, right := tab.panelWidths()
+			left, right := tab.panelWidths()
 
-	assert.Equal(t, 40, left, "left panel should be 40% of total width")
-	assert.Equal(t, 60, right, "right panel should be 60% of total width")
+			assert.Equal(t, tt.left, left)
+			assert.Equal(t, tt.right, right)
+			assert.Equal(t, tt.width, left+1+right, "boxes plus the one-column gap fill the width")
+		})
+	}
 }
 
 func TestMonitoringTab_PanelWidths_WithZeroWidth_ReturnsMin1(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.width = 0
 
 	left, right := tab.panelWidths()
@@ -585,7 +437,7 @@ func TestMonitoringTab_PanelWidths_WithZeroWidth_ReturnsMin1(t *testing.T) {
 // --- rebuildTree ---
 
 func TestMonitoringTab_RebuildTree_WithSteps_BuildsFlatNodes(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.steps = []workflow.Step{
 		{Name: "step-a", Type: workflow.StepTypeCommand},
 		{Name: "step-b", Type: workflow.StepTypeCommand},
@@ -603,7 +455,7 @@ func TestMonitoringTab_RebuildTree_WithSteps_BuildsFlatNodes(t *testing.T) {
 }
 
 func TestMonitoringTab_RebuildTree_ClampsSelectedIdx(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.selectedIdx = 99 // out of bounds
 	tab.steps = []workflow.Step{
 		{Name: "only-step", Type: workflow.StepTypeCommand},
@@ -618,7 +470,7 @@ func TestMonitoringTab_RebuildTree_ClampsSelectedIdx(t *testing.T) {
 // --- Spinner ---
 
 func TestMonitoringTab_WithWorkflow_RendersTwoPanels(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	wf := &workflow.Workflow{Name: "test-wf", Steps: map[string]*workflow.Step{"s1": {Name: "s1"}}}
 	tab.SetWorkflow(wf)
 	tab.width = 80
@@ -635,7 +487,7 @@ func TestMonitoringTab_WithWorkflow_RendersTwoPanels(t *testing.T) {
 // consumes events from a RunSession and forwards each event to the Bubble Tea program.
 // This replaces the 200ms polling loop pattern (D27).
 func TestTUI_TabMonitoringConsumesEventsLoop(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 
 	// Mock RunSession with scripted events.
 	eventChan := make(chan ports.Event, 3)
@@ -704,7 +556,7 @@ CollectLoop:
 // TestTUI_TabMonitoringEventLoopWithNilSender verifies that the event loop
 // safely handles a nil sender (does not panic and discards events).
 func TestTUI_TabMonitoringEventLoopWithNilSender(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	// sender is nil by default
 
 	eventChan := make(chan ports.Event, 1)
@@ -731,7 +583,7 @@ func TestTUI_TabMonitoringEventLoopWithNilSender(t *testing.T) {
 // StartEventLoop sends ExecutionFinishedMsg(nil) when EventWorkflowCompleted is received.
 // This allows the facade-driven path (Done == nil) to properly stop the tick loop.
 func TestTUI_StartEventLoop_TerminalCompleted_SendsExecutionFinishedMsg(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 
 	eventChan := make(chan ports.Event, 2)
 	mockSession := &mockRunSession{eventsChan: eventChan}
@@ -775,7 +627,7 @@ collect:
 // TestTUI_StartEventLoop_TerminalFailed_SendsExecutionFinishedMsg verifies that
 // StartEventLoop sends ExecutionFinishedMsg with sess.Err() when EventWorkflowFailed.
 func TestTUI_StartEventLoop_TerminalFailed_SendsExecutionFinishedMsg(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 
 	eventChan := make(chan ports.Event, 1)
 	mockSession := &mockRunSession{eventsChan: eventChan}
@@ -815,16 +667,9 @@ func TestTUI_NoPollingIntervalConstant(t *testing.T) {
 	// This is a static analysis test: verify that monitoringTickInterval is no longer
 	// referenced in this file's source code.
 	// The constant was defined on line 71-72 and scheduled ticks in scheduleTick().
-	source, err := os.ReadFile("tab_monitoring.go")
-	if err != nil {
-		// If we can't read from the current directory, try the absolute path.
-		// Test runs from the module root.
-		wd, _ := os.Getwd()
-		source, err = os.ReadFile(wd + "/internal/interfaces/tui/tab_monitoring.go")
-		require.NoError(t, err, "must be able to read tab_monitoring.go from either . or ./internal/interfaces/tui/")
-	}
+	source := readRunScreenSource(t)
 
-	hasConstant := strings.Contains(string(source), "monitoringTickInterval")
+	hasConstant := strings.Contains(source, "monitoringTickInterval")
 	assert.False(t, hasConstant, "monitoringTickInterval constant should be removed (D27: replaced by event loop)")
 }
 
@@ -863,7 +708,7 @@ func TestTUI_InputReaderFileDeleted(t *testing.T) {
 // TestMonitoringTab_FacadeEventMsg_StepStarted_SetsRunningState verifies that a
 // EventStepStarted facade event updates the corresponding step's state to Running.
 func TestMonitoringTab_FacadeEventMsg_StepStarted_SetsRunningState(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.steps = []workflow.Step{
 		{Name: "build", Type: workflow.StepTypeCommand},
 	}
@@ -886,7 +731,7 @@ func TestMonitoringTab_FacadeEventMsg_StepStarted_SetsRunningState(t *testing.T)
 // TestMonitoringTab_FacadeEventMsg_StepCompleted_SetsCompletedState verifies that
 // EventStepCompleted updates the step's state to Completed.
 func TestMonitoringTab_FacadeEventMsg_StepCompleted_SetsCompletedState(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.steps = []workflow.Step{
 		{Name: "test", Type: workflow.StepTypeCommand},
 	}
@@ -913,7 +758,7 @@ func TestMonitoringTab_FacadeEventMsg_StepCompleted_SetsCompletedState(t *testin
 // panel can render per-step output for any selected completed step (regression: facade
 // step events dropped output, leaving the panel showing only the command and no result).
 func TestMonitoringTab_FacadeEventMsg_StepCompleted_StoresOutput(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.steps = []workflow.Step{
 		{Name: "greet", Type: workflow.StepTypeCommand},
 	}
@@ -937,7 +782,7 @@ func TestMonitoringTab_FacadeEventMsg_StepCompleted_StoresOutput(t *testing.T) {
 // TestMonitoringTab_FacadeEventMsg_StepCompleted_WithError_SetsFailedState verifies
 // that EventStepCompleted with a non-empty Error sets status to Failed.
 func TestMonitoringTab_FacadeEventMsg_StepCompleted_WithError_SetsFailedState(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.steps = []workflow.Step{
 		{Name: "deploy", Type: workflow.StepTypeCommand},
 	}
@@ -962,7 +807,7 @@ func TestMonitoringTab_FacadeEventMsg_StepCompleted_WithError_SetsFailedState(t 
 // TestMonitoringTab_FacadeEventMsg_UnknownPayload_DoesNotPanic verifies that events
 // with unexpected or nil payload are handled gracefully.
 func TestMonitoringTab_FacadeEventMsg_UnknownPayload_DoesNotPanic(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 
 	event := ports.Event{
 		Seq:     1,
@@ -979,7 +824,7 @@ func TestMonitoringTab_FacadeEventMsg_UnknownPayload_DoesNotPanic(t *testing.T) 
 // TestMonitoringTab_FacadeEventMsg_NonStepEvent_DoesNotAlterStates verifies that
 // non-step events (run-level, message events) do not corrupt the step-state map.
 func TestMonitoringTab_FacadeEventMsg_NonStepEvent_DoesNotAlterStates(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.states["existing"] = workflow.StepState{Name: "existing", Status: workflow.StatusCompleted}
 
 	for _, kind := range []ports.EventKind{
@@ -999,7 +844,7 @@ func TestMonitoringTab_FacadeEventMsg_NonStepEvent_DoesNotAlterStates(t *testing
 // TestMonitoringTab_FacadeEventMsg_RebuildsTree verifies that step state changes
 // from facade events are reflected in the rendered tree (flatNodes updated).
 func TestMonitoringTab_FacadeEventMsg_RebuildsTree(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.steps = []workflow.Step{
 		{Name: "lint", Type: workflow.StepTypeCommand},
 	}
@@ -1024,7 +869,7 @@ func TestMonitoringTab_FacadeEventMsg_RebuildsTree(t *testing.T) {
 // TestTabMonitoring_NoPollingAfterFacadeDispatch verifies that when ExecutionStartedMsg
 // carries a non-nil Session, no tickMsg or executionPollMsg is ever produced (FR-002, D27).
 func TestTabMonitoring_NoPollingAfterFacadeDispatch(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 
 	// Facade-driven path: Session != nil signals push-event mode.
 	eventChan := make(chan ports.Event)
@@ -1036,7 +881,7 @@ func TestTabMonitoring_NoPollingAfterFacadeDispatch(t *testing.T) {
 		Session:     sess,
 	})
 
-	assert.False(t, tab.ticking, "ticking must NOT start when Session is non-nil")
+	assert.True(t, tab.running, "a run with a Session is in flight")
 	assert.Nil(t, cmd, "no tick cmd must be emitted when Session is non-nil")
 
 	// facadeEventMsg must not produce tickMsg or executionPollMsg.
@@ -1053,7 +898,7 @@ func TestTabMonitoring_NoPollingAfterFacadeDispatch(t *testing.T) {
 // returned no nodes — so the panel stayed blank even while Session.Events() were flowing to
 // the Logs tab. The fix supplies the workflow definition; this test pins the rendered panel.
 func TestTabMonitoring_FacadePathRendersPanel(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab, _ = tab.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 
 	wf := &workflow.Workflow{
@@ -1099,7 +944,7 @@ func TestTabMonitoring_FacadePathRendersPanel(t *testing.T) {
 // (execCtx == nil) it stayed ⏳ pending even after the workflow finished. EventWorkflowCompleted
 // must mark the reached terminal step completed.
 func TestTabMonitoring_TerminalStepCompletesOnWorkflowDone(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.steps = []workflow.Step{
 		{Name: "greet", Type: workflow.StepTypeCommand},
 		{Name: "done", Type: workflow.StepTypeTerminal},
@@ -1127,7 +972,7 @@ func TestTabMonitoring_TerminalStepCompletesOnWorkflowDone(t *testing.T) {
 // step ✓ via finalStatus), starting a NEW run must reset finalStatus so its terminal step
 // shows ⏳ pending until that run actually finishes — not ✓ by default.
 func TestTabMonitoring_TerminalStatusResetOnNewRun(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.steps = []workflow.Step{
 		{Name: "work", Type: workflow.StepTypeCommand},
 		{Name: "done", Type: workflow.StepTypeTerminal},
@@ -1149,7 +994,7 @@ func TestTabMonitoring_TerminalStatusResetOnNewRun(t *testing.T) {
 }
 
 // terminalNodeStatus returns the tree-node status for the named step.
-func terminalNodeStatus(t *testing.T, tab MonitoringTab, name string) workflow.ExecutionStatus {
+func terminalNodeStatus(t *testing.T, tab RunScreen, name string) workflow.ExecutionStatus {
 	t.Helper()
 	for _, n := range tab.flatNodes {
 		if n.Name == name {
@@ -1165,7 +1010,7 @@ func terminalNodeStatus(t *testing.T, tab MonitoringTab, name string) workflow.E
 // On the facade path the tab has no ExecutionContext, so it must build the conversation from
 // EventMessageAssistant/User events attributed to the running agent step.
 func TestTabMonitoring_ConversationTurnsFromFacadeEvents(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab, _ = tab.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	wf := &workflow.Workflow{
 		Name:    "clarifier",
@@ -1203,7 +1048,7 @@ func TestTabMonitoring_ConversationTurnsFromFacadeEvents(t *testing.T) {
 }
 
 func TestTabMonitoring_InputRequiredFromFacadeShowsInputAndRespondsToSession(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	session := &mockRunSession{}
 	tab, _ = tab.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	tab, _ = tab.Update(ExecutionStartedMsg{ExecutionID: "clarifier", Session: session})
@@ -1234,28 +1079,28 @@ func TestTabMonitoring_InputRequiredFromFacadeShowsInputAndRespondsToSession(t *
 // TestMonitoringTab is the acceptance-criteria gate named in the task spec.
 func TestMonitoringTab(t *testing.T) {
 	t.Run("empty state when no execution", func(t *testing.T) {
-		tab := newMonitoringTab()
+		tab := newRunScreen()
 		view := tab.View()
 		assert.Contains(t, view, "No active execution")
 	})
 
 	t.Run("execution started does not start polling (facade-driven)", func(t *testing.T) {
-		tab := newMonitoringTab()
+		tab := newRunScreen()
 		tab, cmd := tab.Update(ExecutionStartedMsg{ExecutionID: "exec-1"})
 		// F108: no polling tick is scheduled; state updates arrive via facadeEventMsg.
-		assert.False(t, tab.ticking)
+		assert.False(t, tab.running)
 		assert.Nil(t, cmd)
 	})
 
 	t.Run("execution finished stops tick", func(t *testing.T) {
-		tab := newMonitoringTab()
-		tab.ticking = true
+		tab := newRunScreen()
+		tab.running = true
 		tab, _ = tab.Update(ExecutionFinishedMsg{Err: nil})
-		assert.False(t, tab.ticking)
+		assert.False(t, tab.running)
 	})
 
 	t.Run("arrow navigation changes selection", func(t *testing.T) {
-		tab := newMonitoringTab()
+		tab := newRunScreen()
 		tab.flatNodes = []*TreeNode{
 			{Name: "a", Status: workflow.StatusCompleted, Children: []*TreeNode{}},
 			{Name: "b", Status: workflow.StatusPending, Children: []*TreeNode{}},
@@ -1272,7 +1117,7 @@ func TestMonitoringTab(t *testing.T) {
 	})
 
 	t.Run("failed step auto-selects", func(t *testing.T) {
-		tab := newMonitoringTab()
+		tab := newRunScreen()
 		tab.flatNodes = []*TreeNode{
 			{Name: "ok", Status: workflow.StatusCompleted, Children: []*TreeNode{}},
 			{Name: "bad", Status: workflow.StatusFailed, Children: []*TreeNode{}},
@@ -1294,7 +1139,7 @@ func TestMonitoringTab(t *testing.T) {
 	})
 
 	t.Run("selected step output shown in viewport area", func(t *testing.T) {
-		tab := newMonitoringTab()
+		tab := newRunScreen()
 		tab.flatNodes = []*TreeNode{
 			{Name: "deploy", Status: workflow.StatusCompleted, Children: []*TreeNode{}},
 		}
@@ -1302,7 +1147,7 @@ func TestMonitoringTab(t *testing.T) {
 			"deploy": {Name: "deploy", Status: workflow.StatusCompleted, Output: "Deployed!"},
 		}
 		tab.selectedIdx = 0
-		output := tab.selectedStepOutput()
+		output := tab.renderSelectedStepChat("deploy")
 		assert.Contains(t, output, "Deployed!")
 	})
 
@@ -1329,18 +1174,18 @@ func TestTabMonitoring_FacadeModeNoTickScheduled(t *testing.T) {
 	eventChan := make(chan ports.Event)
 	defer close(eventChan)
 	sess := &mockRunSession{eventsChan: eventChan}
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 
 	tab, cmd := tab.Update(ExecutionStartedMsg{ExecutionID: "facade-exec", Session: sess})
 
 	assert.Nil(t, cmd, "facade mode must not emit tick cmd")
-	assert.False(t, tab.ticking, "facade mode must not enable ticking")
+	assert.True(t, tab.running, "facade mode marks the run in flight without any timer")
 }
 
 // TestTabMonitoring_FacadeEventLoopNoTickLoop verifies the complete sequence:
 // ExecutionStartedMsg(Session) → facadeEventMsg → no tickMsg/executionPollMsg ever produced.
 func TestTabMonitoring_FacadeEventLoopNoTickLoop(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.steps = []workflow.Step{{Name: "step-1", Type: workflow.StepTypeCommand}}
 
 	eventChan := make(chan ports.Event)
@@ -1353,7 +1198,7 @@ func TestTabMonitoring_FacadeEventLoopNoTickLoop(t *testing.T) {
 		Session:     sess,
 	})
 	assert.Nil(t, cmd, "facade dispatch must not schedule tick")
-	assert.False(t, tab.ticking, "facade dispatch must not enable ticking")
+	assert.True(t, tab.running, "facade dispatch marks the run in flight")
 
 	// Multiple facadeEventMsg should never trigger tickMsg or executionPollMsg
 	for seq := 1; seq <= 3; seq++ {
@@ -1367,7 +1212,6 @@ func TestTabMonitoring_FacadeEventLoopNoTickLoop(t *testing.T) {
 
 		// Each facadeEventMsg should return nil cmd (no tick scheduling)
 		assert.Nil(t, cmd, "facadeEventMsg seq %d must not emit cmd", seq)
-		assert.False(t, tab.ticking, "facadeEventMsg seq %d must not enable ticking", seq)
 	}
 }
 
@@ -1375,7 +1219,7 @@ func TestTabMonitoring_FacadeEventLoopNoTickLoop(t *testing.T) {
 // the facade event loop lifecycle, scheduleTick is never called by examining
 // the returned Cmd values (they should all be nil).
 func TestTabMonitoring_NoScheduleTickCallsInFacadePath(t *testing.T) {
-	tab := newMonitoringTab()
+	tab := newRunScreen()
 	tab.steps = []workflow.Step{
 		{Name: "build", Type: workflow.StepTypeCommand},
 		{Name: "test", Type: workflow.StepTypeCommand},
@@ -1415,23 +1259,31 @@ func TestTabMonitoring_NoScheduleTickCallsInFacadePath(t *testing.T) {
 	}
 }
 
-// --- T078: Legacy polling types removed from tab_monitoring.go ---
+// --- T078: Legacy polling types removed from the run screen sources ---
 
-func readTabMonitoringSource(t *testing.T) string {
+// readRunScreenSource returns the concatenated non-test sources of the run screen
+// (screen_run*.go), so structural guards keep working however the screen is split.
+func readRunScreenSource(t *testing.T) string {
 	t.Helper()
-	source, err := os.ReadFile("tab_monitoring.go")
-	if err != nil {
-		wd, _ := os.Getwd()
-		source, err = os.ReadFile(wd + "/internal/interfaces/tui/tab_monitoring.go")
-		require.NoError(t, err, "must be able to read tab_monitoring.go")
+	files, err := filepath.Glob("screen_run*.go")
+	require.NoError(t, err)
+	var sb strings.Builder
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		src, readErr := os.ReadFile(f)
+		require.NoError(t, readErr, "must be able to read %s", f)
+		sb.Write(src)
 	}
-	return string(source)
+	require.NotZero(t, sb.Len(), "no screen_run*.go sources found")
+	return sb.String()
 }
 
 // TestT078_TickMsg_TypeRemovedFromTabMonitoring verifies that the tickMsg type declaration
 // has been deleted as part of T078 cleanup (replaced by event-driven path D27).
 func TestT078_TickMsg_TypeRemovedFromTabMonitoring(t *testing.T) {
-	source := readTabMonitoringSource(t)
+	source := readRunScreenSource(t)
 	assert.False(t, strings.Contains(source, "type tickMsg struct"),
 		"tickMsg type declaration should be removed (T078: legacy polling type)")
 }
@@ -1439,7 +1291,7 @@ func TestT078_TickMsg_TypeRemovedFromTabMonitoring(t *testing.T) {
 // TestT078_ExecutionPollMsg_TypeRemovedFromTabMonitoring verifies that the executionPollMsg
 // type declaration has been deleted as part of T078 cleanup.
 func TestT078_ExecutionPollMsg_TypeRemovedFromTabMonitoring(t *testing.T) {
-	source := readTabMonitoringSource(t)
+	source := readRunScreenSource(t)
 	assert.False(t, strings.Contains(source, "type executionPollMsg struct"),
 		"executionPollMsg type declaration should be removed (T078: legacy polling type)")
 }
@@ -1447,7 +1299,7 @@ func TestT078_ExecutionPollMsg_TypeRemovedFromTabMonitoring(t *testing.T) {
 // TestT078_ScheduleTick_FunctionRemovedFromTabMonitoring verifies that the scheduleTick
 // function has been deleted as part of T078 cleanup.
 func TestT078_ScheduleTick_FunctionRemovedFromTabMonitoring(t *testing.T) {
-	source := readTabMonitoringSource(t)
+	source := readRunScreenSource(t)
 	assert.False(t, strings.Contains(source, "func scheduleTick()"),
 		"scheduleTick function should be removed (T078: legacy polling helper)")
 }

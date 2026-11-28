@@ -223,6 +223,7 @@ func TestEventKind_String(t *testing.T) {
 		{ports.EventInputRequired, "input.required"},
 		{ports.EventWorkflowCompleted, "workflow.completed"},
 		{ports.EventWorkflowFailed, "workflow.failed"},
+		{ports.EventStepOutput, "step.output"},
 		// Out-of-range value must fall through to the "unknown" default.
 		{ports.EventKind(255), "unknown"},
 	}

@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The TUI shows a running step's stdout and stderr as it is produced instead of only
+  when the step ends. The facade gains `ports.EventStepOutput`, an opt-in event
+  (`Adapter.SetStepOutputEvents`) that carries raw output chunks. It is off for the CLI,
+  ACP and HTTP interfaces, is never persisted to transcripts or replayed, and is dropped
+  under back-pressure so it cannot crowd out lifecycle events.
+- The TUI run view can cancel a run (`c`), repeat the last launch (`r`) and copy the
+  selected step's output to the clipboard (`y`).
+- TUI: a read-only Config tab (`3`) shows the project configuration and the inputs it
+  pre-fills, as `awf config show` does, with secret-looking values masked.
+- TUI: `enter` on a workflow opens its configuration step by step (the YAML as written,
+  comments included, split into a general block and one block per state); `x` runs it.
+  Pack workflows are not supported yet.
+- TUI: `h` on a workflow opens History on that workflow's runs (exact name), and `r` in an
+  execution's detail runs it again with the inputs it was started with (`R` reloads).
+- The TUI History screen opens a step detail (`enter`): every step of a past execution
+  with its status, duration, error, stderr and output (or conversation), the run's inputs
+  with secrets masked, scrolling, and copy. It reads the state AWF saved for the run, and
+  says so when that state was removed or the run saved no steps.
+
+### Changed
+
+- The TUI has a new look: a dark page with a header and tab bar, rounded boxes, a key bar,
+  and a workflow detail panel (inputs, steps, last runs). A run now opens as a full-frame
+  view (`esc` goes back and the run keeps going, `o` reopens it) instead of the
+  Monitoring tab. The tabs are now Workflows and History.
+- The TUI input form refuses to start a run while a required input is empty and says which
+  one, and masks `SECRET_*`, `API_KEY*` and `PASSWORD*` inputs while they are typed.
+- `ctrl+c` in the TUI cancels a run in flight and quits only when none is running.
+
+### Removed
+
+- The TUI External Logs tab (the audit log tailer). Use `awf history` and the audit log
+  file directly.
+- The TUI Monitoring tab, replaced by the run view.
+
 ## [0.12.1] - 2026-11-23
 
 ## [0.12.0] - 2026-11-23

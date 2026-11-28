@@ -70,7 +70,8 @@ func eventDataFromEvent(ev ports.Event) sseEventData { //nolint:gocritic // Even
 		ports.EventMessageUser,
 		ports.EventMessageAssistant,
 		ports.EventToolCall,
-		ports.EventToolResult:
+		ports.EventToolResult,
+		ports.EventStepOutput: // live output is opt-in per Adapter and not part of the SSE contract
 	}
 
 	return data

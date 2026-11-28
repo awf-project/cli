@@ -19,7 +19,7 @@ type HistoryLoadedMsg struct {
 
 // ExecutionStartedMsg signals a workflow run has begun via the WorkflowFacade.
 // Session carries the live RunSession whose Events() channel drives the monitoring
-// tab: the model calls MonitoringTab.StartEventLoop to consume facade events (D27).
+// tab: the model calls RunScreen.StartEventLoop to consume facade events (D27).
 type ExecutionStartedMsg struct {
 	ExecutionID string
 	Workflow    *workflow.Workflow
@@ -63,7 +63,7 @@ func (e ErrMsg) Error() string {
 type InputRequestedMsg struct{}
 
 // facadeEventMsg carries a single Event received from a RunSession event channel.
-// Sent from the goroutine spawned by MonitoringTab.StartEventLoop that ranges over
+// Sent from the goroutine spawned by RunScreen.StartEventLoop that ranges over
 // RunSession.Events() — replacing the legacy 200ms polling loop (D27, FR-011).
 type facadeEventMsg struct {
 	Event ports.Event

@@ -223,12 +223,11 @@ func TestMessages_AllTypesCanCoexist(t *testing.T) {
 		HistoryLoadedMsg{Records: []*workflow.ExecutionRecord{{ID: "exec-1"}}},
 		ExecutionStartedMsg{ExecutionID: "exec-1", Workflow: &workflow.Workflow{Name: "wf1"}},
 		ExecutionFinishedMsg{Err: nil},
-		LogLineMsg{Entry: LogEntry{Event: "workflow.started", WorkflowName: "test"}},
 		ErrMsg{Err: errors.New("oops")},
 		facadeEventMsg{Event: ports.Event{Seq: 1, Kind: ports.EventRunStarted}},
 	}
 
-	assert.Len(t, messages, 7)
+	assert.Len(t, messages, 6)
 	for _, msg := range messages {
 		assert.NotNil(t, msg)
 	}

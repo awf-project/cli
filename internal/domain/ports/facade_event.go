@@ -49,6 +49,12 @@ const (
 	EventInputRequired                       // bridge-synthesized: workflow awaits user input
 	EventWorkflowCompleted                   // terminal: workflow finished successfully
 	EventWorkflowFailed                      // terminal: workflow finished with error
+	// EventStepOutput carries a live chunk of a step's stdout or stderr while the
+	// step is still running. It is appended after the terminal kinds so existing
+	// EventKind values keep their numeric identity. It is opt-in (see
+	// application.Adapter.SetStepOutputEvents), lossy under back-pressure, never
+	// buffered for replay, and never persisted to the transcript.
+	EventStepOutput
 )
 
 func (k EventKind) String() string {
@@ -79,6 +85,8 @@ func (k EventKind) String() string {
 		return "workflow.completed"
 	case EventWorkflowFailed:
 		return "workflow.failed"
+	case EventStepOutput:
+		return "step.output"
 	default:
 		return "unknown"
 	}
@@ -105,6 +113,7 @@ func (k EventKind) String() string {
 //	EventInputRequired            *EnrichedInputRequest
 //	EventWorkflowCompleted        nil  (success: no error payload needed)
 //	EventWorkflowFailed           *EnrichedTerminal      Error field carries the reason
+//	EventStepOutput               *EnrichedStepOutput    live stdout/stderr chunk; Seq is 0
 //	EventKindUnknown              nil  (drop: unrecognized or zero-init)
 //
 // Zero-value safety: a zero-value Event has Kind == EventKindUnknown (iota = 0), which is the
@@ -155,6 +164,27 @@ type EnrichedStepPayload struct {
 // participant produced the message.
 type EnrichedMessagePayload struct {
 	Content string
+}
+
+// Stream names carried by EnrichedStepOutput.Stream.
+const (
+	StepOutputStdout = "stdout"
+	StepOutputStderr = "stderr"
+)
+
+// EnrichedStepOutput carries a live output chunk for EventStepOutput.
+//
+// Text is a raw chunk exactly as the step wrote it: it may hold several lines, or
+// end in the middle of a line, so consumers must concatenate chunks per
+// (StepName, Stream) and split on newlines themselves. Chunks of one step and
+// stream arrive in order; ordering relative to other events is best effort.
+// Under back-pressure chunks are dropped, so the authoritative output remains
+// EnrichedStepPayload.Output on EventStepCompleted.
+type EnrichedStepOutput struct {
+	StepName string
+	// Stream is StepOutputStdout or StepOutputStderr.
+	Stream string
+	Text   string
 }
 
 // EnrichedInputRequest carries the prompt for the bridge-synthesized EventInputRequired.

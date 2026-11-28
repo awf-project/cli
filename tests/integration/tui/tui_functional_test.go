@@ -94,14 +94,18 @@ states:
 	require.NoError(t, cmd.Start())
 
 	waitForTUI(t, 10*time.Second, func() bool { return strings.Contains(output.String(), workflowName) }, "workflow readiness")
-	_, err = io.WriteString(stdin, "\r")
+	// x runs the selected workflow; enter opens its configuration.
+	_, err = io.WriteString(stdin, "x")
 	require.NoError(t, err)
 	waitForTUI(t, 10*time.Second, func() bool {
 		records := readTUIAdapterRecords(t, recordPath, false)
 		return len(records) == 1
 	}, "notifier completion")
 	waitForTUI(t, 5*time.Second, func() bool { return strings.Contains(output.String(), "output=sent") }, "rendered completion")
-	_, err = io.WriteString(stdin, "q")
+	// The run view shows the outcome in its header once the run has ended. Only then does
+	// ctrl+c quit: while a run is in flight it cancels the run instead.
+	waitForTUI(t, 5*time.Second, func() bool { return strings.Contains(output.String(), "✓ done ·") }, "run outcome in the header")
+	_, err = io.WriteString(stdin, "\x03")
 	require.NoError(t, err)
 	require.NoError(t, stdin.Close())
 	waitDone := make(chan error, 1)
@@ -299,7 +303,7 @@ func TestTUIModel_WorkflowExecutionLifecycle(t *testing.T) {
 	facade := &fakeFacade{session: newFakeRunSession("exec-abc123")}
 	bridge := tui.NewBridge(&fakeLister{wf: wf}, nil)
 	bridge.SetFacade(facade)
-	m := tui.NewWithBridge(bridge, context.Background(), "")
+	m := tui.NewWithBridge(bridge, context.Background())
 
 	resizeMsg := tea.WindowSizeMsg{Width: 80, Height: 24}
 	updated, _ := m.Update(resizeMsg)
@@ -309,12 +313,8 @@ func TestTUIModel_WorkflowExecutionLifecycle(t *testing.T) {
 	m = updated.(tui.Model)
 
 	output := m.View().Content
-	assert.Contains(t, output, "1:Workflows", "tab bar should show workflows tab")
-	assert.Contains(t, output, "2:Monitoring", "tab bar should show monitoring tab")
-
-	// Switch to monitoring tab.
-	updated, _ = m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
-	m = updated.(tui.Model)
+	assert.Contains(t, output, "1 Workflows", "tab bar should show the workflows tab")
+	assert.Contains(t, output, "2 History", "tab bar should show the history tab")
 
 	// Launch through the facade — this is exactly what LaunchWorkflowMsg triggers in
 	// production. The resulting ExecutionStartedMsg carries the live RunSession.
@@ -326,8 +326,13 @@ func TestTUIModel_WorkflowExecutionLifecycle(t *testing.T) {
 	updated, _ = m.Update(started)
 	m = updated.(tui.Model)
 
+	// A started run opens the full-frame run view for that workflow.
+	output = m.View().Content
+	assert.Contains(t, output, "deploy-app", "the run view is titled with the workflow name")
+	assert.Contains(t, output, "Steps", "the run view lists the steps")
+
 	// In production the session's terminal event drives ExecutionFinishedMsg via
-	// StartEventLoop; deliver it directly here to finalize the monitoring tab.
+	// StartEventLoop; deliver it directly here to finalize the run view.
 	updated, _ = m.Update(tui.ExecutionFinishedMsg{Err: nil})
 	m = updated.(tui.Model)
 
@@ -369,73 +374,15 @@ func TestTUIModel_HistoryLoadedMsg_PopulatesHistoryTab(t *testing.T) {
 	updated, _ := m.Update(tui.HistoryLoadedMsg{Records: records, Stats: stats})
 	m = updated.(tui.Model)
 
-	// Switch to history tab to verify content.
-	updated, _ = m.Update(tea.KeyPressMsg{Code: '3', Text: "3"})
+	// Switch to the history tab to verify content.
+	updated, _ = m.Update(tea.KeyPressMsg{Code: '2', Text: "2"})
+	m = updated.(tui.Model)
+
+	updated, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = updated.(tui.Model)
 
 	output := m.View().Content
-	assert.NotEmpty(t, output)
-}
-
-func TestTUITailer_ReadsNewJSONLLines(t *testing.T) {
-	tmpDir := t.TempDir()
-	logFile := filepath.Join(tmpDir, "audit.jsonl")
-
-	entries := []map[string]any{
-		{"event": "workflow.started", "timestamp": "2026-05-01T10:00:00Z", "workflow_name": "deploy", "execution_id": "abc-123", "user": "pocky", "schema_version": 1},
-		{"event": "workflow.completed", "timestamp": "2026-05-01T10:00:05Z", "workflow_name": "deploy", "execution_id": "abc-123", "status": "success", "duration_ms": 5000, "schema_version": 1},
-	}
-	f, err := os.Create(logFile)
-	require.NoError(t, err)
-	enc := json.NewEncoder(f)
-	for _, e := range entries {
-		require.NoError(t, enc.Encode(e))
-	}
-	require.NoError(t, f.Close())
-
-	tailer := tui.NewTailer(logFile)
-
-	// First Next() tails the last entries from the file as a batch.
-	cmd1 := tailer.Next()
-	require.NotNil(t, cmd1)
-	msg1 := cmd1()
-	batch, ok := msg1.(tui.LogBatchMsg)
-	require.True(t, ok, "first Next() should return LogBatchMsg, got %T", msg1)
-	require.Len(t, batch.Entries, 2)
-	assert.Equal(t, "workflow.started", batch.Entries[0].Event)
-	assert.Equal(t, "workflow.completed", batch.Entries[1].Event)
-	assert.Equal(t, "success", batch.Entries[1].Status)
-
-	// Subsequent Next() follows — no new data returns nil.
-	cmd2 := tailer.Next()
-	require.NotNil(t, cmd2)
-	msg2 := cmd2()
-	assert.Nil(t, msg2, "Follow() should return nil when no more lines")
-}
-
-func TestTUITailer_SkipsMalformedJSON(t *testing.T) {
-	tmpDir := t.TempDir()
-	logFile := filepath.Join(tmpDir, "bad.jsonl")
-
-	require.NoError(t, os.WriteFile(logFile, []byte("not valid json\n"), 0o644))
-
-	tailer := tui.NewTailer(logFile)
-
-	cmd := tailer.Next()
-	require.NotNil(t, cmd)
-	msg := cmd()
-	assert.Nil(t, msg, "malformed JSON should return nil, not crash")
-}
-
-func TestTUITailer_HandlesNonexistentFile(t *testing.T) {
-	tailer := tui.NewTailer("/tmp/nonexistent-tui-test-file.jsonl")
-
-	cmd := tailer.Next()
-	require.NotNil(t, cmd, "Next() must return a tea.Cmd even for missing files")
-	// The tailer emits an internal rotation message (unexported) when the file
-	// does not exist; it does NOT crash or return nil. The model handles the
-	// rotation message gracefully via logRotationMsg routing in tab_logs.go.
-	_ = cmd() // must not panic
+	assert.Contains(t, output, "my-workflow", "the loaded execution is listed")
 }
 
 // --- Facade test doubles: the TUI's only execution path is the WorkflowFacade ---

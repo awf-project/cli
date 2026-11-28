@@ -1,476 +1,226 @@
 ---
 title: "Terminal User Interface (TUI)"
-description: "Browse, execute, and monitor AWF workflows in an interactive terminal interface with execution history, agent conversations, and audit logs."
+description: "Browse workflows, run them with live step output, and review past executions in an interactive terminal interface."
 ---
 
 ## Overview
 
-The AWF Terminal User Interface (TUI) is an interactive dashboard for managing your workflows without touching the command line. It provides real-time visibility into workflow execution, browsing of available workflows, exploration of execution history, and monitoring of agent conversations.
-
-Launch the TUI at any time with:
+The AWF Terminal User Interface (TUI) is an interactive dashboard for working with workflows without leaving the terminal. You can browse and filter workflows, inspect their inputs and steps, run them while watching each step's output as it is produced, answer agent conversation prompts, and review past executions.
 
 ```bash
 awf tui
 ```
 
-The TUI is designed for terminal environments and requires a minimum of 80x24 character dimensions.
+The TUI needs a real terminal of at least **80x24**. In a smaller terminal it shows a short message asking you to enlarge the window.
 
 ---
 
-## Getting Started with the TUI
+## Screens
 
-### Launching the TUI
+The TUI has three screens, shown under a header with the **AWF** badge, the tab bar (with item counts) and the working directory. A fourth view, the **run view**, opens full-frame when a run starts.
 
-```bash
-# Start the TUI
-awf tui
+| Screen | Keys | Shows |
+|--------|------|-------|
+| **Workflows** | `1` | The workflow list and the selected workflow's details |
+| **History** | `2` | Past executions and the selected execution's details |
+| **Config** | `3` | The project configuration (`.awf/config.yaml`), read-only |
+| **Run** | opens automatically | A run's steps, progress and output |
 
-# The TUI will initialize with:
-# - Auto-detected project configuration from .awf/config.yaml
-# - Loaded workflows from .awf/workflows/, global, and installed packs
-# - Recent execution history from history.db
-```
-
-### Tab Navigation
-
-The TUI is organized into five tabs. Switch between them using keyboard shortcuts:
-
-| Tab | Keyboard | Purpose |
-|-----|----------|---------|
-| **Workflows** | `1` or `Ctrl+1` | Browse, filter, and launch workflows |
-| **Monitoring** | `2` or `Ctrl+2` | Watch real-time execution of active workflows |
-| **History** | `3` or `Ctrl+3` | Explore past execution records |
-| **Agent Conversations** | `4` or `Ctrl+4` | View agent interactions with formatting |
-| **External Logs** | `5` or `Ctrl+5` | Live tail Claude Code session files |
-
-> **Tip:** Use `Tab` to cycle forward and `Shift+Tab` to cycle backward through tabs.
+Move between the tabs with `tab` / `shift+tab`, or press `1`, `2` or `3`. Press `q` to quit.
 
 ---
 
-## The Workflows Tab
+## The Workflows Screen
 
-The **Workflows** tab is your entry point for discovering and launching workflows.
+The list on the left shows each workflow with the icon and age of its last run (`✓` succeeded, `✗` failed, `⊘` cancelled, `○` never run). The panel on the right details the selected workflow:
 
-### Finding Workflows
+- **Source** and version
+- **Inputs**, with their defaults (defaults of secret inputs are shown as `***`)
+- The ordered **steps** with their types
+- The **last runs**, with their outcome, age and duration
 
-1. **Browse the list**: All available workflows appear in chronological order (most recently modified first) or by name (alphabetical)
-2. **Filter the list**: Press `f` and type to search by workflow name or description
-3. **View details**: Press `?` on a selected workflow to see its description, inputs, and step count
+| Key | Action |
+|-----|--------|
+| `↑` `↓` / `j` `k` | Move the selection |
+| `g` / `G` | Jump to the first / last workflow |
+| `/` | Filter by name or description (`enter` keeps the filter, `esc` clears it) |
+| `enter` | Open the workflow's configuration, step by step |
+| `x` | Run the selected workflow |
+| `v` | Validate the selected workflow (the result appears in the header) |
+| `h` | Open the History screen on this workflow's runs |
+| `r` | Reload workflows and history |
 
-### Launching a Workflow
+### Workflow configuration
 
-1. **Select a workflow** from the list using arrow keys
-2. **Press Enter** to launch
-3. **Provide inputs** in the prompted dialog (if required by the workflow)
-4. **Confirm** and the TUI will switch to the Monitoring tab
+`enter` opens the workflow's YAML, split by step:
 
-#### Interactive Input Collection
+- The **Steps** box on the left lists a *general* block (the workflow's name, version, inputs and entry point) followed by one entry per state, numbered, with its type
+- The right box shows the YAML of the selected block, exactly as written in the file, comments included
 
-If a workflow requires inputs, the TUI prompts you in a form:
+| Key | Action |
+|-----|--------|
+| `↑` `↓` | Pick a block |
+| `pgup` / `pgdn`, mouse wheel, `home` / `end` | Scroll the YAML |
+| `x` | Run the workflow (asks for its inputs first, if it has some) |
+| `y` | Copy the block to the clipboard |
+| `R` | Reload the file |
+| `esc` | Back to the list |
 
-```
-Workflow: deploy-app
+The view is read-only. Workflows that come from a pack are not supported yet: the screen says so instead of showing a file.
 
-Input Parameters:
-  environment (string, required)
-  > prod
+### Running with inputs
 
-  version (string, required)
-  > 1.2.3
+A workflow that declares inputs opens a form before it starts:
 
-  timeout (integer, optional, default: 300)
-  > (press Enter for default)
-```
-
-Enum inputs present numbered options:
-
-```
-environment (string, required):
-Available options:
-  1) dev
-  2) staging
-  3) prod
-Select (1-3):
-> 2
-```
-
-### Validating Workflows
-
-Validate a workflow without executing it:
-
-1. **Select a workflow** from the list
-2. **Press `v`** to validate
-3. **View results** in a popup overlay (errors or success confirmation)
+- Defaults are prefilled and required inputs are marked with `*`
+- `tab` / `shift+tab` (or `↑` `↓`) move between fields; `enter` moves to the next field and starts the run on the last one
+- Leaving a required input empty keeps the form open and tells you which one is missing
+- Inputs named `SECRET_*`, `API_KEY*` or `PASSWORD*` are masked while you type
+- `esc` cancels
 
 ---
 
-## The Monitoring Tab
+## The Run View
 
-The **Monitoring** tab provides real-time visibility into workflow execution with an execution tree, status indicators, and live log streaming.
-
-### Understanding the Execution Tree
-
-The tree represents the workflow's state structure:
+Starting a run switches to the run view:
 
 ```
-▶ main (duration: 0.5s)
-  ├─ ✓ read_input (0.1s)
-  ├─ ▶ process (0.3s)
-  │  ├─ ▶ validate (0.1s)
-  │  └─ ⏳ transform
-  └─ ⏳ output
+ AWF  deploy run 62a9eee4                                  ⠋ running · 00:12
+ ──────────────────────────────────────────────────────────────────────────
+ ██████████████████████░░░░░░░░░░░░░░░░░░░  1/3 steps  33%
+ ╭─ Steps ──────────────╮ ╭─ Output · test (live) ──────────────────────────╮
+ │ ✓ 1 build       4.2s │ │ ▶ Input:                                        │
+ │ ⠋ 2 test        6.1s │ │   $ make test                                   │
+ │ ○ 3 done     pending │ │ ◀ Output (live):                                │
+ │ Inputs               │ │   running tests...                              │
+ │ env prod             │ │                                                 │
+ ╰──────────────────────╯ ╰─────────────────────────────────────────────────╯
 ```
 
-| Icon | Meaning |
-|------|---------|
-| ⏳ | Pending (waiting to run) |
-| ▶ | Running (currently executing) |
-| ✓ | Success (completed successfully) |
-| ✗ | Failed (encountered an error) |
-| ⊘ | Skipped (not executed) |
+- The **header** shows the workflow, the run identifier and the live status: a spinner and the elapsed time while running, then the outcome (`✓ done`, `✗ failed` or `⊘ cancelled`)
+- The **Steps** box lists each step with its status, number and duration, then the inputs the run was started with (secret inputs masked)
+- The **Output** box shows the selected step's input, its output and any error. Conversation steps are shown as a chat thread
 
-### Viewing Step Logs
+### Live output
 
-1. **Select a step** in the execution tree using arrow keys
-2. **View live logs** in the right panel updating in real-time
-3. **Manual scroll**: Press `Page Up`/`Page Down` or `j`/`k` to scroll
-4. **Toggle auto-scroll**: Press `a` to lock/unlock automatic scrolling
+While a step is running, its stdout and stderr appear as they are produced, under *Output (live)* and *Stderr (live)*. When the step finishes, its complete output replaces the live view.
 
-> **Tip:** When a step fails, the TUI automatically selects it and scrolls the log viewport to show the error message.
+- The view keeps the most recent 256 KiB per stream. If older output was dropped, the panel says so, and the full output still appears when the step ends
+- Live output is best effort: if a run produces it faster than the screen can display it, some of it can be skipped. The final output is always complete
+- The selection follows the step that is running. Pick another step with `↑` `↓` to stay on it; press `f` to follow the running step again
 
-### Parallel Execution Tracking
+### Keys
 
-When a workflow runs parallel steps, they appear as siblings in the tree:
+| Key | Action |
+|-----|--------|
+| `↑` `↓` | Pick a step |
+| `f` | Follow the running step and the tail of the output |
+| `pgup` / `pgdn`, mouse wheel | Scroll the output |
+| `c` | Cancel the run (the header shows *cancelling…* until it stops) |
+| `r` | Run the same workflow again with the same inputs (once the run has ended) |
+| `y` | Copy the selected step's error, stderr and output to the clipboard |
+| `esc` | Go back to the list. **The run keeps going** |
+| `o` | (From the tabs) reopen the current run |
+| `ctrl+c` | Cancel the running run; quit when no run is in flight |
 
-```
-▶ process-batch
-  ├─ ▶ task_1 (0.2s)
-  ├─ ✓ task_2 (0.4s)
-  ├─ ▶ task_3 (0.1s)
-  └─ ⏳ task_4
-```
+### Conversations and prompts
 
-Each parallel task has independent status tracking and log output.
-
-### Stopping a Running Workflow
-
-Press `Ctrl+C` while monitoring a workflow to request cancellation. The workflow will attempt graceful shutdown within the configured timeout.
+When a workflow needs your input (for example an agent conversation step), the TUI switches to the run view, selects the step and shows a *Your message* field under the output. Type your reply and press `enter`. While the field is focused every key is typed text, so `c`, `r` and `y` do nothing until you send your message.
 
 ---
 
-## The History Tab
+## The History Screen
 
-The **History** tab lets you explore past workflow executions without re-running them.
+The list shows executions newest first, with the outcome icon, workflow and age. The panel on the right shows the selected execution: its status, run ID, start time, duration, exit code, attempt and resume information, and the error message when it failed.
 
-### Browsing Execution History
+| Key | Action |
+|-----|--------|
+| `↑` `↓` / `j` `k` | Move the selection |
+| `enter` | Open the step detail of the selected execution |
+| `/` | Filter by workflow name |
+| `s` | Cycle the status filter: all, success, failed |
+| `esc` | Clear the text filter, then the workflow scope |
+| `r` | Reload |
 
-The history list shows recent executions in reverse chronological order:
+When you arrive with `h` from the Workflows screen, the list is limited to that workflow (exact name, so `deploy` does not include `deploy-prod`) and the title reads *History · deploy*. Press `esc` to see every workflow again.
+
+The list footer shows totals (runs, successes, failures).
+
+### Step detail
+
+Press `enter` on an execution to see what each of its steps did, read from the state AWF saved for that run:
 
 ```
-Workflow          ID                 Status    Start Time              Duration
-deploy            abc123-def456      success   2025-05-01 14:30:22     2m 45s
-build             ghi789-jkl012      failed    2025-05-01 13:15:10     45s
-test              mno345-pqr678      success   2025-05-01 12:00:00     1m 30s
+ ✗ deploy run-bbbb                                          yesterday 11:56 · 3.1s
+ ╭─ Steps ──────────────╮ ╭─ Output · test (1–22/48) ───────────────────────────╮
+ │ ✓ 1 build       5.0s │ │ ✗ Error:                                            │
+ │ ✗ 2 test        3.0s │ │   exit status 2                                     │
+ │ ○ 3 done     pending │ │ ⚠ Stderr:                                           │
+ │ Inputs               │ │   FAIL: TestX                                       │
+ │ env prod             │ │ ◀ Output:                                           │
+ ╰──────────────────────╯ ╰─────────────────────────────────────────────────────╯
 ```
 
-### Filtering History
+- The **Steps** box lists the steps in the order they started, with their status and duration, then the inputs the run was started with (secret inputs masked)
+- The **Output** box shows the selected step's error, stderr and output, or its conversation for an agent step. The first failed step is selected for you, so the reason a run failed is on screen right away
+- A step that never ran says so, and so does a step that was still running when the run stopped
 
-Press `f` to open the filter dialog:
+| Key | Action |
+|-----|--------|
+| `↑` `↓` / `j` `k` | Pick a step |
+| `pgup` / `pgdn`, mouse wheel | Scroll the output |
+| `home` / `end` | Jump to the start / end of the output |
+| `y` | Copy the step's error, stderr and output to the clipboard |
+| `r` | Run the workflow again with the inputs this execution was started with |
+| `R` | Reload the detail |
+| `esc` | Back to the list |
 
-```
-Filter History
+`r` reads the inputs back from the saved state; if that state is gone, nothing is started and the header says the inputs are not available.
 
-Workflow (optional):
-> deploy
-
-Status (optional):
-  1) All
-  2) success
-  3) failed
-  4) cancelled
-Select: > 1
-
-Date Range:
-From (YYYY-MM-DD, optional):
-> 2025-05-01
-
-To (YYYY-MM-DD, optional):
-> (press Enter for today)
-```
-
-### Inspecting Execution Details
-
-1. **Select an execution** from the filtered list
-2. **Press Enter** to view details
-3. **Review the execution tree** with final step statuses
-4. **Examine step outputs** by selecting steps
-5. **Press Escape** to return to the history list
+The detail comes from the state file AWF keeps for each run. If that file was removed, or the run saved no step data, the screen says so instead of showing steps. A run that was resumed keeps a single state, so its detail reflects the latest attempt.
 
 ---
 
-## The Agent Conversations Tab
+## The Config Screen
 
-The **Agent Conversations** tab renders multi-turn agent interactions with proper Markdown formatting.
+The Config screen shows what `awf config show` prints: the project configuration file, whether it exists, and the workflow inputs it pre-fills. Input values whose name starts with `SECRET_`, `API_KEY` or `PASSWORD` are masked. Inputs you give when running a workflow take precedence over these values.
 
-### Viewing Agent Messages
+| Key | Action |
+|-----|--------|
+| `↑` `↓`, `pgup` / `pgdn`, mouse wheel | Scroll when there are many inputs |
+| `r` | Reload |
 
-When a workflow with agent steps is running, the Conversations tab shows:
-
-```
-╔════════════════════════════════════════════════════════════════════╗
-║                      Agent Conversation                             ║
-╚════════════════════════════════════════════════════════════════════╝
-
-USER: Analyze this code for performance issues.
-
-function fibonacci(n) {
-  if (n <= 1) return n;
-  return fibonacci(n-1) + fibonacci(n-2);
-}
-
-AGENT (Claude): This recursive implementation has exponential time
-complexity O(2^n) due to overlapping subproblems.
-
-**Recommendations:**
-1. Use memoization to cache results
-2. Consider iterative approach
-3. Dynamic programming solution optimal for n < 93
-
-[Would you like me to show optimization examples?]
-```
-
-### Message Types
-
-- **User messages**: System prompts and user-provided inputs
-- **Agent responses**: LLM outputs with Markdown formatting (headings, lists, code blocks)
-- **Tool use**: If enabled, shows tool invocations and results
-- **Approval prompts**: Interactive yes/no decisions (if applicable)
-
-### Scrolling Through Conversations
-
-- Use arrow keys or `j`/`k` to scroll line-by-line
-- `Page Up`/`Page Down` for page-by-page navigation
-- Press `Home`/`End` to jump to conversation start/end
+A missing file is not an error: nothing is pre-filled. An invalid file shows its error. The screen is read-only; edit `.awf/config.yaml` with your editor.
 
 ---
 
-## The External Logs Tab
+## Secret Handling
 
-The **External Logs** tab live-tails Claude Code JSONL session files for monitoring development sessions alongside workflow execution.
-
-### Automatic Session Detection
-
-The TUI automatically discovers and tails the latest Claude Code session:
-
-1. **Monitors** `~/.claude/projects/*/session.jsonl`
-2. **Auto-switches** to the most recently modified file
-3. **Displays new entries** within 2 seconds of being written
-
-### Session Output Format
-
-```
-[14:30:22] User: Implement OAuth2 authentication
-[14:30:45] Assistant: I'll implement OAuth2 with these components...
-[14:31:12] Tool: claude-code exec npm install
-[14:31:20] Output: ✓ Installed 5 packages
-[14:31:35] Assistant: Now implementing the provider...
-```
-
-### When No Session Is Active
-
-```
-╔════════════════════════════════════════════════════════════════════╗
-║                    External Logs (Claude Code)                      ║
-╚════════════════════════════════════════════════════════════════════╝
-
-No Claude Code session file detected.
-
-Expected location:
-~/.claude/projects/<project-id>/session.jsonl
-
-To start monitoring:
-1. Open Claude Code: https://claude.ai/code
-2. Create a new session
-3. The TUI will auto-detect and begin tailing
-
-```
-
-### Pausing and Resuming
-
-- Press `Space` to pause tailing (useful for reading a specific section)
-- Press `Space` again to resume auto-scrolling
-
----
-
-## Common Workflows
-
-### Workflow: Launch and Monitor
-
-The most common TUI workflow:
-
-1. Launch TUI: `awf tui`
-2. Navigate to **Workflows** tab (press `1`)
-3. Filter by name (press `f`, type workflow name)
-4. Select workflow (arrow keys, press Enter)
-5. Provide inputs when prompted
-6. TUI auto-switches to **Monitoring** tab
-7. Watch execution in real-time
-8. Inspect logs by selecting steps
-9. When complete, view summary status
-
-### Workflow: Investigate a Failed Execution
-
-Debugging a recent failure:
-
-1. Launch TUI: `awf tui`
-2. Navigate to **History** tab (press `3`)
-3. Filter by status (press `f`, select "failed")
-4. Select the failed execution
-5. Review the execution tree (red ✗ marks)
-6. Select the failed step to view error logs
-7. Review related steps' output for context
-8. Navigate to **Workflows** tab to re-run the workflow with corrections
-
-### Workflow: Compare Recent Runs
-
-Analyzing trends across recent executions:
-
-1. Navigate to **History** tab
-2. Select first execution (press Enter to view)
-3. Note timing and outputs
-4. Press Escape to return to list
-5. Select another execution for comparison
-6. Compare step durations and status patterns
-
-### Workflow: Monitor Agent Development
-
-Watching a development agent alongside workflow execution:
-
-1. Have a Claude Code session open in another window
-2. Launch TUI: `awf tui`
-3. Start a workflow in **Workflows** tab
-4. Switch between tabs to monitor:
-   - **Monitoring**: Workflow execution status
-   - **Agent Conversations**: Multi-turn interactions
-   - **External Logs**: Claude Code session activity
-5. All three views update in real-time
-
----
-
-## Tips & Tricks
-
-### Keyboard Efficiency
-
-- **Quick tab navigation**: Use `Ctrl+1` through `Ctrl+5` for direct tab jumping
-- **Search filtering**: Always available in list views with `f` key
-- **Quick quit**: `q` exits cleanly (or `Ctrl+C`)
-- **Refresh view**: `r` manually refreshes (auto-refresh happens every 200ms)
-
-### Terminal Optimization
-
-- **Maximize terminal window** for better tree visualization and log readability
-- **Use a terminal with true color support** for accurate status icon rendering
-- **Increase scroll buffer** in your terminal settings if you need to review long logs
-
-### Performance Tips
-
-- **Close other applications** if terminal rendering is slow (large log output or slow machine)
-- **Disable verbose mode** in workflows (`--verbose` flag not needed in TUI)
-- **Limit history entries** in config if database is very large
-
-### Secret Handling
-
-The TUI automatically masks sensitive values in all views:
-
-- Environment variables starting with `SECRET_`, `API_KEY`, or `PASSWORD` are masked as `***`
-- This applies to logs, execution tree details, and agent conversation output
-- Masking happens at render time (original data is never exposed in TUI)
+Input values that look like secrets (names starting with `SECRET_`, `API_KEY` or `PASSWORD`) are masked in the input form, the workflow details, the run's inputs list and the Config screen. The TUI shows **step output exactly as the step produced it**, so a step that prints a secret will display it.
 
 ---
 
 ## Troubleshooting
 
-### TUI won't start
+### The TUI will not start
 
-**Symptom:** `awf tui` command not found
+The TUI requires an interactive terminal. It fails with a clear message when `TERM` is unset or `dumb`, or when it is not attached to a terminal. For scripts and CI use `awf run`, `awf history` and `awf status` instead.
 
-**Solution:**
-```bash
-# Rebuild the project
-make build
+### "Terminal too small"
 
-# Or reinstall
-make install
-```
+Enlarge the window to at least 80x24.
 
-### Execution tree is empty
+### The workflow list is empty
 
-**Symptom:** Monitoring tab shows no tree nodes
+The TUI lists workflows from `.awf/workflows/`, your global workflows directory and installed packs. Check the working directory shown in the header, and press `r` to reload.
 
-**Causes & Solutions:**
-- Workflow hasn't started yet — check the status bar at bottom
-- Workflow finished very quickly — switch back to Workflows tab and re-run
-- Rendering issue — try pressing `r` to refresh or resizing terminal
+### A workflow shows "could not be read by AWF"
 
-### Logs not updating
-
-**Symptom:** Log viewport stuck at old output
-
-**Solutions:**
-- Toggle auto-scroll off/on (press `a`)
-- Refresh the view (press `r`)
-- Check if workflow is actually running in status bar
-- Terminal might be too small — resize to minimum 80x24
-
-### History tab shows no entries
-
-**Symptom:** History tab is empty despite running workflows
-
-**Causes & Solutions:**
-- No workflows have been executed yet — run a workflow first
-- `history.db` file is corrupted — delete `.awf/storage/history.db` and re-run a workflow
-- Permission issue on history.db — check file permissions
-
-### Claude Code logs not appearing
-
-**Symptom:** External Logs tab empty despite active Claude Code session
-
-**Causes & Solutions:**
-- Session file location differs from expected path — check `~/.claude/projects/`
-- File format changed — the TUI expects JSONL format
-- Tailer hasn't detected the file yet — wait a few seconds and refresh (press `r`)
+Its definition failed to load. Run `awf validate <name>` to see the error.
 
 ### Colors look wrong
 
-**Symptom:** Text is hard to read or colors are incorrect
-
-**Solutions:**
-- Check terminal `TERM` variable: `echo $TERM`
-- Set correct term type: `export TERM=xterm-256color`
-- Test with basic ANSI mode: the TUI auto-detects and degrades gracefully
-- Verify terminal supports true color (most modern terminals do)
-
----
-
-## Best Practices
-
-### For Daily Operations
-
-- **Keep TUI open** during development sessions to monitor background workflows
-- **Use History tab** to track execution patterns and identify slowdowns
-- **Combine with dry-run**: Use `awf run --dry-run` to preview before launching from TUI
-
-### For Troubleshooting
-
-- **Capture logs**: Take screenshots or pipe logs to file for analysis
-- **Check Agent tab**: Before assuming a step failed, view the agent conversation
-- **Cross-reference with CLI**: Use `awf status <id>` from terminal for raw JSON output
-
-### For Performance Monitoring
-
-- **Monitor step durations**: Watch for steps taking longer than expected
-- **Check parallel performance**: Verify parallel steps complete as expected
-- **Review history trends**: Spot regressions in execution time
+The TUI paints its own background and uses true color when available. Use a terminal with 256-color or true-color support.
 
 ---
 

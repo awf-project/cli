@@ -4,7 +4,6 @@ package tui_test
 
 import (
 	"bytes"
-	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -110,8 +109,9 @@ func TestTUICommand_HelpTextContainsKeyBindings(t *testing.T) {
 	require.NoError(t, err)
 	output := out.String()
 	// Long description should mention tab switching and quit.
-	assert.True(t, strings.Contains(output, "1-5") || strings.Contains(output, "Workflows"),
-		"help text should describe tab navigation")
+	assert.Contains(t, output, "Workflows", "help text should name the screens")
+	assert.Contains(t, output, "History", "help text should name the screens")
+	assert.NotContains(t, output, "Logs", "the logs tab was removed")
 }
 
 // TestTUICommand_TerminalValidationTableDriven verifies TUI validates TERM without starting a program.
@@ -166,26 +166,37 @@ func TestTUIModel_ViewRendersTabBar(t *testing.T) {
 	m = updated.(tui.Model)
 
 	view := m.View().Content
-	for _, label := range []string{"1:Workflows", "2:Monitoring", "3:History", "4:Logs"} {
+	for _, label := range []string{"1 Workflows", "2 History"} {
 		assert.Contains(t, view, label, "tab bar should contain label %q", label)
 	}
-	assert.NotContains(t, view, "4:Agent", "agent conversations are rendered in Monitoring, not a separate tab")
-	assert.NotContains(t, view, "5:Logs", "logs are the fourth tab in the current TUI model")
+	assert.NotContains(t, view, "Monitoring", "the run is a full-frame view, not a tab")
+	assert.NotContains(t, view, "Logs", "the logs tab was removed")
 }
 
-// TestTUIModel_TabSwitching verifies that pressing 1–5 switches the active tab.
+// TestTUIModel_TabSwitching verifies that the digit keys and tab move between the screens.
 func TestTUIModel_TabSwitching(t *testing.T) {
 	m := tui.New()
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = updated.(tui.Model)
 
-	keys := []string{"2", "3", "4", "5", "1"}
-	for _, k := range keys {
-		updated, _ := m.Update(tea.KeyPressMsg{Code: rune(k[0]), Text: k})
+	press := func(msg tea.KeyPressMsg) {
+		updated, _ := m.Update(msg)
 		m = updated.(tui.Model)
 	}
 
-	// After pressing 1 last, the model should be on the Workflows tab.
-	view := m.View().Content
-	assert.NotEmpty(t, view, "view must render after tab switching")
+	assert.Contains(t, m.View().Content, "no workflows", "starts on the workflows screen")
+
+	press(tea.KeyPressMsg{Code: '2', Text: "2"})
+	assert.Contains(t, m.View().Content, "no executions", "2 opens the history screen")
+
+	press(tea.KeyPressMsg{Code: '1', Text: "1"})
+	assert.Contains(t, m.View().Content, "no workflows", "1 returns to the workflows screen")
+
+	press(tea.KeyPressMsg{Code: tea.KeyTab})
+	assert.Contains(t, m.View().Content, "no executions", "tab moves to the next screen")
+
+	press(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+	assert.Contains(t, m.View().Content, "no workflows", "shift+tab moves back")
 }
 
 // TestTUIModel_QuitKeyStopsProgram verifies that pressing 'q' produces tea.Quit.

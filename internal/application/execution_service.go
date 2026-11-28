@@ -1826,13 +1826,14 @@ func (s *ExecutionService) resolveStepCommand(
 		}
 	}
 
+	stdout, stderr := s.stepWriters(ctx, step.Name)
 	cmd := &ports.Command{
 		Program:      resolvedCmd,
 		Dir:          resolvedDir,
 		Env:          env,
 		IsScriptFile: step.ScriptFile != "",
-		Stdout:       s.stdoutWriter,
-		Stderr:       s.stderrWriter,
+		Stdout:       stdout,
+		Stderr:       stderr,
 	}
 
 	return cmd, nil
@@ -3052,7 +3053,8 @@ func (s *ExecutionService) executeAgentStep(
 			}
 		}
 	} else {
-		result, execErr = provider.Execute(stepCtx, resolvedPrompt, opts, s.stdoutWriter, s.stderrWriter)
+		agentStdout, agentStderr := s.stepWriters(stepCtx, step.Name)
+		result, execErr = provider.Execute(stepCtx, resolvedPrompt, opts, agentStdout, agentStderr)
 		if result != nil {
 			state.Output = result.Output
 			state.DisplayOutput = result.DisplayOutput
@@ -3231,7 +3233,8 @@ func (s *ExecutionService) executeResumableAgentCall(
 	if composed != "" && state.SessionID == "" {
 		opts["system_prompt"] = composed
 	}
-	return provider.ExecuteConversation(ctx, state, resolvedPrompt, opts, s.stdoutWriter, s.stderrWriter)
+	resumeStdout, resumeStderr := s.stepWriters(ctx, step.Name)
+	return provider.ExecuteConversation(ctx, state, resolvedPrompt, opts, resumeStdout, resumeStderr)
 }
 
 // buildResumableState constructs the conversation state seed for a resumable
@@ -3313,6 +3316,7 @@ func (s *ExecutionService) executeConversationStep(
 
 	// 5. Delegate to ConversationManager
 	s.logger.Debug("executing conversation step", "step", step.Name, "provider", step.Agent.Provider)
+	convStdout, convStderr := s.stepWriters(ctx, step.Name)
 	result, err := s.conversationMgr.ExecuteConversation(
 		ctx,
 		step,
@@ -3320,8 +3324,8 @@ func (s *ExecutionService) executeConversationStep(
 		execCtx,
 		buildContext,
 		wf.SourceDir,
-		s.stdoutWriter,
-		s.stderrWriter,
+		convStdout,
+		convStderr,
 	)
 
 	// 6. Map ConversationResult to StepState
