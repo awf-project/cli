@@ -7,6 +7,7 @@ import (
 	infrahttp "github.com/awf-project/cli/internal/infrastructure/http"
 	"github.com/awf-project/cli/internal/infrastructure/notify"
 	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
+	"github.com/awf-project/cli/internal/infrastructure/tracker"
 	"github.com/awf-project/cli/internal/interfaces/notifierwiring"
 )
 
@@ -36,5 +37,9 @@ func buildValidationOperationProvider(
 		pluginService.IsPluginEnabled("notifier"),
 		external,
 	)
-	return pluginmgr.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider, notifierProvider)
+	var trackerProvider ports.OperationProvider
+	if pluginService.IsPluginEnabled("tracker") {
+		trackerProvider = tracker.NewProvider(nil, "", logger)
+	}
+	return pluginmgr.NewCompositeOperationProvider(githubProvider, notifyProvider, httpProvider, notifierProvider, trackerProvider)
 }

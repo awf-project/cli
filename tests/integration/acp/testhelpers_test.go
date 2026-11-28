@@ -4,6 +4,7 @@ package acp_test
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -65,19 +66,36 @@ func fixtureWorkflowsDir(t *testing.T) string {
 // stream directly. This mirrors how a real ACP editor drives a concurrent agent: requests
 // and responses are correlated by id, and notifications are interleaved freely.
 type acpProcess struct {
-	cmd          *exec.Cmd
-	stdin        io.WriteCloser
-	mu           sync.Mutex
-	waiters      map[string]chan jsonRPCResponse
-	rawCh        chan []byte
-	readPumpDone chan struct{}
+	cmd            *exec.Cmd
+	stdin          io.WriteCloser
+	mu             sync.Mutex
+	waiters        map[string]chan jsonRPCResponse
+	rawCh          chan []byte
+	readPumpDone   chan struct{}
+	frames         bytes.Buffer
+	shutdownChecks []func()
+	stopOnce       sync.Once
+	waitOnce       sync.Once
+	done           chan struct{}
+	signalErr      error
+	waitErr        error
 }
 
 func startACPServeProcess(t *testing.T, binaryPath string, args ...string) *acpProcess {
 	t.Helper()
+	return startACPServeProcessWithStderr(t, binaryPath, os.Stderr, args...)
+}
+
+func startACPServeProcessWithStderr(
+	t *testing.T,
+	binaryPath string,
+	stderr io.Writer,
+	args ...string,
+) *acpProcess {
+	t.Helper()
 	cmdArgs := append([]string{"acp-serve"}, args...)
 	cmd := exec.Command(binaryPath, cmdArgs...) //nolint:gosec // controlled test binary path
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = stderr
 	stdin, err := cmd.StdinPipe()
 	require.NoError(t, err)
 	stdout, err := cmd.StdoutPipe()
@@ -91,25 +109,55 @@ func startACPServeProcess(t *testing.T, binaryPath string, args ...string) *acpP
 		waiters:      make(map[string]chan jsonRPCResponse),
 		rawCh:        make(chan []byte, 1024),
 		readPumpDone: make(chan struct{}),
+		done:         make(chan struct{}),
 	}
 	go p.readPump(stdout)
 
 	t.Cleanup(func() {
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-		done := make(chan struct{})
-		go func() {
-			_ = cmd.Wait()
-			close(done)
-		}()
+		_ = p.stop()
 		select {
-		case <-done:
+		case <-p.done:
 		case <-time.After(3 * time.Second):
 			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			<-done
+			<-p.done
+		}
+		p.mu.Lock()
+		checks := append([]func(){}, p.shutdownChecks...)
+		p.mu.Unlock()
+		for _, check := range checks {
+			check()
 		}
 	})
 
 	return p
+}
+
+func (p *acpProcess) startWait() {
+	p.waitOnce.Do(func() {
+		go func() {
+			p.waitErr = p.cmd.Wait()
+			close(p.done)
+		}()
+	})
+}
+
+func (p *acpProcess) stop() error {
+	p.stopOnce.Do(func() {
+		select {
+		case <-p.done:
+			return
+		default:
+		}
+		p.signalErr = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGTERM)
+		p.startWait()
+	})
+	return p.signalErr
+}
+
+func (p *acpProcess) addShutdownCheck(check func()) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.shutdownChecks = append(p.shutdownChecks, check)
 }
 
 // readPump reads newline-delimited frames and routes them. Responses (no "method") go to
@@ -129,6 +177,10 @@ func (p *acpProcess) readPump(stdout io.Reader) {
 }
 
 func (p *acpProcess) route(line []byte) {
+	p.mu.Lock()
+	_, _ = p.frames.Write(line)
+	p.mu.Unlock()
+
 	var probe struct {
 		ID     json.RawMessage `json:"id"`
 		Method string          `json:"method"`
@@ -157,6 +209,12 @@ func (p *acpProcess) route(line []byte) {
 	default:
 		fmt.Fprintf(os.Stderr, "acp_test: rawCh full (capacity %d): dropping frame: %s\n", cap(p.rawCh), line)
 	}
+}
+
+func (p *acpProcess) protocolFrames() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.frames.String()
 }
 
 func (p *acpProcess) request(t *testing.T, id int, method string, params any) jsonRPCResponse {
@@ -250,6 +308,13 @@ func (p *acpProcess) drainForAvailableCommands(t *testing.T, want string) bool {
 // drainForChunk reads session/update notifications from rawCh until one is an
 // agent_message_chunk whose text contains want, or the timeout elapses.
 func (p *acpProcess) drainForChunk(t *testing.T, want string) bool {
+	return p.drainForSessionChunk(t, "", want)
+}
+
+// drainForSessionChunk reads session/update notifications until it finds an
+// agent_message_chunk for sessionID whose text contains want. An empty sessionID
+// matches any session for existing generic ACP scenarios.
+func (p *acpProcess) drainForSessionChunk(t *testing.T, sessionID, want string) bool {
 	t.Helper()
 	deadline := time.After(acpRPCTimeout)
 	for {
@@ -258,7 +323,8 @@ func (p *acpProcess) drainForChunk(t *testing.T, want string) bool {
 			var n struct {
 				Method string `json:"method"`
 				Params struct {
-					Update struct {
+					SessionID string `json:"sessionId"`
+					Update    struct {
 						SessionUpdate string `json:"sessionUpdate"`
 						Content       struct {
 							Text string `json:"text"`
@@ -268,6 +334,7 @@ func (p *acpProcess) drainForChunk(t *testing.T, want string) bool {
 			}
 			if json.Unmarshal(line, &n) == nil &&
 				n.Params.Update.SessionUpdate == "agent_message_chunk" &&
+				(sessionID == "" || n.Params.SessionID == sessionID) &&
 				strings.Contains(n.Params.Update.Content.Text, want) {
 				return true
 			}

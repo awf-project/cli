@@ -1,0 +1,33 @@
+name: tracker-create
+description: Create an issue through the configured tracker backend
+
+inputs:
+  - name: backend
+    type: string
+    required: false
+    default: ""
+    description: Optional tracker backend override
+  - name: title
+    type: string
+    required: true
+    description: Issue title
+
+states:
+  initial: create_issue
+
+  create_issue:
+    type: operation
+    operation: tracker.create_issue
+    inputs:
+      backend: "{{inputs.backend}}"
+      title: "{{inputs.title}}"
+    on_success: success
+    on_failure: failure
+
+  success:
+    type: terminal
+    status: success
+
+  failure:
+    type: terminal
+    status: failure

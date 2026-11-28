@@ -2,13 +2,226 @@ package cli_test
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/awf-project/cli/internal/interfaces/cli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type trackerServeTestBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *trackerServeTestBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *trackerServeTestBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func TestServePropagatesTrackerDefaultBackend(t *testing.T) {
+	t.Setenv("AWF_TEST_MODE", "1")
+	tempDir := setupTestDir(t)
+	dataHome := filepath.Join(tempDir, "data")
+	t.Setenv("XDG_DATA_HOME", dataHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tempDir, "config-home"))
+	t.Setenv("AWF_PLUGINS_PATH", filepath.Join(tempDir, "plugins"))
+	setupProjectConfig(t, tempDir, "tracker:\n  default_backend: jira\n")
+	createTestWorkflow(t, tempDir, "tracker-serve.yaml", `name: tracker-serve
+version: "1.0.0"
+states:
+  initial: create
+  create:
+    type: operation
+    operation: tracker.create_issue
+    inputs:
+      title: Release blocker
+    on_success: done
+  done:
+    type: terminal
+    status: success
+`)
+
+	listenConfig := net.ListenConfig{}
+	listener, err := listenConfig.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := listener.Addr().(*net.TCPAddr).Port
+	require.NoError(t, listener.Close())
+
+	command := cli.NewRootCommand()
+	var output trackerServeTestBuffer
+	command.SetOut(&output)
+	command.SetErr(&output)
+	command.SetArgs([]string{"serve", "--host=127.0.0.1", fmt.Sprintf("--port=%d", port)})
+	done := make(chan error, 1)
+	go func() { done <- command.Execute() }()
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+	require.Eventually(t, func() bool {
+		request, requestErr := http.NewRequestWithContext(context.Background(), http.MethodGet, baseURL+"/api/workflows", http.NoBody)
+		if requestErr != nil {
+			return false
+		}
+		response, requestErr := http.DefaultClient.Do(request)
+		if requestErr != nil {
+			return false
+		}
+		_ = response.Body.Close()
+		return response.StatusCode == http.StatusOK
+	}, 5*time.Second, 20*time.Millisecond, output.String())
+
+	request, err := http.NewRequestWithContext(
+		context.Background(), http.MethodPost, baseURL+"/api/workflows/local/tracker-serve/run",
+		strings.NewReader(`{"inputs":{}}`),
+	)
+	require.NoError(t, err)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	require.NoError(t, err)
+	responseBody, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	require.Equal(t, http.StatusAccepted, response.StatusCode, string(responseBody))
+	var accepted struct {
+		Body struct {
+			ExecutionID string `json:"execution_id"`
+		} `json:"body"`
+	}
+	require.NoError(t, json.Unmarshal(responseBody, &accepted))
+	require.NotEmpty(t, accepted.Body.ExecutionID, string(responseBody))
+
+	require.Eventually(t, func() bool {
+		resolvedBackend := false
+		_ = filepath.WalkDir(dataHome, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil || entry.IsDir() {
+				return walkErr
+			}
+			contents, readErr := os.ReadFile(path) //nolint:gosec // WalkDir is restricted to the test-owned data root.
+			if readErr == nil && (strings.Contains(string(contents), "tracker-jira") ||
+				strings.Contains(string(contents), "adapter unavailable")) {
+				resolvedBackend = true
+			}
+			return nil
+		})
+		return resolvedBackend
+	}, 5*time.Second, 20*time.Millisecond, "serve execution never resolved tracker.default_backend; output: %s", output.String())
+
+	require.NoError(t, syscall.Kill(os.Getpid(), syscall.SIGINT))
+	select {
+	case serveErr := <-done:
+		require.NoError(t, serveErr, output.String())
+	case <-time.After(5 * time.Second):
+		t.Fatal("serve command did not stop after SIGINT")
+	}
+}
+
+// TestServeWithoutTrackerDefaultPreservesZeroValue verifies the public HTTP
+// execution path preserves an omitted tracker.default_backend rather than
+// selecting an implicit backend.
+func TestServeWithoutTrackerDefaultPreservesZeroValue(t *testing.T) {
+	t.Setenv("AWF_TEST_MODE", "1")
+	tempDir := setupTestDir(t)
+	dataHome := filepath.Join(tempDir, "data")
+	t.Setenv("XDG_DATA_HOME", dataHome)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tempDir, "config-home"))
+	t.Setenv("AWF_PLUGINS_PATH", filepath.Join(tempDir, "plugins"))
+	setupProjectConfig(t, tempDir, "inputs: {}\n")
+	createTestWorkflow(t, tempDir, "tracker-serve-no-default.yaml", `name: tracker-serve-no-default
+version: "1.0.0"
+states:
+  initial: create
+  create:
+    type: operation
+    operation: tracker.create_issue
+    inputs:
+      title: Release blocker
+    on_success: done
+  done:
+    type: terminal
+    status: success
+`)
+
+	listenConfig := net.ListenConfig{}
+	listener, err := listenConfig.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := listener.Addr().(*net.TCPAddr).Port
+	require.NoError(t, listener.Close())
+
+	command := cli.NewRootCommand()
+	var output trackerServeTestBuffer
+	command.SetOut(&output)
+	command.SetErr(&output)
+	command.SetArgs([]string{"serve", "--host=127.0.0.1", fmt.Sprintf("--port=%d", port)})
+	done := make(chan error, 1)
+	go func() { done <- command.Execute() }()
+
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+	require.Eventually(t, func() bool {
+		request, requestErr := http.NewRequestWithContext(context.Background(), http.MethodGet, baseURL+"/api/workflows", http.NoBody)
+		if requestErr != nil {
+			return false
+		}
+		response, requestErr := http.DefaultClient.Do(request)
+		if requestErr != nil {
+			return false
+		}
+		_ = response.Body.Close()
+		return response.StatusCode == http.StatusOK
+	}, 5*time.Second, 20*time.Millisecond, output.String())
+
+	request, err := http.NewRequestWithContext(
+		context.Background(), http.MethodPost, baseURL+"/api/workflows/local/tracker-serve-no-default/run",
+		strings.NewReader(`{"inputs":{}}`),
+	)
+	require.NoError(t, err)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := http.DefaultClient.Do(request)
+	require.NoError(t, err)
+	require.NoError(t, response.Body.Close())
+	require.Equal(t, http.StatusAccepted, response.StatusCode)
+
+	require.Eventually(t, func() bool {
+		backendRequired := false
+		_ = filepath.WalkDir(dataHome, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil || entry.IsDir() {
+				return walkErr
+			}
+			contents, readErr := os.ReadFile(path) //nolint:gosec // WalkDir is restricted to the test-owned data root.
+			if readErr == nil && strings.Contains(string(contents), "tracker backend is required") {
+				backendRequired = true
+			}
+			return nil
+		})
+		return backendRequired
+	}, 5*time.Second, 20*time.Millisecond, "serve execution did not preserve the zero-value tracker backend; output: %s", output.String())
+
+	require.NoError(t, syscall.Kill(os.Getpid(), syscall.SIGINT))
+	select {
+	case serveErr := <-done:
+		require.NoError(t, serveErr, output.String())
+	case <-time.After(5 * time.Second):
+		t.Fatal("serve command did not stop after SIGINT")
+	}
+}
 
 func TestServeCommand_FlagDefaults_PortAndHost(t *testing.T) {
 	cmd := cli.NewServeCommand()

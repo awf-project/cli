@@ -2,13 +2,83 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/infrastructure/tracker"
 )
+
+func TestTUIPropagatesTrackerDefaultBackend(t *testing.T) {
+	tests := []struct {
+		name       string
+		configYAML string
+		want       error
+		notWant    error
+	}{
+		{
+			name:       "configured default reaches bridge execution",
+			configYAML: "tracker:\n  default_backend: jira\n",
+			want:       tracker.ErrAdapterUnavailable,
+			notWant:    tracker.ErrBackendRequired,
+		},
+		{
+			name:    "omitted configuration preserves zero value",
+			want:    tracker.ErrBackendRequired,
+			notWant: tracker.ErrAdapterUnavailable,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dataRoot := t.TempDir()
+			configRoot := t.TempDir()
+			workflowRoot := t.TempDir()
+			configPath := filepath.Join(t.TempDir(), "config.yaml")
+			require.NoError(t, os.WriteFile(configPath, []byte(test.configYAML), 0o600))
+			require.NoError(t, os.WriteFile(filepath.Join(workflowRoot, "tracker-create.yaml"), []byte(`name: tracker-create
+version: "1.0.0"
+states:
+  initial: create
+  create:
+    type: operation
+    operation: tracker.create_issue
+    inputs:
+      title: Release blocker
+    on_success: done
+  done:
+    type: terminal
+    status: success
+`), 0o600))
+
+			t.Setenv("XDG_DATA_HOME", dataRoot)
+			t.Setenv("XDG_CONFIG_HOME", configRoot)
+			t.Setenv("AWF_CONFIG_PATH", configPath)
+			t.Setenv("AWF_WORKFLOWS_PATH", workflowRoot)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			bridge, _, cleanup, err := buildBridge(ctx)
+			require.NoError(t, err)
+			t.Cleanup(cleanup)
+			require.NotNil(t, bridge.facade)
+
+			session, err := bridge.facade.Run(ctx, ports.RunRequest{Identifier: "tracker-create"})
+			require.NoError(t, err)
+			for range session.Events() { //nolint:revive // drain until the asynchronous execution is terminal
+			}
+			require.Error(t, session.Err())
+			assert.ErrorIs(t, session.Err(), test.want)
+			assert.False(t, errors.Is(session.Err(), test.notWant))
+		})
+	}
+}
 
 func TestNewCommand_Metadata(t *testing.T) {
 	cmd := NewCommand()

@@ -1,0 +1,33 @@
+name: tracker-get
+description: Get an issue through the configured tracker backend
+
+inputs:
+  - name: backend
+    type: string
+    required: false
+    default: ""
+    description: Optional tracker backend override
+  - name: key
+    type: string
+    required: true
+    description: Human-readable issue key
+
+states:
+  initial: get_issue
+
+  get_issue:
+    type: operation
+    operation: tracker.get_issue
+    inputs:
+      backend: "{{inputs.backend}}"
+      key: "{{inputs.key}}"
+    on_success: success
+    on_failure: failure
+
+  success:
+    type: terminal
+    status: success
+
+  failure:
+    type: terminal
+    status: failure

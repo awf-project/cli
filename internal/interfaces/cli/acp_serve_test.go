@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,9 +18,117 @@ import (
 
 	"github.com/awf-project/cli/internal/application"
 	"github.com/awf-project/cli/internal/domain/ports"
+	"github.com/awf-project/cli/internal/domain/workflow"
 	"github.com/awf-project/cli/internal/infrastructure/executor"
 	infralogger "github.com/awf-project/cli/internal/infrastructure/logger"
+	"github.com/awf-project/cli/internal/infrastructure/tracker"
 )
+
+func TestACPPropagatesTrackerDefaultBackendToServerAndSessions(t *testing.T) {
+	tests := []struct {
+		name          string
+		trackerConfig application.TrackerConfig
+		want          error
+		notWant       error
+	}{
+		{
+			name:          "configured default reaches both construction layers",
+			trackerConfig: application.TrackerConfig{DefaultBackend: "jira"},
+			want:          tracker.ErrAdapterUnavailable,
+			notWant:       tracker.ErrBackendRequired,
+		},
+		{
+			name:    "omitted configuration preserves zero value",
+			want:    tracker.ErrBackendRequired,
+			notWant: tracker.ErrAdapterUnavailable,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			logger := infralogger.NewConsoleLogger(io.Discard, infralogger.LevelInfo, false)
+			repo := trackerWorkflowRepository{}
+			baseOpts := []application.SetupOption{
+				application.WithTracer(ports.NopTracer{}),
+				application.WithTrackerConfig(test.trackerConfig),
+			}
+			appCfg := DefaultConfig()
+			appCfg.StoragePath = t.TempDir()
+
+			serverFacade, serverCleanup, err := buildACPServerFacade(
+				ctx, repo, executor.NewShellExecutor(), baseOpts, appCfg, logger,
+			)
+			require.NoError(t, err)
+			t.Cleanup(serverCleanup)
+			assertTrackerFacadeFailure(t, ctx, serverFacade, test.want, test.notWant)
+
+			wiring, err := buildACPSessionWiring(&acpSessionFactoryDeps{
+				signalCtx:     ctx,
+				slogLogger:    newACPSDKLogger(io.Discard),
+				logger:        logger,
+				masker:        infralogger.NewSecretMasker(),
+				envMap:        map[string]string{},
+				baseOpts:      baseOpts,
+				repo:          repo,
+				shellExecutor: executor.NewShellExecutor(),
+			}, "tracker-session")
+			require.NoError(t, err)
+			t.Cleanup(wiring.cleanup)
+			assertTrackerFacadeFailure(t, ctx, wiring.facade, test.want, test.notWant)
+		})
+	}
+}
+
+type trackerWorkflowRepository struct{}
+
+func (trackerWorkflowRepository) Load(_ context.Context, name string) (*workflow.Workflow, error) {
+	if name != "tracker-create" {
+		return nil, fmt.Errorf("workflow not found: %s", name)
+	}
+	return &workflow.Workflow{
+		Name: "tracker-create", Initial: "create",
+		Steps: map[string]*workflow.Step{
+			"create": {
+				Name: "create", Type: workflow.StepTypeOperation, Operation: "tracker.create_issue",
+				OperationInputs: map[string]any{"title": "Release blocker"}, OnSuccess: "done",
+			},
+			"done": {Name: "done", Type: workflow.StepTypeTerminal, Status: workflow.TerminalSuccess},
+		},
+	}, nil
+}
+
+func (trackerWorkflowRepository) List(context.Context) ([]string, error) {
+	return []string{"tracker-create"}, nil
+}
+
+func (trackerWorkflowRepository) ListWithSource(context.Context) ([]ports.WorkflowInfo, error) {
+	return []ports.WorkflowInfo{{Name: "tracker-create", Source: ports.SourceLocal}}, nil
+}
+
+func (trackerWorkflowRepository) Exists(_ context.Context, name string) (bool, error) {
+	return name == "tracker-create", nil
+}
+
+func assertTrackerFacadeFailure(
+	t *testing.T,
+	ctx context.Context,
+	facade ports.WorkflowFacade,
+	want error,
+	notWant error,
+) {
+	t.Helper()
+
+	session, err := facade.Run(ctx, ports.RunRequest{Identifier: "tracker-create"})
+	require.NoError(t, err)
+	for range session.Events() { //nolint:revive // drain until the asynchronous execution is terminal
+	}
+	require.Error(t, session.Err())
+	assert.ErrorIs(t, session.Err(), want)
+	assert.False(t, errors.Is(session.Err(), notWant))
+}
 
 func TestProcessEnvMap(t *testing.T) {
 	t.Run("happy path", func(t *testing.T) {

@@ -101,6 +101,7 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 	// not prevent serving). Notification defaults remain empty when it cannot be loaded.
 	notifyBackend := ""
 	notifierSettings := notifierwiring.Settings{}
+	trackerConfig := application.TrackerConfig{}
 	projectCfg, projErr := loadProjectConfig(logger)
 	if projErr != nil {
 		logger.Warn("acp-serve: project config not loaded, using defaults", "error", projErr)
@@ -109,6 +110,7 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 		notifyBackend = projectCfg.Notify.DefaultBackend
 		notifierSettings.Backend = projectCfg.Notifier.Backend
 		notifierSettings.DefaultChannel = projectCfg.Notifier.DefaultChannel
+		trackerConfig.DefaultBackend = projectCfg.Tracker.DefaultBackend
 	}
 	// Agent aliases are best-effort too: a broken alias file is reported and the server starts without aliases.
 	agentAliases, aliasErr := agents.LoadAliases(projectCfg)
@@ -141,6 +143,7 @@ func runACPServe(ctx context.Context, _ Deps, configPath string) error {
 	baseOpts := []application.SetupOption{
 		application.WithAgentAliases(agentAliases),
 		application.WithNotifyConfig(application.NotifyConfig{DefaultBackend: notifyBackend}),
+		application.WithTrackerConfig(trackerConfig),
 		application.WithTemplatePaths([]string{".awf/templates", filepath.Join(appCfg.StoragePath, "templates")}),
 		application.WithTracer(ports.NopTracer{}),
 		application.WithAgentRoleRepository(roles.NewFilesystemAgentRoleRepository(logger)),

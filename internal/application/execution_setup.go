@@ -19,6 +19,7 @@ import (
 	infraskills "github.com/awf-project/cli/internal/infrastructure/skills"
 	infratools "github.com/awf-project/cli/internal/infrastructure/tools"
 	"github.com/awf-project/cli/internal/infrastructure/tools/builtins"
+	"github.com/awf-project/cli/internal/infrastructure/tracker"
 	"github.com/awf-project/cli/internal/infrastructure/xdg"
 	"github.com/awf-project/cli/pkg/display"
 	"github.com/awf-project/cli/pkg/httpx"
@@ -84,6 +85,11 @@ type NotifyConfig struct {
 	DefaultBackend string
 }
 
+// TrackerConfig provides canonical tracker facade configuration.
+type TrackerConfig struct {
+	DefaultBackend string
+}
+
 // OutputWriterPair holds stdout/stderr writers for streaming mode.
 type OutputWriterPair struct {
 	Stdout io.Writer
@@ -96,6 +102,7 @@ type SetupOption func(*setupConfig)
 type setupConfig struct {
 	httpClientOptions      []httpx.Option
 	notifyConfig           NotifyConfig
+	trackerConfig          TrackerConfig
 	pluginChecker          PluginStateChecker
 	pluginProviders        PluginProviders
 	tracer                 ports.Tracer
@@ -125,6 +132,11 @@ func WithExecutionHTTPClientOptions(opts ...httpx.Option) SetupOption {
 // WithNotifyConfig configures notification backend defaults.
 func WithNotifyConfig(cfg NotifyConfig) SetupOption {
 	return func(c *setupConfig) { c.notifyConfig = cfg }
+}
+
+// WithTrackerConfig configures the default tracker adapter backend.
+func WithTrackerConfig(cfg TrackerConfig) SetupOption {
+	return func(c *setupConfig) { c.trackerConfig = cfg }
 }
 
 // WithPluginState configures a checker that gates individual built-in providers.
@@ -497,6 +509,14 @@ func (s *ExecutionSetup) buildProviders(cfg *setupConfig) ports.OperationProvide
 	if isEnabled("http") {
 		httpClient := httpx.NewClient(cfg.httpClientOptions...)
 		providers = append(providers, infrahttp.NewHTTPOperationProvider(httpClient, s.logger))
+	}
+
+	if isEnabled("tracker") {
+		providers = append(providers, tracker.NewProvider(
+			cfg.pluginProviders.Operations,
+			cfg.trackerConfig.DefaultBackend,
+			s.logger,
+		))
 	}
 
 	if cfg.pluginProviders.Operations != nil {

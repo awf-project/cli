@@ -1,0 +1,38 @@
+name: tracker-update
+description: Update an issue through the configured tracker backend
+
+inputs:
+  - name: backend
+    type: string
+    required: false
+    default: ""
+    description: Optional tracker backend override
+  - name: id
+    type: string
+    required: true
+    description: Provider issue identifier
+  - name: title
+    type: string
+    required: true
+    description: Updated issue title
+
+states:
+  initial: update_issue
+
+  update_issue:
+    type: operation
+    operation: tracker.update_issue
+    inputs:
+      backend: "{{inputs.backend}}"
+      id: "{{inputs.id}}"
+      title: "{{inputs.title}}"
+    on_success: success
+    on_failure: failure
+
+  success:
+    type: terminal
+    status: success
+
+  failure:
+    type: terminal
+    status: failure

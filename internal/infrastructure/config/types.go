@@ -21,6 +21,9 @@ type ProjectConfig struct {
 		DefaultChannel string `yaml:"default_channel"`
 	} `yaml:"notifier"`
 
+	// Tracker holds the default issue-tracker adapter selection.
+	Tracker TrackerConfig `yaml:"tracker"`
+
 	// Agents maps an alias to an agent provider and default options.
 	// A step's provider may name an alias; see agents.AgentRegistry.SetAliases.
 	Agents map[string]AgentAlias `yaml:"agents"`
@@ -31,6 +34,11 @@ type ProjectConfig struct {
 		Exporter    string `yaml:"exporter"`
 		ServiceName string `yaml:"service_name"`
 	} `yaml:"telemetry"`
+}
+
+// TrackerConfig configures the provider-neutral tracker facade.
+type TrackerConfig struct {
+	DefaultBackend string `yaml:"default_backend"`
 }
 
 // AgentAlias is a named agent: a built-in provider and options merged under the step options.

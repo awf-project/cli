@@ -17,16 +17,98 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
 	"time"
 
+	pluginSDK "github.com/awf-project/cli/pkg/plugin/sdk"
 	sdk "github.com/coder/acp-go-sdk"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
+
+const (
+	acpTrackerFixtureEnv = "AWF_ACP_TRACKER_FIXTURE"
+	acpTrackerOutput     = "canonical-acp-tracker-result"
+	acpTrackerWorkflow   = "tracker-acp-delegation"
+	acpTrackerSecret     = "confidential-acp-tracker-marker"
+)
+
+type acpTrackerFixture struct {
+	pluginSDK.BasePlugin
+}
+
+func TestSanitizedACPResponseErrorDoesNotExposePayload(t *testing.T) {
+	responseErr := &sdk.RequestError{Message: acpTrackerSecret}
+
+	err := sanitizedACPResponseError(responseErr, "session/prompt")
+
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), acpTrackerSecret)
+}
+
+func sanitizedACPResponseError(responseErr *sdk.RequestError, method string) error {
+	if responseErr == nil {
+		return nil
+	}
+	return fmt.Errorf("%s returned an ACP error", method)
+}
+
+func (*acpTrackerFixture) Operations() []string { return []string{"create_issue"} }
+
+func (*acpTrackerFixture) Init(_ context.Context, _ map[string]any) error {
+	return os.WriteFile(
+		filepath.Join(os.Getenv(acpTrackerFixtureEnv), "adapter.pid"),
+		[]byte(strconv.Itoa(os.Getpid())),
+		0o600,
+	) //nolint:gosec // The parent supplies a test-owned fixture directory.
+}
+
+func (*acpTrackerFixture) HandleOperation(
+	_ context.Context,
+	_ string,
+	_ map[string]any,
+) (*pluginSDK.OperationResult, error) {
+	if err := os.WriteFile(
+		filepath.Join(os.Getenv(acpTrackerFixtureEnv), "adapter.called"),
+		nil,
+		0o600,
+	); err != nil { //nolint:gosec // The parent supplies a test-owned fixture directory.
+		return nil, err
+	}
+	if os.Getenv("AWF_ACP_TRACKER_FAIL") == "true" {
+		path := filepath.Join(os.Getenv(acpTrackerFixtureEnv), "adapter.failed")
+		if err := os.WriteFile(path, nil, 0o600); err != nil { //nolint:gosec // Test-owned fixture path.
+			return nil, err
+		}
+		return nil, errors.New(acpTrackerAdapterFailureMarker)
+	}
+	return pluginSDK.NewSuccessResult(acpTrackerOutput, map[string]any{
+		"id": "ACP-27", "key": acpTrackerOutput, "url": "https://tracker.invalid/ACP-27",
+	}), nil
+}
+
+func (*acpTrackerFixture) Shutdown(_ context.Context) error {
+	return os.WriteFile(
+		filepath.Join(os.Getenv(acpTrackerFixtureEnv), "adapter.stopped"),
+		nil,
+		0o600,
+	) //nolint:gosec // The parent supplies a test-owned fixture directory.
+}
+
+func TestMain(m *testing.M) {
+	if os.Getenv("AWF_PLUGIN") == "awf-plugin-v1" && os.Getenv(acpTrackerFixtureEnv) != "" {
+		pluginSDK.Serve(&acpTrackerFixture{BasePlugin: pluginSDK.BasePlugin{
+			PluginName: "tracker-jira", PluginVersion: "1.0.0",
+		}})
+		return
+	}
+	os.Exit(m.Run())
+}
 
 // TestACPServe_ServerInitialization validates that the server starts up
 // correctly with valid configuration and is ready to handle requests.
@@ -219,11 +301,10 @@ states:
 	require.NoError(t, err)
 	protocolFrames = append(protocolFrames, promptFrame)
 	require.NoError(t, proc.stdin.Close())
-	waitDone := make(chan error, 1)
-	go func() { waitDone <- proc.cmd.Wait() }()
+	proc.startWait()
 	select {
-	case waitErr := <-waitDone:
-		require.NoError(t, waitErr, "ACP and adapter subprocesses must exit cleanly after stdin closes")
+	case <-proc.done:
+		require.NoError(t, proc.waitErr, "ACP and adapter subprocesses must exit cleanly after stdin closes")
 	case <-time.After(5 * time.Second):
 		t.Fatal("ACP and adapter subprocesses did not exit within 5 seconds")
 	}
@@ -407,6 +488,146 @@ func main() {
 }
 `
 
+const acpTrackerAdapterFailureMarker = "confidential-acp-adapter-failure-marker"
+
+func TestACPServe_TrackerWorkflowDelegatesThroughInstalledAdapter(t *testing.T) {
+	runACPTrackerWorkflow(t, false)
+}
+
+func TestACPServe_TrackerWorkflowHidesAdapterFailureDetails(t *testing.T) {
+	runACPTrackerWorkflow(t, true)
+}
+
+func runACPTrackerWorkflow(t *testing.T, failAdapter bool) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	root := t.TempDir()
+	workflowRoot := filepath.Join(root, "workflows")
+	pluginRoot := filepath.Join(root, "plugins")
+	fixtureRoot := filepath.Join(root, "fixture")
+	for _, dir := range []string{workflowRoot, pluginRoot, fixtureRoot} {
+		require.NoError(t, os.MkdirAll(dir, 0o700))
+	}
+
+	pluginDir := filepath.Join(pluginRoot, "tracker-jira")
+	require.NoError(t, os.MkdirAll(pluginDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(pluginDir, "plugin.yaml"), []byte(`name: tracker-jira
+version: 1.0.0
+awf_version: ">=0.1.0"
+capabilities:
+  - operations
+`), 0o600))
+	testBinary, err := os.Executable()
+	require.NoError(t, err)
+	require.NoError(t, os.Symlink(testBinary, filepath.Join(pluginDir, "awf-plugin-tracker-jira")))
+
+	configPath := filepath.Join(root, "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("tracker:\n  default_backend: jira\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowRoot, acpTrackerWorkflow+".yaml"), []byte(`name: `+acpTrackerWorkflow+`
+version: "1.0.0"
+states:
+  initial: create
+  create:
+    type: operation
+    operation: tracker.create_issue
+    inputs:
+      title: `+acpTrackerSecret+`
+      description: `+acpTrackerSecret+`
+    on_success: done
+  done:
+    type: terminal
+    status: failure
+    message: "{{states.create.Output}}"
+`), 0o600))
+
+	t.Setenv("AWF_CONFIG_PATH", configPath)
+	t.Setenv("AWF_WORKFLOWS_PATH", workflowRoot)
+	t.Setenv("AWF_PLUGINS_PATH", pluginRoot)
+	t.Setenv(acpTrackerFixtureEnv, fixtureRoot)
+	t.Setenv("AWF_ACP_TRACKER_FAIL", strconv.FormatBool(failAdapter))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "xdg-config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "xdg-data"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "xdg-state"))
+	t.Setenv("AWF_AUDIT_LOG", "off")
+
+	binaryPath := buildAWFBinary(t)
+	config := writeACPConfig(t, workflowRoot)
+	var stderr bytes.Buffer
+	proc := startACPServeProcessWithStderr(t, binaryPath, &stderr, "--config="+config)
+	proc.addShutdownCheck(func() {
+		assertSecretAbsent(t, proc.protocolFrames(), acpTrackerSecret, "ACP protocol diagnostics")
+		assertSecretAbsent(t, stderr.String(), acpTrackerSecret, "ACP logs")
+		assertSecretAbsent(t, proc.protocolFrames(), acpTrackerAdapterFailureMarker, "ACP protocol diagnostics")
+		assertSecretAbsent(t, stderr.String(), acpTrackerAdapterFailureMarker, "ACP logs")
+	})
+
+	initResp := proc.request(t, 1, sdk.AgentMethodInitialize, map[string]any{
+		"protocolVersion": sdk.ProtocolVersionNumber,
+		"capabilities":    map[string]any{},
+		"clientInfo":      map[string]any{"name": "tracker-test-client", "version": "1.0.0"},
+	})
+	require.Nil(t, initResp.Error, "initialize must succeed")
+
+	sessionResp := proc.request(t, 2, sdk.AgentMethodSessionNew, map[string]any{
+		"cwd": root, "mcpServers": []any{},
+	})
+	require.Nil(t, sessionResp.Error, "session/new must succeed")
+	sessionResult, ok := sessionResp.Result.(map[string]any)
+	require.True(t, ok, "session/new result must be a JSON object")
+	sessionID := fmt.Sprintf("%v", sessionResult["sessionId"])
+	require.NotEmpty(t, sessionID, "sessionId must not be empty")
+	require.True(t, proc.drainForAvailableCommands(t, acpTrackerWorkflow),
+		"tracker workflow must be advertised before prompting")
+
+	promptResp := proc.request(t, 3, sdk.AgentMethodSessionPrompt, map[string]any{
+		"sessionId": sessionID,
+		"prompt":    []map[string]any{{"type": "text", "text": "/" + acpTrackerWorkflow}},
+	})
+	if failAdapter {
+		require.FileExists(t, filepath.Join(fixtureRoot, "adapter.failed"),
+			"the installed adapter must reach its failure path")
+		require.True(t, promptResp.Error != nil || promptResp.Result != nil,
+			"the prompt must receive a response after adapter failure")
+	} else {
+		require.NoError(t, sanitizedACPResponseError(promptResp.Error, "session/prompt"))
+		promptResult, ok := promptResp.Result.(map[string]any)
+		require.True(t, ok, "session/prompt result must be a JSON object")
+		assert.Equal(t, "end_turn", promptResult["stopReason"],
+			"session/prompt must return the expected ACP turn completion")
+		require.True(t, proc.drainForSessionChunk(t, sessionID, acpTrackerOutput),
+			"prompt lifecycle must stream the installed adapter business output to its session")
+	}
+	require.FileExists(t, filepath.Join(fixtureRoot, "adapter.called"),
+		"configured tracker default must execute the installed adapter subprocess")
+
+	require.NoError(t, proc.stop())
+	select {
+	case <-proc.done:
+		require.NoError(t, proc.waitErr, "ACP server must stop cleanly")
+	case <-time.After(8 * time.Second):
+		t.Fatal("ACP server did not stop after SIGTERM")
+	}
+	pidBytes, err := os.ReadFile(filepath.Join(fixtureRoot, "adapter.pid")) //nolint:gosec // Test-owned fixture path.
+	require.NoError(t, err)
+	adapterPID, err := strconv.Atoi(strings.TrimSpace(string(pidBytes)))
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		return syscall.Kill(adapterPID, 0) != nil
+	}, 3*time.Second, 20*time.Millisecond, "adapter process must not survive ACP shutdown")
+}
+
+// assertSecretAbsent deliberately does not provide either captured output or the secret to
+// a test assertion formatter: a regression must not disclose the protected value in test logs.
+func assertSecretAbsent(t *testing.T, captured, secret, boundary string) {
+	t.Helper()
+	if strings.Contains(captured, secret) {
+		t.Errorf("%s exposed a confidential value", boundary)
+	}
+}
+
 // TestACPServe_InvalidConfiguration validates that the server fails gracefully
 // when given invalid configuration (missing or malformed config file).
 func TestACPServe_InvalidConfiguration(t *testing.T) {
@@ -488,21 +709,11 @@ func TestACPServe_GracefulShutdown(t *testing.T) {
 	})
 	require.Nil(t, initResp.Error, "initialize must succeed")
 
-	// Send SIGTERM to trigger graceful shutdown.
-	// The cleanup function in startACPServeProcess will verify the process exits cleanly.
-	// If the shutdown is not graceful, the process will hang and the cleanup timeout will
-	// trigger a SIGKILL, causing the test to fail.
-	err := syscall.Kill(-proc.cmd.Process.Pid, syscall.SIGTERM)
-	require.NoError(t, err, "should be able to send SIGTERM to process")
-
-	// Wait for the process to exit gracefully (with a reasonable timeout).
-	done := make(chan error, 1)
-	go func() {
-		done <- proc.cmd.Wait()
-	}()
+	require.NoError(t, proc.stop(), "should be able to send SIGTERM to process")
 
 	select {
-	case err := <-done:
+	case <-proc.done:
+		err := proc.waitErr
 		// Process exited. Either cleanly (err==nil) or with a signal (ExitError with code).
 		// Either is acceptable; what we're testing is that it exits in reasonable time
 		// without hanging and requiring SIGKILL.

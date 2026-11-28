@@ -12,6 +12,7 @@ import (
 	"github.com/awf-project/cli/internal/domain/pluginmodel"
 	"github.com/awf-project/cli/internal/domain/ports"
 	"github.com/awf-project/cli/internal/infrastructure/pluginmgr"
+	"github.com/awf-project/cli/internal/infrastructure/tracker"
 	"github.com/awf-project/cli/internal/interfaces/notifierwiring"
 )
 
@@ -110,6 +111,12 @@ func TestBuildValidationOperationProvider_IncludesEnabledBuiltins(t *testing.T) 
 		"notifier.update":      "notifier",
 		"notifier.react":       "notifier",
 		"notifier.upload":      "notifier",
+		"tracker.create_issue": "tracker",
+		"tracker.update_issue": "tracker",
+		"tracker.transition":   "tracker",
+		"tracker.add_comment":  "tracker",
+		"tracker.get_issue":    "tracker",
+		"tracker.search":       "tracker",
 	}
 
 	listed := provider.ListOperations()
@@ -173,5 +180,55 @@ func TestBuildValidationOperationProvider_ExcludesDisabledBuiltin(t *testing.T) 
 		operation, found := provider.GetOperation(name)
 		assert.False(t, found, "disabled operation %q should not be available", name)
 		assert.Nil(t, operation)
+	}
+}
+
+func TestBuildValidationOperationProvider_ExcludesDisabledTracker(t *testing.T) {
+	stateStore := pluginmgr.NewJSONPluginStateStore(t.TempDir())
+	require.NoError(t, stateStore.SetEnabled(context.Background(), "tracker", false))
+	pluginService := application.NewPluginService(nil, stateStore, ports.NopLogger{})
+
+	provider := buildValidationOperationProvider(
+		pluginService,
+		nil,
+		ports.NopLogger{},
+		notifierwiring.Settings{},
+	)
+	require.NotNil(t, provider)
+
+	for _, schema := range tracker.OperationSchemas() {
+		operation, found := provider.GetOperation(schema.Name)
+		assert.False(t, found, "disabled operation %q should not be available", schema.Name)
+		assert.Nil(t, operation)
+	}
+}
+
+func TestValidationProviderMatchesRuntimeTrackerOperations(t *testing.T) {
+	externalOperation := &pluginmodel.OperationSchema{
+		Name:       "tracker-jira.create_issue",
+		PluginName: "tracker-jira",
+	}
+	external := &validationExternalOperationProvider{operation: externalOperation}
+	pluginService := application.NewPluginService(nil, nil, ports.NopLogger{})
+
+	validationProvider := buildValidationOperationProvider(
+		pluginService,
+		external,
+		ports.NopLogger{},
+		notifierwiring.Settings{},
+	)
+	runtimeProvider := tracker.NewProvider(external, "jira", ports.NopLogger{})
+
+	for _, schema := range tracker.OperationSchemas() {
+		validationSchema, found := validationProvider.GetOperation(schema.Name)
+		require.True(t, found, "validation operation %q", schema.Name)
+		runtimeSchema, found := runtimeProvider.GetOperation(schema.Name)
+		require.True(t, found, "runtime operation %q", schema.Name)
+		assert.Equal(t, runtimeSchema, validationSchema)
+	}
+
+	for _, name := range []string{"github.get_issue", externalOperation.Name} {
+		_, found := validationProvider.GetOperation(name)
+		assert.True(t, found, "preserved operation %q", name)
 	}
 }

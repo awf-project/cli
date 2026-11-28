@@ -1,13 +1,16 @@
 package config
 
 import (
+	"bytes"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestProjectConfigLoadsNotifierBackendAndChannelDefaults(t *testing.T) {
@@ -57,6 +60,81 @@ notify:
 			assert.NotEqual(t, cfg.Notify.DefaultBackend, cfg.Notifier.DefaultChannel)
 		})
 	}
+}
+
+func TestProjectConfigLoadsTrackerDefaultBackend(t *testing.T) {
+	load := func(t *testing.T, content string) (*ProjectConfig, string, string, error) {
+		t.Helper()
+
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatalf("WriteFile() error = %v", err)
+		}
+
+		var warnings bytes.Buffer
+		warningLogger := log.New(&warnings, "", 0)
+		cfg, err := NewYAMLConfigLoader(path).WithWarningFunc(warningLogger.Printf).Load()
+
+		return cfg, warnings.String(), path, err
+	}
+
+	t.Run("configured backend", func(t *testing.T) {
+		cfg, warnings, _, err := load(t, "tracker:\n  default_backend: Jira-Team_42\n")
+		if err != nil {
+			t.Fatalf("Load() error = %v, want nil", err)
+		}
+		if cfg.Tracker.DefaultBackend != "Jira-Team_42" {
+			t.Errorf("Tracker.DefaultBackend = %q, want %q", cfg.Tracker.DefaultBackend, "Jira-Team_42")
+		}
+		if warnings != "" {
+			t.Errorf("warnings = %q, want none", warnings)
+		}
+	})
+
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{name: "omitted tracker", content: "inputs:\n  project: awf\n"},
+		{name: "omitted default backend", content: "tracker: {}\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, warnings, _, err := load(t, tt.content)
+			if err != nil {
+				t.Fatalf("Load() error = %v, want nil", err)
+			}
+			if cfg.Tracker.DefaultBackend != "" {
+				t.Errorf("Tracker.DefaultBackend = %q, want empty zero value", cfg.Tracker.DefaultBackend)
+			}
+			if warnings != "" {
+				t.Errorf("warnings = %q, want none", warnings)
+			}
+		})
+	}
+
+	t.Run("malformed tracker", func(t *testing.T) {
+		cfg, _, path, err := load(t, "tracker: []\n")
+		if cfg != nil {
+			t.Errorf("Load() config = %#v, want nil", cfg)
+		}
+
+		var configErr *ConfigError
+		if !errors.As(err, &configErr) {
+			t.Fatalf("Load() error = %v, want *ConfigError", err)
+		}
+		if configErr.Op != "parse" {
+			t.Errorf("ConfigError.Op = %q, want %q", configErr.Op, "parse")
+		}
+		if configErr.Path != path {
+			t.Errorf("ConfigError.Path = %q, want %q", configErr.Path, path)
+		}
+
+		var typeErr *yaml.TypeError
+		if !errors.As(err, &typeErr) {
+			t.Errorf("Load() error = %v, want wrapped *yaml.TypeError", err)
+		}
+	})
 }
 
 func TestProjectConfig_DefaultValues(t *testing.T) {
