@@ -1,5 +1,5 @@
 ---
-title: \"MCP Proxy — Tool Interception and Plugin Tool Exposure\"
+title: "MCP Proxy — Tool Interception and Plugin Tool Exposure"
 ---
 
 ## Overview
