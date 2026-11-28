@@ -314,7 +314,7 @@ All key packages now have documentation:
 
 ## See Also
 
-- [Code Quality](code-quality.md) - Linting and formatting standards
+- [Code Quality](../development/code-quality.md) - Linting and formatting standards
 - [Project Structure](../development/project-structure.md) - Codebase organization
 - [Architecture](../development/architecture.md) - Hexagonal design principles
 - [Go Documentation Best Practices](https://go.dev/blog/godoc)

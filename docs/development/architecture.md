@@ -687,4 +687,4 @@ The PluginManager interface (7 methods) was evaluated for ISP compliance and kep
 - [Project Structure](project-structure.md) - Directory organization
 - [Plugin Event System Architecture](plugin-event-architecture.md) - EventBus, gRPC adapter, and wiring details
 - [Testing](testing.md) - Testing conventions
-- [Contributing](../../CONTRIBUTING.md) - Development workflow
+- [Contributing](https://github.com/awf-project/cli/blob/main/CONTRIBUTING.md) - Development workflow

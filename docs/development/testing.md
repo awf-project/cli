@@ -661,4 +661,4 @@ Integration and external tests may be run in separate CI jobs or only on specifi
 
 - [Architecture](architecture.md) - Code organization
 - [Project Structure](project-structure.md) - Directory layout
-- [Contributing](../../CONTRIBUTING.md) - Development workflow
+- [Contributing](https://github.com/awf-project/cli/blob/main/CONTRIBUTING.md) - Development workflow

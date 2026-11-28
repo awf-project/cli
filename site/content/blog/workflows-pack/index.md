@@ -11,7 +11,7 @@ contributors: ["Alex"]
 Last week was a blast! I had many great discussions about AWF and AI in general at Symfony Live. 
 These conversations convinced me that the AWF ecosystem definitely needs a way to share workflows. 
 
-That’s why I’ve been working on [__workflow packs__](https://awf-project.ai/cli/docs/user-guide/workflow-packs/), building on the plugin concept. 
+That’s why I’ve been working on [__workflow packs__](https://docs.awf-project.ai/cli/docs/user-guide/workflow-packs/), building on the plugin concept. 
 A workflow pack is a set of workflows, prompts, and scripts that can be installed like a plugin via dedicated commands.
 The only thing you need to be mindful of is what these workflows actually do on your machine,
 given the security implications of AWF’s execution.
