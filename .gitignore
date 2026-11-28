@@ -21,8 +21,6 @@ coverage.html
 .DS_Store
 Thumbs.db
 
-npm-cache/
-
 # Dependencies (if vendored)
 .grepai/
 
@@ -39,11 +37,7 @@ storage/history.db
 # Workflow files
 /audit
 
-# Hugo / Doks (site/)
-site/public/
-site/resources/
-site/.hugo_build.lock
-site/node_modules/
+# Local browser automation output
 .playwright-mcp/
 
 # Temporary files
@@ -73,6 +67,3 @@ examples/plugins/*/awf-plugin-*
 # Added by awf project-onboard
 .awf/storage/states/
 .awf/storage/logs/
-
-# Site styles prepared from the locked Doks/Bootstrap dependencies
-site/.generated/

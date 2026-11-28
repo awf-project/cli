@@ -361,6 +361,6 @@
 // See also:
 //   - internal/domain/operation: Domain operation interface and result types
 //   - internal/infrastructure/pluginmgr: Plugin loader and registry implementation
-//   - docs/plugin-development.md: Complete plugin development guide
+//   - Complete plugin development guide at https://docs.awf-project.ai/cli/getting-started/build-your-first-plugin/
 //   - examples/plugins/: Example plugin implementations
 package sdk

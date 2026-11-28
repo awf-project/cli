@@ -398,7 +398,7 @@ func buildACPSessionWiring(deps *acpSessionFactoryDeps, sessionID string) (*acpS
 		// NOTE(F102): stdout and stderr of a workflow step are both surfaced as
 		// agent_message_chunk via the same writer; the ACP protocol output does not yet
 		// distinguish the two streams. Tracked as a known limitation for F102-v2.
-		// See docs/ADR/018-acp-transparent-agent-server-protocol.md.
+		// See ADR-018 at https://docs.awf-project.ai/cli/adr/018-acp-transparent-agent-server-via-json-rpc-2.0-stdio-subprocess/
 		application.WithOutputWriters(textWriter, textWriter),
 		application.WithDisplayRendererFactory(func(stepID string) display.EventRenderer {
 			// M-4: pass the process environment so MaskText can redact secrets before they

@@ -350,6 +350,6 @@
 // See also:
 //   - internal/domain/workflow: Workflow input and validation types
 //   - internal/application: Application service using validation
-//   - docs/input-validation.md: Complete validation syntax reference
+//   - Complete validation syntax reference at https://docs.awf-project.ai/cli/reference/input-validation/
 //   - CLAUDE.md: Project conventions and validation semantics
 package validation

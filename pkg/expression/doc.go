@@ -291,6 +291,6 @@
 //   - pkg/interpolation: Template variable resolution (provides Context types)
 //   - internal/domain/workflow: Workflow transition and condition types
 //   - internal/infrastructure/expression: Infrastructure adapter implementing expression compilation port
-//   - docs/conditional-transitions.md: Workflow transition syntax
+//   - Workflow transition syntax at https://docs.awf-project.ai/cli/user-guide/workflow-syntax-reference/#conditional-transitions
 //   - External: https://expr-lang.org/ - expr-lang documentation
 package expression

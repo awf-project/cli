@@ -1,4 +1,4 @@
-.PHONY: help build install dev test test-unit test-integration test-coverage test-race lint format vet clean tidy verify lint-arch lint-arch-map quality fix docs docs-serve docs-clean proto-gen
+.PHONY: help build install dev test test-unit test-integration test-coverage test-race lint format vet clean tidy verify lint-arch lint-arch-map quality fix proto-gen
 
 .DEFAULT_GOAL := help
 
@@ -31,11 +31,6 @@ help:
 	@echo "  fix              Auto-fix linter issues"
 	@echo "  lint-arch        Check architecture constraints (go-arch-lint)"
 	@echo "  lint-arch-map    Show component-to-package mapping"
-	@echo ""
-	@echo "Documentation:"
-	@echo "  docs             Build documentation site"
-	@echo "  docs-serve       Serve documentation site locally"
-	@echo "  docs-clean       Clean documentation build artifacts"
 	@echo ""
 	@echo "Code Generation:"
 	@echo "  proto-gen        Regenerate protobuf Go code from proto/plugin/v1/plugin.proto"
@@ -138,16 +133,6 @@ lint-arch:
 # Show component-to-package mapping
 lint-arch-map:
 	go-arch-lint mapping --project-path . --arch-file .go-arch-lint.yml
-
-# Documentation site
-docs:
-	cd site && npm ci && npx hugo --minify
-
-docs-serve:
-	cd site && npm ci && npm run dev
-
-docs-clean:
-	rm -rf site/public site/resources site/.hugo_build.lock
 
 # Regenerate protobuf Go code (requires protoc, protoc-gen-go, protoc-gen-go-grpc)
 proto-gen:

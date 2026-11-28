@@ -427,6 +427,6 @@
 // See also:
 //   - internal/domain/ports: Port interfaces for adapters
 //   - internal/application: Application services orchestrating workflow execution
-//   - docs/architecture.md: Hexagonal architecture overview
+//   - Hexagonal architecture overview at https://docs.awf-project.ai/cli/development/architecture/
 //   - CLAUDE.md: Project conventions and workflow execution semantics
 package workflow

@@ -19,9 +19,9 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, GitHub Copilot
 - **MCP Proxy** - Intercept and audit AI agent tool calls via Model Context Protocol (MCP); re-expose the 6 built-in tools (`Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`) with full observability (OTel spans, structured logs); expose custom gRPC plugin operations as MCP tools; optional full interception or additive mode per step
 - **OpenAI-Compatible Provider** - Use any Chat Completions API (OpenAI, Ollama, vLLM, Groq) with native HTTP integration, accurate token reporting, and no CLI tool required
 - **Parallel Execution** - Run multiple steps concurrently with configurable strategies
-- **Loop Constructs** - For-each and while loops with full context access and [handled failure transitions](docs/reference/loop.md#handled-failure-transitions) between steps in the same loop body
+- **Loop Constructs** - For-each and while loops with full context access and [handled failure transitions](https://docs.awf-project.ai/cli/reference/loop-reference/#handled-failure-transitions) between steps in the same loop body
 - **Sub-Workflows** - Invoke workflows from other workflows with input/output mapping
-- **Explicit Execution Timeouts** - Omitted workflow, agent, plugin, and HTTP-operation timeouts do not impose hidden execution limits; set a positive timeout when a local deadline is required, or use `0` to disable an inherited step limit. See [Timeouts](docs/reference/timeouts.md).
+- **Explicit Execution Timeouts** - Omitted workflow, agent, plugin, and HTTP-operation timeouts do not impose hidden execution limits; set a positive timeout when a local deadline is required, or use `0` to disable an inherited step limit. See [Timeouts](https://docs.awf-project.ai/cli/reference/timeouts/).
 - **Retry with Backoff** - Automatic retry with exponential, linear, or constant backoff
 - **Workflow Templates** - Reusable step patterns with parameters
 - **Input Validation** - Type checking, patterns, enums, file validation
@@ -30,8 +30,8 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, GitHub Copilot
 - **Interactive Input Collection** - Automatically prompt for missing required inputs in terminal sessions
 - **Structured Error Codes** - Hierarchical error taxonomy (`USER.INPUT.MISSING_FILE`) with `awf error` lookup command
 - **Actionable Error Hints** - Context-aware suggestions ("Did you mean?") with fuzzy matching, suppressible via `--no-hints`
-- **Audit Trail** - Structured JSONL audit log with paired start/completion records for execution attempts, normalized non-zero codes for failures and cancellations, pre-execution validation and provider-readiness checks, consistent history/audit outcomes, secret masking, configurable path, bounded records, and serialized concurrent writes. See [Audit Trail](docs/user-guide/audit-trail.md).
-- **Canonical Agent Exchange Transcript** - Append-only JSONL transcript per run (`storage/transcripts/<run-id>.jsonl`) capturing the full workflow lifecycle and agent exchange in one normalized stream; closed `EventType` vocabulary (run/step lifecycle, user/assistant messages, tool call/result) and typed `ContentBlock` (text, thinking, tool_use, tool_result, command, stream) with `fidelity` marker (`router` vs `agent_emitted`); per-provider normalization for Claude, Codex (with NUL byte tolerance), Gemini, Copilot, and OpenAI HTTP; tool capture at the `tools.Router.CallTool` seam covers builtin and plugin tools; sub-workflow linkage via `child_run_id`/`parent_run_id` with one file per run; bounded live fan-out with drop-newest policy keeps slow subscribers from stalling disk writes; atomic `O_APPEND` writes with `0o600` permissions and monotonic `Seq` ordering; coexists with `audit.jsonl` and `DisplayEvent` channels unchanged. See [Agent Exchange Transcript](docs/user-guide/transcript.md).
+- **Audit Trail** - Structured JSONL audit log with paired start/completion records for execution attempts, normalized non-zero codes for failures and cancellations, pre-execution validation and provider-readiness checks, consistent history/audit outcomes, secret masking, configurable path, bounded records, and serialized concurrent writes. See [Audit Trail](https://docs.awf-project.ai/cli/user-guide/audit-trail/).
+- **Canonical Agent Exchange Transcript** - Append-only JSONL transcript per run (`storage/transcripts/<run-id>.jsonl`) capturing the full workflow lifecycle and agent exchange in one normalized stream; closed `EventType` vocabulary (run/step lifecycle, user/assistant messages, tool call/result) and typed `ContentBlock` (text, thinking, tool_use, tool_result, command, stream) with `fidelity` marker (`router` vs `agent_emitted`); per-provider normalization for Claude, Codex (with NUL byte tolerance), Gemini, Copilot, and OpenAI HTTP; tool capture at the `tools.Router.CallTool` seam covers builtin and plugin tools; sub-workflow linkage via `child_run_id`/`parent_run_id` with one file per run; bounded live fan-out with drop-newest policy keeps slow subscribers from stalling disk writes; atomic `O_APPEND` writes with `0o600` permissions and monotonic `Seq` ordering; coexists with `audit.jsonl` and `DisplayEvent` channels unchanged. See [Agent Exchange Transcript](https://docs.awf-project.ai/cli/user-guide/agent-exchange-transcript/).
 - **Distributed Tracing** - OpenTelemetry integration for visibility into workflow execution with spans for steps, agents, parallel/loop blocks, and shell commands; export to any OTLP-compatible backend (Jaeger, Grafana Tempo, Honeycomb) via `--otel-exporter` and `--otel-service-name` flags
 - **Plugin System** - Extend AWF with custom operations, validators, and step types via gRPC plugins (HashiCorp go-plugin); scaffold operation plugins with `awf plugin init`; automatic mutual TLS (AutoMTLS) encryption for all host-plugin communication with zero configuration; SHA-256 binary integrity verification at launch time blocks tampered or corrupted plugins; plugin subprocess log and stdout/stderr forwarding to AWF's structured logger for crash diagnostics; validators run custom rules during `awf validate`, custom step types register new `type:` values for workflow steps; event system enables plugins to subscribe to core lifecycle events (`workflow.*`, `step.*`) and emit custom inter-plugin events with glob pattern matching, per-plugin buffered channels, and cycle detection; GRPCBroker enables plugins to emit events back to the host at runtime via a dedicated reverse channel with manifest-based permission enforcement; persistent gRPC streaming delivers events to plugins over long-lived connections with automatic fallback to unary RPCs for plugins that don't support streaming; includes `sdk.Serve()` entry point for plugin authors, and install/update/remove from GitHub Releases with checksum verification
 - **Workflow Packs** - Share reusable workflows and prompts via `awf workflow install owner/repo[@version]` from GitHub Releases with manifest validation, checksum verification, and atomic installation; execute with `awf run pack/workflow` namespace syntax; `{{.awf.prompts_dir}}` and `{{.awf.scripts_dir}}` resolve context-aware with 3-tier resolution (user override → pack embedded → global); `call_workflow` within packs resolves relative to pack root; `--global` flag for user-level installation; `awf workflow remove <pack>` for cleanup; source metadata tracking and plugin dependency warnings
@@ -40,7 +40,7 @@ A Go CLI tool for orchestrating AI agents (Claude, Gemini, Codex, GitHub Copilot
 - **Built-in Notification Plugin** - Workflow completion alerts via desktop and webhooks with configurable backends
 - **Terminal User Interface (TUI)** - Full-screen interactive dashboard (`awf tui`) with tab-based navigation for workflow browsing, real-time execution monitoring, history exploration, agent conversation rendering, and Claude Code session tailing; built on Bubble Tea with Lip Gloss styling and Glamour Markdown rendering
 - **HTTP REST API Server** - `awf serve` exposes workflow discovery, async execution, SSE event streaming, lifecycle control, and execution history over HTTP with auto-generated OpenAPI 3.1 spec and Swagger UI at `/docs`; built on Huma v2 + chi v5; defaults to `127.0.0.1:2511` (loopback-only) with `--host`/`--port` overrides
-- **ACP Transparent Agent Server** - `awf acp-serve` (hidden) exposes workflows as an [ACP (Agent Client Protocol)](https://agentclientprotocol.com) agent over stdio, enabling ACP-compatible editors (Zed, acp.nvim) to spawn AWF as a transparent agent subprocess; full workflow execution per `session/prompt` (not single-provider passthrough) with multi-step progress projected as `tool_call` / `tool_call_update` notifications; workflow discovery via slash commands (`available_commands_update`); native `session/request_permission` for approval gates; mid-workflow user input via turn-boundary resume; `session/cancel` with 5s SIGTERM→SIGKILL grace; editor-provided `mcpServers` merged with per-step MCP proxy config (editor wins on collision); powered by the official `github.com/coder/acp-go-sdk` with infrastructure adapter pattern. See [ADR-018](docs/ADR/018-acp-transparent-agent-server-protocol.md) and [ADR-020](docs/ADR/020-acp-server-migration-to-coder-sdk.md).
+- **ACP Transparent Agent Server** - `awf acp-serve` (hidden) exposes workflows as an [ACP (Agent Client Protocol)](https://agentclientprotocol.com) agent over stdio, enabling ACP-compatible editors (Zed, acp.nvim) to spawn AWF as a transparent agent subprocess; full workflow execution per `session/prompt` (not single-provider passthrough) with multi-step progress projected as `tool_call` / `tool_call_update` notifications; workflow discovery via slash commands (`available_commands_update`); native `session/request_permission` for approval gates; mid-workflow user input via turn-boundary resume; `session/cancel` with 5s SIGTERM→SIGKILL grace; editor-provided `mcpServers` merged with per-step MCP proxy config (editor wins on collision); powered by the official `github.com/coder/acp-go-sdk` with infrastructure adapter pattern. See [ADR-018](https://docs.awf-project.ai/cli/adr/018-acp-transparent-agent-server-via-json-rpc-2.0-stdio-subprocess/) and [ADR-020](https://docs.awf-project.ai/cli/adr/020-acp-server-migration-to-official-coder-acp-go-sdk/).
 
 ## Installation
 
@@ -61,7 +61,7 @@ git clone https://github.com/awf-project/cli.git
 cd cli && make build && make install
 ```
 
-See [Installation Guide](docs/getting-started/installation.md) for details.
+See [Installation Guide](https://docs.awf-project.ai/cli/getting-started/installation/) for details.
 
 ## Quick Start
 
@@ -97,7 +97,7 @@ EOF
 awf run hello --input name=World
 ```
 
-See [Quick Start Guide](docs/getting-started/quickstart.md) for more.
+See [Quick Start Guide](https://docs.awf-project.ai/cli/getting-started/quick-start/) for more.
 
 ## ⚠️ Security & Risk Disclaimer
 
@@ -149,7 +149,7 @@ AWF is a powerful orchestration tool that grants AI agents and workflows direct 
 | `awf --version` | Show binary version information |
 | `awf completion <shell>` | Generate shell autocompletion |
 
-See [Command Reference](docs/user-guide/commands.md) for all options.
+See [Command Reference](https://docs.awf-project.ai/cli/user-guide/cli-commands/) for all options.
 
 **BREAKING:** Use `--verbose` instead of `-v`. Version selection now follows standard CLI conventions: `awf --version`, `awf upgrade [version]`, `awf plugin install owner/repo[@version]`, and `awf workflow install owner/repo[@version]`.
 
@@ -202,20 +202,18 @@ states:
 awf run code-review --input file=main.go
 ```
 
-See [Examples](docs/user-guide/examples.md) for more workflows.
+See [Examples](https://docs.awf-project.ai/cli/user-guide/workflow-examples/) for more workflows.
 
 ## Documentation
 
-📖 **[Browse the documentation site](https://awf-project.github.io/cli/)** — searchable, with dark mode.
-
-Or read locally:
+[Browse the AWF CLI documentation](https://docs.awf-project.ai/cli/).
 
 | Section | Description |
 |---------|-------------|
-| [Getting Started](docs/getting-started/) | Installation and first steps |
-| [User Guide](docs/user-guide/) | Commands, workflow syntax, templates |
-| [Reference](docs/reference/) | Exit codes, error codes, interpolation, validation |
-| [Development](docs/development/) | Architecture, contributing, testing |
+| [Getting Started](https://docs.awf-project.ai/cli/getting-started/) | Installation and first steps |
+| [User Guide](https://docs.awf-project.ai/cli/user-guide/) | Commands, workflow syntax, templates |
+| [Reference](https://docs.awf-project.ai/cli/reference/) | Exit codes, error codes, interpolation, validation |
+| [Development](https://docs.awf-project.ai/cli/development/) | Architecture, contributing, testing |
 
 ## Architecture
 
@@ -227,7 +225,7 @@ Interfaces (CLI) → Application (Services) → Domain (Entities, Ports)
                         Infrastructure (YAML, JSON, Shell) ─┘
 ```
 
-See [Architecture](docs/development/architecture.md) for details.
+See [Architecture](https://docs.awf-project.ai/cli/development/architecture/) for details.
 
 ## Development
 
@@ -239,12 +237,9 @@ make lint-arch      # Check architecture constraints
 make test-coverage  # Generate coverage report
 make quality        # Run all quality checks
 make proto-gen      # Regenerate protobuf Go code
-make docs           # Build documentation site
-make docs-serve     # Serve documentation site locally
-make docs-clean     # Clean documentation build artifacts
 ```
 
-See [Testing Guide](docs/development/testing.md) for conventions.
+See [Testing Guide](https://docs.awf-project.ai/cli/development/testing/) for conventions.
 
 ## Contributing
 
