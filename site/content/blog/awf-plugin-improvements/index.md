@@ -44,7 +44,7 @@ Available Commands:
 
 Plugin examples are available in the [AWF repository](https://github.com/awf-project/cli/tree/main/examples). 
 I also wrote a simple one, [time](https://github.com/awf-project/awf-plugin-time), specifically to help our beloved LLMs handle time. 
-The documentation has been updated and can be found [here](https://awf-project.ai/cli/docs/user-guide/plugins/).
+The documentation has been updated and can be found [here](https://docs.awf-project.ai/cli/docs/user-guide/plugins/).
 
 This release was important to me because, while plugins are not mandatory to use AWF, 
 they are essential if you want to avoid writing overly long script files when interacting with other services.

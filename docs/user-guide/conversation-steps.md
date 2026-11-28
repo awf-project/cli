@@ -158,7 +158,7 @@ Violating any of these produces a clear error: `continue_from: step "X" has no s
 
 ### Cross-Provider Session Chains
 
-Each provider has its own session identifier format and CLI flag. A session established by Claude cannot be resumed by Gemini. Keep `provider` consistent across the seed and recall steps — or use distinct seed/recall pairs per provider, as in [`test-resume.yaml`](https://github.com/awf-project/cli/blob/main/.awf/workflows/test-resume.yaml).
+Each provider has its own session identifier format and CLI flag. A session established by Claude cannot be resumed by Gemini. Keep `provider` consistent across the seed and recall steps — or use distinct seed/recall pairs per provider.
 
 ### Session Tracking vs. State Passing
 

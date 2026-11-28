@@ -5,7 +5,7 @@ description: "Connect AWF to an ACP-compatible editor as a transparent AI agent,
 
 ## Overview
 
-AWF integrates with [ACP](https://agentclientprotocol.com) (Agent Client Protocol)-compatible editors such as [Zed](https://zed.dev) and [acp.nvim](https://github.com/huynhsontung/acp.nvim). This allows you to invoke AWF workflows directly from your editor's agent panel.
+AWF integrates with [ACP](https://agentclientprotocol.com) (Agent Client Protocol)-compatible editors such as [Zed](https://zed.dev) and acp.nvim. This allows you to invoke AWF workflows directly from your editor's agent panel.
 
 ## Supported Editors
 
