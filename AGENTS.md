@@ -386,7 +386,7 @@ Query: `zpm query-logic --goal "rule(Id, review, Desc, Prio, Src)" --memory feed
 ## Tower workspace tools
 
 Tower reads `.tower/config.toml` and `.towerignore` independently of Git ignore
-rules. Keep generated site output, binaries and runtime storage out of its index.
+rules. Keep binaries and runtime storage out of its index.
 Use indexed search and AST tools for Go navigation, and version-guarded edits for
 mutations. `gopls` supplies hover, definitions, references and semantic rename for
 `.go` files; inspect `supported` and `outcome` before trusting a result.

@@ -245,6 +245,6 @@
 //   - pkg/expression: Boolean expression evaluation using interpolation context
 //   - pkg/validation: Input validation before interpolation
 //   - internal/infrastructure/expression: Infrastructure adapter implementing expression evaluation
-//   - docs/template-syntax.md: Complete template syntax reference
+//   - Complete template syntax reference at https://docs.awf-project.ai/cli/reference/variable-interpolation/
 //   - CLAUDE.md: Project conventions and template interpolation semantics
 package interpolation

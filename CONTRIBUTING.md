@@ -37,6 +37,8 @@ Open an issue with:
 7. Push to your fork (`git push origin feature/amazing-feature`)
 8. Open a Pull Request
 
+For guide and ADR changes, edit `content/cli/` in the shared AWF documentation repository and run `make check` there.
+
 ## Development Setup
 
 ```bash
@@ -86,7 +88,7 @@ Domain → Application → Infrastructure → Interfaces
 
 ### Code Quality Requirements
 
-All pull requests must pass code quality checks before merge. See [Code Quality Documentation](docs/development/code-quality.md) for detailed explanations.
+All pull requests must pass code quality checks before merge. See [Code Quality Documentation](https://docs.awf-project.ai/cli/development/code-quality-tools/) for detailed explanations.
 
 **Required checks:**
 
@@ -176,7 +178,7 @@ AWF uses [Renovate](https://www.renovatebot.com/) for automated dependency updat
 1. **Automerge-eligible PRs** (minor/patch with passing CI): These merge automatically
 2. **Major version updates**: Review the changelog and test locally before approving
 3. **CI failures**: Investigate if the failure is dependency-related or a flaky test
-4. **Questions**: See [Dependency Management](docs/development/dependency-management.md) for more details
+4. **Questions**: See [Renovate configuration](renovate.json) for more details
 
 To temporarily stop updates, comment `@renovatebot stop` on a Renovate PR. To resume, comment `@renovatebot start`.
 
